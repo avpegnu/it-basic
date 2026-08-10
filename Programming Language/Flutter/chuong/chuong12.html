@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 12 — Animation · Flutter Sub-pillar</title>
+  <meta name="description" content="Implicit vs explicit animation, AnimationController, Tween, Curve, Hero, Lottie, staggered animation, RepaintBoundary." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 12</span>
+      </div>
+      <div class="chapter-num">Chương 12 · Animation</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Animation
+      </h1>
+      <p class="lead">
+        Animation tốt → app feel premium. Flutter có 2 hệ: <strong>implicit</strong> (đơn giản, 80% use case)
+        và <strong>explicit</strong> (control đầy đủ). Beginner thường jump thẳng explicit → over-engineer.
+        Chương này dạy đúng spectrum.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1090 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 2-4 + Dart Ch 7</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phân biệt implicit vs explicit animation.</li>
+            <li>Implicit family: AnimatedContainer, AnimatedOpacity, AnimatedAlign, AnimatedSwitcher.</li>
+            <li>Explicit: <code>AnimationController</code>, <code>Tween&lt;T&gt;</code>, <code>Curve</code>.</li>
+            <li><code>TweenAnimationBuilder</code> — flexible implicit.</li>
+            <li><code>vsync</code> với <code>SingleTickerProviderStateMixin</code>.</li>
+            <li><code>Hero</code> — shared element transition.</li>
+            <li>Lottie / Rive cho animation phức tạp.</li>
+            <li>Custom animation với CustomPainter.</li>
+            <li>Staggered animation.</li>
+            <li>Performance: <code>RepaintBoundary</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="implicit-vs-explicit">1. Implicit vs Explicit — spectrum</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Implicit</th><th>Explicit</th></tr></thead>
+            <tbody>
+              <tr><td>Cách dùng</td><td>Declare target state, Flutter tween từ state hiện tại</td><td>Control AnimationController + value mỗi frame</td></tr>
+              <tr><td>Boilerplate</td><td>Min</td><td>Cao</td></tr>
+              <tr><td>Flexibility</td><td>Limited</td><td>Full</td></tr>
+              <tr><td>Use case</td><td>80% — UI state transition đơn giản</td><td>Complex sequence, custom curve, multi-property</td></tr>
+              <tr><td>Vd</td><td>AnimatedContainer color change</td><td>Loading spinner custom, hero spring</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="implicit-family">2. Implicit — <code>Animated*</code> widget family</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Widget</th><th>Anim</th></tr></thead>
+            <tbody>
+              <tr><td>AnimatedContainer</td><td>color, size, padding, decoration, alignment</td></tr>
+              <tr><td>AnimatedOpacity</td><td>fade in/out</td></tr>
+              <tr><td>AnimatedAlign</td><td>vị trí align</td></tr>
+              <tr><td>AnimatedDefaultTextStyle</td><td>text style transition</td></tr>
+              <tr><td>AnimatedCrossFade</td><td>fade giữa 2 child</td></tr>
+              <tr><td>AnimatedSwitcher</td><td>swap child có transition</td></tr>
+              <tr><td>AnimatedSize</td><td>size change</td></tr>
+              <tr><td>AnimatedPadding</td><td>padding change</td></tr>
+              <tr><td>AnimatedPositioned</td><td>position trong Stack</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_ToggleBoxState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">ToggleBox</span>&gt; {
+  <span class="tok-cls">bool</span> _on = <span class="tok-kw">false</span>;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) =&gt; <span class="tok-fn">GestureDetector</span>(
+    onTap: () =&gt; <span class="tok-fn">setState</span>(() =&gt; _on = !_on),
+    child: <span class="tok-fn">AnimatedContainer</span>(
+      duration: <span class="tok-kw">const</span> <span class="tok-cls">Duration</span>(milliseconds: <span class="tok-num">300</span>),
+      curve: <span class="tok-cls">Curves</span>.easeInOut,
+      width: _on ? <span class="tok-num">200</span> : <span class="tok-num">100</span>,
+      height: _on ? <span class="tok-num">100</span> : <span class="tok-num">50</span>,
+      decoration: <span class="tok-fn">BoxDecoration</span>(
+        color: _on ? <span class="tok-cls">Colors</span>.amber : <span class="tok-cls">Colors</span>.blue,
+        borderRadius: <span class="tok-cls">BorderRadius</span>.<span class="tok-fn">circular</span>(_on ? <span class="tok-num">24</span> : <span class="tok-num">8</span>),
+      ),
+    ),
+  );
+}
+<span class="tok-com">// 1 setState đổi flag → AnimatedContainer tween từ size+color cũ → mới.</span></code></pre>
+
+        <h2 id="tween-animation-builder">3. <code>TweenAnimationBuilder</code> — flexible implicit</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">TweenAnimationBuilder</span>&lt;<span class="tok-type">double</span>&gt;(
+  tween: <span class="tok-cls">Tween</span>(begin: <span class="tok-num">0</span>, end: targetValue),
+  duration: <span class="tok-kw">const</span> <span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>),
+  curve: <span class="tok-cls">Curves</span>.easeOutCubic,
+  builder: (context, value, child) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Transform.rotate</span>(angle: value * <span class="tok-num">6.28</span>, child: child);
+  },
+  child: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.refresh, size: <span class="tok-num">64</span>),
+)
+<span class="tok-com">// Khi targetValue đổi → animate từ value hiện tại → target mới.</span></code></pre>
+
+        <h2 id="explicit">4. Explicit — <code>AnimationController</code> + <code>Tween</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_BouncingState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">Bouncing</span>&gt; <span class="tok-kw">with</span> <span class="tok-cls">SingleTickerProviderStateMixin</span> {
+  <span class="tok-kw">late</span> <span class="tok-kw">final</span> <span class="tok-cls">AnimationController</span> _ctrl;
+  <span class="tok-kw">late</span> <span class="tok-kw">final</span> <span class="tok-cls">Animation</span>&lt;<span class="tok-type">double</span>&gt; _scale;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">initState</span>() {
+    <span class="tok-kw">super</span>.<span class="tok-fn">initState</span>();
+    _ctrl = <span class="tok-fn">AnimationController</span>(
+      vsync: <span class="tok-kw">this</span>,
+      duration: <span class="tok-kw">const</span> <span class="tok-cls">Duration</span>(milliseconds: <span class="tok-num">800</span>),
+    );
+    _scale = <span class="tok-cls">Tween</span>&lt;<span class="tok-type">double</span>&gt;(begin: <span class="tok-num">1</span>, end: <span class="tok-num">1.4</span>).<span class="tok-fn">animate</span>(
+      <span class="tok-fn">CurvedAnimation</span>(parent: _ctrl, curve: <span class="tok-cls">Curves</span>.elasticOut),
+    );
+
+    _ctrl.<span class="tok-fn">repeat</span>(reverse: <span class="tok-kw">true</span>);   <span class="tok-com">// loop forward + reverse</span>
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">dispose</span>() {
+    _ctrl.<span class="tok-fn">dispose</span>();
+    <span class="tok-kw">super</span>.<span class="tok-fn">dispose</span>();
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) =&gt; <span class="tok-fn">ScaleTransition</span>(
+    scale: _scale,
+    child: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.favorite, color: <span class="tok-cls">Colors</span>.red, size: <span class="tok-num">100</span>),
+  );
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Luôn dispose AnimationController</div>
+          <p>
+            Không dispose = leak + animation tiếp tục chạy sau khi widget unmount. <code>super.dispose()</code> không tự dispose controller.
+          </p>
+        </div>
+
+        <h2 id="vsync"><code>vsync</code> và TickerProviderMixin</h2>
+        <ul>
+          <li><code>vsync: this</code> — sync animation với screen refresh (60Hz/120Hz). Tránh waste CPU khi screen off.</li>
+          <li><code>SingleTickerProviderStateMixin</code> — 1 controller. Đa số case.</li>
+          <li><code>TickerProviderStateMixin</code> — nhiều controller.</li>
+        </ul>
+
+        <h2 id="curves">5. <code>Curve</code> — easing function</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Curves</span>.linear            <span class="tok-com">// đều, robot-like</span>
+<span class="tok-cls">Curves</span>.easeIn            <span class="tok-com">// chậm đầu</span>
+<span class="tok-cls">Curves</span>.easeOut           <span class="tok-com">// chậm cuối</span>
+<span class="tok-cls">Curves</span>.easeInOut         <span class="tok-com">// chậm 2 đầu, "natural" nhất</span>
+<span class="tok-cls">Curves</span>.easeOutCubic      <span class="tok-com">// recommend cho UI transition</span>
+<span class="tok-cls">Curves</span>.bounceIn          <span class="tok-com">// nảy</span>
+<span class="tok-cls">Curves</span>.bounceOut
+<span class="tok-cls">Curves</span>.elasticIn         <span class="tok-com">// đàn hồi</span>
+<span class="tok-cls">Curves</span>.elasticOut
+<span class="tok-cls">Curves</span>.fastOutSlowIn    <span class="tok-com">// Material default</span></code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Curve quan trọng hơn duration</div>
+          <p>
+            Cùng duration 300ms, <code>easeOutCubic</code> feel premium, <code>linear</code> feel mechanical.
+            <strong>Default cho hầu hết UI</strong>: <code>easeOutCubic</code> hoặc <code>fastOutSlowIn</code>.
+          </p>
+        </div>
+
+        <h2 id="animated-builder">6. <code>AnimatedBuilder</code> — perf pattern</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ Sai — heavy widget rebuild mỗi frame</span>
+<span class="tok-kw">return</span> <span class="tok-fn">RotationTransition</span>(
+  turns: _ctrl,
+  child: <span class="tok-cls">ExpensiveWidget</span>(),   <span class="tok-com">// rebuild mỗi tick</span>
+);
+
+<span class="tok-com">// ✅ Đúng — child ngoài builder, không rebuild</span>
+<span class="tok-kw">return</span> <span class="tok-fn">AnimatedBuilder</span>(
+  animation: _ctrl,
+  builder: (context, child) =&gt; <span class="tok-fn">Transform.rotate</span>(
+    angle: _ctrl.value * <span class="tok-num">6.28</span>,
+    child: child,
+  ),
+  child: <span class="tok-kw">const</span> <span class="tok-cls">ExpensiveWidget</span>(),   <span class="tok-com">// build 1 lần, pass vào builder</span>
+);</code></pre>
+
+        <h2 id="staggered">7. Staggered animation</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// 1 controller, nhiều animation interval</span>
+<span class="tok-kw">late</span> <span class="tok-kw">final</span> <span class="tok-cls">AnimationController</span> _ctrl = <span class="tok-fn">AnimationController</span>(
+  vsync: <span class="tok-kw">this</span>, duration: <span class="tok-kw">const</span> <span class="tok-cls">Duration</span>(seconds: <span class="tok-num">2</span>),
+);
+
+<span class="tok-kw">late</span> <span class="tok-kw">final</span> <span class="tok-cls">Animation</span>&lt;<span class="tok-type">double</span>&gt; _fade = <span class="tok-cls">CurvedAnimation</span>(
+  parent: _ctrl, curve: <span class="tok-kw">const</span> <span class="tok-fn">Interval</span>(<span class="tok-num">0</span>, <span class="tok-num">0.4</span>, curve: <span class="tok-cls">Curves</span>.easeOut),
+);
+<span class="tok-kw">late</span> <span class="tok-kw">final</span> <span class="tok-cls">Animation</span>&lt;<span class="tok-cls">Offset</span>&gt; _slide = <span class="tok-cls">Tween</span>(
+  begin: <span class="tok-kw">const</span> <span class="tok-cls">Offset</span>(<span class="tok-num">0</span>, <span class="tok-num">0.3</span>), end: <span class="tok-cls">Offset</span>.zero,
+).<span class="tok-fn">animate</span>(<span class="tok-fn">CurvedAnimation</span>(
+  parent: _ctrl, curve: <span class="tok-kw">const</span> <span class="tok-fn">Interval</span>(<span class="tok-num">0.3</span>, <span class="tok-num">0.7</span>, curve: <span class="tok-cls">Curves</span>.easeOut),
+));
+<span class="tok-kw">late</span> <span class="tok-kw">final</span> <span class="tok-cls">Animation</span>&lt;<span class="tok-type">double</span>&gt; _scale = <span class="tok-cls">Tween</span>(begin: <span class="tok-num">0.8</span>, end: <span class="tok-num">1.0</span>).<span class="tok-fn">animate</span>(
+  <span class="tok-fn">CurvedAnimation</span>(parent: _ctrl, curve: <span class="tok-kw">const</span> <span class="tok-fn">Interval</span>(<span class="tok-num">0.6</span>, <span class="tok-num">1.0</span>, curve: <span class="tok-cls">Curves</span>.easeOutBack)),
+);
+
+<span class="tok-com">// 3 anim chạy theo timeline cùng 1 controller — staggered.</span></code></pre>
+
+        <h2 id="hero">8. <code>Hero</code> — shared element transition</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Trong list page</span>
+<span class="tok-fn">GestureDetector</span>(
+  onTap: () =&gt; <span class="tok-fn">Navigator.push</span>(context, <span class="tok-fn">MaterialPageRoute</span>(builder: (_) =&gt; <span class="tok-cls">DetailPage</span>(item: item))),
+  child: <span class="tok-fn">Hero</span>(
+    tag: <span class="tok-str">'item-$</span>{item.id}<span class="tok-str">'</span>,
+    child: <span class="tok-fn">Image.network</span>(item.thumbUrl, width: <span class="tok-num">100</span>, height: <span class="tok-num">100</span>),
+  ),
+)
+
+<span class="tok-com">// Trong detail page</span>
+<span class="tok-fn">Hero</span>(
+  tag: <span class="tok-str">'item-$</span>{item.id}<span class="tok-str">'</span>,    <span class="tok-com">// CÙNG tag</span>
+  child: <span class="tok-fn">Image.network</span>(item.fullUrl, width: screenWidth, height: <span class="tok-num">300</span>),
+)
+<span class="tok-com">// Flutter tự animate giữa 2 vị trí + size.</span></code></pre>
+
+        <h2 id="lottie-rive">9. Lottie / Rive</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add lottie
+flutter pub add rive</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Lottie — JSON từ Adobe After Effects</span>
+<span class="tok-fn">Lottie.asset</span>(<span class="tok-str">'assets/loading.json'</span>, width: <span class="tok-num">200</span>, height: <span class="tok-num">200</span>)
+<span class="tok-fn">Lottie.network</span>(<span class="tok-str">'https://lottiefiles.com/some.json'</span>)
+
+<span class="tok-com">// Rive — vector animation với state machine interactive</span>
+<span class="tok-fn">RiveAnimation.asset</span>(<span class="tok-str">'assets/character.riv'</span>)</code></pre>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 Lottie vs Rive</div>
+          <ul>
+            <li><strong>Lottie:</strong> one-shot animation export từ AE. Đẹp cho loading, splash, illustration.</li>
+            <li><strong>Rive:</strong> interactive — state machine với input/event. Game-like, character animation.</li>
+          </ul>
+        </div>
+
+        <h2 id="page-route-builder">10. Custom page route transition</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">Navigator.push</span>(
+  context,
+  <span class="tok-fn">PageRouteBuilder</span>(
+    pageBuilder: (_, __, ___) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">NextPage</span>(),
+    transitionDuration: <span class="tok-kw">const</span> <span class="tok-cls">Duration</span>(milliseconds: <span class="tok-num">300</span>),
+    transitionsBuilder: (_, anim, __, child) {
+      <span class="tok-kw">return</span> <span class="tok-fn">SlideTransition</span>(
+        position: <span class="tok-fn">Tween</span>&lt;<span class="tok-cls">Offset</span>&gt;(
+          begin: <span class="tok-kw">const</span> <span class="tok-cls">Offset</span>(<span class="tok-num">0</span>, <span class="tok-num">1</span>),    <span class="tok-com">// slide từ dưới</span>
+          end: <span class="tok-cls">Offset</span>.zero,
+        ).<span class="tok-fn">animate</span>(<span class="tok-fn">CurvedAnimation</span>(parent: anim, curve: <span class="tok-cls">Curves</span>.easeOutCubic)),
+        child: child,
+      );
+    },
+  ),
+)</code></pre>
+
+        <h2 id="animated-list">11. <code>AnimatedList</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> _listKey = <span class="tok-fn">GlobalKey</span>&lt;<span class="tok-cls">AnimatedListState</span>&gt;();
+<span class="tok-kw">final</span> _items = &lt;<span class="tok-cls">Item</span>&gt;[];
+
+<span class="tok-fn">AnimatedList</span>(
+  key: _listKey,
+  initialItemCount: _items.length,
+  itemBuilder: (context, index, animation) =&gt; <span class="tok-fn">SizeTransition</span>(
+    sizeFactor: animation,
+    child: <span class="tok-fn">ListTile</span>(title: <span class="tok-fn">Text</span>(_items[index].title)),
+  ),
+)
+
+<span class="tok-com">// Add với animation</span>
+<span class="tok-kw">void</span> <span class="tok-fn">_addItem</span>(<span class="tok-cls">Item</span> item) {
+  _items.<span class="tok-fn">insert</span>(<span class="tok-num">0</span>, item);
+  _listKey.currentState?.<span class="tok-fn">insertItem</span>(<span class="tok-num">0</span>, duration: <span class="tok-kw">const</span> <span class="tok-cls">Duration</span>(milliseconds: <span class="tok-num">300</span>));
+}
+
+<span class="tok-com">// Remove với animation</span>
+<span class="tok-kw">void</span> <span class="tok-fn">_removeItem</span>(<span class="tok-type">int</span> index) {
+  <span class="tok-kw">final</span> removed = _items.<span class="tok-fn">removeAt</span>(index);
+  _listKey.currentState?.<span class="tok-fn">removeItem</span>(index,
+    (context, animation) =&gt; <span class="tok-fn">SizeTransition</span>(
+      sizeFactor: animation,
+      child: <span class="tok-fn">ListTile</span>(title: <span class="tok-fn">Text</span>(removed.title)),
+    ),
+  );
+}</code></pre>
+
+        <h2 id="physics">12. Physics-based animation (intro)</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// SpringSimulation — physics</span>
+<span class="tok-kw">final</span> spring = <span class="tok-fn">SpringSimulation</span>(
+  <span class="tok-cls">SpringDescription</span>(mass: <span class="tok-num">1</span>, stiffness: <span class="tok-num">100</span>, damping: <span class="tok-num">10</span>),
+  <span class="tok-num">0</span>,    <span class="tok-com">// start</span>
+  <span class="tok-num">1</span>,    <span class="tok-com">// end</span>
+  <span class="tok-num">0</span>,    <span class="tok-com">// initial velocity</span>
+);
+_ctrl.<span class="tok-fn">animateWith</span>(spring);
+
+<span class="tok-com">// BouncingScrollPhysics — đã quen từ ListView iOS-style</span>
+<span class="tok-fn">ListView</span>(
+  physics: <span class="tok-kw">const</span> <span class="tok-cls">BouncingScrollPhysics</span>(),
+  children: [<span class="tok-com">/*...*/</span>],
+)</code></pre>
+
+        <h2 id="repaint-boundary">13. <code>RepaintBoundary</code> — performance</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Isolate paint layer — parent rebuild không trigger child repaint</span>
+<span class="tok-fn">RepaintBoundary</span>(
+  child: <span class="tok-cls">ExpensiveAnimation</span>(),
+)
+
+<span class="tok-com">// Khi animation trong RepaintBoundary chạy, chỉ paint phần đó.</span>
+<span class="tok-com">// Parent không liên quan animation → không bị repaint.</span></code></pre>
+
+        <h2 id="performance-overlay">14. Performance Overlay</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">MaterialApp</span>(
+  showPerformanceOverlay: <span class="tok-kw">true</span>,   <span class="tok-com">// 2 bar đo UI + Raster thread</span>
+)
+
+<span class="tok-com">// 2 thanh:</span>
+<span class="tok-com">// - UI thread (Dart): build/layout time</span>
+<span class="tok-com">// - Raster thread: GPU paint time</span>
+<span class="tok-com">// Đỏ = vượt 16ms (60fps) → jank.</span></code></pre>
+
+        <h2 id="bai-tap" class="exercises">15. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Theme toggle animated</h4>
+          <div class="exercise-body">
+            <p>
+              Toggle theme button với <code>AnimatedContainer</code> đổi background + icon rotate 180°. Mỗi click swap.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>AnimatedContainer width/color, RotationTransition cho icon. Hoặc AnimatedRotation.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Like animation</h4>
+          <div class="exercise-body">
+            <p>
+              Tap heart icon → scale up + color change. Dùng explicit (AnimationController + Tween).
+              Bonus: thêm particle burst nhỏ.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>
+                AnimationController duration 400ms. Tween scale 1 → 1.4 → 1 (use TweenSequence). Color animation từ grey → red.
+                Particle: stack với nhiều dot animate radial out.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Hero detail page</h4>
+          <div class="exercise-body">
+            <p>Grid product list → tap → detail page. Hero transition thumbnail → full image.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tag unique per item: <code>'product-${item.id}'</code>. Cùng tag ở 2 page, Flutter tự animate.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Lottie loading screen</h4>
+          <div class="exercise-body">
+            <p>Loading screen với Lottie animation tải free từ LottieFiles.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Download từ lottiefiles.com → put vào assets. <code>Lottie.asset('assets/loading.json')</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Bouncing notification badge</h4>
+          <div class="exercise-body">
+            <p>
+              Notification badge: số đếm tăng → badge scale 0 → 1.2 → 1 với spring. Dùng SpringSimulation hoặc Curves.elasticOut.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">TweenAnimationBuilder&lt;double&gt;(
+  tween: Tween(begin: 0, end: 1),
+  duration: const Duration(milliseconds: 500),
+  curve: Curves.elasticOut,
+  builder: (_, value, __) =&gt; Transform.scale(scale: value, child: badge),
+)</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">16. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>AnimatedContainer</code> cần controller không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Implicit tự nội — chỉ cần đổi prop + duration + curve, Flutter tween.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p><code>vsync</code> parameter — vai trò?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Sync animation với ticker (frame refresh). Pause khi screen off để save CPU/battery.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p>AnimationController không dispose — chuyện gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Memory leak + animation tiếp chạy nền sau dispose widget. <code>super.dispose()</code> không tự dispose controller.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>Hero tag duplicate giữa 2 page — chuyện gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Throw error <em>"There are multiple heroes that share the same tag within a subtree"</em>. Tag phải unique.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>Curves.easeInOut</code> vs <code>Curves.linear</code> — khác feel?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> easeInOut "natural", linear "robot-like". Easing usually preferred trừ progress indicator (cần linear).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p><code>RepaintBoundary</code> giúp gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Isolate paint layer. Repaint chỉ phần thay đổi, không repaint cả tree. Performance hint.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Lottie vs Rive — chọn?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Lottie cho one-shot animation export từ AE. Rive cho interactive với state machine.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p><code>AnimatedBuilder</code> builder gọi mỗi frame — performance OK?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> OK nếu widget trong builder rẻ. Đặt heavy widget ngoài (pass qua <code>child</code> param), chỉ widget animated trong builder.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">17. Tổng kết</h2>
+        <ul>
+          <li>✅ Implicit (Animated*) cho 80% case — declare target, framework tween.</li>
+          <li>✅ Explicit (AnimationController + Tween) cho complex sequence.</li>
+          <li>✅ <code>vsync</code> + SingleTickerProviderStateMixin.</li>
+          <li>✅ Curve quan trọng hơn duration — easeOutCubic default.</li>
+          <li>✅ AnimatedBuilder pattern: heavy child ngoài, transform trong builder.</li>
+          <li>✅ Staggered animation — 1 controller, nhiều Interval.</li>
+          <li>✅ Hero — shared element transition giữa route.</li>
+          <li>✅ Lottie (one-shot) vs Rive (interactive).</li>
+          <li>✅ AnimatedList cho insert/remove animation.</li>
+          <li>✅ Physics — SpringSimulation.</li>
+          <li>✅ RepaintBoundary isolate paint zone.</li>
+          <li>✅ Performance Overlay đo UI + Raster thread time.</li>
+        </ul>
+
+        <h2 id="ket-noi">18. Kết nối</h2>
+        <ul>
+          <li><a href="chuong13.html"><strong>Chương 13 — Custom Paint:</strong></a> animation pair với CustomPainter.</li>
+          <li><a href="chuong15.html"><strong>Chương 15:</strong></a> Performance overlay đo jank animation.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong11.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">11 · Local Storage</div>
+          </a>
+          <a href="chuong13.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">13 · Custom Paint &amp; Render</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#implicit-vs-explicit">1. Implicit vs Explicit</a></li>
+          <li><a href="#implicit-family">2. Animated* family</a></li>
+          <li><a href="#tween-animation-builder">3. TweenAnimationBuilder</a></li>
+          <li><a href="#explicit">4. Explicit Controller + Tween</a></li>
+          <li><a href="#curves">5. Curves</a></li>
+          <li><a href="#animated-builder">6. AnimatedBuilder</a></li>
+          <li><a href="#staggered">7. Staggered</a></li>
+          <li><a href="#hero">8. Hero</a></li>
+          <li><a href="#lottie-rive">9. Lottie / Rive</a></li>
+          <li><a href="#page-route-builder">10. Custom route transition</a></li>
+          <li><a href="#animated-list">11. AnimatedList</a></li>
+          <li><a href="#physics">12. Physics</a></li>
+          <li><a href="#repaint-boundary">13. RepaintBoundary</a></li>
+          <li><a href="#performance-overlay">14. Performance Overlay</a></li>
+          <li><a href="#bai-tap">15. Bài tập</a></li>
+          <li><a href="#quiz">16. Quiz</a></li>
+          <li><a href="#tong-ket">17. Tổng kết</a></li>
+          <li><a href="#ket-noi">18. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 12 · Pillar 9 — IT Basic<br/>
+        <a href="chuong11.html">← Chương 11</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong13.html">Chương 13 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

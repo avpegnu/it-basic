@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — TypeScript Generics &amp; Utility Types · JavaScript Sub-pillar</title>
+  <meta name="description" content="Generic function/class/interface, type parameter constraint, default, Partial/Required/Readonly/Pick/Omit/Record/Exclude/Extract/NonNullable/ReturnType/Parameters/Awaited — toolset reuse type của TypeScript." />
+  <meta name="theme-color" content="#3178c6" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-ts">TS</span>
+        TS · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 10</span>
+      </div>
+      <div class="chapter-num ts">Chương 10 · TypeScript Generics &amp; Utility Types</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Generic và Utility Types — viết một lần, dùng cho mọi type
+      </h1>
+      <p class="lead">
+        Generic biến function/class/type thành <strong>template tham số hoá theo type</strong> — như function nhận arg
+        nhưng arg ở đây là <em>type</em>. Utility types là bộ generic <strong>built-in</strong> của TypeScript: biến
+        đổi type sẵn có thành type mới (làm optional, lọc key, rút type từ function). Master 2 thứ này là bước nhảy
+        từ "biết TS" sang "viết được API library".
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 9 (TS Foundations)</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose ts-section">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Viết generic function với 1, 2, nhiều type parameter, hiểu cơ chế <strong>type inference</strong>.</li>
+            <li>Dùng <code>extends</code> để <strong>constraint</strong> type parameter; kết hợp với <code>keyof</code>.</li>
+            <li>Đặt <strong>default type parameter</strong> để API gọn nhưng vẫn linh hoạt.</li>
+            <li>Định nghĩa generic <strong>class</strong>, <strong>interface</strong>, <strong>type alias</strong>.</li>
+            <li>Master 11 utility types: <code>Partial</code>, <code>Required</code>, <code>Readonly</code>, <code>Pick</code>,
+              <code>Omit</code>, <code>Record</code>, <code>Exclude</code>, <code>Extract</code>, <code>NonNullable</code>,
+              <code>ReturnType</code>, <code>Parameters</code>, <code>Awaited</code>.</li>
+            <li>Bắt đầu tự viết utility (<code>Nullable</code>, <code>DeepPartial</code> stub) — cầu nối sang chương 11.</li>
+          </ul>
+        </div>
+
+        <h2 id="generic-function">1. Generic function — type là tham số</h2>
+
+        <p>
+          Bắt đầu bằng một function "không generic" để thấy vấn đề. Muốn viết hàm <code>identity</code> trả
+          chính giá trị truyền vào, làm việc với <em>mọi</em> type:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Vấn đề trước khi có generic</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Cách 1 — quá hẹp, mỗi type 1 hàm</span>
+<span class="tok-kw">function</span> <span class="tok-fn">identityNumber</span>(x: <span class="tok-cls">number</span>): <span class="tok-cls">number</span> { <span class="tok-kw">return</span> x; }
+<span class="tok-kw">function</span> <span class="tok-fn">identityString</span>(x: <span class="tok-cls">string</span>): <span class="tok-cls">string</span> { <span class="tok-kw">return</span> x; }
+
+<span class="tok-com">// Cách 2 — any, mất type</span>
+<span class="tok-kw">function</span> <span class="tok-fn">identity</span>(x: <span class="tok-cls">any</span>): <span class="tok-cls">any</span> { <span class="tok-kw">return</span> x; }
+<span class="tok-kw">const</span> r = <span class="tok-fn">identity</span>(<span class="tok-num">5</span>);   <span class="tok-com">// r: any — không gợi ý gì cả</span>
+r.<span class="tok-fn">toUpperCase</span>();         <span class="tok-com">// 💥 runtime error, TS không catch</span></code></pre>
+        </div>
+
+        <p>
+          Giải pháp: thêm <strong>type parameter</strong> <code>T</code> trong cặp <code>&lt;...&gt;</code>. <code>T</code>
+          như một <em>biến type</em>, được "điền" khi gọi hàm:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>identity&lt;T&gt;</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">identity</span>&lt;<span class="tok-cls">T</span>&gt;(x: <span class="tok-cls">T</span>): <span class="tok-cls">T</span> {
+  <span class="tok-kw">return</span> x;
+}
+
+<span class="tok-com">// Cách 1 — gọi explicit, chỉ định T</span>
+<span class="tok-kw">const</span> a = <span class="tok-fn">identity</span>&lt;<span class="tok-cls">number</span>&gt;(<span class="tok-num">5</span>);     <span class="tok-com">// a: number</span>
+<span class="tok-kw">const</span> b = <span class="tok-fn">identity</span>&lt;<span class="tok-cls">string</span>&gt;(<span class="tok-str">"hi"</span>); <span class="tok-com">// b: string</span>
+
+<span class="tok-com">// Cách 2 — để TS infer (thường dùng)</span>
+<span class="tok-kw">const</span> c = <span class="tok-fn">identity</span>(<span class="tok-num">5</span>);            <span class="tok-com">// c: number — T inferred = number</span>
+<span class="tok-kw">const</span> d = <span class="tok-fn">identity</span>(<span class="tok-str">"hi"</span>);         <span class="tok-com">// d: string</span>
+<span class="tok-kw">const</span> e = <span class="tok-fn">identity</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);    <span class="tok-com">// e: number[]</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — generic ≈ function ở "tầng type"</div>
+          <p>
+            Hình dung TypeScript có 2 tầng: tầng <strong>value</strong> (giá trị runtime — chạy bởi JS) và tầng
+            <strong>type</strong> (biến mất khi compile). Function thường nhận value và trả value. Generic function
+            <em>còn</em> nhận type và trả type.
+          </p>
+          <p style="margin-top: 10px;">
+            <code>identity&lt;T&gt;(x: T): T</code> đọc là: "cho tôi type T, tôi trả function nhận T trả T".
+            Khi bạn viết <code>identity(5)</code>, compiler chạy thuật toán inference: "x là <code>number</code>,
+            mà x: T → T = number → hàm trả number".
+          </p>
+        </div>
+
+        <h2 id="multiple-params">2. Nhiều type parameter</h2>
+
+        <p>
+          Một generic có thể nhận nhiều type parameter, đặt cách nhau bằng dấu phẩy trong <code>&lt;...&gt;</code>.
+          Quy ước đặt tên: <code>T</code>, <code>U</code>, <code>V</code> cho generic chung; <code>K</code> cho key,
+          <code>V</code> cho value, <code>E</code> cho element, <code>R</code> cho return.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pair&lt;A, B&gt;</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">pair</span>&lt;<span class="tok-cls">A</span>, <span class="tok-cls">B</span>&gt;(a: <span class="tok-cls">A</span>, b: <span class="tok-cls">B</span>): [<span class="tok-cls">A</span>, <span class="tok-cls">B</span>] {
+  <span class="tok-kw">return</span> [a, b];
+}
+
+<span class="tok-kw">const</span> p1 = <span class="tok-fn">pair</span>(<span class="tok-num">1</span>, <span class="tok-str">"x"</span>);        <span class="tok-com">// p1: [number, string]</span>
+<span class="tok-kw">const</span> p2 = <span class="tok-fn">pair</span>(<span class="tok-kw">true</span>, [<span class="tok-num">1</span>, <span class="tok-num">2</span>]);  <span class="tok-com">// p2: [boolean, number[]]</span>
+
+<span class="tok-com">// Ví dụ thực tế — zip 2 array</span>
+<span class="tok-kw">function</span> <span class="tok-fn">zip</span>&lt;<span class="tok-cls">A</span>, <span class="tok-cls">B</span>&gt;(as: <span class="tok-cls">A</span>[], bs: <span class="tok-cls">B</span>[]): [<span class="tok-cls">A</span>, <span class="tok-cls">B</span>][] {
+  <span class="tok-kw">const</span> n = <span class="tok-cls">Math</span>.<span class="tok-fn">min</span>(as.length, bs.length);
+  <span class="tok-kw">const</span> out: [<span class="tok-cls">A</span>, <span class="tok-cls">B</span>][] = [];
+  <span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = <span class="tok-num">0</span>; i &lt; n; i++) out.<span class="tok-fn">push</span>([as[i], bs[i]]);
+  <span class="tok-kw">return</span> out;
+}
+
+<span class="tok-kw">const</span> z = <span class="tok-fn">zip</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>], [<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>]);  <span class="tok-com">// z: [number, string][]</span></code></pre>
+        </div>
+
+        <p>
+          Một ví dụ rất hay trong thực tế — <code>map</code> tự viết, biến mảng <code>T[]</code> thành mảng <code>U[]</code>:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">map</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">U</span>&gt;(arr: <span class="tok-cls">T</span>[], fn: (x: <span class="tok-cls">T</span>) =&gt; <span class="tok-cls">U</span>): <span class="tok-cls">U</span>[] {
+  <span class="tok-kw">const</span> out: <span class="tok-cls">U</span>[] = [];
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> x <span class="tok-kw">of</span> arr) out.<span class="tok-fn">push</span>(<span class="tok-fn">fn</span>(x));
+  <span class="tok-kw">return</span> out;
+}
+
+<span class="tok-kw">const</span> lengths = <span class="tok-fn">map</span>([<span class="tok-str">"hi"</span>, <span class="tok-str">"world"</span>], s =&gt; s.length);
+<span class="tok-com">// lengths: number[]   ← TS infer T=string, U=number</span></code></pre>
+        </div>
+
+        <h2 id="constraint">3. Constraint — bó hẹp type parameter với <code>extends</code></h2>
+
+        <p>
+          Bình thường <code>T</code> là "bất cứ type nào". Nhưng đôi khi ta cần đảm bảo T có <em>vài property</em>.
+          Dùng <code>T extends SomeType</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Constraint cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Không constraint — sai vì không phải mọi T có .length</span>
+<span class="tok-kw">function</span> <span class="tok-fn">len</span>&lt;<span class="tok-cls">T</span>&gt;(x: <span class="tok-cls">T</span>): <span class="tok-cls">number</span> {
+  <span class="tok-kw">return</span> x.length;  <span class="tok-com">// ❌ Property 'length' does not exist on type 'T'</span>
+}
+
+<span class="tok-com">// Có constraint — T phải có .length</span>
+<span class="tok-kw">function</span> <span class="tok-fn">len</span>&lt;<span class="tok-cls">T</span> <span class="tok-kw">extends</span> { length: <span class="tok-cls">number</span> }&gt;(x: <span class="tok-cls">T</span>): <span class="tok-cls">number</span> {
+  <span class="tok-kw">return</span> x.length;
+}
+
+<span class="tok-fn">len</span>(<span class="tok-str">"hello"</span>);          <span class="tok-com">// OK — string có length</span>
+<span class="tok-fn">len</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);        <span class="tok-com">// OK — array có length</span>
+<span class="tok-fn">len</span>({ length: <span class="tok-num">10</span>, x: <span class="tok-num">1</span> }); <span class="tok-com">// OK — object có length</span>
+<span class="tok-fn">len</span>(<span class="tok-num">42</span>);               <span class="tok-com">// ❌ number không có length</span></code></pre>
+        </div>
+
+        <p>
+          Combo cực mạnh: <code>K extends keyof T</code>. Đảm bảo <code>key</code> là <em>real key</em> của object —
+          không chấp nhận string ngẫu nhiên. Đây là kỹ thuật chủ lực để viết "object accessor" type-safe:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>getProp&lt;T, K extends keyof T&gt;</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">getProp</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">K</span> <span class="tok-kw">extends</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>&gt;(obj: <span class="tok-cls">T</span>, key: <span class="tok-cls">K</span>): <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] {
+  <span class="tok-kw">return</span> obj[key];
+}
+
+<span class="tok-kw">const</span> user = { id: <span class="tok-num">1</span>, name: <span class="tok-str">"An"</span>, active: <span class="tok-kw">true</span> };
+
+<span class="tok-kw">const</span> id   = <span class="tok-fn">getProp</span>(user, <span class="tok-str">"id"</span>);     <span class="tok-com">// id: number</span>
+<span class="tok-kw">const</span> name = <span class="tok-fn">getProp</span>(user, <span class="tok-str">"name"</span>);   <span class="tok-com">// name: string</span>
+<span class="tok-kw">const</span> act  = <span class="tok-fn">getProp</span>(user, <span class="tok-str">"active"</span>); <span class="tok-com">// act: boolean</span>
+
+<span class="tok-fn">getProp</span>(user, <span class="tok-str">"email"</span>);
+<span class="tok-com">// ❌ Argument of type '"email"' is not assignable to parameter of type 'keyof typeof user'</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Vì sao thêm K (không chỉ T)?</div>
+          <p>
+            Nếu viết <code>function getProp&lt;T&gt;(obj: T, key: keyof T): T[keyof T]</code>, return type là
+            <em>union</em> của mọi value type — bạn không biết cụ thể nào. Tách <code>K</code> ra giúp TS "ghi nhớ"
+            đúng key user đã truyền, từ đó suy ra <code>T[K]</code> chính xác.
+          </p>
+        </div>
+
+        <h2 id="default-param">4. Default type parameter</h2>
+
+        <p>
+          Giống default value cho function param, type parameter có thể có default. Cú pháp <code>T = SomeType</code>.
+          Khi gọi không spec, TS lấy default:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Default type parameter</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">createArray</span>&lt;<span class="tok-cls">T</span> = <span class="tok-cls">string</span>&gt;(): <span class="tok-cls">T</span>[] {
+  <span class="tok-kw">return</span> [];
+}
+
+<span class="tok-kw">const</span> a = <span class="tok-fn">createArray</span>();            <span class="tok-com">// a: string[]   (default)</span>
+<span class="tok-kw">const</span> b = <span class="tok-fn">createArray</span>&lt;<span class="tok-cls">number</span>&gt;();    <span class="tok-com">// b: number[]</span>
+
+<span class="tok-com">// Combo: default + constraint</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">ApiResponse</span>&lt;<span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">object</span> = {}&gt; {
+  status: <span class="tok-cls">number</span>;
+  data: <span class="tok-cls">T</span>;
+}
+
+<span class="tok-kw">const</span> r1: <span class="tok-cls">ApiResponse</span> = { status: <span class="tok-num">200</span>, data: {} };
+<span class="tok-kw">const</span> r2: <span class="tok-cls">ApiResponse</span>&lt;{ id: <span class="tok-cls">number</span> }&gt; = { status: <span class="tok-num">200</span>, data: { id: <span class="tok-num">1</span> } };</code></pre>
+        </div>
+
+        <p>
+          Default rất hay khi viết library — user không spec gì vẫn dùng được, nhưng vẫn override khi cần type cụ thể.
+        </p>
+
+        <h2 id="generic-class">5. Generic class</h2>
+
+        <p>
+          Class cũng nhận type parameter. Type parameter sống ở cấp class — mọi property/method đều dùng được:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Generic Stack</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Stack</span>&lt;<span class="tok-cls">T</span>&gt; {
+  <span class="tok-kw">private</span> items: <span class="tok-cls">T</span>[] = [];
+
+  <span class="tok-fn">push</span>(x: <span class="tok-cls">T</span>): <span class="tok-cls">void</span> {
+    <span class="tok-kw">this</span>.items.<span class="tok-fn">push</span>(x);
+  }
+
+  <span class="tok-fn">pop</span>(): <span class="tok-cls">T</span> | <span class="tok-cls">undefined</span> {
+    <span class="tok-kw">return</span> <span class="tok-kw">this</span>.items.<span class="tok-fn">pop</span>();
+  }
+
+  <span class="tok-fn">peek</span>(): <span class="tok-cls">T</span> | <span class="tok-cls">undefined</span> {
+    <span class="tok-kw">return</span> <span class="tok-kw">this</span>.items[<span class="tok-kw">this</span>.items.length - <span class="tok-num">1</span>];
+  }
+
+  <span class="tok-kw">get</span> <span class="tok-fn">size</span>(): <span class="tok-cls">number</span> {
+    <span class="tok-kw">return</span> <span class="tok-kw">this</span>.items.length;
+  }
+}
+
+<span class="tok-kw">const</span> numbers = <span class="tok-kw">new</span> <span class="tok-cls">Stack</span>&lt;<span class="tok-cls">number</span>&gt;();
+numbers.<span class="tok-fn">push</span>(<span class="tok-num">1</span>);
+numbers.<span class="tok-fn">push</span>(<span class="tok-num">2</span>);
+<span class="tok-kw">const</span> top = numbers.<span class="tok-fn">pop</span>();  <span class="tok-com">// top: number | undefined</span>
+
+<span class="tok-kw">const</span> strs = <span class="tok-kw">new</span> <span class="tok-cls">Stack</span>&lt;<span class="tok-cls">string</span>&gt;();
+strs.<span class="tok-fn">push</span>(<span class="tok-str">"hello"</span>);
+strs.<span class="tok-fn">push</span>(<span class="tok-num">42</span>);  <span class="tok-com">// ❌ number không gán vào string</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mỗi instance "đóng băng" 1 T</div>
+          <p>
+            Mỗi <em>instance</em> Stack có một T cụ thể: <code>Stack&lt;number&gt;</code> và <code>Stack&lt;string&gt;</code>
+            là 2 type khác nhau. Khi compile, generic biến mất, chỉ còn class <code>Stack</code> JS thường — type là
+            công cụ tĩnh.
+          </p>
+        </div>
+
+        <h2 id="generic-interface-type">6. Generic interface và type alias</h2>
+
+        <p>
+          Interface và type alias cũng nhận type parameter. Đây là cách định nghĩa <strong>container type</strong> tái
+          sử dụng được:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Box&lt;T&gt; — container đơn giản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Cách 1 — interface</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">Box</span>&lt;<span class="tok-cls">T</span>&gt; {
+  value: <span class="tok-cls">T</span>;
+}
+
+<span class="tok-com">// Cách 2 — type alias (tương đương)</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Box2</span>&lt;<span class="tok-cls">T</span>&gt; = { value: <span class="tok-cls">T</span> };
+
+<span class="tok-kw">const</span> b1: <span class="tok-cls">Box</span>&lt;<span class="tok-cls">number</span>&gt; = { value: <span class="tok-num">42</span> };
+<span class="tok-kw">const</span> b2: <span class="tok-cls">Box</span>&lt;<span class="tok-cls">string</span>&gt; = { value: <span class="tok-str">"hi"</span> };
+
+<span class="tok-com">// Generic interface trong API — pattern phổ biến</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">Result</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">E</span> = <span class="tok-cls">Error</span>&gt; {
+  ok: <span class="tok-cls">boolean</span>;
+  data?: <span class="tok-cls">T</span>;
+  error?: <span class="tok-cls">E</span>;
+}
+
+<span class="tok-kw">const</span> success: <span class="tok-cls">Result</span>&lt;<span class="tok-cls">number</span>&gt; = { ok: <span class="tok-kw">true</span>, data: <span class="tok-num">42</span> };
+<span class="tok-kw">const</span> fail: <span class="tok-cls">Result</span>&lt;<span class="tok-cls">number</span>, <span class="tok-cls">string</span>&gt; = { ok: <span class="tok-kw">false</span>, error: <span class="tok-str">"timeout"</span> };</code></pre>
+        </div>
+
+        <p>
+          Function signature cũng có thể là generic interface — cách định nghĩa "callable generic":
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com">// Interface mô tả function generic</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">Mapper</span> {
+  &lt;<span class="tok-cls">T</span>, <span class="tok-cls">U</span>&gt;(arr: <span class="tok-cls">T</span>[], fn: (x: <span class="tok-cls">T</span>) =&gt; <span class="tok-cls">U</span>): <span class="tok-cls">U</span>[];
+}
+
+<span class="tok-kw">const</span> myMap: <span class="tok-cls">Mapper</span> = (arr, fn) =&gt; arr.<span class="tok-fn">map</span>(fn);
+<span class="tok-fn">myMap</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>], n =&gt; n * <span class="tok-num">2</span>);  <span class="tok-com">// number[]</span></code></pre>
+        </div>
+
+        <h2 id="utility-partial">7. Utility types: <code>Partial</code>, <code>Required</code>, <code>Readonly</code></h2>
+
+        <p>
+          Từ chương này về sau, ta dùng <strong>utility types</strong> — sẵn có trong TS. Đây là generic được viết
+          sẵn để biến đổi type. Bộ 3 đầu tiên: bật/tắt optional và readonly.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Utility</th><th>Tác dụng</th><th>Tương đương</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Partial&lt;T&gt;</code></td><td>Mọi property thành <em>optional</em></td><td><code>{ [K in keyof T]?: T[K] }</code></td></tr>
+              <tr><td><code>Required&lt;T&gt;</code></td><td>Mọi property thành <em>bắt buộc</em></td><td><code>{ [K in keyof T]-?: T[K] }</code></td></tr>
+              <tr><td><code>Readonly&lt;T&gt;</code></td><td>Mọi property thành <em>readonly</em></td><td><code>{ readonly [K in keyof T]: T[K] }</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Partial — pattern update DTO</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">User</span> {
+  id: <span class="tok-cls">number</span>;
+  name: <span class="tok-cls">string</span>;
+  email: <span class="tok-cls">string</span>;
+  active: <span class="tok-cls">boolean</span>;
+}
+
+<span class="tok-com">// updateUser nhận subset of User — chỉ field nào muốn đổi</span>
+<span class="tok-kw">function</span> <span class="tok-fn">updateUser</span>(id: <span class="tok-cls">number</span>, patch: <span class="tok-cls">Partial</span>&lt;<span class="tok-cls">User</span>&gt;): <span class="tok-cls">User</span> {
+  <span class="tok-com">// ... merge với user hiện tại</span>
+  <span class="tok-kw">return</span> { id, name: <span class="tok-str">"x"</span>, email: <span class="tok-str">"x"</span>, active: <span class="tok-kw">true</span>, ...patch };
+}
+
+<span class="tok-fn">updateUser</span>(<span class="tok-num">1</span>, { name: <span class="tok-str">"An"</span> });               <span class="tok-com">// OK</span>
+<span class="tok-fn">updateUser</span>(<span class="tok-num">1</span>, { email: <span class="tok-str">"a@b"</span>, active: <span class="tok-kw">false</span> }); <span class="tok-com">// OK</span>
+<span class="tok-fn">updateUser</span>(<span class="tok-num">1</span>, {});                              <span class="tok-com">// OK (rỗng cũng được)</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>Partial</code> chỉ "shallow" — không đi sâu</div>
+          <p>
+            <code>Partial&lt;T&gt;</code> chỉ làm optional ở <em>tầng 1</em>. Nếu property là object lồng,
+            object đó vẫn nguyên cấu trúc, không tự optional bên trong.
+          </p>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">Config</span> {
+  ui: { theme: <span class="tok-cls">string</span>; lang: <span class="tok-cls">string</span> };
+  api: { url: <span class="tok-cls">string</span> };
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">P</span> = <span class="tok-cls">Partial</span>&lt;<span class="tok-cls">Config</span>&gt;;
+<span class="tok-com">// = { ui?: { theme: string; lang: string }; api?: { url: string } }</span>
+
+<span class="tok-kw">const</span> p: <span class="tok-cls">P</span> = { ui: { theme: <span class="tok-str">"dark"</span> } };  <span class="tok-com">// ❌ thiếu lang</span></code></pre>
+          <p style="margin-top: 8px;">
+            Cần "đệ quy" → tự viết <code>DeepPartial&lt;T&gt;</code> bằng conditional/mapped type — chương 11 sẽ làm.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Required — ngược lại Partial</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">PartialConfig</span> {
+  theme?: <span class="tok-cls">string</span>;
+  lang?: <span class="tok-cls">string</span>;
+  debug?: <span class="tok-cls">boolean</span>;
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">FullConfig</span> = <span class="tok-cls">Required</span>&lt;<span class="tok-cls">PartialConfig</span>&gt;;
+<span class="tok-com">// = { theme: string; lang: string; debug: boolean }   ← bỏ tất cả ?</span>
+
+<span class="tok-kw">function</span> <span class="tok-fn">applyConfig</span>(c: <span class="tok-cls">FullConfig</span>) {
+  <span class="tok-com">// c.theme đảm bảo có, không phải undefined</span>
+}</code></pre>
+        </div>
+
+        <p>
+          <code>Readonly&lt;T&gt;</code> hữu ích khi muốn nhấn mạnh "không được mutate" — vd state immutable, config app.
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">Point</span> { x: <span class="tok-cls">number</span>; y: <span class="tok-cls">number</span>; }
+
+<span class="tok-kw">const</span> p: <span class="tok-cls">Readonly</span>&lt;<span class="tok-cls">Point</span>&gt; = { x: <span class="tok-num">1</span>, y: <span class="tok-num">2</span> };
+p.x = <span class="tok-num">5</span>;  <span class="tok-com">// ❌ Cannot assign to 'x' because it is a read-only property</span></code></pre>
+        </div>
+
+        <h2 id="utility-pick-omit">8. Utility types: <code>Pick</code> và <code>Omit</code></h2>
+
+        <p>
+          Hai utility "ngược nhau" để tạo subtype: <strong>chọn</strong> hay <strong>loại</strong> một số key.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Utility</th><th>Tác dụng</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Pick&lt;T, K&gt;</code></td><td>Lấy chỉ key trong K</td><td><code>Pick&lt;User, "id" | "name"&gt;</code></td></tr>
+              <tr><td><code>Omit&lt;T, K&gt;</code></td><td>Bỏ key trong K</td><td><code>Omit&lt;User, "password"&gt;</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pick / Omit thực tế</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">User</span> {
+  id: <span class="tok-cls">number</span>;
+  name: <span class="tok-cls">string</span>;
+  email: <span class="tok-cls">string</span>;
+  password: <span class="tok-cls">string</span>;
+  createdAt: <span class="tok-cls">Date</span>;
+}
+
+<span class="tok-com">// Trả API: không lộ password</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UserResponse</span> = <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">"password"</span>&gt;;
+<span class="tok-com">// = { id: number; name: string; email: string; createdAt: Date }</span>
+
+<span class="tok-com">// Item trong list — chỉ cần id + name</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UserListItem</span> = <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">"id"</span> | <span class="tok-str">"name"</span>&gt;;
+<span class="tok-com">// = { id: number; name: string }</span>
+
+<span class="tok-com">// Form đăng nhập — chỉ email + password</span>
+<span class="tok-kw">type</span> <span class="tok-cls">LoginForm</span> = <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">"email"</span> | <span class="tok-str">"password"</span>&gt;;</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mối quan hệ Pick &amp; Omit</div>
+          <p>
+            Chúng "lưỡng tính" — biểu diễn qua nhau:
+          </p>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">K</span> <span class="tok-kw">extends</span> <span class="tok-kw">keyof</span> <span class="tok-cls">any</span>&gt; = <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">Exclude</span>&lt;<span class="tok-kw">keyof</span> <span class="tok-cls">T</span>, <span class="tok-cls">K</span>&gt;&gt;;
+<span class="tok-com">// "Omit K" = "Pick mọi key của T trừ K"</span></code></pre>
+          <p style="margin-top: 8px;">
+            Đây thực sự là cách <code>Omit</code> được định nghĩa trong <code>lib.es5.d.ts</code> của TS.
+          </p>
+        </div>
+
+        <h2 id="utility-record">9. Utility type: <code>Record&lt;K, V&gt;</code></h2>
+
+        <p>
+          Tạo object type với key trong union <code>K</code>, value type <code>V</code>. Cú pháp gọn hơn index signature.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Record — dictionary với key cố định</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Object có chính xác 3 key Role → number (count user)</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Role</span> = <span class="tok-str">"admin"</span> | <span class="tok-str">"user"</span> | <span class="tok-str">"guest"</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">RoleCount</span> = <span class="tok-cls">Record</span>&lt;<span class="tok-cls">Role</span>, <span class="tok-cls">number</span>&gt;;
+<span class="tok-com">// = { admin: number; user: number; guest: number }</span>
+
+<span class="tok-kw">const</span> counts: <span class="tok-cls">RoleCount</span> = {
+  admin: <span class="tok-num">2</span>,
+  user: <span class="tok-num">100</span>,
+  guest: <span class="tok-num">42</span>,
+};
+
+counts.user;   <span class="tok-com">// number</span>
+counts.other;  <span class="tok-com">// ❌ Property 'other' does not exist</span>
+
+<span class="tok-com">// String key bất kỳ — tương đương index signature</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Dict</span>&lt;<span class="tok-cls">V</span>&gt; = <span class="tok-cls">Record</span>&lt;<span class="tok-cls">string</span>, <span class="tok-cls">V</span>&gt;;
+<span class="tok-com">// = { [key: string]: V }</span>
+
+<span class="tok-kw">const</span> ages: <span class="tok-cls">Dict</span>&lt;<span class="tok-cls">number</span>&gt; = { an: <span class="tok-num">22</span>, binh: <span class="tok-num">23</span> };</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 <code>Record&lt;K, V&gt;</code> vs index signature</div>
+          <p>
+            <code>Record&lt;string, number&gt;</code> và <code>{ [key: string]: number }</code> <strong>tương
+            đương</strong>. <code>Record</code> chỉ là "sugar" cho mapped type:
+          </p>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">Record</span>&lt;<span class="tok-cls">K</span> <span class="tok-kw">extends</span> <span class="tok-kw">keyof</span> <span class="tok-cls">any</span>, <span class="tok-cls">V</span>&gt; = {
+  [<span class="tok-cls">P</span> <span class="tok-kw">in</span> <span class="tok-cls">K</span>]: <span class="tok-cls">V</span>;
+};</code></pre>
+          <p style="margin-top: 8px;">
+            Khác biệt thực dụng: <code>Record</code> đẹp hơn khi <em>K là union cụ thể</em> (vd <code>"a"|"b"|"c"</code>)
+            — nó "ghi" đủ key cho IntelliSense. Index signature đẹp hơn khi key thực sự "bất kỳ".
+          </p>
+        </div>
+
+        <h2 id="utility-filter">10. Utility types lọc union: <code>Exclude</code>, <code>Extract</code>, <code>NonNullable</code></h2>
+
+        <p>
+          Bộ ba này làm việc với <strong>union</strong>. Hữu ích cho narrowing type, lọc literal, bỏ null/undefined.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Utility</th><th>Ý nghĩa</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Exclude&lt;T, U&gt;</code></td><td>Loại member của T nằm trong U</td><td><code>Exclude&lt;"a"|"b"|"c", "a"&gt; = "b"|"c"</code></td></tr>
+              <tr><td><code>Extract&lt;T, U&gt;</code></td><td>Giữ lại member của T nằm trong U</td><td><code>Extract&lt;"a"|"b"|1, string&gt; = "a"|"b"</code></td></tr>
+              <tr><td><code>NonNullable&lt;T&gt;</code></td><td>Loại <code>null</code> &amp; <code>undefined</code></td><td><code>NonNullable&lt;string|null&gt; = string</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Filter union</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">Status</span> = <span class="tok-str">"pending"</span> | <span class="tok-str">"success"</span> | <span class="tok-str">"error"</span> | <span class="tok-str">"cancelled"</span>;
+
+<span class="tok-com">// Bỏ "cancelled"</span>
+<span class="tok-kw">type</span> <span class="tok-cls">ActiveStatus</span> = <span class="tok-cls">Exclude</span>&lt;<span class="tok-cls">Status</span>, <span class="tok-str">"cancelled"</span>&gt;;
+<span class="tok-com">// = "pending" | "success" | "error"</span>
+
+<span class="tok-com">// Chỉ giữ "success" và "error"</span>
+<span class="tok-kw">type</span> <span class="tok-cls">DoneStatus</span> = <span class="tok-cls">Extract</span>&lt;<span class="tok-cls">Status</span>, <span class="tok-str">"success"</span> | <span class="tok-str">"error"</span>&gt;;
+<span class="tok-com">// = "success" | "error"</span>
+
+<span class="tok-com">// Bỏ null/undefined</span>
+<span class="tok-kw">type</span> <span class="tok-cls">MaybeName</span> = <span class="tok-cls">string</span> | <span class="tok-cls">null</span> | <span class="tok-cls">undefined</span>;
+<span class="tok-kw">type</span> <span class="tok-cls">Name</span> = <span class="tok-cls">NonNullable</span>&lt;<span class="tok-cls">MaybeName</span>&gt;;  <span class="tok-com">// = string</span>
+
+<span class="tok-com">// Áp dụng trong function — narrow sau check</span>
+<span class="tok-kw">function</span> <span class="tok-fn">trim</span>(s: <span class="tok-cls">string</span> | <span class="tok-cls">null</span>): <span class="tok-cls">string</span> {
+  <span class="tok-kw">if</span> (s === <span class="tok-kw">null</span>) <span class="tok-kw">return</span> <span class="tok-str">""</span>;
+  <span class="tok-kw">const</span> v: <span class="tok-cls">NonNullable</span>&lt;<span class="tok-kw">typeof</span> s&gt; = s;  <span class="tok-com">// v: string</span>
+  <span class="tok-kw">return</span> v.<span class="tok-fn">trim</span>();
+}</code></pre>
+        </div>
+
+        <h2 id="utility-function">11. Utility types về function: <code>ReturnType</code>, <code>Parameters</code>, <code>Awaited</code></h2>
+
+        <p>
+          Bộ 3 này "rút" thông tin từ type của function/promise. Cực kỳ hữu ích khi bạn không muốn viết tay lại type
+          mà function khác đã định nghĩa.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Utility</th><th>Input</th><th>Output</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>ReturnType&lt;F&gt;</code></td><td>function type</td><td>Type của giá trị return</td></tr>
+              <tr><td><code>Parameters&lt;F&gt;</code></td><td>function type</td><td>Tuple type của param</td></tr>
+              <tr><td><code>Awaited&lt;P&gt;</code></td><td>Promise type</td><td>Type bên trong Promise (đệ quy)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ReturnType và Parameters</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">createUser</span>(name: <span class="tok-cls">string</span>, age: <span class="tok-cls">number</span>) {
+  <span class="tok-kw">return</span> { id: <span class="tok-cls">Date</span>.<span class="tok-fn">now</span>(), name, age, active: <span class="tok-kw">true</span> };
+}
+
+<span class="tok-com">// Lấy return type — không cần định nghĩa lại</span>
+<span class="tok-kw">type</span> <span class="tok-cls">User</span> = <span class="tok-cls">ReturnType</span>&lt;<span class="tok-kw">typeof</span> <span class="tok-fn">createUser</span>&gt;;
+<span class="tok-com">// = { id: number; name: string; age: number; active: boolean }</span>
+
+<span class="tok-com">// Lấy tuple param</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Args</span> = <span class="tok-cls">Parameters</span>&lt;<span class="tok-kw">typeof</span> <span class="tok-fn">createUser</span>&gt;;
+<span class="tok-com">// = [name: string, age: number]</span>
+
+<span class="tok-com">// Lấy param đầu</span>
+<span class="tok-kw">type</span> <span class="tok-cls">FirstArg</span> = <span class="tok-cls">Parameters</span>&lt;<span class="tok-kw">typeof</span> <span class="tok-fn">createUser</span>&gt;[<span class="tok-num">0</span>];  <span class="tok-com">// = string</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Vì sao phải có <code>typeof</code> trước tên function?</div>
+          <p>
+            <code>createUser</code> là <em>value</em> (function thật). <code>ReturnType</code> cần một <em>type</em>.
+            Toán tử <code>typeof</code> ở vị trí type "lấy type của value đó". Tương tự pattern hay gặp:
+          </p>
+<pre><code><span class="tok-kw">const</span> config = { theme: <span class="tok-str">"dark"</span>, lang: <span class="tok-str">"vi"</span> };
+<span class="tok-kw">type</span> <span class="tok-cls">Config</span> = <span class="tok-kw">typeof</span> config;  <span class="tok-com">// = { theme: string; lang: string }</span></code></pre>
+          <p style="margin-top: 8px;">
+            Đây là <code>typeof</code> ở "tầng type" — không phải <code>typeof</code> runtime trả string. Cùng từ
+            khoá, 2 nghĩa khác nhau tuỳ ngữ cảnh.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Awaited — unwrap Promise</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">fetchUser</span>(): <span class="tok-cls">Promise</span>&lt;{ id: <span class="tok-cls">number</span>; name: <span class="tok-cls">string</span> }&gt; {
+  <span class="tok-kw">return</span> { id: <span class="tok-num">1</span>, name: <span class="tok-str">"An"</span> };
+}
+
+<span class="tok-com">// ReturnType — chỉ lấy Promise&lt;...&gt;, chưa unwrap</span>
+<span class="tok-kw">type</span> <span class="tok-cls">R</span> = <span class="tok-cls">ReturnType</span>&lt;<span class="tok-kw">typeof</span> <span class="tok-fn">fetchUser</span>&gt;;
+<span class="tok-com">// R = Promise&lt;{ id: number; name: string }&gt;</span>
+
+<span class="tok-com">// Awaited — lấy giá trị bên trong Promise</span>
+<span class="tok-kw">type</span> <span class="tok-cls">User</span> = <span class="tok-cls">Awaited</span>&lt;<span class="tok-cls">R</span>&gt;;
+<span class="tok-com">// User = { id: number; name: string }</span>
+
+<span class="tok-com">// Combo phổ biến</span>
+<span class="tok-kw">type</span> <span class="tok-cls">User2</span> = <span class="tok-cls">Awaited</span>&lt;<span class="tok-cls">ReturnType</span>&lt;<span class="tok-kw">typeof</span> <span class="tok-fn">fetchUser</span>&gt;&gt;;
+
+<span class="tok-com">// Awaited đệ quy — unwrap Promise lồng</span>
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">Awaited</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">number</span>&gt;&gt;&gt;;  <span class="tok-com">// = number</span></code></pre>
+        </div>
+
+        <h2 id="self-utility">12. Tự viết utility — bước đầu</h2>
+
+        <p>
+          Bạn không phải lúc nào cũng phải dùng utility built-in — tự viết được khi cần. Ở chương 11 (Advanced Types)
+          ta học đầy đủ conditional và mapped type. Chương này chỉ "nếm thử":
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Utility tự viết</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// 1. Nullable — thêm null vào union</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Nullable</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> | <span class="tok-cls">null</span>;
+
+<span class="tok-kw">const</span> name: <span class="tok-cls">Nullable</span>&lt;<span class="tok-cls">string</span>&gt; = <span class="tok-kw">null</span>;       <span class="tok-com">// OK</span>
+<span class="tok-kw">const</span> name2: <span class="tok-cls">Nullable</span>&lt;<span class="tok-cls">string</span>&gt; = <span class="tok-str">"hello"</span>;   <span class="tok-com">// OK</span>
+
+<span class="tok-com">// 2. Optional — thêm null + undefined</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Maybe</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> | <span class="tok-cls">null</span> | <span class="tok-cls">undefined</span>;
+
+<span class="tok-com">// 3. ValueOf — tương tự keyof nhưng cho value type</span>
+<span class="tok-kw">type</span> <span class="tok-cls">ValueOf</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span>[<span class="tok-kw">keyof</span> <span class="tok-cls">T</span>];
+
+<span class="tok-kw">interface</span> <span class="tok-cls">Color</span> { red: <span class="tok-num">1</span>; green: <span class="tok-num">2</span>; blue: <span class="tok-num">3</span>; }
+<span class="tok-kw">type</span> <span class="tok-cls">ColorValue</span> = <span class="tok-cls">ValueOf</span>&lt;<span class="tok-cls">Color</span>&gt;;  <span class="tok-com">// = 1 | 2 | 3</span>
+
+<span class="tok-com">// 4. DeepPartial — phiên bản đệ quy của Partial</span>
+<span class="tok-com">//    (đầy đủ ở chương 11 — đây là intro)</span>
+<span class="tok-kw">type</span> <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]?: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-cls">object</span>
+    ? <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>[<span class="tok-cls">K</span>]&gt;
+    : <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">interface</span> <span class="tok-cls">Config</span> {
+  ui: { theme: <span class="tok-cls">string</span>; lang: <span class="tok-cls">string</span> };
+  api: { url: <span class="tok-cls">string</span>; timeout: <span class="tok-cls">number</span> };
+}
+
+<span class="tok-kw">const</span> p: <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">Config</span>&gt; = {
+  ui: { theme: <span class="tok-str">"dark"</span> },   <span class="tok-com">// thiếu lang — OK vì đã đệ quy</span>
+};</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Đặt utility ở đâu?</div>
+          <p>
+            Quy ước phổ biến: tạo file <code>src/types/utils.ts</code> (hoặc <code>shared/types.ts</code>),
+            <code>export type</code> những utility tự viết. Một số project lớn dùng package
+            <a href="https://github.com/sindresorhus/type-fest" target="_blank" rel="noopener">type-fest</a> (Sindre
+            Sorhus) — bộ ~150 utility chất lượng cao, đỡ tự viết lại.
+          </p>
+        </div>
+
+        <h2 id="full-table">13. Bảng tổng kết utility types</h2>
+
+        <p>Một bảng để tra cứu nhanh sau khi đã đọc xong từng phần:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Utility</th><th>Input → Output</th><th>Dùng khi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Partial&lt;T&gt;</code></td><td>Mọi property → optional</td><td>Update DTO, patch object</td></tr>
+              <tr><td><code>Required&lt;T&gt;</code></td><td>Mọi property → bắt buộc</td><td>Sau khi merge default, đảm bảo đủ field</td></tr>
+              <tr><td><code>Readonly&lt;T&gt;</code></td><td>Mọi property → readonly</td><td>State immutable, config</td></tr>
+              <tr><td><code>Pick&lt;T, K&gt;</code></td><td>Lấy key trong K</td><td>List item, form subset</td></tr>
+              <tr><td><code>Omit&lt;T, K&gt;</code></td><td>Bỏ key trong K</td><td>Hide password, ẩn id khi tạo mới</td></tr>
+              <tr><td><code>Record&lt;K, V&gt;</code></td><td>Object {K → V}</td><td>Dictionary key cố định</td></tr>
+              <tr><td><code>Exclude&lt;T, U&gt;</code></td><td>Bỏ member union T trong U</td><td>Narrow status, lọc literal</td></tr>
+              <tr><td><code>Extract&lt;T, U&gt;</code></td><td>Giữ member T trong U</td><td>Lọc loại event, giữ string trong mixed</td></tr>
+              <tr><td><code>NonNullable&lt;T&gt;</code></td><td>Bỏ null + undefined</td><td>Sau narrowing, force non-null</td></tr>
+              <tr><td><code>ReturnType&lt;F&gt;</code></td><td>Lấy return của F</td><td>Reuse type của function khác</td></tr>
+              <tr><td><code>Parameters&lt;F&gt;</code></td><td>Lấy tuple param của F</td><td>Wrap/decorate function</td></tr>
+              <tr><td><code>Awaited&lt;P&gt;</code></td><td>Unwrap Promise (đệ quy)</td><td>Lấy giá trị async return</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — Generic map function</h4>
+            <div class="exercise-body">
+              <p>
+                Viết function <code>map&lt;T, U&gt;(arr: T[], fn: (x: T) =&gt; U): U[]</code> — không dùng
+                <code>Array.prototype.map</code>. Test với:
+              </p>
+              <ul>
+                <li><code>map([1, 2, 3], n =&gt; n.toString())</code> → <code>["1", "2", "3"]</code> kiểu <code>string[]</code></li>
+                <li><code>map(["a", "bb", "ccc"], s =&gt; s.length)</code> → <code>[1, 2, 3]</code> kiểu <code>number[]</code></li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">map</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">U</span>&gt;(arr: <span class="tok-cls">T</span>[], fn: (x: <span class="tok-cls">T</span>) =&gt; <span class="tok-cls">U</span>): <span class="tok-cls">U</span>[] {
+  <span class="tok-kw">const</span> out: <span class="tok-cls">U</span>[] = [];
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> x <span class="tok-kw">of</span> arr) {
+    out.<span class="tok-fn">push</span>(<span class="tok-fn">fn</span>(x));
+  }
+  <span class="tok-kw">return</span> out;
+}
+
+<span class="tok-kw">const</span> strs = <span class="tok-fn">map</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>], n =&gt; n.<span class="tok-fn">toString</span>());
+<span class="tok-com">// strs: string[]   ← TS infer T=number, U=string</span>
+
+<span class="tok-kw">const</span> lens = <span class="tok-fn">map</span>([<span class="tok-str">"a"</span>, <span class="tok-str">"bb"</span>, <span class="tok-str">"ccc"</span>], s =&gt; s.length);
+<span class="tok-com">// lens: number[]</span></code></pre>
+                  <p>Điểm chính: 2 type parameter — input element type và output element type — TS tự suy ra cả 2 từ argument.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — groupBy</h4>
+            <div class="exercise-body">
+              <p>
+                Viết function <code>groupBy&lt;T, K extends string | number&gt;(arr: T[], keyFn: (x: T) =&gt; K): Record&lt;K, T[]&gt;</code>
+                — gom mảng thành object theo key. Ví dụ:
+              </p>
+<pre><code><span class="tok-kw">const</span> users = [
+  { name: <span class="tok-str">"An"</span>, role: <span class="tok-str">"admin"</span> },
+  { name: <span class="tok-str">"Binh"</span>, role: <span class="tok-str">"user"</span> },
+  { name: <span class="tok-str">"Cuong"</span>, role: <span class="tok-str">"admin"</span> },
+];
+
+<span class="tok-fn">groupBy</span>(users, u =&gt; u.role);
+<span class="tok-com">// = { admin: [An, Cuong], user: [Binh] }</span></code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">groupBy</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">K</span> <span class="tok-kw">extends</span> <span class="tok-cls">string</span> | <span class="tok-cls">number</span>&gt;(
+  arr: <span class="tok-cls">T</span>[],
+  keyFn: (x: <span class="tok-cls">T</span>) =&gt; <span class="tok-cls">K</span>
+): <span class="tok-cls">Record</span>&lt;<span class="tok-cls">K</span>, <span class="tok-cls">T</span>[]&gt; {
+  <span class="tok-kw">const</span> out = {} <span class="tok-kw">as</span> <span class="tok-cls">Record</span>&lt;<span class="tok-cls">K</span>, <span class="tok-cls">T</span>[]&gt;;
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> x <span class="tok-kw">of</span> arr) {
+    <span class="tok-kw">const</span> k = <span class="tok-fn">keyFn</span>(x);
+    (out[k] ??= []).<span class="tok-fn">push</span>(x);
+  }
+  <span class="tok-kw">return</span> out;
+}</code></pre>
+                  <p>
+                    Constraint <code>K extends string | number</code> đảm bảo có thể dùng làm key object. Pattern
+                    <code>(out[k] ??= []).push(x)</code> dùng logical-nullish-assignment (ES2021): nếu key chưa
+                    có → tạo array rỗng → push.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Type-safe event emitter</h4>
+            <div class="exercise-body">
+              <p>
+                Cho:
+              </p>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">EventMap</span> = {
+  click: <span class="tok-cls">MouseEvent</span>;
+  submit: <span class="tok-cls">SubmitEvent</span>;
+  keypress: <span class="tok-cls">KeyboardEvent</span>;
+};</code></pre>
+              <p>
+                Viết function <code>on&lt;K extends keyof EventMap&gt;(event: K, handler: (e: EventMap[K]) =&gt; void): void</code>.
+                Yêu cầu:
+              </p>
+              <ul>
+                <li><code>on("click", e =&gt; e.clientX)</code> hợp lệ (e là MouseEvent)</li>
+                <li><code>on("submit", e =&gt; e.preventDefault())</code> hợp lệ</li>
+                <li><code>on("click", e =&gt; e.key)</code> ❌ (key chỉ có ở KeyboardEvent)</li>
+                <li><code>on("unknown", ...)</code> ❌ (không có trong EventMap)</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">EventMap</span> = {
+  click: <span class="tok-cls">MouseEvent</span>;
+  submit: <span class="tok-cls">SubmitEvent</span>;
+  keypress: <span class="tok-cls">KeyboardEvent</span>;
+};
+
+<span class="tok-kw">function</span> <span class="tok-fn">on</span>&lt;<span class="tok-cls">K</span> <span class="tok-kw">extends</span> <span class="tok-kw">keyof</span> <span class="tok-cls">EventMap</span>&gt;(
+  event: <span class="tok-cls">K</span>,
+  handler: (e: <span class="tok-cls">EventMap</span>[<span class="tok-cls">K</span>]) =&gt; <span class="tok-cls">void</span>
+): <span class="tok-cls">void</span> {
+  document.<span class="tok-fn">addEventListener</span>(event, handler <span class="tok-kw">as</span> <span class="tok-cls">EventListener</span>);
+}
+
+<span class="tok-fn">on</span>(<span class="tok-str">"click"</span>, e =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(e.clientX));     <span class="tok-com">// OK</span>
+<span class="tok-fn">on</span>(<span class="tok-str">"submit"</span>, e =&gt; e.<span class="tok-fn">preventDefault</span>());          <span class="tok-com">// OK</span>
+<span class="tok-fn">on</span>(<span class="tok-str">"click"</span>, e =&gt; e.key);                       <span class="tok-com">// ❌ key không có trên MouseEvent</span>
+<span class="tok-fn">on</span>(<span class="tok-str">"unknown"</span>, () =&gt; {});                       <span class="tok-com">// ❌ "unknown" không phải keyof EventMap</span></code></pre>
+                  <p>
+                    Đây là pattern <strong>core</strong> của type-safe event system — react synthetic events,
+                    Node EventEmitter typed, RxJS. Cả 2 lỗi compile-time, không cần runtime check.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — User DTOs với Pick/Omit</h4>
+            <div class="exercise-body">
+              <p>Cho interface User 10 field:</p>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">User</span> {
+  id: <span class="tok-cls">number</span>;
+  email: <span class="tok-cls">string</span>;
+  password: <span class="tok-cls">string</span>;
+  name: <span class="tok-cls">string</span>;
+  avatar: <span class="tok-cls">string</span>;
+  bio: <span class="tok-cls">string</span>;
+  role: <span class="tok-str">"admin"</span> | <span class="tok-str">"user"</span>;
+  active: <span class="tok-cls">boolean</span>;
+  createdAt: <span class="tok-cls">Date</span>;
+  updatedAt: <span class="tok-cls">Date</span>;
+}</code></pre>
+              <p>Hãy tạo 4 type sau bằng Pick/Omit/Partial:</p>
+              <ul>
+                <li><code>CreateUserDto</code> — bỏ id, createdAt, updatedAt (server tự sinh)</li>
+                <li><code>UpdateUserDto</code> — như CreateUserDto nhưng mọi field optional</li>
+                <li><code>UserResponse</code> — bỏ password</li>
+                <li><code>UserListItem</code> — chỉ id, name, avatar</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com">// 1. Tạo mới — bỏ field server-generated</span>
+<span class="tok-kw">type</span> <span class="tok-cls">CreateUserDto</span> = <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">"id"</span> | <span class="tok-str">"createdAt"</span> | <span class="tok-str">"updatedAt"</span>&gt;;
+
+<span class="tok-com">// 2. Update — như tạo mới + mọi field optional</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UpdateUserDto</span> = <span class="tok-cls">Partial</span>&lt;<span class="tok-cls">CreateUserDto</span>&gt;;
+<span class="tok-com">// Hoặc: Partial&lt;Omit&lt;User, "id" | "createdAt" | "updatedAt"&gt;&gt;</span>
+
+<span class="tok-com">// 3. Response — không lộ password</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UserResponse</span> = <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">"password"</span>&gt;;
+
+<span class="tok-com">// 4. List — chỉ thông tin để hiển thị</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UserListItem</span> = <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">"id"</span> | <span class="tok-str">"name"</span> | <span class="tok-str">"avatar"</span>&gt;;
+
+<span class="tok-com">// Test</span>
+<span class="tok-kw">const</span> dto: <span class="tok-cls">CreateUserDto</span> = {
+  email: <span class="tok-str">"a@b.com"</span>,
+  password: <span class="tok-str">"x"</span>,
+  name: <span class="tok-str">"An"</span>,
+  avatar: <span class="tok-str">""</span>,
+  bio: <span class="tok-str">""</span>,
+  role: <span class="tok-str">"user"</span>,
+  active: <span class="tok-kw">true</span>,
+};
+
+<span class="tok-kw">const</span> patch: <span class="tok-cls">UpdateUserDto</span> = { name: <span class="tok-str">"An mới"</span> };  <span class="tok-com">// OK chỉ 1 field</span></code></pre>
+                  <p>
+                    Pattern này là <strong>chuẩn cho REST API</strong>. Một interface User duy nhất sinh ra 4 type
+                    khác nhau cho 4 ngữ cảnh — không lặp code, đổi User → tất cả tự đồng bộ.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — OptionalKeys&lt;T&gt;</h4>
+            <div class="exercise-body">
+              <p>
+                Viết utility type <code>OptionalKeys&lt;T&gt;</code> trả về union của các key trong T mà property
+                là optional (có <code>?</code>). Ví dụ:
+              </p>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">User</span> {
+  id: <span class="tok-cls">number</span>;
+  name: <span class="tok-cls">string</span>;
+  email?: <span class="tok-cls">string</span>;
+  bio?: <span class="tok-cls">string</span>;
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">Opt</span> = <span class="tok-cls">OptionalKeys</span>&lt;<span class="tok-cls">User</span>&gt;;  <span class="tok-com">// = "email" | "bio"</span></code></pre>
+              <p>
+                Gợi ý: dùng conditional type. So sánh <code>{}</code> với <code>Pick&lt;T, K&gt;</code> — nếu một
+                key K là optional, <code>{}</code> có thể assignable vào <code>Pick&lt;T, K&gt;</code>.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">OptionalKeys</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]-?: {} <span class="tok-kw">extends</span> <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">K</span>&gt; ? <span class="tok-cls">K</span> : <span class="tok-kw">never</span>;
+}[<span class="tok-kw">keyof</span> <span class="tok-cls">T</span>];
+
+<span class="tok-com">// Đối xứng — key bắt buộc</span>
+<span class="tok-kw">type</span> <span class="tok-cls">RequiredKeys</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]-?: {} <span class="tok-kw">extends</span> <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">K</span>&gt; ? <span class="tok-kw">never</span> : <span class="tok-cls">K</span>;
+}[<span class="tok-kw">keyof</span> <span class="tok-cls">T</span>];
+
+<span class="tok-com">// Test</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">User</span> { id: <span class="tok-cls">number</span>; name: <span class="tok-cls">string</span>; email?: <span class="tok-cls">string</span>; bio?: <span class="tok-cls">string</span>; }
+<span class="tok-kw">type</span> <span class="tok-cls">Opt</span> = <span class="tok-cls">OptionalKeys</span>&lt;<span class="tok-cls">User</span>&gt;;   <span class="tok-com">// "email" | "bio"</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Req</span> = <span class="tok-cls">RequiredKeys</span>&lt;<span class="tok-cls">User</span>&gt;;   <span class="tok-com">// "id" | "name"</span></code></pre>
+                  <p>
+                    Cơ chế: với mỗi K, kiểm tra <code>{} extends Pick&lt;T, K&gt;</code>:
+                  </p>
+                  <ul>
+                    <li>Nếu K optional → <code>Pick&lt;T, K&gt;</code> là <code>{ K?: ... }</code> → <code>{}</code> assignable → kết quả K.</li>
+                    <li>Nếu K bắt buộc → <code>Pick</code> là <code>{ K: ... }</code> → <code>{}</code> không assignable → kết quả never.</li>
+                  </ul>
+                  <p>
+                    Cuối cùng <code>[keyof T]</code> "indexed access" lấy union các value — <code>never</code> tự loại bỏ.
+                    Đây là pattern conditional + mapped type "kinh điển" — chương 11 sẽ phân tích kỹ.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Với <code>function f&lt;T&gt;(x: T): T { return x; }</code>, khi gọi <code>f(5)</code>, T là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                T = <code>number</code>. TS dùng <strong>type inference</strong> — nhìn vào argument <code>5</code> có type
+                <code>number</code>, đối chiếu với param <code>x: T</code> → suy ra <code>T = number</code>. Không cần viết
+                <code>f&lt;number&gt;(5)</code> tường minh (vẫn đúng nhưng dư).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>Partial&lt;T&gt;</code> có đệ quy không (làm optional ở nested object)?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. <code>Partial</code> chỉ làm optional ở <strong>tầng 1</strong>. Nested object
+                vẫn nguyên cấu trúc. Muốn đệ quy phải tự viết <code>DeepPartial</code> bằng conditional type
+                (xem mục 12 và chương 11).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>Pick&lt;T, K&gt;</code> và <code>Omit&lt;T, K&gt;</code> "đối xứng" thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>Omit&lt;T, K&gt; = Pick&lt;T, Exclude&lt;keyof T, K&gt;&gt;</code>. Tức là "Omit K" tương đương
+                "Pick tất cả key của T trừ K". Đây chính là cách <code>Omit</code> được định nghĩa trong
+                <code>lib.es5.d.ts</code> của TypeScript.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Khác nhau giữa <code>Record&lt;string, number&gt;</code> và <code>{ [key: string]: number }</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Tương đương về mặt type</strong>. <code>Record</code> là "sugar" cho mapped type:
+                <code>Record&lt;K, V&gt; = { [P in K]: V }</code>. Khác biệt thực dụng: dùng <code>Record</code> khi
+                K là union <em>cụ thể</em> (vd <code>"a"|"b"|"c"</code>) — IntelliSense gợi ý đủ key. Index signature
+                thuận tự nhiên hơn khi key thực sự "bất kỳ string".
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Vì sao viết <code>ReturnType&lt;typeof foo&gt;</code> mà không phải <code>ReturnType&lt;foo&gt;</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì <code>foo</code> là <strong>value</strong> (function thật khi runtime), còn <code>ReturnType</code>
+                nhận <strong>type</strong>. Toán tử <code>typeof</code> ở <em>tầng type</em> "chuyển" value thành type
+                tương ứng — không phải <code>typeof</code> runtime trả string. Cùng từ khoá, 2 nghĩa khác nhau tuỳ
+                vị trí (type position vs value position).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Generic class có default cho type parameter không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Có</strong>. Cú pháp giống function: <code>class Container&lt;T extends object = {}&gt;</code>.
+                Khi tạo instance không spec type, TS lấy default. Pattern này phổ biến trong React (vd
+                <code>useState&lt;T = undefined&gt;</code>), state library.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p><code>Required&lt;T&gt;</code> có loại bỏ <code>?</code> kể cả những field <em>vốn</em> đã optional?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Có</strong>. <code>Required&lt;T&gt;</code> ép tất cả property thành bắt buộc, kể cả original
+                <code>?</code>. Định nghĩa: <code>{ [K in keyof T]-?: T[K] }</code> — dấu <code>-?</code> là
+                "remove optional modifier". Tương tự <code>Readonly</code> dùng <code>readonly</code> và có
+                "mặt nghịch" là <code>-readonly</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 10, bạn nên đã thành thạo:</p>
+        <ul>
+          <li><strong>Generic function</strong>: 1, 2, nhiều type parameter; hiểu inference vs spec tường minh.</li>
+          <li><strong>Constraint</strong>: <code>T extends ...</code>, đặc biệt combo <code>K extends keyof T</code>.</li>
+          <li><strong>Default type parameter</strong>: <code>T = string</code>, gọn API mà vẫn linh hoạt.</li>
+          <li><strong>Generic class</strong> và <strong>generic interface/type</strong>: container, callable signature.</li>
+          <li><strong>11 utility types built-in</strong>: bốn nhóm — modifier (Partial/Required/Readonly), select (Pick/Omit/Record),
+            filter union (Exclude/Extract/NonNullable), từ function (ReturnType/Parameters/Awaited).</li>
+          <li>Cảm giác đầu tiên với <strong>conditional &amp; mapped type</strong> tự viết — sẽ "deep dive" ở chương 11.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 11 (TS Advanced Types)</strong> — conditional type, mapped type, template literal type, infer.
+            Đây là engine đằng sau mọi utility hôm nay; sau chương 11 bạn sẽ viết được mọi utility tự thân.</li>
+          <li><strong>Chương 12 (TS Practical)</strong> — áp dụng generic + utility vào project React + Node thật.
+            tsconfig khắt khe, declaration file, integration với Express/Fastify.</li>
+          <li><strong>Dart Chương 8 (Generic)</strong> — đối chiếu generic Dart (cũng có <code>extends</code>) vs TS
+            (cộng thêm conditional). Dart không có utility "biến đổi type" tương đương Pick/Omit — type system
+            của TS mạnh hơn ở mặt này.</li>
+          <li><strong>Python typing</strong> (pillar tương lai) — <code>TypeVar</code>, <code>Generic[T]</code>,
+            <code>TypedDict</code> — tương ứng generic/interface, nhưng yếu hơn về utility.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong9.html" class="prev">
+            <div class="dir">← Chương 9</div>
+            <div class="label">TypeScript Foundations</div>
+          </a>
+          <a href="chuong11.html" class="next">
+            <div class="dir">Chương 11 →</div>
+            <div class="label">TS Advanced Types</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#generic-function">1. Generic function</a></li>
+          <li><a href="#multiple-params">2. Nhiều type parameter</a></li>
+          <li><a href="#constraint">3. Constraint</a></li>
+          <li><a href="#default-param">4. Default type parameter</a></li>
+          <li><a href="#generic-class">5. Generic class</a></li>
+          <li><a href="#generic-interface-type">6. Generic interface/type</a></li>
+          <li><a href="#utility-partial">7. Partial/Required/Readonly</a></li>
+          <li><a href="#utility-pick-omit">8. Pick / Omit</a></li>
+          <li><a href="#utility-record">9. Record</a></li>
+          <li><a href="#utility-filter">10. Exclude/Extract/NonNullable</a></li>
+          <li><a href="#utility-function">11. ReturnType/Parameters/Awaited</a></li>
+          <li><a href="#self-utility">12. Tự viết utility</a></li>
+          <li><a href="#full-table">13. Bảng tổng kết</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 10 — TypeScript Generics &amp; Utility Types · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong9.html">← Chương 9</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong11.html">Chương 11 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

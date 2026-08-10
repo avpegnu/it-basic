@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G4 · Data fetching & state</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-g">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">G4 · Data fetching & state</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần G · Frontend React</div>
+      <nav class="nav">
+        <a href="G1-react-core.html">G1 · React core</a>
+        <a href="G2-react-hooks.html">G2 · React Hooks</a>
+        <a href="G3-react-nang-cao.html">G3 · React nâng cao & performance</a>
+        <a href="G4-data-fetching.html" class="active">G4 · Data fetching & state</a>
+        <a href="G5-tailwindcss.html">G5 · TailwindCSS</a>
+        <a href="G6-realtime-ui.html">G6 · Realtime UI</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#fetch">① Fetch & Axios</a>
+        <a href="#effectpitfall">② Pitfalls khi fetch trong useEffect</a>
+        <a href="#reactquery">③ React Query / SWR</a>
+        <a href="#states">④ Loading, error, optimistic</a>
+        <a href="#statemgmt">⑤ State management</a>
+        <a href="#servervsclient">⑥ Server state vs client state</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần G · Frontend React &nbsp;›&nbsp; <b>G4 · Data fetching & state</b></div>
+      <div class="live-pill"><span class="blink"></span> data layer</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần G · Chương 4</span>
+        <h1>Data Fetching & State Management</h1>
+        <p class="lead">Lấy dữ liệu đúng cách (React Query/SWR), quản lý server state vs client state, và optimistic update cho trải nghiệm realtime mượt.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Gọi API đúng cách với <code>fetch</code>/<code>axios</code>, biết khác biệt và cách hủy request bằng <code>AbortController</code>.</p>
+        <p>• Nhận diện và sửa các <b>pitfall</b> kinh điển khi fetch trong <code>useEffect</code>: race condition, double fetch, request waterfall, thiếu cleanup.</p>
+        <p>• Hiểu vì sao <b>React Query / SWR</b> thay thế phần lớn <code>useEffect</code> + <code>useState</code>: cache, stale-while-revalidate, dedup, refetch nền, mutation & invalidation.</p>
+        <p>• Quản lý đầy đủ các trạng thái UI: <b>loading / error / empty / success</b> và làm <b>optimistic update</b> kèm rollback.</p>
+        <p>• Phân biệt <b>server state</b> với <b>client/UI state</b>, và chọn đúng công cụ state management (Context, Redux, Zustand, Jotai) cho từng loại.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế hệ thống Contact Center</div>
+        <p>Màn hình của tổng đài viên (agent) là một "bảng điều khiển sống": danh sách hàng đợi (queue), thông tin khách đang gọi, lịch sử ticket, đoạn chat. Dữ liệu này <b>do server làm chủ</b>, thay đổi từng giây và có nhiều màn hình cùng xem. Nếu mỗi component tự <code>fetch</code> trong <code>useEffect</code>, bạn sẽ có request trùng lặp, dữ liệu lệch nhau, và UI giật khi mạng chậm. Đây chính là bài toán mà lớp data-fetching hiện đại sinh ra để giải.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="fetch"><span class="ico">①</span> Fetch & Axios</h2>
+      <p>Trình duyệt cung cấp sẵn <code>fetch</code> — một API dựa trên <b>Promise</b> để gọi HTTP. <code>axios</code> là thư viện bên thứ ba bọc thêm nhiều tiện ích. Hiểu rõ cả hai giúp bạn chọn đúng và trả lời tốt câu hỏi "tại sao team dùng axios".</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th><code>fetch</code></th><th><code>axios</code></th></tr></thead>
+          <tbody>
+            <tr><td>Cài đặt</td><td>Có sẵn trong trình duyệt & Node 18+</td><td>Phải <code>npm i axios</code></td></tr>
+            <tr><td>Parse JSON</td><td>Phải gọi tay <code>res.json()</code></td><td>Tự parse, có sẵn <code>res.data</code></td></tr>
+            <tr><td>Lỗi HTTP (4xx/5xx)</td><td><b>Không</b> reject — phải tự kiểm tra <code>res.ok</code></td><td><b>Tự</b> reject khi status ≥ 400</td></tr>
+            <tr><td>Timeout</td><td>Phải tự làm bằng <code>AbortController</code></td><td>Có option <code>timeout</code></td></tr>
+            <tr><td>Interceptor</td><td>Không có</td><td>Có (gắn token, log, refresh)</td></tr>
+            <tr><td>Hủy request</td><td><code>AbortController</code></td><td><code>AbortController</code> (hoặc CancelToken cũ)</td></tr>
+            <tr><td>Upload progress</td><td>Hạn chế</td><td>Hỗ trợ tốt</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Bẫy lớn nhất của fetch</div>
+        <p><code>fetch</code> <b>chỉ reject khi lỗi mạng</b> (mất kết nối, CORS chặn). Một response <code>404</code> hay <code>500</code> vẫn vào nhánh <code>.then</code> bình thường! Phải tự kiểm tra <code>if (!res.ok) throw ...</code>. Quên điều này là lý do số một khiến UI "im lặng nuốt lỗi" — agent thấy danh sách rỗng mà không có thông báo gì.</p>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">fetch-client.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Bọc fetch thành 1 hàm chuẩn: ném lỗi rõ ràng, tự parse JSON</span>
+<span class="tok-key">export async function</span> <span class="tok-fn">apiGet</span>&lt;T&gt;(url: <span class="tok-typ">string</span>, signal?: <span class="tok-typ">AbortSignal</span>): <span class="tok-typ">Promise</span>&lt;T&gt; {
+  <span class="tok-key">const</span> res = <span class="tok-key">await</span> <span class="tok-fn">fetch</span>(url, {
+    headers: { <span class="tok-str">'Authorization'</span>: <span class="tok-str">`Bearer </span>${token}<span class="tok-str">`</span> },
+    signal,                       <span class="tok-com">// để hủy được request</span>
+  });
+  <span class="tok-key">if</span> (!res.ok) {                  <span class="tok-com">// 4xx/5xx KHÔNG tự reject → phải tự ném</span>
+    <span class="tok-key">throw new</span> <span class="tok-fn">Error</span>(<span class="tok-str">`HTTP </span>${res.status}<span class="tok-str"> khi gọi </span>${url}<span class="tok-str">`</span>);
+  }
+  <span class="tok-key">return</span> res.<span class="tok-fn">json</span>() <span class="tok-key">as</span> <span class="tok-typ">Promise</span>&lt;T&gt;;
+}
+
+<span class="tok-com">// Dùng: lấy danh sách cuộc gọi đang chờ trong hàng đợi</span>
+<span class="tok-key">const</span> calls = <span class="tok-key">await</span> <span class="tok-fn">apiGet</span>&lt;Call[]&gt;(<span class="tok-str">'/api/queues/sales/calls'</span>);</code></pre>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">axios-instance.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">import</span> axios <span class="tok-key">from</span> <span class="tok-str">'axios'</span>;
+
+<span class="tok-key">export const</span> api = axios.<span class="tok-fn">create</span>({
+  baseURL: <span class="tok-str">'/api'</span>,
+  timeout: <span class="tok-num">8000</span>,                  <span class="tok-com">// 8s là tự huỷ → tránh agent chờ vô tận</span>
+});
+
+<span class="tok-com">// Interceptor: gắn token vào MỌI request — không lặp code ở từng nơi</span>
+api.interceptors.request.<span class="tok-fn">use</span>((config) => {
+  config.headers.<span class="tok-var">Authorization</span> = <span class="tok-str">`Bearer </span>${<span class="tok-fn">getToken</span>()}<span class="tok-str">`</span>;
+  <span class="tok-key">return</span> config;
+});
+
+<span class="tok-com">// Interceptor response: token hết hạn → refresh 1 lần rồi thử lại</span>
+api.interceptors.response.<span class="tok-fn">use</span>(
+  (res) => res,
+  <span class="tok-key">async</span> (err) => {
+    <span class="tok-key">if</span> (err.response?.status === <span class="tok-num">401</span> &amp;&amp; !err.config._retry) {
+      err.config._retry = <span class="tok-key">true</span>;
+      <span class="tok-key">await</span> <span class="tok-fn">refreshToken</span>();
+      <span class="tok-key">return</span> api(err.config);     <span class="tok-com">// phát lại request gốc</span>
+    }
+    <span class="tok-key">throw</span> err;
+  },
+);</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Chọn cái nào?</div>
+        <p>Dự án nhỏ, ít endpoint → <code>fetch</code> + một wrapper mỏng là đủ, không thêm dependency. Dự án lớn cần <b>interceptor</b> (gắn token, auto-refresh, log, retry tập trung) → <code>axios</code> tiết kiệm rất nhiều code. Nhưng nhớ: dù chọn gì, ở tầng React bạn vẫn nên đặt nó <b>bên dưới</b> React Query/SWR — fetch/axios chỉ là "transport", còn cache & trạng thái để thư viện lo (mục ③).</p>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="effectpitfall"><span class="ico">②</span> Pitfalls khi fetch trong <code>useEffect</code></h2>
+      <p>Cách "ngây thơ" mà ai cũng viết lúc đầu: <code>useEffect</code> + <code>useState</code> để gọi API. Nó <em>chạy được</em> nhưng ẩn chứa hàng loạt cạm bẫy. Hiểu chúng là nền tảng để hiểu vì sao React Query ra đời.</p>
+
+      <h3>2.1 Race condition (điều kiện tranh chấp)</h3>
+      <p>Người dùng đổi tham số nhanh (đổi hàng đợi từ <code>sales</code> sang <code>support</code>). Request cũ và mới chạy song song; request cũ có thể <b>về sau</b> request mới và ghi đè kết quả → agent thấy dữ liệu của hàng đợi sai.</p>
+      <div class="flow">
+        <span class="node">Chọn "sales"</span><span class="arr">→</span>
+        <span class="node">fetch A bắt đầu</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Chọn "support"</span><span class="arr">→</span>
+        <span class="node">fetch B bắt đầu</span><span class="arr">→</span>
+        <span class="node">B về trước</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--red)">A về sau, GHI ĐÈ B ❌</span>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">QueuePanel.tsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-key">function</span> <span class="tok-fn">QueuePanel</span>({ queueId }: { queueId: <span class="tok-typ">string</span> }) {
+  <span class="tok-key">const</span> [calls, setCalls] = <span class="tok-fn">useState</span>&lt;Call[]&gt;([]);
+  <span class="tok-key">const</span> [error, setError] = <span class="tok-fn">useState</span>&lt;<span class="tok-typ">string</span> | <span class="tok-key">null</span>&gt;(<span class="tok-key">null</span>);
+
+  <span class="tok-fn">useEffect</span>(() => {
+    <span class="tok-key">const</span> ctrl = <span class="tok-key">new</span> <span class="tok-fn">AbortController</span>();
+    <span class="tok-fn">apiGet</span>&lt;Call[]&gt;(<span class="tok-str">`/queues/</span>${queueId}<span class="tok-str">/calls`</span>, ctrl.signal)
+      .<span class="tok-fn">then</span>(setCalls)
+      .<span class="tok-fn">catch</span>((e) => {
+        <span class="tok-key">if</span> (e.name !== <span class="tok-str">'AbortError'</span>) <span class="tok-fn">setError</span>(e.message);
+      });
+
+    <span class="tok-com">// CLEANUP: huỷ request cũ khi queueId đổi hoặc component unmount</span>
+    <span class="tok-key">return</span> () => ctrl.<span class="tok-fn">abort</span>();
+  }, [queueId]);   <span class="tok-com">// deps đúng → effect chạy lại khi đổi hàng đợi</span>
+
+  <span class="tok-com">// ...</span>
+}</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Hai cách chống race</div>
+        <p><b>(1) AbortController</b> như trên — huỷ hẳn request cũ ở tầng mạng. <b>(2) Cờ "ignore"</b> — biến cục bộ <code>let active = true</code>, trong cleanup gán <code>active = false</code>, chỉ <code>setState</code> khi <code>active</code>. Cách (1) tiết kiệm băng thông hơn vì thật sự cắt request. Cả hai đều phải đặt trong <b>hàm cleanup</b> của effect.</p>
+      </div>
+
+      <h3>2.2 Thiếu dependency &amp; stale closure</h3>
+      <p>Bỏ <code>queueId</code> khỏi mảng deps (<code>[]</code>) thì effect chỉ chạy một lần — đổi hàng đợi nhưng dữ liệu không cập nhật. Ngược lại, để <b>nguyên một object/hàm</b> trong deps mà nó tạo mới mỗi render thì effect chạy <b>mỗi render</b> → fetch liên tục. Quy tắc: đưa đủ giá trị thực sự dùng vào deps, và bọc hàm bằng <code>useCallback</code>, object bằng <code>useMemo</code> nếu cần (xem <a href="G2-react-hooks.html">G2</a>).</p>
+
+      <h3>2.3 Double fetch trong StrictMode</h3>
+      <p>React 18 <b>StrictMode</b> ở môi trường dev cố tình mount → unmount → mount lại component để lộ các effect chưa cleanup đúng. Hệ quả: bạn thấy request chạy <b>hai lần</b>. Đây không phải bug của bạn nếu cleanup đã đúng (request thừa bị abort). Nhưng nếu không cleanup, double fetch là dấu hiệu cảnh báo. Ở production StrictMode không nhân đôi.</p>
+
+      <h3>2.4 Request waterfall (thác nước)</h3>
+      <p>Lỗi hiệu năng kinh điển: component A fetch xong mới render B, B fetch xong mới render C — các request <b>nối đuôi tuần tự</b> dù lẽ ra độc lập. Tổng thời gian = tổng từng request thay vì request lâu nhất.</p>
+      <div class="flow">
+        <span class="node" style="border-color:var(--red)">Waterfall: agent (300ms) → ticket (300ms) → chat (300ms) = 900ms</span>
+      </div>
+      <div class="flow">
+        <span class="node" style="border-color:var(--green)">Song song: Promise.all([agent, ticket, chat]) = ~300ms ✅</span>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Cách phá waterfall</div>
+        <p>Gọi các request độc lập <b>song song</b> bằng <code>Promise.all</code>, hoặc nâng việc fetch lên cha rồi truyền xuống, hoặc dùng <b>prefetch</b> của React Query. Với router hiện đại (loader của React Router/Next.js) có thể fetch song song ngay ở tầng route trước khi render.</p>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Tổng kết: vì sao useEffect-fetch không đủ</div>
+        <p>Bạn phải tự tay: quản lý loading/error, chống race, cleanup, chống double fetch, dedup request trùng, cache giữa các component, refetch khi quay lại tab... Lặp đi lặp lại ở mọi màn hình. Đó chính xác là phần việc mà React Query/SWR đã giải sẵn.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="reactquery"><span class="ico">③</span> React Query / SWR</h2>
+      <p><b>TanStack Query</b> (React Query) và <b>SWR</b> là hai thư viện <em>server-state management</em>. Ý tưởng cốt lõi: bạn khai báo "dữ liệu này lấy từ đâu, key là gì", thư viện lo <b>cache, đồng bộ, làm mới</b>. Bạn không còn viết <code>useEffect</code> fetch thủ công nữa.</p>
+
+      <h3>3.1 Các khái niệm trụ cột</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🔑</span> Query key</div><p>Định danh duy nhất cho một mẩu dữ liệu, vd <code>['calls', queueId]</code>. Cùng key → dùng chung cache; key đổi → tự fetch lại.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">♻️</span> Stale-while-revalidate</div><p>Trả ngay dữ liệu cũ (stale) cho UI hiển thị tức thì, <b>đồng thời</b> fetch nền để làm mới. Đúng tên gọi của SWR.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔁</span> Dedup</div><p>Nhiều component cùng yêu cầu một key trong khoảng ngắn → chỉ <b>một</b> request mạng thật được gửi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⏱️</span> staleTime / gcTime</div><p><code>staleTime</code>: bao lâu coi dữ liệu là "tươi" (không refetch). <code>gcTime</code>: bao lâu giữ cache khi không ai dùng rồi mới dọn.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🪟</span> Refetch nền</div><p>Tự fetch lại khi cửa sổ được focus lại, khi mạng kết nối lại, hoặc theo <code>refetchInterval</code> (polling).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✍️</span> Mutation + invalidation</div><p>Ghi dữ liệu (POST/PUT/DELETE) bằng <code>useMutation</code>, xong <b>invalidate</b> các query liên quan để chúng tự fetch lại.</p></div>
+      </div>
+
+      <h3>3.2 useQuery — đọc dữ liệu</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">useCalls.ts</span><span class="lang">React Query</span></div>
+        <pre><code><span class="tok-key">import</span> { useQuery } <span class="tok-key">from</span> <span class="tok-str">'@tanstack/react-query'</span>;
+
+<span class="tok-key">function</span> <span class="tok-fn">useQueueCalls</span>(queueId: <span class="tok-typ">string</span>) {
+  <span class="tok-key">return</span> <span class="tok-fn">useQuery</span>({
+    queryKey: [<span class="tok-str">'calls'</span>, queueId],          <span class="tok-com">// định danh cache</span>
+    queryFn: ({ signal }) =&gt;                  <span class="tok-com">// signal có sẵn để abort</span>
+      <span class="tok-fn">apiGet</span>&lt;Call[]&gt;(<span class="tok-str">`/queues/</span>${queueId}<span class="tok-str">/calls`</span>, signal),
+    staleTime: <span class="tok-num">5_000</span>,                      <span class="tok-com">// 5s coi là tươi</span>
+    refetchOnWindowFocus: <span class="tok-key">true</span>,           <span class="tok-com">// agent quay lại tab → làm mới</span>
+  });
+}
+
+<span class="tok-com">// Trong component — thay cho 30 dòng useEffect/useState</span>
+<span class="tok-key">function</span> <span class="tok-fn">QueuePanel</span>({ queueId }: { queueId: <span class="tok-typ">string</span> }) {
+  <span class="tok-key">const</span> { data, isLoading, isError, error, isFetching } = <span class="tok-fn">useQueueCalls</span>(queueId);
+  <span class="tok-key">if</span> (isLoading) <span class="tok-key">return</span> &lt;<span class="tok-typ">Skeleton</span> /&gt;;
+  <span class="tok-key">if</span> (isError)   <span class="tok-key">return</span> &lt;<span class="tok-typ">ErrorBox</span> msg={error.message} /&gt;;
+  <span class="tok-key">return</span> &lt;<span class="tok-typ">CallList</span> calls={data} refreshing={isFetching} /&gt;;
+}</code></pre>
+      </div>
+      <div class="callout info">
+        <div class="c-title">ℹ️ isLoading vs isFetching</div>
+        <p><code>isLoading</code> = lần đầu chưa có dữ liệu nào (hiện skeleton). <code>isFetching</code> = đang có request chạy (kể cả refetch nền khi đã có dữ liệu cũ). Dùng <code>isFetching</code> để hiện một spinner nhỏ "đang đồng bộ" mà <b>không</b> che mất danh sách hiện có — trải nghiệm mượt hơn hẳn.</p>
+      </div>
+
+      <h3>3.3 useMutation — ghi dữ liệu &amp; invalidation</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">useAssignTicket.ts</span><span class="lang">React Query</span></div>
+        <pre><code><span class="tok-key">import</span> { useMutation, useQueryClient } <span class="tok-key">from</span> <span class="tok-str">'@tanstack/react-query'</span>;
+
+<span class="tok-key">function</span> <span class="tok-fn">useAssignTicket</span>() {
+  <span class="tok-key">const</span> qc = <span class="tok-fn">useQueryClient</span>();
+  <span class="tok-key">return</span> <span class="tok-fn">useMutation</span>({
+    mutationFn: ({ ticketId, agentId }) =&gt;
+      api.<span class="tok-fn">post</span>(<span class="tok-str">`/tickets/</span>${ticketId}<span class="tok-str">/assign`</span>, { agentId }),
+
+    onSuccess: () =&gt; {
+      <span class="tok-com">// Báo cho cache: 2 danh sách này đã "cũ" → tự fetch lại</span>
+      qc.<span class="tok-fn">invalidateQueries</span>({ queryKey: [<span class="tok-str">'tickets'</span>] });
+      qc.<span class="tok-fn">invalidateQueries</span>({ queryKey: [<span class="tok-str">'agent-workload'</span>] });
+    },
+  });
+}
+
+<span class="tok-com">// Dùng:</span>
+<span class="tok-key">const</span> assign = <span class="tok-fn">useAssignTicket</span>();
+&lt;<span class="tok-typ">button</span> onClick={() =&gt; assign.<span class="tok-fn">mutate</span>({ ticketId, agentId })}
+  disabled={assign.isPending}&gt;Gán ticket&lt;/<span class="tok-typ">button</span>&gt;</code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Invalidation là "nguồn sự thật" duy nhất</div>
+        <p>Thay vì tự tay <code>setState</code> để chèn ticket mới vào danh sách (dễ lệch với server), bạn chỉ cần <b>invalidate</b> và để query tự lấy lại bản chuẩn từ server. Code ít hơn, dữ liệu luôn khớp DB. Khi cần phản hồi tức thì hơn nữa, kết hợp <b>optimistic update</b> (mục ④).</p>
+      </div>
+
+      <h3>3.4 So sánh React Query và SWR</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>React Query (TanStack)</th><th>SWR</th></tr></thead>
+          <tbody>
+            <tr><td>Triết lý</td><td>Bộ công cụ server-state đầy đủ</td><td>Tối giản, tập trung đọc dữ liệu</td></tr>
+            <tr><td>Mutation</td><td><code>useMutation</code> mạnh, có optimistic API rõ ràng</td><td>Có <code>mutate</code>, đơn giản hơn</td></tr>
+            <tr><td>Devtools</td><td>Devtools rất tốt, xem cache trực quan</td><td>Có nhưng nhẹ hơn</td></tr>
+            <tr><td>Pagination/Infinite</td><td><code>useInfiniteQuery</code> tích hợp</td><td><code>useSWRInfinite</code></td></tr>
+            <tr><td>Kích thước</td><td>Lớn hơn một chút</td><td>Rất nhẹ</td></tr>
+            <tr><td>Hợp khi</td><td>App phức tạp, nhiều mutation, cần kiểm soát sâu</td><td>App đọc nhiều, ít ghi, muốn gọn nhẹ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="states"><span class="ico">④</span> Loading, error, empty &amp; optimistic update</h2>
+      <p>Một màn hình "đúng" phải xử lý <b>bốn</b> trạng thái, không chỉ "thành công". Bỏ sót một trạng thái là cách nhanh nhất để UI trông kém chuyên nghiệp.</p>
+
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">⏳</span> Loading</div><p>Ưu tiên <b>skeleton</b> (khung xương) thay vì spinner toàn trang — giữ bố cục ổn định, đỡ giật layout.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">❌</span> Error</div><p>Thông báo rõ ràng + nút "Thử lại". Đừng để màn hình trắng. Log lỗi để theo dõi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📭</span> Empty</div><p>"Hàng đợi đang trống — chưa có cuộc gọi nào chờ." Khác hẳn loading; đừng nhầm hai cái.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Success</div><p>Dữ liệu thật. Kèm chỉ báo nhỏ khi đang refetch nền để người dùng biết hệ thống vẫn sống.</p></div>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Lỗi hay gặp: nhầm empty với loading</div>
+        <p>Viết <code>if (!data) return &lt;Loading/&gt;</code> rồi khi server trả mảng rỗng <code>[]</code>, <code>data</code> vẫn là mảng (truthy) nhưng độ dài 0 → nếu không có nhánh empty riêng, UI hiện danh sách trống <b>không lời giải thích</b>. Luôn phân biệt <code>isLoading</code> với <code>data.length === 0</code>.</p>
+      </div>
+
+      <h3>4.1 Optimistic update &amp; rollback</h3>
+      <p><b>Optimistic update</b> = cập nhật UI <em>ngay lập tức</em> theo kết quả mong đợi <b>trước khi</b> server trả lời, để cảm giác tức thì. Nếu server báo lỗi, ta <b>rollback</b> (hoàn tác) về trạng thái cũ. Cực kỳ quan trọng trong Contact Center: agent bấm "Kết thúc cuộc gọi" phải thấy phản hồi ngay, không chờ round-trip mạng.</p>
+      <div class="flow">
+        <span class="node">Agent bấm "Resolve ticket"</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">UI đổi sang Resolved NGAY</span><span class="arr">→</span>
+        <span class="node">Gửi request nền</span><span class="arr">→</span>
+        <span class="node">OK: giữ nguyên ✅</span>
+      </div>
+      <div class="flow">
+        <span class="node" style="border-color:var(--red)">Lỗi: rollback về Open + báo "Không lưu được, thử lại"</span>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">useResolveTicket.ts</span><span class="lang">React Query</span></div>
+        <pre><code><span class="tok-key">function</span> <span class="tok-fn">useResolveTicket</span>() {
+  <span class="tok-key">const</span> qc = <span class="tok-fn">useQueryClient</span>();
+  <span class="tok-key">return</span> <span class="tok-fn">useMutation</span>({
+    mutationFn: (id: <span class="tok-typ">string</span>) =&gt; api.<span class="tok-fn">post</span>(<span class="tok-str">`/tickets/</span>${id}<span class="tok-str">/resolve`</span>),
+
+    <span class="tok-com">// 1) Trước khi gửi: cập nhật cache lạc quan</span>
+    onMutate: <span class="tok-key">async</span> (id) =&gt; {
+      <span class="tok-key">await</span> qc.<span class="tok-fn">cancelQueries</span>({ queryKey: [<span class="tok-str">'tickets'</span>] }); <span class="tok-com">// tránh refetch đè lên</span>
+      <span class="tok-key">const</span> prev = qc.<span class="tok-fn">getQueryData</span>&lt;Ticket[]&gt;([<span class="tok-str">'tickets'</span>]);
+      qc.<span class="tok-fn">setQueryData</span>&lt;Ticket[]&gt;([<span class="tok-str">'tickets'</span>], (old) =&gt;
+        old?.<span class="tok-fn">map</span>((t) =&gt; t.id === id ? { ...t, status: <span class="tok-str">'resolved'</span> } : t));
+      <span class="tok-key">return</span> { prev };               <span class="tok-com">// lưu lại để rollback</span>
+    },
+
+    <span class="tok-com">// 2) Lỗi: trả cache về như cũ</span>
+    onError: (_e, _id, ctx) =&gt; {
+      <span class="tok-key">if</span> (ctx?.prev) qc.<span class="tok-fn">setQueryData</span>([<span class="tok-str">'tickets'</span>], ctx.prev);
+      <span class="tok-fn">toast</span>(<span class="tok-str">'Không lưu được, đã hoàn tác'</span>);
+    },
+
+    <span class="tok-com">// 3) Dù thành/bại: đồng bộ lại với server cho chắc</span>
+    onSettled: () =&gt; qc.<span class="tok-fn">invalidateQueries</span>({ queryKey: [<span class="tok-str">'tickets'</span>] }),
+  });
+}</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Optimistic phải đi kèm 3 thứ</div>
+        <p><b>(1) Snapshot</b> trạng thái cũ trước khi đổi. <b>(2) Rollback</b> trong <code>onError</code>. <b>(3) Re-sync</b> trong <code>onSettled</code> (invalidate) để chắc chắn cuối cùng UI khớp server. Thiếu rollback = dữ liệu "ma" còn lại khi lỗi; thiếu re-sync = UI có thể lệch nhẹ với DB.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="statemgmt"><span class="ico">⑤</span> State management</h2>
+      <p>Không phải mọi state đều cần một thư viện. Câu hỏi quan trọng là: state này <b>ai cần biết</b> và <b>sống ở đâu</b>. Đi từ đơn giản đến phức tạp, chỉ "leo thang" khi thật sự cần.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Công cụ</th><th>Phạm vi</th><th>Dùng khi</th><th>Ví dụ Contact Center</th></tr></thead>
+          <tbody>
+            <tr><td><code>useState</code> cục bộ</td><td>1 component</td><td>State chỉ component đó dùng</td><td>Mở/đóng dropdown trạng thái agent</td></tr>
+            <tr><td>Lifting state up</td><td>Vài component anh em</td><td>2-3 component cần chia sẻ qua cha chung</td><td>Bộ lọc + danh sách ticket cùng một filter</td></tr>
+            <tr><td>Context</td><td>Một nhánh cây</td><td>Dữ liệu ít đổi, nhiều nơi đọc</td><td>Theme, ngôn ngữ, user hiện tại</td></tr>
+            <tr><td>Zustand / Jotai</td><td>Toàn app, nhẹ</td><td>Global UI state, ít boilerplate</td><td>Trạng thái sidebar, panel đang mở, soft-phone</td></tr>
+            <tr><td>Redux Toolkit</td><td>Toàn app, có cấu trúc</td><td>App lớn, logic phức tạp, cần devtools/middleware</td><td>Luồng cuộc gọi nhiều bước, undo/redo</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Bẫy Context: re-render hàng loạt</div>
+        <p>Context <b>không</b> tối ưu re-render. Khi giá trị Context đổi, <b>mọi</b> component đang <code>useContext</code> đều render lại, kể cả phần không dùng tới giá trị đó. Nhồi một object lớn hay đổi liên tục (vd state realtime của cuộc gọi) vào một Context duy nhất sẽ gây giật cả cây. Giải pháp: tách Context nhỏ theo mối quan tâm, hoặc dùng Zustand/Jotai vốn cho phép <b>chọn (select)</b> đúng phần cần.</p>
+      </div>
+
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🐻</span> Zustand</div><p>Store dạng hook, không cần Provider bao quanh. <code>useStore(s =&gt; s.x)</code> chỉ render lại khi <code>x</code> đổi. Ít boilerplate.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⚛️</span> Jotai</div><p>State theo <b>atom</b> nhỏ, bottom-up. Hợp khi state phân mảnh, mỗi mẩu độc lập, muốn tránh re-render rộng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🧰</span> Redux Toolkit</div><p>Có quy ước rõ (slice, reducer, middleware), devtools time-travel mạnh. Đáng dùng cho team lớn, logic nhiều nhánh.</p></div>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">uiStore.ts</span><span class="lang">Zustand</span></div>
+        <pre><code><span class="tok-key">import</span> { create } <span class="tok-key">from</span> <span class="tok-str">'zustand'</span>;
+
+<span class="tok-key">type</span> <span class="tok-typ">UiState</span> = {
+  activePanel: <span class="tok-str">'queue'</span> | <span class="tok-str">'ticket'</span> | <span class="tok-str">'chat'</span>;
+  setPanel: (p: <span class="tok-typ">UiState</span>[<span class="tok-str">'activePanel'</span>]) =&gt; <span class="tok-typ">void</span>;
+};
+
+<span class="tok-key">export const</span> useUi = create&lt;<span class="tok-typ">UiState</span>&gt;((set) =&gt; ({
+  activePanel: <span class="tok-str">'queue'</span>,
+  setPanel: (p) =&gt; <span class="tok-fn">set</span>({ activePanel: p }),
+}));
+
+<span class="tok-com">// Chỉ render lại khi activePanel đổi — không phải toàn store</span>
+<span class="tok-key">const</span> panel = <span class="tok-fn">useUi</span>((s) =&gt; s.activePanel);</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Nguyên tắc vàng</div>
+        <p>Bắt đầu với <code>useState</code> cục bộ. Cần chia sẻ thì lift up. Sâu nhiều tầng và ít đổi thì Context. Cần global thật sự thì Zustand/Jotai. Chỉ chọn Redux khi <b>độ phức tạp logic</b> (chứ không phải "dữ liệu nhiều") biện minh cho boilerplate của nó. <b>Quan trọng nhất:</b> dữ liệu từ server thì <b>đừng</b> nhét vào bất kỳ store nào ở trên — để React Query lo (mục ⑥).</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="servervsclient"><span class="ico">⑥</span> Server state vs Client state</h2>
+      <p>Đây là khái niệm <b>quan trọng nhất</b> của cả chương, và là câu hỏi phỏng vấn phân loại trình độ. Lẫn lộn hai loại state này là gốc rễ của hầu hết bug dữ liệu trên frontend.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>&nbsp;</th><th>Server state</th><th>Client / UI state</th></tr></thead>
+          <tbody>
+            <tr><td>Nguồn sự thật</td><td>Server / database</td><td>Trình duyệt, do người dùng tạo</td></tr>
+            <tr><td>Đặc điểm</td><td>Bất đồng bộ, có thể "cũ" (stale), người khác cũng đổi được</td><td>Đồng bộ, tức thời, chỉ session này biết</td></tr>
+            <tr><td>Ví dụ</td><td>Danh sách cuộc gọi, ticket, profile khách, hàng đợi</td><td>Tab đang mở, dropdown, nội dung đang gõ, theme</td></tr>
+            <tr><td>Công cụ đúng</td><td><b>React Query / SWR</b></td><td><code>useState</code>, Zustand, Jotai, Redux</td></tr>
+            <tr><td>Vấn đề cốt lõi</td><td>Cache, đồng bộ, làm mới, dedup</td><td>Lưu trữ &amp; cập nhật giá trị</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Anti-pattern phổ biến nhất</div>
+        <p>Nhét dữ liệu server vào Redux: <code>dispatch(fetchTickets())</code> rồi tự viết reducer lưu loading/error/data. Bạn đang <b>tự xây lại</b> React Query bằng tay — nửa vời, đầy bug đồng bộ. Server state có vấn đề <em>riêng</em> (stale, cache, refetch) mà các thư viện client-state không sinh ra để giải. Hãy tách bạch: <b>React Query cho dữ liệu server, store nhẹ cho UI state.</b></p>
+      </div>
+
+      <div class="flow">
+        <span class="node" style="border-color:var(--cyan)">Server state → React Query</span>
+        <span class="node" style="border-color:var(--green)">Client/UI state → Zustand / useState</span>
+        <span class="node" style="border-color:var(--violet)">Realtime (WebSocket) → đẩy vào cache React Query</span>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Realtime trong Contact Center khớp mô hình này thế nào</div>
+        <p>Khi WebSocket báo "có cuộc gọi mới vào hàng đợi", bạn không tạo store riêng — mà <b>ghi thẳng vào cache</b> của React Query: <code>queryClient.setQueryData(['calls', queueId], updater)</code> hoặc <code>invalidateQueries</code>. Như vậy realtime và HTTP cùng dùng <b>một nguồn dữ liệu</b>, UI không bị "hai bản sự thật". Chi tiết ở <a href="G6-realtime-ui.html">G6 · Realtime UI</a>.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp &amp; Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên <code>res.ok</code> với fetch</div><p>404/500 lọt vào <code>.then</code>, lỗi bị nuốt. Luôn kiểm tra status hoặc dùng wrapper ném lỗi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Không cleanup effect</div><p>Race condition + setState trên component đã unmount. Luôn <code>abort</code> trong cleanup.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Tự build cache trong Redux</div><p>Tái phát minh React Query. Tách server state ra thư viện chuyên dụng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Nhầm empty với loading</div><p>Mảng rỗng vẫn truthy. Phân biệt <code>isLoading</code> và <code>length === 0</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Request waterfall</div><p>Fetch nối đuôi tuần tự. Dùng <code>Promise.all</code>/prefetch cho request độc lập.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Optimistic không rollback</div><p>Lỗi mà UI giữ dữ liệu sai. Luôn snapshot + rollback + re-sync.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Object/hàm trong deps</div><p>Tạo mới mỗi render → fetch vô hạn. Bọc <code>useMemo</code>/<code>useCallback</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> staleTime hợp lý</div><p>Đặt theo độ "tươi" cần thiết: hàng đợi vài giây, profile khách vài phút.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Chống race condition</div>
+        <p>Component <code>AgentDetail</code> nhận prop <code>agentId</code> và fetch hồ sơ agent trong <code>useEffect</code>. Người dùng đổi agent rất nhanh. Hãy viết effect <b>chống race</b> bằng cả hai cách (AbortController và cờ ignore) và giải thích cách nào tốt hơn, vì sao.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Cách cờ: <code>let active = true</code>; trong <code>.then</code> chỉ <code>setState</code> khi <code>active</code>; cleanup <code>active = false</code>. Cách abort: tạo <code>AbortController</code>, truyền <code>signal</code> vào fetch, cleanup gọi <code>ctrl.abort()</code> và bỏ qua <code>AbortError</code>. AbortController tốt hơn vì <b>thật sự huỷ request mạng</b>, tiết kiệm băng thông và tránh xử lý phản hồi thừa — quan trọng khi agent thao tác liên tục.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Optimistic resolve ticket</div>
+        <p>Viết một <code>useMutation</code> để "resolve" một ticket với optimistic update đầy đủ: cập nhật cache ngay, rollback khi lỗi, và re-sync khi xong. Liệt kê 3 callback bạn cần và việc của từng cái.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px"><code>onMutate</code>: <code>cancelQueries</code> → snapshot <code>prev</code> bằng <code>getQueryData</code> → cập nhật lạc quan bằng <code>setQueryData</code> → trả <code>{ prev }</code>. <code>onError</code>: <code>setQueryData(key, ctx.prev)</code> để hoàn tác + toast. <code>onSettled</code>: <code>invalidateQueries</code> để chốt lại với server. Thiếu bất kỳ bước nào sẽ gây dữ liệu lệch khi mạng lỗi.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Phân loại state</div>
+        <p>Cho các state sau trên màn hình agent: (a) danh sách cuộc gọi đang chờ, (b) panel đang được chọn, (c) hồ sơ khách đang gọi, (d) nội dung tin nhắn đang soạn, (e) trạng thái online/offline của agent (lưu ở server). Phân loại server vs client và chọn công cụ cho từng cái.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Server state → React Query: (a) danh sách cuộc gọi, (c) hồ sơ khách, (e) trạng thái online/offline (server làm chủ; bấm đổi = mutation optimistic). Client/UI state → useState/Zustand: (b) panel đang chọn (UI thuần), (d) nội dung đang soạn (cục bộ, mất khi gửi). Mấu chốt: hỏi "ai là nguồn sự thật?".</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Với <code>fetch</code>, một response 500 sẽ?</div>
+          <div class="opt">Tự động reject Promise</div>
+          <div class="opt" data-correct="true">Vẫn vào <code>.then</code>; phải tự kiểm tra <code>res.ok</code></div>
+          <div class="opt">Ném lỗi ngay lập tức</div>
+          <div class="explain"><b>res.ok.</b> fetch chỉ reject khi lỗi mạng. 4xx/5xx vẫn resolve, dễ nuốt lỗi nếu không kiểm tra.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Cách đúng để chống race condition khi fetch trong useEffect?</div>
+          <div class="opt">Thêm <code>await</code> vào hàm effect</div>
+          <div class="opt" data-correct="true">Hủy request cũ bằng <code>AbortController</code> trong cleanup (hoặc dùng cờ ignore)</div>
+          <div class="opt">Dùng <code>Promise.all</code></div>
+          <div class="explain"><b>AbortController/cleanup.</b> Request cũ về sau có thể ghi đè request mới nếu không huỷ/bỏ qua.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Sau khi <code>useMutation</code> gán ticket thành công, cách "đúng" để danh sách cập nhật là?</div>
+          <div class="opt">Tự reload cả trang</div>
+          <div class="opt" data-correct="true"><code>invalidateQueries</code> để query tự fetch lại từ server</div>
+          <div class="opt">Lưu kết quả vào Redux</div>
+          <div class="explain"><b>invalidateQueries.</b> Để server là nguồn sự thật; React Query refetch và đồng bộ tự động.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Dữ liệu nào nên quản lý bằng React Query thay vì Redux/Zustand?</div>
+          <div class="opt">Tab đang được chọn</div>
+          <div class="opt">Nội dung tin nhắn đang gõ</div>
+          <div class="opt" data-correct="true">Danh sách ticket lấy từ server</div>
+          <div class="explain"><b>Server state.</b> Dữ liệu do server làm chủ (cache/stale/refetch) thuộc về React Query, không phải store client.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Optimistic update bắt buộc phải có thêm điều gì?</div>
+          <div class="opt">Một spinner toàn màn hình</div>
+          <div class="opt" data-correct="true">Snapshot trạng thái cũ để rollback khi lỗi</div>
+          <div class="opt">Tắt cache hoàn toàn</div>
+          <div class="explain"><b>Rollback.</b> Cập nhật lạc quan mà không hoàn tác được khi lỗi sẽ để lại dữ liệu sai trên UI.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Data fetching & state — chủ đề "lọc" ứng viên frontend rất rõ.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Khác biệt giữa <code>fetch</code> và <code>axios</code>?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>fetch</code> có sẵn, dựa trên Promise, nhưng phải tự gọi <code>res.json()</code> và <b>không tự reject</b> với 4xx/5xx — phải kiểm tra <code>res.ok</code>. <code>axios</code> là thư viện ngoài: tự parse JSON (<code>res.data</code>), tự reject khi status ≥ 400, có timeout, interceptor (gắn token, refresh), hỗ trợ progress. App lớn dùng axios để có interceptor tập trung; app nhỏ thì fetch + wrapper là đủ.</p>
+        <p class="trap">⚠️ Bẫy: nói "fetch tự ném lỗi với 404" là sai.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>React Query lợi gì so với <code>useEffect</code> + <code>useState</code> tự fetch?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Nó giải sẵn toàn bộ phần khó của server state: <b>cache</b> chia sẻ giữa component, <b>dedup</b> request trùng, <b>stale-while-revalidate</b>, <b>refetch nền</b> khi focus/reconnect, chống race &amp; cleanup, quản lý loading/error/empty, mutation + invalidation, optimistic update. Với useEffect bạn phải tự viết lại tất cả ở mọi màn hình, dễ thiếu sót. React Query biến ~30 dòng thủ công thành một hook khai báo, giảm bug và code lặp.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Server state và client state khác nhau thế nào? Cho ví dụ.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>Server state</b> do server/DB làm chủ, bất đồng bộ, có thể cũ, người khác cũng đổi được — vd danh sách ticket, hồ sơ khách, hàng đợi. Vấn đề của nó là cache/đồng bộ/làm mới → dùng React Query. <b>Client/UI state</b> do trình duyệt tạo, tức thời, chỉ session này biết — vd tab đang mở, dropdown, nội dung đang gõ, theme → dùng useState/Zustand. Tách bạch hai loại tránh được hầu hết bug đồng bộ.</p>
+        <p class="trap">⚠️ Bẫy: gộp dữ liệu server vào Redux là tự xây lại React Query nửa vời.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Optimistic update là gì? Triển khai an toàn ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là cập nhật UI ngay theo kết quả mong đợi trước khi server trả lời, để cảm giác tức thì. An toàn cần 3 bước: <code>onMutate</code> — huỷ query đang chạy, snapshot dữ liệu cũ, cập nhật cache lạc quan; <code>onError</code> — rollback về snapshot + báo lỗi; <code>onSettled</code> — invalidate để đồng bộ lại với server. Rất hợp cho thao tác agent như resolve ticket, kết thúc cuộc gọi.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Cache invalidation là gì? Vì sao nói nó là một trong những bài toán khó?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Invalidation là đánh dấu dữ liệu cache đã "cũ" để được fetch lại — thường sau một mutation. Trong React Query làm bằng <code>invalidateQueries({ queryKey })</code>. Khó ở chỗ: phải biết mutation này ảnh hưởng <b>những key nào</b> (gán ticket có thể đụng cả danh sách ticket lẫn workload của agent); invalidate quá rộng gây refetch thừa, quá hẹp gây dữ liệu lệch. Thiết kế <b>query key có cấu trúc</b> tốt giúp invalidate chính xác.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Race condition khi fetch trong useEffect là gì? Cách xử lý?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khi tham số đổi nhanh, request cũ và mới chạy song song và request cũ có thể về sau, ghi đè kết quả mới → UI hiển thị dữ liệu sai. Xử lý: huỷ request cũ bằng <code>AbortController</code> (truyền <code>signal</code>, gọi <code>abort()</code> trong cleanup) hoặc dùng cờ <code>ignore</code> để bỏ qua phản hồi cũ. AbortController tốt hơn vì cắt request ở tầng mạng. React Query lo việc này tự động qua query key.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Request waterfall là gì? Làm sao tránh?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là các request độc lập bị chạy <b>nối đuôi tuần tự</b> (A xong mới B, B xong mới C) khiến tổng thời gian = tổng các request thay vì request lâu nhất. Thường do component con chỉ fetch sau khi cha render xong. Tránh bằng: gọi song song với <code>Promise.all</code>, nâng fetch lên cha, <b>prefetch</b> của React Query, hoặc fetch ở tầng route loader (React Router/Next.js) trước khi render.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Khi nào nên dùng Redux thay vì Context hay Zustand?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Chọn theo <b>độ phức tạp logic</b>, không phải lượng dữ liệu. Redux Toolkit đáng dùng khi: state global lớn với nhiều luồng tương tác phức tạp, cần devtools time-travel, middleware (logging, side-effect), quy ước chặt cho team đông. Nếu chỉ cần global UI state nhẹ → Zustand/Jotai ít boilerplate hơn. Dữ liệu ít đổi nhiều nơi đọc → Context. Và dữ liệu server thì <b>không</b> để vào Redux mà dùng React Query.</p>
+        <p class="trap">⚠️ Bẫy: chọn Redux chỉ vì "dữ liệu nhiều" — sai tiêu chí; tiêu chí là độ phức tạp logic.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Vì sao Context có thể gây vấn đề hiệu năng? Khắc phục thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khi value của Context đổi, <b>mọi</b> component <code>useContext</code> đều re-render, không có cơ chế chọn lọc như selector. Nhồi object lớn/đổi liên tục vào một Context gây render cả cây. Khắc phục: tách Context theo mối quan tâm (giá trị ít đổi tách riêng giá trị hay đổi); memo hoá value provider; hoặc dùng Zustand/Jotai cho phép <code>select</code> đúng phần cần để chỉ render component liên quan.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span><code>staleTime</code> và <code>gcTime</code> khác nhau ra sao? Đặt thế nào cho hợp?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>staleTime</code> = bao lâu dữ liệu được coi là "tươi" — trong thời gian này React Query <b>không</b> refetch khi component dùng lại. <code>gcTime</code> (trước là cacheTime) = bao lâu giữ cache trong bộ nhớ <b>sau khi</b> không còn observer nào dùng, rồi mới dọn. Đặt <code>staleTime</code> theo độ tươi cần: hàng đợi cuộc gọi vài giây (thay đổi nhanh), hồ sơ khách vài phút (ít đổi). <code>gcTime</code> dài hơn để quay lại màn hình vẫn còn cache mượt.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Trong app realtime (WebSocket), bạn lưu dữ liệu server đẩy về ở đâu?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Nên ghi thẳng vào <b>cache của React Query</b> (<code>queryClient.setQueryData(key, updater)</code>) hoặc <code>invalidateQueries</code> khi nhận sự kiện WebSocket, thay vì tạo một store riêng. Như vậy dữ liệu từ HTTP và từ realtime cùng một nguồn, UI không bị "hai bản sự thật". Vd: có cuộc gọi mới vào hàng đợi → cập nhật key <code>['calls', queueId]</code>. Chi tiết thêm ở chương Realtime UI.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Phân biệt <code>isLoading</code> và <code>isFetching</code> của React Query?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>isLoading</code> = true khi query <b>chưa có dữ liệu nào</b> và đang chạy lần đầu — lúc này hiện skeleton/loading toàn phần. <code>isFetching</code> = true bất cứ khi nào có request đang chạy, kể cả refetch nền khi đã có dữ liệu cũ — dùng để hiện một chỉ báo nhỏ "đang đồng bộ" mà không che danh sách hiện có. Phân biệt đúng giúp UI mượt, không nhấp nháy mỗi lần refetch.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương G4</button>
+      </div>
+
+      <div class="pager">
+        <a href="G3-react-nang-cao.html"><span class="dir">← Trước</span><span class="ttl">G3 · React nâng cao & performance</span></a>
+        <a href="G5-tailwindcss.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">G5 · TailwindCSS</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='G4',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành G4 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương G4'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

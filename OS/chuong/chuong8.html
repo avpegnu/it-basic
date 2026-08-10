@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 08 — Memory Management & Virtual Memory · OS Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">os-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong7.html">← Ch.07</a></li>
+        <li><a href="chuong8.html" class="active">Ch.08</a></li>
+        <li><a href="chuong9.html">Ch.09 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 08 · MEMORY · ~120 phút</div>
+      <h1>Memory Management<br/><span class="text-accent">&amp; Virtual Memory</span></h1>
+      <p class="lead">
+        RAM hữu hạn (8-32GB), nhưng <em>mỗi process</em> tưởng mình có cả 4GB/256TB ảo. Đó là phép màu của <strong>Virtual Memory</strong>.
+        Học chương này, bạn nắm: stack vs heap, virtual address vs physical, paging cơ chế bên trong, và Garbage Collection.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#stack-heap">8.1 Stack vs Heap</a></li>
+          <li><a href="#errors">8.2 Memory errors</a></li>
+          <li><a href="#vm">8.3 Virtual Memory — illusion</a></li>
+          <li><a href="#address">8.4 Virtual vs Physical address</a></li>
+          <li><a href="#mmu">8.5 MMU</a></li>
+          <li><a href="#paging">8.6 Paging cơ bản</a></li>
+          <li><a href="#page-table">8.7 Page Table</a></li>
+          <li><a href="#multilevel">8.8 Multi-level Page Table</a></li>
+          <li><a href="#segmentation">8.9 Segmentation</a></li>
+          <li><a href="#mmap">8.10 mmap</a></li>
+          <li><a href="#gc">8.11 Garbage Collection</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 8.1 -->
+        <section id="stack-heap">
+          <h2>8.1 Stack vs Heap — đặc điểm</h2>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-green">Stack</h4>
+              <ul>
+                <li>LIFO — push/pop tự động khi function call/return</li>
+                <li>Chứa: local var, function param, return address</li>
+                <li><strong>Cấp phát/thu hồi cực nhanh</strong> (chỉ tăng/giảm SP)</li>
+                <li>Kích thước cố định khi process khởi tạo (8MB Linux mặc định)</li>
+                <li>Memory tự được "free" khi function return</li>
+                <li>Mỗi thread có stack riêng</li>
+              </ul>
+            </div>
+            <div class="good">
+              <h4 class="text-green">Heap</h4>
+              <ul>
+                <li>Cấp phát động bằng <code>malloc</code>/<code>new</code></li>
+                <li>Phải <strong>tự free</strong> (C/C++) hoặc GC tự dọn (JS, Java, Go)</li>
+                <li>Chậm hơn stack (cần allocator, có thể fragment)</li>
+                <li>Kích thước lớn (giới hạn bởi virtual memory + RAM available)</li>
+                <li>Chia sẻ giữa các thread trong cùng process</li>
+              </ul>
+            </div>
+          </div>
+
+          <pre data-lang="c"><code>void example() {
+    int x = 5;             // x trên STACK — tự free khi return
+    int *p = malloc(100);  // 100 byte trên HEAP — phải free
+    int arr[1000];          // 4000 byte trên STACK
+    free(p);
+}</code></pre>
+
+          <h3>Vì sao stack nhanh hơn heap?</h3>
+          <ul>
+            <li>Stack chỉ cần tăng/giảm Stack Pointer — 1 instruction</li>
+            <li>Heap cần allocator: tìm free block, split, link list... — nhiều thao tác</li>
+            <li>Stack cache-friendly: liên tiếp trong RAM</li>
+            <li>Heap có thể fragment, cần defragmentation</li>
+          </ul>
+        </section>
+
+        <!-- 8.2 -->
+        <section id="errors">
+          <h2>8.2 Memory Errors — phải biết phân biệt</h2>
+
+          <table>
+            <thead>
+              <tr><th>Error</th><th>Nguyên nhân</th><th>Vùng</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Stack Overflow</strong></td>
+                <td>Đệ quy quá sâu, mảng stack quá lớn</td>
+                <td>Stack đụng heap</td>
+                <td><code>void f() { f(); }</code></td>
+              </tr>
+              <tr>
+                <td><strong>Buffer Overflow</strong></td>
+                <td>Ghi quá ranh giới buffer</td>
+                <td>Stack hoặc Heap</td>
+                <td><code>strcpy(buf, longer_string)</code></td>
+              </tr>
+              <tr>
+                <td><strong>Memory Leak</strong></td>
+                <td>Cấp phát mà quên free</td>
+                <td>Heap (lớn dần)</td>
+                <td>malloc rồi không free</td>
+              </tr>
+              <tr>
+                <td><strong>Use-After-Free</strong></td>
+                <td>Dùng pointer sau khi free</td>
+                <td>Heap (UB)</td>
+                <td><code>free(p); use(p);</code></td>
+              </tr>
+              <tr>
+                <td><strong>Double Free</strong></td>
+                <td>Free 2 lần cùng pointer</td>
+                <td>Heap (UB, có thể crash)</td>
+                <td><code>free(p); free(p);</code></td>
+              </tr>
+              <tr>
+                <td><strong>Segmentation Fault</strong></td>
+                <td>Truy cập address không thuộc process</td>
+                <td>Bất kỳ</td>
+                <td>Dereference NULL pointer</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Tools để debug memory error</h3>
+          <ul>
+            <li><strong>Valgrind</strong>: detect leak, use-after-free, invalid read/write (slow but thorough)</li>
+            <li><strong>AddressSanitizer (ASan)</strong>: clang/gcc <code>-fsanitize=address</code>, faster</li>
+            <li><strong>Node.js heap snapshot</strong>: Chrome DevTools → Memory tab</li>
+          </ul>
+        </section>
+
+        <!-- 8.3 -->
+        <section id="vm">
+          <h2>8.3 Virtual Memory — phép màu của OS</h2>
+
+          <p>
+            <strong>Vấn đề thực tế:</strong>
+          </p>
+          <ul>
+            <li>Máy có 16GB RAM, nhưng có hàng trăm process chạy</li>
+            <li>Mỗi process cần nhiều memory, nhưng không đủ RAM cho tất cả</li>
+            <li>Process cần được cô lập — không được đọc memory của process khác</li>
+            <li>Process không biết trước nó sẽ ở vị trí RAM nào</li>
+          </ul>
+
+          <p><strong>Giải pháp: Virtual Memory.</strong> Mỗi process được OS "lừa" rằng nó có toàn bộ address space (vd 4GB cho 32-bit, 256TB cho 64-bit) — gọi là <em>virtual address space</em>. Thực tế, OS map các vùng đang dùng vào RAM thật, vùng không dùng có thể swap ra disk.</p>
+
+          <h3>Lợi ích của VM</h3>
+          <ol>
+            <li><strong>Cô lập</strong>: process không thấy memory của process khác</li>
+            <li><strong>Mỗi process tưởng mình có cả RAM</strong>: không cần biết process khác đang dùng đâu</li>
+            <li><strong>Ảo hoá hơn RAM</strong>: tổng VA của các process &gt; RAM thật, OS swap ra disk khi cần</li>
+            <li><strong>Lazy loading</strong>: chỉ load page khi truy cập (page on demand)</li>
+            <li><strong>Memory sharing</strong>: nhiều process map cùng physical page (libc shared, fork CoW)</li>
+            <li><strong>Memory protection</strong>: read-only page (text segment) không cho ghi</li>
+          </ol>
+        </section>
+
+        <!-- 8.4 -->
+        <section id="address">
+          <h2>8.4 Virtual Address vs Physical Address</h2>
+
+          <div class="ascii-art">
+   Process A's view              Process B's view              Physical RAM
+   (virtual)                     (virtual)                     (physical)
+   ┌──────────────┐              ┌──────────────┐              ┌──────────────┐
+   │  0x7fff...   │              │  0x7fff...   │              │  0x00001000  │
+   │              │              │              │              │   (frame X)  │
+   │     ...      │              │     ...      │              ├──────────────┤
+   │  0x00400000  │ ← MMU map ▶  │  0x00400000  │ ← MMU map ▶  │  0x00002000  │
+   │   (text)     │              │   (text)     │              │   (frame Y)  │
+   │  0x00000000  │              │  0x00000000  │              │     ...      │
+   └──────────────┘              └──────────────┘              └──────────────┘
+          </div>
+
+          <p>
+            Khi process A và B cả hai có địa chỉ ảo <code>0x00400000</code>, MMU dịch sang địa chỉ vật lý khác nhau (vd 0x12345 cho A, 0x67890 cho B).
+            Cả hai cứ tưởng mình có địa chỉ đó, nhưng thực ra OS điều phối.
+          </p>
+
+          <h3>Linux x86_64 virtual address space</h3>
+
+          <pre data-lang="text"><code>0xffff_ffff_ffff_ffff
+                       │
+   Kernel space (chia sẻ giữa mọi process, chỉ kernel mode mới đọc được)
+                       │
+0xffff_8000_0000_0000  ← split point
+                       │
+                       │
+   User space (mỗi process riêng)
+   ┌────────────┐
+   │   Stack    │ tăng xuống
+   │     ↓      │
+   │            │
+   │     ↑      │
+   │   Heap     │ tăng lên
+   │   BSS      │
+   │   Data     │
+   │   Text     │
+   └────────────┘
+0x0000_0000_0040_0000   (0x400000 = entrypoint mặc định cho ELF)</code></pre>
+        </section>
+
+        <!-- 8.5 -->
+        <section id="mmu">
+          <h2>8.5 MMU — Memory Management Unit (phần cứng)</h2>
+
+          <p>
+            <strong>MMU</strong> là phần cứng nằm giữa CPU và RAM. Mỗi instruction đọc/ghi memory đều đi qua MMU:
+          </p>
+
+          <ol>
+            <li>CPU phát virtual address (vd <code>0x401000</code>)</li>
+            <li>MMU tra <em>page table</em> của process hiện tại</li>
+            <li>MMU dịch sang physical address (vd <code>0x12345</code>)</li>
+            <li>RAM trả data cho CPU</li>
+          </ol>
+
+          <p>
+            Vì mỗi instruction đều cần dịch, MMU phải <strong>cực nhanh</strong>. Kèm theo: <strong>TLB</strong> (Translation Lookaside Buffer) — cache cho page table (sẽ học chương 9).
+          </p>
+
+          <p>
+            Khi context switch giữa process A và B, kernel update CR3 register (x86) để trỏ vào page table của process mới. MMU tự dùng page table mới.
+          </p>
+        </section>
+
+        <!-- 8.6 -->
+        <section id="paging">
+          <h2>8.6 Paging — chia memory thành ô vuông</h2>
+
+          <p>
+            <strong>Paging</strong>: chia toàn bộ address space (cả virtual lẫn physical) thành các <em>page</em> kích thước cố định.
+            Linux x86_64: page = <strong>4 KB</strong>.
+          </p>
+
+          <ul>
+            <li><strong>Virtual page</strong>: đơn vị trong virtual address space</li>
+            <li><strong>Physical frame</strong>: đơn vị tương ứng trong RAM thật</li>
+            <li><strong>Page Table</strong>: ánh xạ virtual page → physical frame</li>
+          </ul>
+
+          <h3>Cách dịch địa chỉ</h3>
+
+          <p>Virtual address 32-bit chia làm:</p>
+          <ul>
+            <li><strong>20 bit cao</strong>: Page Number (chỉ số page) — 2²⁰ = 1M page</li>
+            <li><strong>12 bit thấp</strong>: Offset trong page (4KB = 2¹²)</li>
+          </ul>
+
+          <pre data-lang="text"><code>Virtual address: 0x00401234
+                  ┌──────────┬──────┐
+                  │ Page #   │Offset│
+                  │ 0x00401  │ 0x234│
+                  └────┬─────┴───┬──┘
+                       │         │
+                  page table     │
+                       │         │
+                       ▼         │
+                  Frame # 0x12345│
+                       │         │
+                       └─────────┴────▶ Physical: 0x12345234</code></pre>
+
+          <h3>Tại sao chọn 4KB?</h3>
+          <ul>
+            <li>Đủ nhỏ để không lãng phí (process nhỏ chỉ dùng vài KB)</li>
+            <li>Đủ lớn để page table không quá khổng lồ</li>
+            <li>Một số kernel hỗ trợ "huge pages" 2MB/1GB cho workload đặc thù (DB, JVM)</li>
+          </ul>
+        </section>
+
+        <!-- 8.7 -->
+        <section id="page-table">
+          <h2>8.7 Page Table Entry (PTE)</h2>
+
+          <p>Mỗi entry trong page table chứa:</p>
+          <ul>
+            <li><strong>Frame number</strong>: physical frame (~52 bit)</li>
+            <li><strong>Present bit</strong>: page có trong RAM chưa? (0 → page fault, đọc từ disk)</li>
+            <li><strong>Read/Write bit</strong>: read-only hay writable? (text segment = R only)</li>
+            <li><strong>User/Supervisor</strong>: user code có truy cập được không? (kernel page = supervisor only)</li>
+            <li><strong>Accessed bit</strong>: đã từng được đọc? (cho LRU)</li>
+            <li><strong>Dirty bit</strong>: đã bị ghi chưa? (nếu chưa dirty, swap out không cần ghi disk)</li>
+            <li><strong>NX bit</strong> (No-Execute): page có chứa code chạy được không? (chống buffer overflow exploit)</li>
+          </ul>
+
+          <h3>Vấn đề: Page Table khổng lồ</h3>
+          <p>
+            32-bit: 2²⁰ entry × 4 byte = <strong>4 MB</strong> page table per process. Có 100 process = 400 MB chỉ cho page table.<br/>
+            64-bit: 2⁵² entry × 8 byte = <strong>32 PB</strong> per process. Bất khả thi.
+          </p>
+          <p>Giải pháp: <strong>Multi-level page table</strong>.</p>
+        </section>
+
+        <!-- 8.8 -->
+        <section id="multilevel">
+          <h2>8.8 Multi-level Page Table</h2>
+
+          <p>Thay vì 1 bảng phẳng khổng lồ, chia thành cây nhiều tầng. Phần nào không dùng thì không cần bảng con.</p>
+
+          <h3>x86_64 — 4-level paging</h3>
+
+          <pre data-lang="text"><code>Virtual address (48 bit):
+   ┌──────┬──────┬──────┬──────┬──────────┐
+   │ PML4 │ PDPT │ PD   │ PT   │  Offset  │
+   │ 9 bit│ 9 bit│ 9 bit│ 9 bit│  12 bit  │
+   └───┬──┴───┬──┴───┬──┴───┬──┴──────────┘
+       │      │      │      │
+       ▼      ▼      ▼      ▼
+   PML4 ──▶ PDPT ──▶ PD  ──▶ PT  ──▶ Frame
+   (root)
+
+4 lookup → 4 memory access cho mỗi address translation
+→ Slow! Nên cần TLB cache</code></pre>
+
+          <p>
+            Ưu điểm: process chỉ dùng 1 ít VA → các nhánh không dùng để rỗng.
+            Nhược: 4 memory access cho mỗi translation.
+          </p>
+
+          <p>Kernel mới hơn (Linux 4.14+) hỗ trợ <strong>5-level paging</strong> để đạt 57-bit VA = 128 PB.</p>
+        </section>
+
+        <!-- 8.9 -->
+        <section id="segmentation">
+          <h2>8.9 Segmentation — old approach</h2>
+
+          <p>
+            Trước paging, OS dùng <strong>segmentation</strong>: chia memory thành các segment có kích thước biến đổi (vd 1 segment cho code, 1 cho data, 1 cho stack).
+          </p>
+
+          <ul>
+            <li>Address = (segment, offset)</li>
+            <li>Mỗi segment có base + limit register</li>
+            <li>Vấn đề: <em>external fragmentation</em> — sau khi free, RAM có "lỗ hổng" kích thước khác nhau, khó tìm chỗ trống đúng size</li>
+          </ul>
+
+          <p>x86 32-bit còn segment registers (CS, DS, SS) nhưng modern OS chỉ set base = 0, limit = max → "flat segment" → effectively chỉ dùng paging.</p>
+        </section>
+
+        <!-- 8.10 -->
+        <section id="mmap">
+          <h2>8.10 Memory Mapping (mmap)</h2>
+
+          <p>
+            <code>mmap</code> là syscall map 1 file (hoặc anonymous memory) vào virtual address space của process. Sau đó đọc/ghi file = đọc/ghi memory.
+          </p>
+
+          <pre data-lang="c"><code>int fd = open("data.bin", O_RDWR);
+struct stat st; fstat(fd, &amp;st);
+
+// Map toàn bộ file vào memory
+char *p = mmap(NULL, st.st_size, PROT_READ | PROT_WRITE,
+                MAP_SHARED, fd, 0);
+
+// Đọc/ghi file như memory
+p[0] = 'A';      // ghi byte đầu
+char c = p[100]; // đọc byte 100
+
+munmap(p, st.st_size);
+close(fd);</code></pre>
+
+          <h3>Lợi ích</h3>
+          <ul>
+            <li>Truy cập ngẫu nhiên file rất nhanh — không cần seek + read</li>
+            <li>OS quản lý cache tự động (page cache)</li>
+            <li>Nhiều process map cùng file = chia sẻ memory tự nhiên</li>
+            <li>Lazy loading: page chỉ load khi truy cập</li>
+          </ul>
+
+          <h3>Use case</h3>
+          <ul>
+            <li>Database (LMDB, SQLite memory mode)</li>
+            <li>Shared memory IPC (chương 5)</li>
+            <li>Loading executable: kernel mmap binary → execute</li>
+            <li>Đọc file lớn không cần load hết vào RAM</li>
+          </ul>
+        </section>
+
+        <!-- 8.11 -->
+        <section id="gc">
+          <h2>8.11 Garbage Collection — quan trọng cho JS dev</h2>
+
+          <p>
+            Trong C/C++, lập trình viên tự <code>free</code>. Nhưng JS, Java, Go, Python — runtime tự thu hồi memory không dùng nữa. Đây là <strong>Garbage Collection (GC)</strong>.
+          </p>
+
+          <h3>Reachability — khái niệm cốt lõi</h3>
+          <p>
+            Object "reachable" = có thể đến được từ <strong>roots</strong> (global vars, stack vars, registers...).
+            Object "unreachable" = không còn reference nào → có thể thu hồi.
+          </p>
+
+          <h3>Mark-and-Sweep (cổ điển)</h3>
+          <ol>
+            <li><strong>Mark</strong>: từ roots, đi qua mọi reachable object, đánh dấu</li>
+            <li><strong>Sweep</strong>: scan toàn bộ heap, free các object không có dấu</li>
+          </ol>
+          <p>Nhược: có thể dừng app khá lâu ("stop-the-world" pause).</p>
+
+          <h3>Generational GC (V8 dùng)</h3>
+          <p>
+            Quan sát: hầu hết object <strong>chết trẻ</strong> (vd biến tạm). Chỉ một số "sống dai" (config, cache).
+            Chia heap thành:
+          </p>
+          <ul>
+            <li><strong>Young generation</strong> (Eden + Survivor): nơi object mới sinh; GC thường xuyên (Minor GC, fast)</li>
+            <li><strong>Old generation</strong>: object đã survive vài lần Minor GC; GC ít hơn (Major GC, slow)</li>
+          </ul>
+
+          <p>V8 (Node.js, Chrome) dùng <strong>Scavenger</strong> cho young + <strong>Mark-Compact</strong> cho old.</p>
+
+          <h3>Reference Counting (Python, Swift)</h3>
+          <p>
+            Mỗi object có counter "bao nhiêu reference đang trỏ đến mình". Khi counter = 0 → free ngay.<br/>
+            Nhược: <strong>circular reference</strong> không bao giờ giảm về 0 → leak. Phải có thêm cycle detector.
+          </p>
+
+          <h3>Memory leak trong language có GC?</h3>
+          <p>Có! GC chỉ thu hồi unreachable. Nếu code "vô tình" giữ reference (vd thêm vào array global mà quên xoá), object sẽ "reachable" mãi → leak.</p>
+
+          <pre data-lang="javascript"><code>// Memory leak kinh điển trong JS
+const cache = [];
+function loadData(id) {
+  const data = fetch('/api/' + id);
+  cache.push(data);  // không bao giờ xoá → memory tăng vô hạn
+  return data;
+}</code></pre>
+
+          <p>Tools: Chrome DevTools heap snapshot, <code>node --inspect</code>.</p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Memory layout C</div>
+            <p>Viết C program in địa chỉ: 1 biến global, 1 biến local, 1 malloc, 1 function pointer. Sắp xếp theo địa chỉ. Mỗi địa chỉ thuộc vùng nào?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Stack overflow</div>
+            <p>Viết C program đệ quy infinite. Quan sát crash với SIGSEGV. Đọc <code>/proc/self/maps</code> trước khi crash.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Read /proc/PID/maps</div>
+            <p>Trên Linux, <code>cat /proc/$$/maps</code>. Identify: text, data, heap, stack, shared libs.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Virtual memory size</div>
+            <p>Process có VSZ = 10GB nhưng RSS = 100MB. VSZ và RSS khác nhau gì? (Xem qua <code>top</code> hoặc <code>ps</code>)</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — mmap đọc file lớn</div>
+            <p>Viết C program mmap 1 file 1GB. Đọc byte ngẫu nhiên. So sánh thời gian với <code>fread</code> + <code>fseek</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Memory leak trong Node</div>
+            <p>Tạo Node script có memory leak (vd push vào global array). Dùng <code>--inspect</code> + Chrome DevTools để chụp heap snapshot và tìm leak.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 1.</strong> Stack vs Heap khác nhau chính ở?</p>
+              <ul class="quiz-options">
+                <li>Stack: cấp phát tự động (function call), nhanh, kích thước cố định; Heap: cấp phát động (malloc), chậm hơn, kích thước lớn</li>
+                <li>Stack chỉ chứa số, Heap chứa string</li>
+                <li>Stack chỉ trên Linux</li>
+                <li>Heap nhanh hơn Stack</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: stack tự động + nhanh, heap động + free thủ công.</strong> Stack cấp phát = SP±, Heap cần allocator.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 2.</strong> Tại sao cần Virtual Memory?</p>
+              <ul class="quiz-options">
+                <li>Vì RAM rẻ hơn</li>
+                <li>Vì CPU đa nhân</li>
+                <li>Để cô lập process, ảo hoá hơn RAM thật, lazy loading, sharing — và mỗi process tưởng có cả RAM</li>
+                <li>Không cần</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: cô lập + ảo hoá + lazy + sharing.</strong> VM giải quyết nhiều vấn đề cùng lúc.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> MMU là gì?</p>
+              <ul class="quiz-options">
+                <li>Một thư viện C</li>
+                <li>Một loại RAM</li>
+                <li>Phần cứng dịch virtual address sang physical address — tra page table tự động</li>
+                <li>Một loại CPU</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: phần cứng dịch địa chỉ.</strong> MMU + TLB. Mỗi instruction đọc memory đều qua MMU.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 4.</strong> Page size phổ biến trên Linux x86_64?</p>
+              <ul class="quiz-options">
+                <li>4 KB</li>
+                <li>1 KB</li>
+                <li>1 MB</li>
+                <li>16 KB</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 4 KB.</strong> Có thể configure huge pages 2MB hoặc 1GB cho workload đặc biệt.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Tại sao dùng multi-level page table?</p>
+              <ul class="quiz-options">
+                <li>Nhanh hơn single-level</li>
+                <li>Giảm memory cho page table — phần VA không dùng không cần bảng con</li>
+                <li>Đẹp hơn</li>
+                <li>Không có lý do</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: tiết kiệm memory.</strong> 64-bit single-level page table = 32 PB → bất khả thi. Multi-level chỉ tốn cho phần dùng.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Memory leak trong JS có thể xảy ra không?</p>
+              <ul class="quiz-options">
+                <li>Không vì có GC</li>
+                <li>Chỉ với object lớn</li>
+                <li>Có — nếu code giữ reference không cần thiết, GC không thu hồi</li>
+                <li>Chỉ trong browser, không trong Node</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: có thể.</strong> GC chỉ thu hồi unreachable. Push object vào global array → vẫn reachable → leak.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> V8 dùng GC strategy nào chính?</p>
+              <ul class="quiz-options">
+                <li>Reference counting</li>
+                <li>Generational GC (young + old gen)</li>
+                <li>Mark-and-sweep duy nhất</li>
+                <li>Manual <code>delete</code></li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Generational.</strong> Scavenger cho young, Mark-Compact cho old. Dựa vào quan sát "object chết trẻ".
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 8.</strong> mmap dùng để?</p>
+              <ul class="quiz-options">
+                <li>Map file (hoặc anonymous memory) vào virtual address space — đọc/ghi file như memory</li>
+                <li>Tạo memory mới</li>
+                <li>Free memory</li>
+                <li>Crash app</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: map file.</strong> Truy cập ngẫu nhiên file nhanh, OS cache page tự động, có thể chia sẻ giữa process.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 8</h2>
+          <ul>
+            <li>✅ Stack tự động (function call) + nhanh; Heap động (malloc) + free thủ công hoặc GC</li>
+            <li>✅ Memory errors: Stack overflow, Buffer overflow, Memory leak, Use-after-free, Double free, Segfault</li>
+            <li>✅ <strong>Virtual Memory</strong> = ảo giác mỗi process có cả address space; cô lập + ảo hoá + lazy + sharing</li>
+            <li>✅ Virtual address ≠ Physical address; <strong>MMU</strong> dịch tự động qua page table</li>
+            <li>✅ <strong>Paging</strong>: chia thành 4KB page, mapping page→frame</li>
+            <li>✅ <strong>PTE</strong>: frame#, present, R/W, U/S, accessed, dirty, NX</li>
+            <li>✅ <strong>Multi-level page table</strong>: tiết kiệm memory cho 64-bit (4 hoặc 5 levels)</li>
+            <li>✅ <strong>mmap</strong>: map file vào memory — fast random access</li>
+            <li>✅ <strong>GC</strong>: reachability từ roots; Generational (V8) > Mark-and-sweep > Reference counting</li>
+            <li>✅ Memory leak xảy ra cả với GC nếu code giữ reference không cần</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong7.html">
+        <span class="label">← Chương trước</span>
+        Chương 07: Deadlock
+      </a>
+      <a href="chuong9.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 09: Paging →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">●</span> OS Mastery · Chương 08 · Memory Management
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

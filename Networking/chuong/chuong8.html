@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 08 — API Styles · Networking Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">net-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong7.html">← Ch.07</a></li>
+        <li><a href="chuong8.html" class="active">Ch.08</a></li>
+        <li><a href="chuong9.html">Ch.09 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 08 · API · ~120 phút</div>
+      <h1>WebSocket, SSE, gRPC,<br/><span class="text-accent">REST, GraphQL</span></h1>
+      <p class="lead">
+        5 cách build API + realtime communication. Mỗi cái có điểm mạnh riêng — biết khi nào dùng cái nào quyết định kiến trúc app.
+        Học xong, bạn nắm: REST principles, GraphQL trade-off, gRPC streaming, WebSocket vs SSE vs polling.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#rest">8.1 REST</a></li>
+          <li><a href="#graphql">8.2 GraphQL</a></li>
+          <li><a href="#rest-vs-graphql">8.3 REST vs GraphQL</a></li>
+          <li><a href="#grpc">8.4 gRPC</a></li>
+          <li><a href="#realtime">8.5 Realtime — vấn đề</a></li>
+          <li><a href="#polling">8.6 Polling (short/long)</a></li>
+          <li><a href="#sse">8.7 Server-Sent Events</a></li>
+          <li><a href="#websocket">8.8 WebSocket</a></li>
+          <li><a href="#compare">8.9 Khi nào dùng cái nào</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 8.1 -->
+        <section id="rest">
+          <h2>8.1 REST — Representational State Transfer</h2>
+
+          <p>
+            REST không phải protocol — là <strong>kiến trúc API</strong> dựa trên HTTP, đề xuất bởi Roy Fielding (2000). Nguyên lý:
+          </p>
+
+          <ol>
+            <li><strong>Stateless</strong>: mỗi request độc lập, server không lưu session client</li>
+            <li><strong>Resource-oriented</strong>: mọi thứ là resource, có URL riêng (vd <code>/users/42</code>)</li>
+            <li><strong>HTTP method</strong> = action (GET đọc, POST tạo, PUT/PATCH update, DELETE xoá)</li>
+            <li><strong>HTTP status code</strong> = kết quả</li>
+            <li><strong>Cacheable</strong>: GET cache được</li>
+            <li><strong>Uniform interface</strong>: mọi resource dùng cùng cách</li>
+          </ol>
+
+          <h3>RESTful URL design</h3>
+          <pre data-lang="text"><code>✓ Đúng                          ✗ Sai (RPC-style)
+GET    /users                   GET    /getUsers
+GET    /users/42                GET    /getUserById?id=42
+POST   /users                   POST   /createUser
+PUT    /users/42                POST   /updateUser
+DELETE /users/42                POST   /deleteUser
+
+# Nested
+GET    /users/42/posts          (lấy tất cả post của user 42)
+GET    /users/42/posts/123      (post 123 của user 42)
+
+# Query params cho filter/sort/pagination
+GET    /users?role=admin&amp;sort=name&amp;page=2&amp;limit=20</code></pre>
+
+          <h3>RESTful response</h3>
+          <pre data-lang="json"><code>// GET /users/42
+{
+  "id": 42,
+  "name": "Alice",
+  "email": "alice@example.com",
+  "createdAt": "2025-01-15T10:00:00Z"
+}
+
+// GET /users (collection)
+{
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "perPage": 20,
+    "total": 150
+  }
+}
+
+// Error
+{
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "User 42 does not exist"
+  }
+}</code></pre>
+
+          <h3>HATEOAS — link trong response</h3>
+          <p>"Hypermedia as the Engine of Application State" — response chứa link đến next action. Đẹp lý thuyết nhưng ít api thực tế dùng đầy đủ.</p>
+
+          <pre data-lang="json"><code>{
+  "id": 42,
+  "name": "Alice",
+  "_links": {
+    "self": { "href": "/users/42" },
+    "posts": { "href": "/users/42/posts" },
+    "delete": { "href": "/users/42", "method": "DELETE" }
+  }
+}</code></pre>
+        </section>
+
+        <!-- 8.2 -->
+        <section id="graphql">
+          <h2>8.2 GraphQL — query language cho API</h2>
+
+          <p>
+            GraphQL (Facebook 2015) — <strong>1 endpoint duy nhất</strong>, client gửi <em>query</em> mô tả chính xác data cần. Server trả đúng những field đó.
+          </p>
+
+          <h3>Schema + Query</h3>
+          <pre data-lang="graphql"><code># Server schema
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  posts: [Post!]!
+}
+
+type Post {
+  id: ID!
+  title: String!
+  content: String!
+  author: User!
+}
+
+type Query {
+  user(id: ID!): User
+  users: [User!]!
+}
+
+type Mutation {
+  createUser(name: String!, email: String!): User!
+}</code></pre>
+
+          <pre data-lang="graphql"><code># Client query — chỉ lấy field cần
+query {
+  user(id: "42") {
+    name
+    email
+    posts {
+      title
+    }
+  }
+}
+
+# Server response
+{
+  "data": {
+    "user": {
+      "name": "Alice",
+      "email": "alice@example.com",
+      "posts": [
+        { "title": "Hello GraphQL" },
+        { "title": "GraphQL vs REST" }
+      ]
+    }
+  }
+}</code></pre>
+
+          <h3>Mutation = ghi data</h3>
+          <pre data-lang="graphql"><code>mutation {
+  createUser(name: "Bob", email: "bob@example.com") {
+    id
+    name
+  }
+}</code></pre>
+
+          <h3>Subscription = realtime</h3>
+          <pre data-lang="graphql"><code>subscription {
+  newPost {
+    id
+    title
+  }
+}
+# Implement qua WebSocket</code></pre>
+
+          <h3>Lợi ích</h3>
+          <ul>
+            <li><strong>Không over-fetching</strong>: lấy đúng field cần</li>
+            <li><strong>Không under-fetching</strong>: 1 query lấy cả user + posts (REST cần 2 endpoint)</li>
+            <li>Schema tự document</li>
+            <li>Strong typing + autocomplete trong tool (GraphiQL, Apollo Studio)</li>
+          </ul>
+
+          <h3>Nhược</h3>
+          <ul>
+            <li>Phức tạp hơn REST cho API đơn giản</li>
+            <li>Khó cache HTTP (mọi query đến cùng URL với POST)</li>
+            <li>N+1 query problem (cần DataLoader)</li>
+            <li>File upload không thuận tiện</li>
+          </ul>
+        </section>
+
+        <!-- 8.3 -->
+        <section id="rest-vs-graphql">
+          <h2>8.3 REST vs GraphQL — Khi nào dùng cái nào?</h2>
+
+          <table>
+            <thead>
+              <tr><th>Tiêu chí</th><th>REST</th><th>GraphQL</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Endpoint</td><td>Nhiều (theo resource)</td><td>1 endpoint duy nhất</td></tr>
+              <tr><td>Method HTTP</td><td>GET/POST/PUT/DELETE</td><td>POST (hầu hết)</td></tr>
+              <tr><td>Over/under-fetching</td><td>Có</td><td>Không</td></tr>
+              <tr><td>HTTP cache</td><td>Dễ (GET với URL khác)</td><td>Khó</td></tr>
+              <tr><td>File upload</td><td>Tự nhiên</td><td>Phức tạp (multipart spec)</td></tr>
+              <tr><td>Versioning</td><td>v1/v2 trong URL</td><td>Field deprecation</td></tr>
+              <tr><td>Learning curve</td><td>Thấp</td><td>Cao hơn</td></tr>
+              <tr><td>Mobile (bandwidth limited)</td><td>Tốn nhiều req</td><td>1 query lấy tất cả</td></tr>
+              <tr><td>Tool</td><td>Postman, Swagger</td><td>GraphiQL, Apollo</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Khi nào REST?</h3>
+          <ul>
+            <li>API đơn giản, CRUD truyền thống</li>
+            <li>Public API (Stripe, GitHub) — cache, versioning rõ ràng</li>
+            <li>Server-to-server (microservice với khối lượng data nhỏ)</li>
+            <li>Team chưa quen GraphQL</li>
+          </ul>
+
+          <h3>Khi nào GraphQL?</h3>
+          <ul>
+            <li>App phức tạp với nhiều view khác nhau cần data khác nhau (mobile + web + dashboard)</li>
+            <li>Avoid over-fetching trên mobile (data plan)</li>
+            <li>Frontend tự định nghĩa nhu cầu (BFF pattern)</li>
+            <li>Multiple legacy backends — GraphQL aggregate</li>
+          </ul>
+        </section>
+
+        <!-- 8.4 -->
+        <section id="grpc">
+          <h2>8.4 gRPC — RPC modern, fast</h2>
+
+          <p>
+            <strong>gRPC</strong> (Google 2015) — RPC framework dùng <strong>Protocol Buffers</strong> + <strong>HTTP/2</strong>. Cực nhanh cho microservice.
+          </p>
+
+          <h3>Protocol Buffers (protobuf) — schema + serialization</h3>
+          <pre data-lang="protobuf"><code>// user.proto
+syntax = "proto3";
+
+service UserService {
+  rpc GetUser (GetUserRequest) returns (User);
+  rpc StreamUsers (stream GetUserRequest) returns (stream User);
+}
+
+message GetUserRequest {
+  int32 id = 1;
+}
+
+message User {
+  int32 id = 1;
+  string name = 2;
+  string email = 3;
+}</code></pre>
+
+          <p>Compiler tự sinh code Go/Java/Node/Python từ <code>.proto</code>. Type-safe, không phải parse tay.</p>
+
+          <h3>4 loại RPC</h3>
+          <ul>
+            <li><strong>Unary</strong>: 1 request → 1 response (như REST)</li>
+            <li><strong>Server streaming</strong>: 1 request → nhiều response (vd subscribe to events)</li>
+            <li><strong>Client streaming</strong>: nhiều request → 1 response (vd upload file)</li>
+            <li><strong>Bidirectional streaming</strong>: 2 chiều cùng lúc (vd chat)</li>
+          </ul>
+
+          <h3>Lợi ích so với REST</h3>
+          <ul>
+            <li><strong>Nhanh hơn 5-10x</strong>: binary protobuf nhỏ + parse nhanh + HTTP/2 multiplex</li>
+            <li><strong>Strong typing</strong>: schema bắt buộc → ít bug</li>
+            <li><strong>Streaming native</strong></li>
+            <li><strong>Multi-language</strong>: cùng .proto, code gen cho mọi ngôn ngữ</li>
+          </ul>
+
+          <h3>Nhược</h3>
+          <ul>
+            <li>Browser support kém — cần grpc-web proxy</li>
+            <li>Khó debug (binary format)</li>
+            <li>Yêu cầu HTTP/2 → khó qua proxy cũ</li>
+          </ul>
+
+          <p><strong>Use case lý tưởng:</strong> microservice giao tiếp nội bộ (server-to-server).</p>
+        </section>
+
+        <!-- 8.5 -->
+        <section id="realtime">
+          <h2>8.5 Realtime Communication — Vấn đề</h2>
+
+          <p>
+            HTTP truyền thống là <strong>client pull</strong>: client request, server response. Nhưng nếu cần server <em>push</em> (vd notification, chat)?
+          </p>
+
+          <p>4 cách giải quyết, từ thô sơ đến hiện đại:</p>
+          <ol>
+            <li>Short polling — client liên tục hỏi</li>
+            <li>Long polling — server giữ request đến khi có data</li>
+            <li>Server-Sent Events — 1 chiều server→client, qua HTTP</li>
+            <li>WebSocket — 2 chiều full-duplex</li>
+          </ol>
+        </section>
+
+        <!-- 8.6 -->
+        <section id="polling">
+          <h2>8.6 Polling — đơn giản nhất nhưng kém</h2>
+
+          <h3>Short polling</h3>
+          <pre data-lang="javascript"><code>setInterval(async () =&gt; {
+  const messages = await fetch('/api/messages?since=' + lastTime).then(r =&gt; r.json());
+  if (messages.length) renderMessages(messages);
+}, 3000);  // hỏi mỗi 3 giây</code></pre>
+
+          <ul>
+            <li><strong>Ưu</strong>: đơn giản, không cần infrastructure đặc biệt</li>
+            <li><strong>Nhược</strong>: hầu hết request lãng phí (không có data mới); latency = polling interval</li>
+          </ul>
+
+          <h3>Long polling</h3>
+          <pre data-lang="javascript"><code>async function poll() {
+  // Server giữ request mở đến khi có data hoặc timeout (vd 30s)
+  const data = await fetch('/api/messages/wait?since=' + lastTime);
+  renderMessages(data);
+  poll();  // ngay sau khi nhận, poll tiếp
+}
+poll();</code></pre>
+
+          <p>Server side: nhận request, hold connection, đợi event hoặc timeout, rồi trả response.</p>
+          <ul>
+            <li><strong>Ưu</strong>: latency thấp hơn short polling, dùng được trên HTTP/1.1 thường</li>
+            <li><strong>Nhược</strong>: chiếm connection lâu, vẫn có overhead reconnect</li>
+          </ul>
+
+          <p>Long polling là hack. Modern thay bằng SSE/WebSocket.</p>
+        </section>
+
+        <!-- 8.7 -->
+        <section id="sse">
+          <h2>8.7 Server-Sent Events (SSE) — push 1 chiều, đơn giản</h2>
+
+          <p>
+            <strong>SSE</strong>: server giữ HTTP connection mở, gửi nhiều event qua thời gian. Native trong browser qua <code>EventSource</code> API.
+          </p>
+
+          <h3>Server side</h3>
+          <pre data-lang="javascript"><code>// Express
+app.get('/events', (req, res) =&gt; {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Gửi event mỗi 5 giây
+  const intervalId = setInterval(() =&gt; {
+    res.write(`data: ${JSON.stringify({ time: Date.now() })}\n\n`);
+  }, 5000);
+
+  req.on('close', () =&gt; clearInterval(intervalId));
+});</code></pre>
+
+          <h3>Client side</h3>
+          <pre data-lang="javascript"><code>const es = new EventSource('/events');
+es.onmessage = (event) =&gt; {
+  const data = JSON.parse(event.data);
+  console.log('received:', data);
+};
+es.onerror = (err) =&gt; { /* auto reconnect */ };</code></pre>
+
+          <h3>Đặc điểm</h3>
+          <ul>
+            <li><strong>1 chiều</strong>: chỉ server → client</li>
+            <li><strong>Auto reconnect</strong>: browser tự retry khi mất connection</li>
+            <li><strong>Built on HTTP</strong>: dễ qua proxy/firewall</li>
+            <li>Text only (UTF-8)</li>
+          </ul>
+
+          <p>Use case: notification, live feed, stock price, log streaming.</p>
+        </section>
+
+        <!-- 8.8 -->
+        <section id="websocket">
+          <h2>8.8 WebSocket — full-duplex realtime</h2>
+
+          <p>
+            <strong>WebSocket</strong> (RFC 6455, 2011): protocol full-duplex over TCP, upgrade từ HTTP. Là chuẩn cho realtime app.
+          </p>
+
+          <h3>Handshake — Upgrade từ HTTP</h3>
+          <pre data-lang="http"><code># Client request
+GET /chat HTTP/1.1
+Host: example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+
+# Server response
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
+
+          <p>Sau 101, connection chuyển sang WebSocket frame format. Không còn HTTP nữa.</p>
+
+          <h3>WebSocket frame</h3>
+          <ul>
+            <li>Header nhỏ (2-14 byte)</li>
+            <li>Binary hoặc text</li>
+            <li>Cả 2 chiều có thể gửi bất cứ lúc nào</li>
+            <li>Có ping/pong để giữ connection alive</li>
+          </ul>
+
+          <h3>Code đơn giản</h3>
+          <pre data-lang="javascript"><code>// Client (browser)
+const ws = new WebSocket('wss://example.com/chat');
+
+ws.onopen = () =&gt; ws.send(JSON.stringify({ type: 'hello' }));
+ws.onmessage = (event) =&gt; {
+  const msg = JSON.parse(event.data);
+  console.log('received:', msg);
+};
+ws.onclose = () =&gt; console.log('closed');
+
+// Server (Node + ws library)
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 8080 });
+
+wss.on('connection', (ws) =&gt; {
+  ws.on('message', (data) =&gt; {
+    // broadcast to all
+    wss.clients.forEach(client =&gt; {
+      if (client.readyState === WebSocket.OPEN) client.send(data);
+    });
+  });
+});</code></pre>
+
+          <h3>Use case</h3>
+          <p>Chat (Slack, Discord), collaborative editing (Google Docs, Figma), live dashboard, multiplayer game, trading.</p>
+
+          <h3>Khó khăn</h3>
+          <ul>
+            <li>Stateful — server giữ connection per user → khó scale (sticky session, message broker)</li>
+            <li>Reconnect logic phức tạp</li>
+            <li>Một số proxy/firewall không support</li>
+            <li>Library phổ biến: <code>ws</code> (Node), <code>socket.io</code> (có fallback long polling)</li>
+          </ul>
+        </section>
+
+        <!-- 8.9 -->
+        <section id="compare">
+          <h2>8.9 So sánh — Khi nào dùng cái nào?</h2>
+
+          <table>
+            <thead>
+              <tr><th>Pattern</th><th>Direction</th><th>Latency</th><th>Complexity</th><th>Use case</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Short polling</td><td>Client pull</td><td>Cao (= interval)</td><td>Thấp</td><td>Don't use, trừ cùng cực</td></tr>
+              <tr><td>Long polling</td><td>Client pull</td><td>Trung</td><td>Trung</td><td>Legacy support</td></tr>
+              <tr><td>SSE</td><td>Server → Client</td><td>Thấp</td><td>Thấp</td><td>Notification, news feed, log stream</td></tr>
+              <tr><td>WebSocket</td><td>Bidirectional</td><td>Thấp</td><td>Cao</td><td>Chat, collab, game, trading</td></tr>
+              <tr><td>gRPC streaming</td><td>Bidirectional</td><td>Thấp</td><td>Cao</td><td>Microservice realtime</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Quyết định cây</h3>
+          <pre data-lang="text"><code>Cần realtime?
+├─ Server push 1 chiều (notification, feed) → SSE
+├─ 2 chiều (chat, collab) → WebSocket
+└─ Microservice nội bộ → gRPC streaming
+
+Không realtime, server-to-server → gRPC unary
+Không realtime, public API đơn giản → REST
+Frontend phức tạp, nhiều view → GraphQL</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — RESTful URL</div>
+            <p>Thiết kế REST API cho blog: list bài, xem chi tiết bài, viết comment, like comment, follow author. Liệt kê method + URL.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — GraphQL query</div>
+            <p>Cho schema User-Post, viết GraphQL query: lấy 10 user mới nhất + 3 post gần nhất của mỗi user (chỉ title + createdAt).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — gRPC vs REST benchmark</div>
+            <p>Search "grpc vs rest benchmark". So sánh: latency, throughput, payload size. gRPC nhanh hơn bao nhiêu?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — SSE thực hành</div>
+            <p>Viết Express server có endpoint /sse gửi timestamp mỗi giây. Browser HTML connect bằng <code>new EventSource('/sse')</code>, in messages.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — WebSocket chat</div>
+            <p>Viết simple chat server bằng <code>ws</code>: nhiều client connect, broadcast message tới mọi client.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Pick the right tool</div>
+            <p>Mỗi scenario, chọn pattern phù hợp:
+            (a) Stock price ticker;
+            (b) Multiplayer game;
+            (c) GitHub API public;
+            (d) Mobile app fetch user profile + last 10 posts trong 1 request;
+            (e) Microservice cho video transcoding cluster;
+            (f) Log streaming đến browser.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> REST nguyên lý chính?</p>
+              <ul class="quiz-options">
+                <li>Mã hoá data</li>
+                <li>WebSocket-based</li>
+                <li>Stateless, resource-oriented (URL = resource), HTTP method = action, cacheable</li>
+                <li>Chỉ dùng JSON</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Stateless + resource-oriented + HTTP method.</strong> Đây là kiến trúc, không phải spec.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> GraphQL khắc phục vấn đề nào của REST?</p>
+              <ul class="quiz-options">
+                <li>Chậm</li>
+                <li>Over-fetching (lấy quá nhiều) + Under-fetching (cần nhiều request)</li>
+                <li>Không hỗ trợ HTTP/2</li>
+                <li>Không có authentication</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: over/under-fetching.</strong> Client query đúng field cần. 1 query lấy được data từ nhiều "resource".
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> gRPC nhanh hơn REST vì?</p>
+              <ul class="quiz-options">
+                <li>Dùng IPv6</li>
+                <li>Single threaded</li>
+                <li>Binary protobuf (nhỏ + parse nhanh) + HTTP/2 multiplex + native streaming</li>
+                <li>Không cần auth</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: protobuf + HTTP/2 + streaming.</strong> 5-10x nhanh hơn REST/JSON.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> WebSocket khác HTTP polling thế nào?</p>
+              <ul class="quiz-options">
+                <li>WebSocket dùng UDP</li>
+                <li>WebSocket = full-duplex, 1 connection, server push được; polling = client phải hỏi</li>
+                <li>WebSocket free hơn</li>
+                <li>Hai cái giống nhau</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: full-duplex 1 connection.</strong> Polling tốn nhiều request lãng phí.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 5.</strong> SSE vs WebSocket?</p>
+              <ul class="quiz-options">
+                <li>SSE 1 chiều server→client (đơn giản hơn); WebSocket bidirectional</li>
+                <li>SSE binary, WebSocket text</li>
+                <li>WebSocket 1 chiều, SSE 2 chiều</li>
+                <li>Hai cái giống nhau</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: SSE 1 chiều, WS 2 chiều.</strong> SSE đơn giản hơn cho notification/feed; WS cho chat/collab.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 6.</strong> WebSocket handshake bắt đầu bằng?</p>
+              <ul class="quiz-options">
+                <li>HTTP request với Upgrade: websocket header → server response 101 Switching Protocols</li>
+                <li>TCP SYN trực tiếp</li>
+                <li>UDP packet</li>
+                <li>DNS query</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: HTTP Upgrade.</strong> Sau 101, không còn HTTP, dùng WebSocket frame format.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Use case TỐT cho GraphQL?</p>
+              <ul class="quiz-options">
+                <li>Public API đơn giản</li>
+                <li>File upload chính</li>
+                <li>Mobile app phức tạp với nhiều view khác nhau cần data khác nhau, tránh over-fetch trên mobile data</li>
+                <li>Microservice nội bộ tốc độ cao</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: mobile + nhiều view khác nhau.</strong> Microservice nội bộ → gRPC. Public API đơn giản → REST.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Stock price live ticker — chọn pattern?</p>
+              <ul class="quiz-options">
+                <li>Short polling 1s</li>
+                <li>SSE — server push 1 chiều, đơn giản hơn WebSocket</li>
+                <li>REST GET</li>
+                <li>gRPC unary</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: SSE.</strong> Chỉ cần server→client. WebSocket overkill. Polling tốn bandwidth.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 8</h2>
+          <ul>
+            <li>✅ <strong>REST</strong>: stateless, resource-oriented, HTTP method = action — đơn giản, public API</li>
+            <li>✅ <strong>GraphQL</strong>: 1 endpoint, query language, không over/under-fetch — phức tạp nhưng hợp app frontend phong phú</li>
+            <li>✅ <strong>gRPC</strong>: protobuf + HTTP/2 — nhanh nhất, native streaming, lý tưởng microservice nội bộ</li>
+            <li>✅ <strong>Polling</strong>: short (lãng phí), long (hack); chỉ dùng khi không có lựa chọn khác</li>
+            <li>✅ <strong>SSE</strong>: server push 1 chiều qua HTTP, auto-reconnect — notification, feed, log</li>
+            <li>✅ <strong>WebSocket</strong>: full-duplex bi-directional, upgrade từ HTTP — chat, collab, game</li>
+            <li>✅ Quy tắc: realtime 1 chiều → SSE; 2 chiều → WebSocket; microservice → gRPC; public CRUD → REST; frontend phức tạp → GraphQL</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong7.html">
+        <span class="label">← Chương trước</span>
+        Chương 07: DNS
+      </a>
+      <a href="chuong9.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 09: Auth →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◆</span> Networking Mastery · Chương 08 · API Styles
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

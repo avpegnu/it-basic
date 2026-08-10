@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 14 — Testing · Flutter Sub-pillar</title>
+  <meta name="description" content="Unit / Widget / Integration / Golden test, mocktail, bloc_test, WidgetTester, coverage, CI GitHub Actions." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 14</span>
+      </div>
+      <div class="chapter-num">Chương 14 · Testing</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Testing
+      </h1>
+      <p class="lead">
+        Test thường bị skip "vì gấp" — sau đó refactor không dám vì sợ vỡ. Flutter có <strong>test infra tốt nhất ecosystem mobile</strong>.
+        Chương này dạy đủ 4 level + cách mỗi level test cái gì.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1090 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Tất cả chương trước</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phân biệt 4 level test: Unit / Widget / Integration / Golden.</li>
+            <li>Setup <code>flutter_test</code>, <code>mocktail</code>, <code>bloc_test</code>.</li>
+            <li>Unit test cho Dart logic (Bloc, utility, model).</li>
+            <li>Widget test với <code>WidgetTester</code>: pump, tap, drag, expect.</li>
+            <li>Integration test với <code>integration_test</code> package.</li>
+            <li>Golden test (visual regression).</li>
+            <li>Coverage report với <code>--coverage</code>.</li>
+            <li>CI GitHub Actions chạy test trên PR.</li>
+          </ul>
+        </div>
+
+        <h2 id="pyramid">1. Test pyramid</h2>
+        <figure>
+          <svg viewBox="0 0 400 240" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .tp { font-family: var(--font-mono); font-size: 11px; fill: var(--ink); }
+              .tp-acc { font-family: var(--font-mono); font-size: 12px; fill: var(--accent); font-weight: 700; }
+            </style>
+            <polygon points="200,30 80,200 320,200" fill="none" stroke="var(--border)" stroke-width="2"/>
+            <line x1="120" y1="135" x2="280" y2="135" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="155" y1="75" x2="245" y2="75" stroke="var(--border)" stroke-width="1.5"/>
+
+            <text class="tp-acc" x="200" y="55" text-anchor="middle">Integration / Golden</text>
+            <text class="tp" x="200" y="105" text-anchor="middle">Widget tests</text>
+            <text class="tp" x="200" y="170" text-anchor="middle">Unit tests (nhiều)</text>
+
+            <text class="tp" x="40" y="40" text-anchor="middle">Cost</text>
+            <text class="tp" x="40" y="60" text-anchor="middle">↑</text>
+            <text class="tp" x="40" y="200" text-anchor="middle">↓ many</text>
+
+            <text class="tp" x="360" y="40" text-anchor="middle">Confidence</text>
+            <text class="tp" x="360" y="60" text-anchor="middle">↑</text>
+            <text class="tp" x="360" y="200" text-anchor="middle">↓ low</text>
+          </svg>
+        </figure>
+
+        <ul>
+          <li><strong>Unit (nhiều)</strong> — fast, cheap, narrow scope. Test pure Dart logic.</li>
+          <li><strong>Widget (vừa)</strong> — render widget, interact. Test UI behavior.</li>
+          <li><strong>Integration (ít)</strong> — chạy app thật trên device, full flow.</li>
+          <li><strong>Golden</strong> — visual regression, screenshot diff.</li>
+        </ul>
+
+        <h2 id="setup">2. Setup</h2>
+        <p><code>flutter_test</code> đã có trong template <code>flutter create</code>. Thêm:</p>
+
+        <pre data-lang="bash"><code class="language-bash">flutter pub add --dev mocktail bloc_test
+flutter pub add --dev integration_test:
+# trong dev_dependencies thêm:
+#   integration_test:
+#     sdk: flutter</code></pre>
+
+        <p>Chạy test:</p>
+
+        <pre data-lang="bash"><code class="language-bash">flutter test                    # tất cả test/
+flutter test test/user_test.dart  # 1 file
+flutter test --coverage         # + coverage report
+flutter test --tags=fast        # chỉ test có tag 'fast'</code></pre>
+
+        <h2 id="unit-basic">3. Unit test cơ bản</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// test/utils_test.dart</span>
+<span class="tok-kw">import</span> <span class="tok-str">'package:flutter_test/flutter_test.dart'</span>;
+<span class="tok-kw">import</span> <span class="tok-str">'package:my_app/utils.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">group</span>(<span class="tok-str">'formatPrice'</span>, () {
+    <span class="tok-fn">test</span>(<span class="tok-str">'formats VND correctly'</span>, () {
+      <span class="tok-fn">expect</span>(<span class="tok-fn">formatPrice</span>(<span class="tok-num">1500000</span>, <span class="tok-str">'VND'</span>), <span class="tok-str">'1,500,000 VND'</span>);
+    });
+
+    <span class="tok-fn">test</span>(<span class="tok-str">'handles zero'</span>, () {
+      <span class="tok-fn">expect</span>(<span class="tok-fn">formatPrice</span>(<span class="tok-num">0</span>, <span class="tok-str">'USD'</span>), <span class="tok-str">'0 USD'</span>);
+    });
+
+    <span class="tok-fn">test</span>(<span class="tok-str">'throws on negative'</span>, () {
+      <span class="tok-fn">expect</span>(() =&gt; <span class="tok-fn">formatPrice</span>(-<span class="tok-num">1</span>, <span class="tok-str">'USD'</span>), <span class="tok-fn">throwsArgumentError</span>);
+    });
+  });
+}</code></pre>
+
+        <h3 id="setup-teardown">setUp / tearDown</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">group</span>(<span class="tok-str">'CartCubit'</span>, () {
+  <span class="tok-kw">late</span> <span class="tok-cls">CartCubit</span> cubit;
+
+  <span class="tok-fn">setUp</span>(() {
+    cubit = <span class="tok-fn">CartCubit</span>();
+  });
+
+  <span class="tok-fn">tearDown</span>(() {
+    cubit.<span class="tok-fn">close</span>();
+  });
+
+  <span class="tok-fn">test</span>(<span class="tok-str">'initial state empty'</span>, () {
+    <span class="tok-fn">expect</span>(cubit.state.items, <span class="tok-fn">isEmpty</span>);
+  });
+
+  <span class="tok-fn">test</span>(<span class="tok-str">'add item'</span>, () {
+    cubit.<span class="tok-fn">add</span>(<span class="tok-fn">Item</span>(id: <span class="tok-num">1</span>));
+    <span class="tok-fn">expect</span>(cubit.state.items.length, <span class="tok-num">1</span>);
+  });
+});</code></pre>
+
+        <h2 id="matchers">4. <code>expect</code> matchers</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">expect</span>(value, <span class="tok-fn">equals</span>(<span class="tok-num">42</span>));
+<span class="tok-fn">expect</span>(value, <span class="tok-num">42</span>);                       <span class="tok-com">// shortcut equals</span>
+<span class="tok-fn">expect</span>(value, <span class="tok-fn">isA</span>&lt;<span class="tok-cls">User</span>&gt;());
+<span class="tok-fn">expect</span>(list, [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);
+<span class="tok-fn">expect</span>(list, <span class="tok-fn">contains</span>(<span class="tok-num">2</span>));
+<span class="tok-fn">expect</span>(list, <span class="tok-fn">hasLength</span>(<span class="tok-num">3</span>));
+<span class="tok-fn">expect</span>(value, <span class="tok-fn">isNull</span>);
+<span class="tok-fn">expect</span>(value, <span class="tok-fn">isNotNull</span>);
+<span class="tok-fn">expect</span>(value, <span class="tok-fn">isTrue</span>);
+<span class="tok-fn">expect</span>(value, <span class="tok-fn">isEmpty</span>);
+<span class="tok-fn">expect</span>(() =&gt; <span class="tok-fn">throwing</span>(), <span class="tok-fn">throwsA</span>(<span class="tok-fn">isA</span>&lt;<span class="tok-cls">ApiException</span>&gt;()));
+<span class="tok-fn">expect</span>(list, <span class="tok-fn">everyElement</span>(<span class="tok-fn">greaterThan</span>(<span class="tok-num">0</span>)));
+<span class="tok-fn">expect</span>(map, {<span class="tok-str">'a'</span>: <span class="tok-num">1</span>});
+<span class="tok-fn">expect</span>(future, <span class="tok-fn">completes</span>);                <span class="tok-com">// async — không throw</span>
+<span class="tok-fn">expect</span>(future, <span class="tok-fn">completion</span>(<span class="tok-num">42</span>));
+<span class="tok-fn">expect</span>(future, <span class="tok-fn">throwsException</span>);</code></pre>
+
+        <h2 id="async-test">5. Async test</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">test</span>(<span class="tok-str">'fetches user'</span>, () <span class="tok-kw">async</span> {
+  <span class="tok-kw">final</span> user = <span class="tok-kw">await</span> <span class="tok-fn">fetchUser</span>(<span class="tok-num">1</span>);
+  <span class="tok-fn">expect</span>(user.name, <span class="tok-str">'Việt'</span>);
+});</code></pre>
+
+        <h2 id="mocktail">6. Mock với <code>mocktail</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:mocktail/mocktail.dart'</span>;
+
+<span class="tok-kw">class</span> <span class="tok-cls">MockUserRepo</span> <span class="tok-kw">extends</span> <span class="tok-cls">Mock</span> <span class="tok-kw">implements</span> <span class="tok-cls">UserRepository</span> {}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">group</span>(<span class="tok-str">'UserBloc'</span>, () {
+    <span class="tok-kw">late</span> <span class="tok-cls">MockUserRepo</span> repo;
+    <span class="tok-kw">late</span> <span class="tok-cls">UserBloc</span> bloc;
+
+    <span class="tok-fn">setUp</span>(() {
+      repo = <span class="tok-fn">MockUserRepo</span>();
+      bloc = <span class="tok-fn">UserBloc</span>(repo);
+    });
+
+    <span class="tok-fn">test</span>(<span class="tok-str">'load success'</span>, () <span class="tok-kw">async</span> {
+      <span class="tok-com">// Setup mock</span>
+      <span class="tok-fn">when</span>(() =&gt; repo.<span class="tok-fn">fetchUser</span>(<span class="tok-num">1</span>))
+          .<span class="tok-fn">thenAnswer</span>((_) <span class="tok-kw">async</span> =&gt; <span class="tok-fn">User</span>(id: <span class="tok-num">1</span>, name: <span class="tok-str">'Việt'</span>));
+
+      <span class="tok-com">// Act</span>
+      <span class="tok-kw">await</span> bloc.<span class="tok-fn">load</span>(<span class="tok-num">1</span>);
+
+      <span class="tok-com">// Assert</span>
+      <span class="tok-fn">expect</span>(bloc.state, <span class="tok-fn">isA</span>&lt;<span class="tok-cls">UserLoaded</span>&gt;());
+
+      <span class="tok-com">// Verify mock call</span>
+      <span class="tok-fn">verify</span>(() =&gt; repo.<span class="tok-fn">fetchUser</span>(<span class="tok-num">1</span>)).<span class="tok-fn">called</span>(<span class="tok-num">1</span>);
+    });
+
+    <span class="tok-fn">test</span>(<span class="tok-str">'load failure'</span>, () <span class="tok-kw">async</span> {
+      <span class="tok-fn">when</span>(() =&gt; repo.<span class="tok-fn">fetchUser</span>(<span class="tok-fn">any</span>()))
+          .<span class="tok-fn">thenThrow</span>(<span class="tok-fn">ApiException</span>(<span class="tok-num">500</span>, <span class="tok-str">'Server error'</span>));
+
+      <span class="tok-kw">await</span> bloc.<span class="tok-fn">load</span>(<span class="tok-num">1</span>);
+
+      <span class="tok-fn">expect</span>(bloc.state, <span class="tok-fn">isA</span>&lt;<span class="tok-cls">UserError</span>&gt;());
+    });
+  });
+}</code></pre>
+
+        <h2 id="bloc-test">7. <code>bloc_test</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:bloc_test/bloc_test.dart'</span>;
+
+<span class="tok-fn">blocTest</span>&lt;<span class="tok-cls">CounterCubit</span>, <span class="tok-type">int</span>&gt;(
+  <span class="tok-str">'emits [1] when increment called'</span>,
+  build: () =&gt; <span class="tok-fn">CounterCubit</span>(),
+  act: (cubit) =&gt; cubit.<span class="tok-fn">increment</span>(),
+  expect: () =&gt; [<span class="tok-num">1</span>],
+);
+
+<span class="tok-fn">blocTest</span>&lt;<span class="tok-cls">UserBloc</span>, <span class="tok-cls">UserState</span>&gt;(
+  <span class="tok-str">'emits [Loading, Loaded] on success'</span>,
+  setUp: () {
+    <span class="tok-fn">when</span>(() =&gt; mockRepo.<span class="tok-fn">fetchUser</span>(<span class="tok-num">1</span>))
+        .<span class="tok-fn">thenAnswer</span>((_) <span class="tok-kw">async</span> =&gt; <span class="tok-fn">User</span>(id: <span class="tok-num">1</span>, name: <span class="tok-str">'V'</span>));
+  },
+  build: () =&gt; <span class="tok-fn">UserBloc</span>(mockRepo),
+  act: (bloc) =&gt; bloc.<span class="tok-fn">load</span>(<span class="tok-num">1</span>),
+  expect: () =&gt; [
+    <span class="tok-fn">isA</span>&lt;<span class="tok-cls">UserLoading</span>&gt;(),
+    <span class="tok-fn">isA</span>&lt;<span class="tok-cls">UserLoaded</span>&gt;(),
+  ],
+  verify: (bloc) {
+    <span class="tok-fn">verify</span>(() =&gt; mockRepo.<span class="tok-fn">fetchUser</span>(<span class="tok-num">1</span>)).<span class="tok-fn">called</span>(<span class="tok-num">1</span>);
+  },
+);</code></pre>
+
+        <h2 id="widget-test">8. Widget test</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">testWidgets</span>(<span class="tok-str">'counter increments'</span>, (<span class="tok-cls">WidgetTester</span> tester) <span class="tok-kw">async</span> {
+  <span class="tok-com">// 1. Pump widget</span>
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(<span class="tok-kw">const</span> <span class="tok-cls">MaterialApp</span>(home: <span class="tok-cls">CounterPage</span>()));
+
+  <span class="tok-com">// 2. Verify initial state</span>
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'0'</span>), <span class="tok-fn">findsOneWidget</span>);
+
+  <span class="tok-com">// 3. Tap button</span>
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">tap</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byIcon</span>(<span class="tok-cls">Icons</span>.add));
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pump</span>();   <span class="tok-com">// advance 1 frame</span>
+
+  <span class="tok-com">// 4. Verify new state</span>
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'1'</span>), <span class="tok-fn">findsOneWidget</span>);
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'0'</span>), <span class="tok-fn">findsNothing</span>);
+});</code></pre>
+
+        <h3 id="widget-tester-api">WidgetTester API</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Pump</span>
+<span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(widget);
+<span class="tok-kw">await</span> tester.<span class="tok-fn">pump</span>();                  <span class="tok-com">// 1 frame</span>
+<span class="tok-kw">await</span> tester.<span class="tok-fn">pump</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>));
+<span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();          <span class="tok-com">// đợi đến khi không còn frame schedule (animation done)</span>
+
+<span class="tok-com">// Find</span>
+<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Hello'</span>);
+<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-kw">const</span> <span class="tok-cls">Key</span>(<span class="tok-str">'submit'</span>));
+<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">ElevatedButton</span>);
+<span class="tok-cls">find</span>.<span class="tok-fn">byIcon</span>(<span class="tok-cls">Icons</span>.add);
+<span class="tok-cls">find</span>.<span class="tok-fn">byTooltip</span>(<span class="tok-str">'Increment'</span>);
+<span class="tok-cls">find</span>.<span class="tok-fn">descendant</span>(of: <span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">Card</span>), matching: <span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Hi'</span>));
+
+<span class="tok-com">// Interact</span>
+<span class="tok-kw">await</span> tester.<span class="tok-fn">tap</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-cls">Key</span>(<span class="tok-str">'submit'</span>)));
+<span class="tok-kw">await</span> tester.<span class="tok-fn">enterText</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-cls">Key</span>(<span class="tok-str">'email'</span>)), <span class="tok-str">'v@x.com'</span>);
+<span class="tok-kw">await</span> tester.<span class="tok-fn">drag</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">Slider</span>), <span class="tok-cls">Offset</span>(<span class="tok-num">50</span>, <span class="tok-num">0</span>));
+<span class="tok-kw">await</span> tester.<span class="tok-fn">longPress</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">ListTile</span>));
+
+<span class="tok-com">// Find matchers</span>
+<span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Hi'</span>), <span class="tok-fn">findsOneWidget</span>);
+<span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'X'</span>), <span class="tok-fn">findsNothing</span>);
+<span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">ListTile</span>), <span class="tok-fn">findsNWidgets</span>(<span class="tok-num">5</span>));
+<span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Item'</span>), <span class="tok-fn">findsWidgets</span>);    <span class="tok-com">// ≥ 1</span></code></pre>
+
+        <h2 id="widget-test-bloc">9. Widget test với BlocProvider</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">testWidgets</span>(<span class="tok-str">'login page shows error on fail'</span>, (tester) <span class="tok-kw">async</span> {
+  <span class="tok-kw">final</span> mockBloc = <span class="tok-fn">MockLoginCubit</span>();
+
+  <span class="tok-com">// Stub state stream</span>
+  <span class="tok-fn">whenListen</span>(
+    mockBloc,
+    <span class="tok-cls">Stream</span>.<span class="tok-fn">fromIterable</span>([<span class="tok-fn">LoginLoading</span>(), <span class="tok-fn">LoginError</span>(<span class="tok-str">'Sai email'</span>)]),
+    initialState: <span class="tok-fn">LoginInitial</span>(),
+  );
+
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(
+    <span class="tok-fn">MaterialApp</span>(
+      home: <span class="tok-fn">BlocProvider</span>&lt;<span class="tok-cls">LoginCubit</span>&gt;.value(
+        value: mockBloc,
+        child: <span class="tok-kw">const</span> <span class="tok-cls">LoginPage</span>(),
+      ),
+    ),
+  );
+
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();
+
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Sai email'</span>), <span class="tok-fn">findsOneWidget</span>);
+});</code></pre>
+
+        <h2 id="navigation-test">10. Test navigation</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">testWidgets</span>(<span class="tok-str">'navigate to detail'</span>, (tester) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(<span class="tok-kw">const</span> <span class="tok-cls">MaterialApp</span>(home: <span class="tok-cls">HomePage</span>()));
+
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">tap</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Go to Detail'</span>));
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();    <span class="tok-com">// đợi navigation animation done</span>
+
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">DetailPage</span>), <span class="tok-fn">findsOneWidget</span>);
+});</code></pre>
+
+        <h2 id="form-test">11. Test form interaction</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">testWidgets</span>(<span class="tok-str">'login form validation'</span>, (tester) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(<span class="tok-kw">const</span> <span class="tok-cls">MaterialApp</span>(home: <span class="tok-cls">LoginForm</span>()));
+
+  <span class="tok-com">// Submit without input</span>
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">tap</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Login'</span>));
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pump</span>();
+
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Email bắt buộc'</span>), <span class="tok-fn">findsOneWidget</span>);
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Password bắt buộc'</span>), <span class="tok-fn">findsOneWidget</span>);
+
+  <span class="tok-com">// Enter values</span>
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">enterText</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-cls">Key</span>(<span class="tok-str">'email'</span>)), <span class="tok-str">'viet@example.com'</span>);
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">enterText</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-cls">Key</span>(<span class="tok-str">'password'</span>)), <span class="tok-str">'password123'</span>);
+
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">tap</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Login'</span>));
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pump</span>();
+
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Email bắt buộc'</span>), <span class="tok-fn">findsNothing</span>);
+});</code></pre>
+
+        <h2 id="futurebuilder-test">12. FutureBuilder/StreamBuilder test</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">testWidgets</span>(<span class="tok-str">'shows loading then data'</span>, (tester) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(<span class="tok-kw">const</span> <span class="tok-cls">MaterialApp</span>(home: <span class="tok-cls">FutureWidget</span>()));
+
+  <span class="tok-com">// Initial — loading</span>
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">CircularProgressIndicator</span>), <span class="tok-fn">findsOneWidget</span>);
+
+  <span class="tok-com">// Wait future complete</span>
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();
+
+  <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Data loaded'</span>), <span class="tok-fn">findsOneWidget</span>);
+});</code></pre>
+
+        <h2 id="integration-test">13. Integration test</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// integration_test/app_test.dart</span>
+<span class="tok-kw">import</span> <span class="tok-str">'package:flutter_test/flutter_test.dart'</span>;
+<span class="tok-kw">import</span> <span class="tok-str">'package:integration_test/integration_test.dart'</span>;
+<span class="tok-kw">import</span> <span class="tok-str">'package:my_app/main.dart'</span> <span class="tok-kw">as</span> app;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-cls">IntegrationTestWidgetsFlutterBinding</span>.<span class="tok-fn">ensureInitialized</span>();
+
+  <span class="tok-fn">testWidgets</span>(<span class="tok-str">'full login flow'</span>, (tester) <span class="tok-kw">async</span> {
+    app.<span class="tok-fn">main</span>();
+    <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();
+
+    <span class="tok-com">// Already on login page</span>
+    <span class="tok-kw">await</span> tester.<span class="tok-fn">enterText</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-cls">Key</span>(<span class="tok-str">'email'</span>)), <span class="tok-str">'test@example.com'</span>);
+    <span class="tok-kw">await</span> tester.<span class="tok-fn">enterText</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byKey</span>(<span class="tok-cls">Key</span>(<span class="tok-str">'password'</span>)), <span class="tok-str">'12345678'</span>);
+    <span class="tok-kw">await</span> tester.<span class="tok-fn">tap</span>(<span class="tok-cls">find</span>.<span class="tok-fn">text</span>(<span class="tok-str">'Login'</span>));
+    <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();
+
+    <span class="tok-fn">expect</span>(<span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">HomePage</span>), <span class="tok-fn">findsOneWidget</span>);
+  });
+}</code></pre>
+
+        <pre data-lang="bash"><code class="language-bash"># Chạy trên real device / emulator
+flutter test integration_test/app_test.dart</code></pre>
+
+        <h2 id="golden-test">14. Golden test — visual regression</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">testWidgets</span>(<span class="tok-str">'home page matches golden'</span>, (tester) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpWidget</span>(<span class="tok-kw">const</span> <span class="tok-cls">MaterialApp</span>(home: <span class="tok-cls">HomePage</span>()));
+  <span class="tok-kw">await</span> tester.<span class="tok-fn">pumpAndSettle</span>();
+
+  <span class="tok-kw">await</span> <span class="tok-fn">expectLater</span>(
+    <span class="tok-cls">find</span>.<span class="tok-fn">byType</span>(<span class="tok-cls">HomePage</span>),
+    <span class="tok-fn">matchesGoldenFile</span>(<span class="tok-str">'goldens/home_page.png'</span>),
+  );
+});</code></pre>
+
+        <pre data-lang="bash"><code class="language-bash"># Lần đầu — generate baseline
+flutter test --update-goldens
+
+# Sau đó — test diff với baseline
+flutter test</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Golden test cross-platform khó</div>
+          <p>
+            Pixel khác nhau giữa Mac, Linux, Windows do font render. Practice:
+          </p>
+          <ul>
+            <li>Generate goldens trên CI cố định (vd Ubuntu) — đảm bảo consistent.</li>
+            <li>Hoặc dùng <code>flutter_test</code> với <code>TestWidgetsFlutterBinding</code> font stub.</li>
+            <li>Package <code>alchemist</code> giúp golden test reliable hơn.</li>
+          </ul>
+        </div>
+
+        <h2 id="coverage">15. Coverage report</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter test --coverage
+# Sinh coverage/lcov.info
+
+# Convert sang HTML
+brew install lcov
+genhtml coverage/lcov.info -o coverage/html
+
+# Mở
+open coverage/html/index.html</code></pre>
+
+        <h3 id="exclude-coverage">Exclude file khỏi coverage</h3>
+        <pre data-lang="yaml"><code class="language-yaml"># trong dart_test.yaml
+coverage_exclude:
+  - lib/**/*.g.dart      # codegen
+  - lib/**/*.freezed.dart</code></pre>
+
+        <h2 id="ci-github">16. CI — GitHub Actions</h2>
+        <pre data-lang="yaml"><code class="language-yaml"># .github/workflows/test.yml
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --coverage
+
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info</code></pre>
+
+        <h2 id="bai-tap" class="exercises">17. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Unit test Validator</h4>
+          <div class="exercise-body">
+            <p>Unit test <code>class Validator { static String? email(String?), static String? password(String?) }</code> với 6 case mỗi method.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>email: null, empty, no @, no domain, valid simple, valid với subdomain. password: null, &lt;8 char, no number, no upper, all good.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>blocTest CartBloc</h4>
+          <div class="exercise-body">
+            <p>Bloc test cho CartBloc: add, remove, clear, total. 5 case khác nhau.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 7. Mỗi case: build → act → expect list of states.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Widget test LoginPage</h4>
+          <div class="exercise-body">
+            <p>
+              Widget test LoginPage: form validation, mock auth bloc, submit success → navigate.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 9 (Widget + Bloc) + 11 (form). Mock LoginCubit qua MockBloc.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Integration test counter</h4>
+          <div class="exercise-body">
+            <p>Integration test cho counter app: tap 5 lần, verify "5". Chạy trên emulator.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 13. Loop 5 tap. <code>flutter test integration_test/counter_test.dart</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Golden test settings page</h4>
+          <div class="exercise-body">
+            <p>Golden test cho settings page với 3 theme khác nhau (light, dark, custom). Update goldens khi UI đổi.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>3 testWidgets riêng. Mỗi pump MaterialApp với theme khác. <code>matchesGoldenFile</code> tên khác nhau.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">18. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>pump()</code> vs <code>pumpAndSettle()</code> — khi nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>pump(duration)</code> advance 1 frame (hoặc duration). <code>pumpAndSettle</code> đợi đến khi không còn frame schedule (animation done). Sau navigate dùng pumpAndSettle.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>Mock object — chỉ mock cái gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Boundary: HTTP, DB, time, external service. KHÔNG mock business logic của chính mình — đó là cái cần test.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>find.byType(ElevatedButton)</code> trả gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Finder</code> instance — descriptor để find. Pass vào <code>expect</code> với matcher (findsOneWidget, findsNWidgets, findsNothing).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p><code>blocTest</code> <code>expect</code> parameter — return type?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Function returning List of states. Lazy để cho phép Matcher (vd <code>isA&lt;LoadingState&gt;()</code>).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p>Coverage <code>lcov.info</code> — view?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>genhtml coverage/lcov.info -o coverage/html</code> rồi <code>open coverage/html/index.html</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>Golden test fail vì khác baseline — fix?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Verify UI change intentional → <code>flutter test --update-goldens</code> update baseline. Commit golden mới.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Test Bloc cần inject mock repo — pattern?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Constructor inject: <code>CounterBloc(this.repo)</code>. Test: <code>CounterBloc(mockRepo)</code>. Repository pattern (Ch 10).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>CI GitHub Actions chạy <code>flutter test</code> — setup gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Action <code>subosito/flutter-action</code> setup Flutter SDK + Dart. Sau đó <code>flutter pub get</code> + <code>flutter test</code>.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">19. Tổng kết</h2>
+        <ul>
+          <li>✅ Test pyramid: unit nhiều, widget vừa, integration ít.</li>
+          <li>✅ Unit test Dart logic (Bloc, util, model).</li>
+          <li>✅ <code>mocktail</code> mock boundary (HTTP, DB).</li>
+          <li>✅ <code>bloc_test</code> cho Cubit/Bloc.</li>
+          <li>✅ Widget test với WidgetTester: pump, find, tap, expect.</li>
+          <li>✅ <code>pumpAndSettle</code> đợi async/animation done.</li>
+          <li>✅ Test với BlocProvider qua <code>BlocProvider.value</code>.</li>
+          <li>✅ Integration test với <code>integration_test</code> trên device thật.</li>
+          <li>✅ Golden test visual regression — <code>matchesGoldenFile</code>.</li>
+          <li>✅ Coverage <code>--coverage</code> + genhtml.</li>
+          <li>✅ CI GitHub Actions auto chạy test trên PR.</li>
+        </ul>
+
+        <h2 id="ket-noi">20. Kết nối</h2>
+        <ul>
+          <li>Mọi chương trước — test cover feature.</li>
+          <li><a href="chuong15.html"><strong>Ch 15:</strong></a> CI/CD pipeline build + test.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong13.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">13 · Custom Paint</div>
+          </a>
+          <a href="chuong15.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">15 · Performance &amp; Deploy</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#pyramid">1. Test pyramid</a></li>
+          <li><a href="#setup">2. Setup</a></li>
+          <li><a href="#unit-basic">3. Unit test cơ bản</a></li>
+          <li><a href="#matchers">4. expect matchers</a></li>
+          <li><a href="#async-test">5. Async test</a></li>
+          <li><a href="#mocktail">6. mocktail</a></li>
+          <li><a href="#bloc-test">7. bloc_test</a></li>
+          <li><a href="#widget-test">8. Widget test</a></li>
+          <li><a href="#widget-test-bloc">9. Widget + Bloc</a></li>
+          <li><a href="#navigation-test">10. Navigation test</a></li>
+          <li><a href="#form-test">11. Form test</a></li>
+          <li><a href="#futurebuilder-test">12. FutureBuilder test</a></li>
+          <li><a href="#integration-test">13. Integration test</a></li>
+          <li><a href="#golden-test">14. Golden test</a></li>
+          <li><a href="#coverage">15. Coverage</a></li>
+          <li><a href="#ci-github">16. CI GitHub Actions</a></li>
+          <li><a href="#bai-tap">17. Bài tập</a></li>
+          <li><a href="#quiz">18. Quiz</a></li>
+          <li><a href="#tong-ket">19. Tổng kết</a></li>
+          <li><a href="#ket-noi">20. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 14 · Pillar 9 — IT Basic<br/>
+        <a href="chuong13.html">← Chương 13</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong15.html">Chương 15 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

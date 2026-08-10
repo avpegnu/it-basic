@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5: Text processing — sed, awk, cut, sort, uniq, jq — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong4.html">← Chương 4</a></li>
+        <li><a href="chuong5.html" class="active">Chương 5</a></li>
+        <li><a href="chuong6.html">Chương 6 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 05 — Text processing: sed, awk, cut, sort, uniq, jq</h1>
+        <p>
+          Đây là lúc CLI thực sự đáng giá — <strong>xử lý hàng triệu dòng trong vài giây</strong>.
+          Bạn sẽ dùng <code>cut</code>, <code>sort</code>, <code>uniq</code>, <code>sed</code>, <code>awk</code>, <code>jq</code>
+          như những "lego" lắp với pipe để biến đống log lộn xộn thành insight.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. <code>cut</code>, <code>paste</code>, <code>tr</code>, <code>column</code> — cắt &amp; biến đổi cột text</h2>
+
+      <h3><code>cut</code> — cắt theo cột</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cut</span> <span class="flag">-d,</span> <span class="flag">-f1,3</span> data.csv      <span class="comment"># delimiter dấu phẩy, lấy cột 1 và 3</span>
+<span class="prompt">$ </span><span class="cmd">cut</span> <span class="flag">-d:</span> <span class="flag">-f1</span> /etc/passwd     <span class="comment"># lấy username từ /etc/passwd</span>
+<span class="prompt">$ </span><span class="cmd">cut</span> <span class="flag">-c1-10</span> file.txt           <span class="comment"># 10 ký tự đầu mỗi dòng</span>
+<span class="prompt">$ </span><span class="cmd">cut</span> <span class="flag">-f2</span> data.tsv               <span class="comment"># mặc định delimiter là TAB</span></code></pre>
+
+      <h3><code>tr</code> — translate / squeeze / delete</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">echo</span> <span class="text-cyan">"Hello World"</span> | <span class="cmd">tr</span> <span class="text-cyan">'a-z'</span> <span class="text-cyan">'A-Z'</span>     <span class="comment"># HELLO WORLD</span>
+<span class="prompt">$ </span><span class="cmd">tr</span> <span class="flag">-d</span> <span class="text-cyan">' '</span> &lt; file.txt                    <span class="comment"># xóa toàn bộ dấu cách</span>
+<span class="prompt">$ </span><span class="cmd">tr</span> <span class="flag">-s</span> <span class="text-cyan">' '</span> &lt; file.txt                    <span class="comment"># squeeze: nhiều space liên tiếp → 1 space</span>
+<span class="prompt">$ </span><span class="cmd">cat</span> file.txt | <span class="cmd">tr</span> <span class="text-cyan">','</span> <span class="text-cyan">'\n'</span>          <span class="comment"># thay , bằng newline (CSV → 1 cột)</span></code></pre>
+
+      <h3><code>paste</code> — ghép cột</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">paste</span> names.txt ages.txt           <span class="comment"># ghép 2 file thành 2 cột (tab giữa)</span>
+<span class="prompt">$ </span><span class="cmd">paste</span> <span class="flag">-d,</span> a.txt b.txt             <span class="comment"># dùng "," làm delimiter</span></code></pre>
+
+      <h3><code>column</code> — căn cột cho đẹp</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cat</span> data.csv | <span class="cmd">column</span> <span class="flag">-t</span> <span class="flag">-s,</span>     <span class="comment"># bảng gọn gàng, tách bằng dấu phẩy</span>
+<span class="prompt">$ </span><span class="cmd">mount</span> | <span class="cmd">column</span> <span class="flag">-t</span>                <span class="comment"># output mount hiển thị thẳng cột</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Mánh nhỏ</div>
+        <code>cut</code> không hỗ trợ delimiter "nhiều khoảng trắng" — nếu file có nhiều space ngăn cách (output của <code>ls -l</code>, <code>ps</code>...), hãy dùng <code>awk</code> hoặc <code>tr -s ' '</code> để gom space lại trước.
+      </div>
+    </section>
+
+    <section>
+      <h2>2. <code>sort</code> &amp; <code>uniq</code> — nâng cao</h2>
+
+      <h3><code>sort</code> — sắp xếp</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sort</span> file.txt                       <span class="comment"># mặc định: alphabet, A-Z</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-r</span> file.txt                    <span class="comment"># reverse: Z-A</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-n</span> numbers.txt                 <span class="comment"># numeric: 2 &lt; 10 &lt; 100 (KHÔNG so chuỗi)</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-rn</span> numbers.txt                <span class="comment"># giảm dần theo số</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-k2</span> data.txt                   <span class="comment"># sort theo cột 2</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-t,</span> <span class="flag">-k3</span> <span class="flag">-n</span> data.csv             <span class="comment"># delimiter ",", sort cột 3 dạng số</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-u</span> file.txt                    <span class="comment"># unique: bỏ dòng trùng (như sort | uniq)</span></code></pre>
+
+      <h3><code>uniq</code> — lọc dòng trùng (dòng phải LIỀN nhau!)</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sort</span> file.txt | <span class="cmd">uniq</span>              <span class="comment"># bỏ dòng trùng</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> file.txt | <span class="cmd">uniq</span> <span class="flag">-c</span>           <span class="comment"># đếm số lần xuất hiện mỗi dòng</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> file.txt | <span class="cmd">uniq</span> <span class="flag">-d</span>           <span class="comment"># chỉ in dòng bị trùng</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> file.txt | <span class="cmd">uniq</span> <span class="flag">-u</span>           <span class="comment"># chỉ in dòng KHÔNG bị trùng</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ <code>uniq</code> CẦN input đã sort</div>
+        <code>uniq</code> chỉ so sánh dòng hiện tại với dòng <em>liền trước</em>. Nếu input chưa sort, các dòng giống nhau ở xa nhau sẽ không bị gộp. <strong>Luôn <code>sort | uniq</code></strong>, không bao giờ <code>uniq</code> đơn lẻ trừ khi bạn biết input đã sort.
+      </div>
+
+      <h3>Idiom kinh điển: top-N</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sort</span> file.txt | <span class="cmd">uniq</span> <span class="flag">-c</span> | <span class="cmd">sort</span> <span class="flag">-rn</span> | <span class="cmd">head</span>
+<span class="comment"># Đếm dòng trùng → sort giảm dần theo count → 10 dòng đầu</span>
+<span class="comment"># → đây là cách tìm "top N item phổ biến" trong mọi dataset text</span></code></pre>
+    </section>
+
+    <section>
+      <h2>3. <code>sed</code> — stream editor</h2>
+      <p><code>sed</code> đọc input theo dòng, áp dụng quy tắc, in ra. Dùng nhiều nhất cho <strong>tìm &amp; thay thế</strong>.</p>
+
+      <h3>Substitution — <code>s/cũ/mới/</code></h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sed</span> <span class="text-cyan">'s/foo/bar/'</span> file.txt          <span class="comment"># thay foo → bar (dòng đầu tiên gặp)</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="text-cyan">'s/foo/bar/g'</span> file.txt         <span class="comment"># g = global, thay TẤT CẢ trên mỗi dòng</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="text-cyan">'s|/usr/bin|/opt/bin|g'</span> conf  <span class="comment"># dùng | làm delimiter khi chuỗi có /</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="flag">-E</span> <span class="text-cyan">'s/[0-9]+/N/g'</span> file.txt    <span class="comment"># -E: regex extended; thay mọi số bằng N</span></code></pre>
+
+      <h3>In-place editing — <code>-i</code></h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sed</span> <span class="flag">-i</span> <span class="text-cyan">'s/old/new/g'</span> config.txt   <span class="comment"># Linux: sửa trực tiếp file</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="flag">-i</span> <span class="text-cyan">''</span> <span class="text-cyan">'s/old/new/g'</span> config.txt <span class="comment"># macOS: BẮT BUỘC '' sau -i (BSD sed)</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="flag">-i.bak</span> <span class="text-cyan">'s/old/new/g'</span> config.txt <span class="comment"># tạo backup config.txt.bak (Linux)</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ macOS vs Linux — bẫy <code>sed -i</code></div>
+        macOS dùng BSD sed: <code>sed -i '' 's/.../.../' file</code> — phải có chuỗi rỗng <code>''</code> ngay sau <code>-i</code>, nếu không sed sẽ tưởng đối số kế tiếp là extension và tạo file backup tên kỳ quặc. Linux (GNU sed) thì <code>sed -i 's/.../.../' file</code> chạy bình thường. Đây là một trong những khác biệt khó chịu nhất khi viết script chạy ở cả hai bên.
+      </div>
+
+      <h3>Xóa dòng &amp; chỉ in dòng khớp</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sed</span> <span class="text-cyan">'/^#/d'</span> config.conf            <span class="comment"># xóa mọi dòng comment (bắt đầu bằng #)</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="text-cyan">'/^$/d'</span> file.txt                <span class="comment"># xóa dòng trống</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="flag">-n</span> <span class="text-cyan">'/ERROR/p'</span> app.log         <span class="comment"># -n: tắt in mặc định; chỉ in dòng có ERROR</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="flag">-n</span> <span class="text-cyan">'10,20p'</span> file.txt           <span class="comment"># in dòng 10-20</span>
+<span class="prompt">$ </span><span class="cmd">sed</span> <span class="text-cyan">'5d'</span> file.txt                   <span class="comment"># xóa dòng 5</span></code></pre>
+    </section>
+
+    <section>
+      <h2>4. <code>awk</code> — mini language cho text</h2>
+      <p>
+        Nghĩ về <code>awk</code> như <em>"Python mini cho text"</em> — nó đọc từng dòng, tách thành các field,
+        rồi cho bạn viết logic xử lý. Một dòng <code>awk</code> đôi khi tương đương 20 dòng Python.
+      </p>
+
+      <h3>Bảng tham chiếu biến built-in</h3>
+      <table>
+        <thead><tr><th>Biến</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>$0</code></td><td>Toàn bộ dòng hiện tại</td></tr>
+          <tr><td><code>$1, $2, $3...</code></td><td>Field thứ 1, 2, 3... (mặc định cách bằng whitespace)</td></tr>
+          <tr><td><code>NR</code></td><td>Number of Records — số dòng đã đọc (line number hiện tại)</td></tr>
+          <tr><td><code>NF</code></td><td>Number of Fields — số cột của dòng hiện tại</td></tr>
+          <tr><td><code>FS</code></td><td>Field Separator (mặc định: whitespace)</td></tr>
+          <tr><td><code>OFS</code></td><td>Output Field Separator (mặc định: space)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Cú pháp cơ bản</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print $1}'</span> file.txt           <span class="comment"># in cột đầu</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print $1, $3}'</span> file.txt       <span class="comment"># cột 1 và 3 (cách bằng OFS)</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print NR, $0}'</span> file.txt       <span class="comment"># thêm số dòng phía trước</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print NF}'</span> file.txt           <span class="comment"># in số cột mỗi dòng</span></code></pre>
+
+      <h3>Field separator — <code>-F</code></h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="flag">-F,</span> <span class="text-cyan">'{print $2}'</span> data.csv      <span class="comment"># delimiter là dấu phẩy</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="flag">-F:</span> <span class="text-cyan">'{print $1}'</span> /etc/passwd  <span class="comment"># : là field separator</span></code></pre>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Lưu ý về Field Separator</div>
+        Mặc định <code>awk</code> tách bằng <em>whitespace</em> (1 hoặc nhiều space/tab) — mạnh hơn <code>cut</code>.
+        Nếu file dùng delimiter cụ thể (vd CSV), <strong>luôn nhớ <code>-F</code></strong>. Quên <code>-F,</code> với CSV là lỗi rất thường gặp:
+        <code>$1</code> sẽ là cả dòng vì không có space.
+      </div>
+
+      <h3>BEGIN / END — chạy trước &amp; sau khi đọc</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'BEGIN {print "Bắt đầu"} {print $1} END {print "Tổng:", NR}'</span> file.txt</code></pre>
+
+      <h3>Filter (như WHERE trong SQL)</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'$3 &gt; 100'</span> data.txt              <span class="comment"># in dòng có cột 3 &gt; 100</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'/ERROR/ {print $0}'</span> app.log     <span class="comment"># dòng chứa ERROR</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'NR&gt;1'</span> data.csv                  <span class="comment"># bỏ dòng tiêu đề (skip header)</span></code></pre>
+
+      <h3>Ví dụ thực tế 1 — Xử lý CSV</h3>
+      <pre><code><span class="comment"># sales.csv:</span>
+<span class="comment"># date,product,amount</span>
+<span class="comment"># 2026-01-15,coffee,45000</span>
+<span class="comment"># 2026-01-15,tea,30000</span>
+<span class="comment"># 2026-01-16,coffee,50000</span>
+
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="flag">-F,</span> <span class="text-cyan">'NR&gt;1 {print $2, $3}'</span> sales.csv
+<span class="output">coffee 45000
+tea 30000
+coffee 50000</span></code></pre>
+
+      <h3>Ví dụ thực tế 2 — Tính tổng &amp; trung bình cột</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="flag">-F,</span> <span class="text-cyan">'NR&gt;1 {sum += $3} END {print "Tổng:", sum}'</span> sales.csv
+<span class="output">Tổng: 125000</span>
+
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="flag">-F,</span> <span class="text-cyan">'NR&gt;1 {sum += $3; n++} END {print "Trung bình:", sum/n}'</span> sales.csv
+<span class="output">Trung bình: 41666.7</span></code></pre>
+
+      <h3>Ví dụ thực tế 3 — Log analysis (đếm theo nhóm)</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{count[$1]++} END {for (ip in count) print count[ip], ip}'</span> access.log | <span class="cmd">sort</span> <span class="flag">-rn</span>
+<span class="comment"># Đếm số request theo IP (cột 1), sort giảm dần</span>
+<span class="output">  4521 192.168.1.10
+  1203 10.0.0.5
+   847 172.16.0.99</span></code></pre>
+    </section>
+
+    <section>
+      <h2>5. <code>jq</code> — JSON xử lý</h2>
+      <p>
+        Mọi REST API hôm nay trả JSON. <code>jq</code> là <code>awk</code> cho JSON: query, filter, transform.
+        Cài: <code>brew install jq</code>.
+      </p>
+
+      <h3>Bảng tham chiếu cú pháp <code>jq</code></h3>
+      <table>
+        <thead><tr><th>Cú pháp</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>.</code></td><td>Identity — trả nguyên input (pretty-print)</td></tr>
+          <tr><td><code>.field</code></td><td>Lấy giá trị của <code>field</code> trong object</td></tr>
+          <tr><td><code>.[]</code></td><td>Iterate — duyệt mọi phần tử trong array</td></tr>
+          <tr><td><code>.[0]</code></td><td>Phần tử thứ 0 của array</td></tr>
+          <tr><td><code>select(cond)</code></td><td>Chỉ giữ phần tử thoả điều kiện</td></tr>
+          <tr><td><code>map(expr)</code></td><td>Áp expr cho mỗi phần tử array</td></tr>
+          <tr><td><code>length</code></td><td>Độ dài array / số ký tự string / số key của object</td></tr>
+          <tr><td><code>keys</code></td><td>Danh sách key của object</td></tr>
+          <tr><td><code>|</code></td><td>Pipe trong jq (giống pipe shell, nhưng giữa các expression)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Ví dụ với REST API</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">curl</span> <span class="flag">-s</span> https://api.github.com/users/torvalds | <span class="cmd">jq</span> <span class="text-cyan">'.'</span>
+<span class="comment"># Pretty-print toàn bộ JSON, tô màu</span>
+
+<span class="prompt">$ </span><span class="cmd">curl</span> <span class="flag">-s</span> https://api.github.com/users/torvalds | <span class="cmd">jq</span> <span class="text-cyan">'.name'</span>
+<span class="output">"Linus Torvalds"</span>
+
+<span class="prompt">$ </span><span class="cmd">curl</span> <span class="flag">-s</span> https://api.github.com/users/torvalds/repos | <span class="cmd">jq</span> <span class="text-cyan">'.[].name'</span>
+<span class="comment"># Lấy tên mọi repo (array → từng phần tử → field name)</span>
+
+<span class="prompt">$ </span><span class="cmd">curl</span> <span class="flag">-s</span> https://api.github.com/users/torvalds/repos | <span class="cmd">jq</span> <span class="text-cyan">'.[] | select(.stargazers_count &gt; 1000) | .name'</span>
+<span class="comment"># Chỉ repo có &gt; 1000 sao</span>
+
+<span class="prompt">$ </span><span class="cmd">curl</span> <span class="flag">-s</span> https://api.github.com/users/torvalds/repos | <span class="cmd">jq</span> <span class="text-cyan">'[.[] | {name, stars: .stargazers_count}]'</span>
+<span class="comment"># Map sang object mới gọn hơn → wrap thành array</span>
+
+<span class="prompt">$ </span><span class="cmd">curl</span> <span class="flag">-s</span> https://api.github.com/users/torvalds/repos | <span class="cmd">jq</span> <span class="text-cyan">'length'</span>
+<span class="output">7</span></code></pre>
+
+      <h3>Ví dụ với file JSON local</h3>
+      <pre><code><span class="comment"># users.json: [{"name":"Alice","age":30},{"name":"Bob","age":25}]</span>
+
+<span class="prompt">$ </span><span class="cmd">jq</span> <span class="text-cyan">'.[].name'</span> users.json
+<span class="output">"Alice"
+"Bob"</span>
+
+<span class="prompt">$ </span><span class="cmd">jq</span> <span class="text-cyan">'map(.age) | add'</span> users.json     <span class="comment"># tổng age = 55</span>
+<span class="prompt">$ </span><span class="cmd">jq</span> <span class="flag">-r</span> <span class="text-cyan">'.[].name'</span> users.json        <span class="comment"># -r: raw output, bỏ dấu nháy</span></code></pre>
+    </section>
+
+    <section>
+      <h2>6. Pipeline thực chiến — gộp tất cả</h2>
+
+      <h3>Bài toán 1: Top 10 IP gọi nhiều nhất từ access.log</h3>
+      <pre><code><span class="comment"># access.log dạng nginx: 192.168.1.10 - - [08/May/2026...] "GET /api ..." 200</span>
+
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print $1}'</span> access.log | <span class="cmd">sort</span> | <span class="cmd">uniq</span> <span class="flag">-c</span> | <span class="cmd">sort</span> <span class="flag">-rn</span> | <span class="cmd">head</span> <span class="flag">-10</span>
+<span class="output">  4521 192.168.1.10
+  1203 10.0.0.5
+   847 172.16.0.99
+   ...</span></code></pre>
+
+      <h3>Bài toán 2: Top 10 URL được gọi nhiều nhất</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print $7}'</span> access.log | <span class="cmd">sort</span> | <span class="cmd">uniq</span> <span class="flag">-c</span> | <span class="cmd">sort</span> <span class="flag">-rn</span> | <span class="cmd">head</span>
+<span class="comment"># $7 trong nginx log là path của request (/api, /login...)</span></code></pre>
+
+      <h3>Bài toán 3: Đếm response status code</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">awk</span> <span class="text-cyan">'{print $9}'</span> access.log | <span class="cmd">sort</span> | <span class="cmd">uniq</span> <span class="flag">-c</span> | <span class="cmd">sort</span> <span class="flag">-rn</span>
+<span class="output"> 18203 200
+   452 304
+   189 404
+    23 500</span></code></pre>
+
+      <h3>Bài toán 4: Top contributor trong git log</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> log <span class="flag">--format='%an'</span> | <span class="cmd">sort</span> | <span class="cmd">uniq</span> <span class="flag">-c</span> | <span class="cmd">sort</span> <span class="flag">-rn</span> | <span class="cmd">head</span>
+<span class="output">   312 Linus Torvalds
+   147 Greg KH
+    89 ...</span></code></pre>
+
+      <h3>Bài toán 5: Lọc CSV phức tạp</h3>
+      <pre><code><span class="comment"># Tìm các giao dịch &gt; 100k, sort theo amount giảm dần, lấy top 5</span>
+<span class="prompt">$ </span><span class="cmd">awk</span> <span class="flag">-F,</span> <span class="text-cyan">'NR&gt;1 &amp;&amp; $3 &gt; 100000 {print $0}'</span> sales.csv | <span class="cmd">sort</span> <span class="flag">-t,</span> <span class="flag">-k3</span> <span class="flag">-rn</span> | <span class="cmd">head</span> <span class="flag">-5</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Tư duy pipeline</div>
+        Mỗi lệnh = 1 bước biến đổi text. Đừng cố viết "1 lệnh khủng" — hãy <strong>chia nhỏ</strong> rồi pipe lại:
+        <em>extract → sort → count → re-sort → cắt top</em>. Khi gặp output sai, chạy từng đoạn pipeline một (chèn <code>head</code> giữa) để xem dữ liệu mỗi bước trông thế nào.
+      </div>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>Gợi ý các lệnh để thử (terminal demo có thể chỉ giả lập một phần — phần còn lại làm trên Terminal thật):</p>
+      <ol>
+        <li><code>echo "apple,banana,cherry" | tr ',' '\n'</code></li>
+        <li><code>echo "Hello World" | tr 'a-z' 'A-Z'</code></li>
+        <li><code>printf "3\n1\n2\n10\n" | sort -n</code></li>
+        <li><code>printf "a\nb\na\nb\nc\n" | sort | uniq -c</code></li>
+        <li><code>echo "id,name,age" | awk -F, '{print NF}'</code> (kết quả: 3)</li>
+        <li><code>echo "hello sed" | sed 's/sed/awk/'</code></li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong5 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Làm trên Terminal thật. Tạo một thư mục <code>chuong5-practice</code> và đặt mọi file đầu vào trong đó.</p>
+      <ol>
+        <li>
+          Tạo file <code>names.csv</code> với nội dung:
+          <pre><code><span class="output">id,name,score
+1,Alice,87
+2,Bob,72
+3,Charlie,95
+4,Diana,68
+5,Evan,91</span></code></pre>
+          Dùng <code>awk</code> in ra <strong>tên và điểm</strong> (cột 2 và 3), bỏ dòng tiêu đề.
+        </li>
+        <li>Vẫn từ <code>names.csv</code>: tính <strong>tổng điểm</strong> và <strong>điểm trung bình</strong> bằng <code>awk</code>.</li>
+        <li>Lọc người có điểm <code>&gt; 80</code> bằng <code>awk -F, '...'</code>.</li>
+        <li>
+          Tạo <code>fruits.txt</code> với 10 dòng (có nhiều dòng trùng), ví dụ mỗi dòng 1 loại quả: <code>apple</code>, <code>banana</code>, <code>apple</code>, <code>orange</code>, <code>apple</code>, <code>banana</code>, <code>kiwi</code>, <code>kiwi</code>, <code>apple</code>, <code>orange</code>.
+          Dùng pipeline <code>sort | uniq -c | sort -rn</code> để liệt kê loại quả nào xuất hiện nhiều nhất.
+        </li>
+        <li>
+          <strong>Phân tích log thật:</strong> tải một file access log mẫu (hoặc tự bịa 50 dòng theo format nginx).
+          Dùng pipeline <code>awk + sort + uniq + sort -rn + head</code> để tìm:
+          <ul>
+            <li>Top 5 IP gọi nhiều nhất.</li>
+            <li>Đếm số request theo status code.</li>
+          </ul>
+        </li>
+        <li>
+          <strong>Bài <code>sed</code>:</strong> tạo file <code>config.txt</code> chứa vài dòng có <code>localhost:3000</code>.
+          Dùng <code>sed</code> thay tất cả thành <code>example.com:443</code> và <strong>lưu thẳng vào file</strong>
+          (chú ý macOS cần <code>sed -i ''</code>).
+        </li>
+        <li>
+          Vẫn <code>config.txt</code>: dùng <code>sed</code> xóa mọi dòng comment (bắt đầu bằng <code>#</code>) và mọi dòng trống.
+        </li>
+        <li>
+          <strong>Bài <code>jq</code>:</strong> chạy
+          <code>curl -s https://api.github.com/users/torvalds/repos &gt; repos.json</code>.
+          Dùng <code>jq</code> để:
+          <ul>
+            <li>In số repo (<code>length</code>).</li>
+            <li>Liệt kê tên repo và số sao, sort giảm dần theo sao.</li>
+            <li>Chỉ in repo có ngôn ngữ là <code>"C"</code>.</li>
+          </ul>
+        </li>
+        <li>
+          Kết hợp: dùng <code>git log --format='%an'</code> trong một repo bất kỳ + pipeline đếm xem ai commit nhiều nhất top 5.
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ Cắt cột: <code>cut -d, -f1,3</code> / biến đổi: <code>tr</code>, <code>column -t</code></li>
+        <li>✅ Sắp xếp: <code>sort -n</code>, <code>sort -k</code>, <code>sort -t,</code></li>
+        <li>✅ Đếm dòng trùng: <strong><code>sort | uniq -c | sort -rn</code></strong> (idiom phải nhớ)</li>
+        <li>✅ <code>sed 's/old/new/g'</code> + lưu ý macOS <code>sed -i ''</code></li>
+        <li>✅ <code>awk</code>: <code>$1</code>, <code>NR</code>, <code>NF</code>, <code>-F</code>, <code>BEGIN/END</code>, sum/avg, filter</li>
+        <li>✅ <code>jq</code>: <code>.field</code>, <code>.[]</code>, <code>select()</code>, <code>map()</code>, <code>length</code></li>
+        <li>✅ Pipeline thực chiến: log analysis, CSV, JSON API</li>
+      </ul>
+      <p class="text-dim">
+        Chương 6 chúng ta sẽ chuyển sang <em>Process &amp; Job control</em> — quản lý tiến trình đang chạy:
+        <code>ps</code>, <code>top</code>/<code>htop</code>, <code>kill</code>, foreground/background, <code>jobs</code>, <code>nohup</code>, <code>&amp;</code>.
+        Sau khi đã thuần thục text, chúng ta sẽ điều khiển những thứ <em>đang chạy</em> trong máy.
+      </p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong4.html">
+        <span class="label">Trước</span>
+        ← Chương 04: Tìm kiếm (find, grep)
+      </a>
+      <a href="chuong6.html">
+        <span class="label">Tiếp theo</span>
+        Chương 06: Process &amp; Job control →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 05
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Trên macOS, lệnh nào sửa file in-place đúng cú pháp?",
+        options: [
+          "sed -i 's/foo/bar/g' file.txt",
+          "sed -i '' 's/foo/bar/g' file.txt",
+          "sed --in-place 's/foo/bar/g' file.txt",
+          "sed -e 's/foo/bar/g' file.txt"
+        ],
+        correct: 1,
+        explain: "macOS dùng BSD sed — bắt buộc có chuỗi '' ngay sau -i (đó là 'không backup'). Cú pháp Linux 'sed -i ...' sẽ lỗi/làm sai trên macOS. Đây là cái bẫy hàng đầu khi viết script chạy chéo OS."
+      },
+      {
+        q: "Pipeline 'cat file.txt | uniq -c' có thể cho kết quả SAI khi nào?",
+        options: [
+          "Khi file rỗng",
+          "Khi file đã sort",
+          "Khi file CHƯA sort — dòng trùng nằm xa nhau",
+          "Khi file có dòng trống"
+        ],
+        correct: 2,
+        explain: "uniq chỉ so dòng hiện tại với dòng LIỀN TRƯỚC. Nếu input chưa sort, các dòng giống nhau ở xa sẽ không bị gộp. Luôn 'sort | uniq', không bao giờ uniq đơn lẻ trừ khi biết chắc input đã sort."
+      },
+      {
+        q: "Cho file CSV: 'name,age,city'. Lệnh nào in ra cột 'city' bằng awk?",
+        options: [
+          "awk '{print $3}' file.csv",
+          "awk -F, '{print $3}' file.csv",
+          "awk -d, '{print $3}' file.csv",
+          "awk '{print $1}' file.csv"
+        ],
+        correct: 1,
+        explain: "awk mặc định tách bằng whitespace, không phải dấu phẩy. Với CSV BẮT BUỘC dùng -F, để chỉ định field separator. Quên -F là lỗi rất thường gặp — khi đó $1 sẽ là cả dòng."
+      },
+      {
+        q: "sort -n vs sort khác nhau thế nào với input '2\\n10\\n1'?",
+        options: [
+          "Cùng kết quả: 1, 2, 10",
+          "sort: 1, 10, 2 (so chuỗi). sort -n: 1, 2, 10 (so số)",
+          "sort: 1, 2, 10. sort -n: 1, 10, 2",
+          "Cả hai đều lỗi"
+        ],
+        correct: 1,
+        explain: "sort mặc định so chuỗi từng ký tự — '10' đứng trước '2' vì '1' < '2'. -n bật chế độ numeric: hiểu chúng là số. Đây là lý do tại sao 'sort numbers.txt' thường cho thứ tự lạ — phải dùng sort -n."
+      },
+      {
+        q: "Idiom kinh điển 'sort file | uniq -c | sort -rn | head' làm gì?",
+        options: [
+          "Sort file rồi in ra",
+          "Đếm tổng số dòng",
+          "Tìm top N dòng XUẤT HIỆN nhiều nhất trong file",
+          "Bỏ tất cả dòng trùng"
+        ],
+        correct: 2,
+        explain: "Pipeline kinh điển: sort gom dòng giống nhau lại → uniq -c thêm số đếm → sort -rn sắp xếp giảm dần theo count → head lấy top. Là cách chuẩn để tìm 'top N item phổ biến' trong bất kỳ dataset text nào (top IP, top URL, top error message...)."
+      },
+      {
+        q: "jq query nào lấy tên mọi user có age > 25 từ JSON: [{\"name\":\"A\",\"age\":30},{\"name\":\"B\",\"age\":20}]?",
+        options: [
+          ".[] | .name",
+          ".[] | select(.age > 25) | .name",
+          "map(.name) | filter(.age > 25)",
+          ".age > 25 | .name"
+        ],
+        correct: 1,
+        explain: ".[] iterate qua array → select(cond) là filter trong jq → .name trích field. Pipe | trong jq tương tự shell pipe nhưng giữa các expression jq."
+      },
+      {
+        q: "Trong awk, NR và NF khác nhau thế nào?",
+        options: [
+          "NR = số dòng đã đọc, NF = số cột (field) trên dòng hiện tại",
+          "NR = số cột, NF = số dòng",
+          "Cả hai cùng nghĩa",
+          "NR = 'New Record', NF = 'New Field' — dùng để khai báo"
+        ],
+        correct: 0,
+        explain: "NR = Number of Records (line number hiện tại, tăng dần khi đọc). NF = Number of Fields (số cột của dòng hiện tại, có thể khác nhau giữa các dòng). 'NR>1' bỏ header CSV, '$NF' lấy cột cuối — đây là 2 idiom rất thông dụng."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

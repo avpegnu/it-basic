@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 8: Git &amp; SSH — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong7.html">← Chương 7</a></li>
+        <li><a href="chuong8.html" class="active">Chương 8</a></li>
+        <li><a href="chuong9.html">Chương 9 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 08 — Git &amp; SSH</h1>
+        <p>
+          Git là <em>toolkit hằng ngày của dev</em>: track lịch sử code, hợp tác qua remote, undo nhầm lẫn. SSH là kênh
+          bảo mật để bạn nói chuyện với GitHub, server, máy đồng nghiệp. Học chương này, bạn không còn lệ thuộc vào nút bấm
+          trong VS Code/SourceTree nữa — terminal nhanh hơn và mạnh hơn rất nhiều.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. Git CLI cơ bản</h2>
+      <p>Git theo dõi <strong>snapshot</strong> của project theo thời gian. Mỗi commit là một snapshot có hash riêng. Bạn có thể quay về bất kỳ commit nào.</p>
+
+      <h3>Khởi tạo &amp; commit đầu tiên</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> init                      <span class="comment"># tạo repo .git/ trong folder hiện tại</span>
+<span class="prompt">$ </span><span class="cmd">git</span> status                    <span class="comment"># xem file nào đã/chưa track, đã/chưa stage</span>
+<span class="prompt">$ </span><span class="cmd">git</span> add README.md              <span class="comment"># stage 1 file</span>
+<span class="prompt">$ </span><span class="cmd">git</span> add .                       <span class="comment"># stage tất cả thay đổi</span>
+<span class="prompt">$ </span><span class="cmd">git</span> commit <span class="flag">-m</span> "init project"   <span class="comment"># tạo commit với message</span>
+<span class="prompt">$ </span><span class="cmd">git</span> log <span class="flag">--oneline --graph</span>     <span class="comment"># xem lịch sử ngắn gọn dạng đồ thị</span></code></pre>
+
+      <h3>3 vùng quan trọng nhất</h3>
+      <table>
+        <thead><tr><th>Vùng</th><th>Mô tả</th><th>Lệnh đưa vào</th></tr></thead>
+        <tbody>
+          <tr><td>Working dir</td><td>File bạn đang sửa</td><td>(chỉnh sửa file)</td></tr>
+          <tr><td>Staging (index)</td><td>Đã chọn để commit</td><td><code>git add</code></td></tr>
+          <tr><td>Repository</td><td>Đã commit, có hash</td><td><code>git commit</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Vì sao terminal nhanh hơn GUI?</div>
+        SourceTree, GitHub Desktop tốt cho người mới, nhưng mỗi click = 1 thao tác. Trong terminal, bạn ghép được nhiều lệnh,
+        dùng alias (vd <code>g co</code> = <code>git checkout</code>), và mọi tính năng Git đều có sẵn — không có chuyện
+        "GUI chưa hỗ trợ feature đó".
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Branch &amp; merge</h2>
+      <p>Branch là <em>nhánh phát triển song song</em>. Bạn làm feature X trên một branch riêng, không đụng tới <code>main</code>, đến khi xong thì merge vào.</p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> branch                       <span class="comment"># liệt kê branch local</span>
+<span class="prompt">$ </span><span class="cmd">git</span> branch feature-login          <span class="comment"># tạo branch mới (nhưng chưa chuyển sang)</span>
+<span class="prompt">$ </span><span class="cmd">git</span> checkout feature-login        <span class="comment"># chuyển sang branch đó (cách cũ)</span>
+<span class="prompt">$ </span><span class="cmd">git</span> checkout <span class="flag">-b</span> feature-login     <span class="comment"># tạo + chuyển trong 1 lệnh</span>
+<span class="prompt">$ </span><span class="cmd">git</span> switch feature-login          <span class="comment"># chuyển branch (cách mới, rõ nghĩa hơn)</span>
+<span class="prompt">$ </span><span class="cmd">git</span> switch <span class="flag">-c</span> feature-login       <span class="comment"># tạo + chuyển (tương đương -b)</span></code></pre>
+
+      <h3>Merge vào main</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> switch main                   <span class="comment"># về main</span>
+<span class="prompt">$ </span><span class="cmd">git</span> merge feature-login            <span class="comment"># gộp feature vào main</span>
+<span class="prompt">$ </span><span class="cmd">git</span> branch <span class="flag">-d</span> feature-login        <span class="comment"># xóa branch đã merge xong</span>
+<span class="prompt">$ </span><span class="cmd">git</span> log <span class="flag">--all --graph --decorate</span>   <span class="comment"># xem mọi branch dạng đồ thị</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 <code>switch</code> hay <code>checkout</code>?</div>
+        Git 2.23 (2019) tách <code>checkout</code> thành 2 lệnh rõ nghĩa hơn: <code>switch</code> (chuyển branch) và
+        <code>restore</code> (khôi phục file). Dùng cái mới — đỡ nhầm lẫn, vì <code>checkout</code> làm quá nhiều việc.
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Rebase &amp; cherry-pick</h2>
+      <p>Cả hai đều là cách "viết lại lịch sử" — mạnh nhưng phải dùng cẩn thận.</p>
+
+      <h3><code>git rebase</code> — đặt lại nhánh lên trên</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> switch feature-x
+<span class="prompt">$ </span><span class="cmd">git</span> rebase main                   <span class="comment"># đem các commit của feature-x lên trên main mới nhất</span></code></pre>
+      <p>So với <code>merge</code>: rebase tạo lịch sử <em>thẳng</em>, không có merge commit. Nhánh trông gọn hơn.</p>
+
+      <h3>Interactive rebase — "biên tập" lịch sử</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> rebase <span class="flag">-i</span> HEAD~5             <span class="comment"># sửa 5 commit gần nhất</span></code></pre>
+      <p>Editor mở ra, bạn chọn cho từng commit:</p>
+      <ul>
+        <li><code>pick</code> — giữ nguyên</li>
+        <li><code>reword</code> — đổi message</li>
+        <li><code>squash</code> — gộp vào commit trên</li>
+        <li><code>fixup</code> — gộp + bỏ message</li>
+        <li><code>drop</code> — xóa commit</li>
+      </ul>
+
+      <h3><code>git cherry-pick</code> — bốc lẻ commit</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> cherry-pick a1b2c3d            <span class="comment"># mang commit a1b2c3d sang branch hiện tại</span>
+<span class="prompt">$ </span><span class="cmd">git</span> cherry-pick a1b2c3d..f4e5d6c   <span class="comment"># range commit</span></code></pre>
+      <p>Hữu ích khi bạn cần fix bug từ branch khác mà không muốn merge cả branch đó.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">🛑 Không rebase nhánh đã push public</div>
+        Rebase <strong>viết lại hash</strong> các commit. Nếu nhánh đó đồng nghiệp đã pull về, sau khi bạn rebase rồi
+        <code>git push --force</code>, commit cũ của họ <em>biến mất</em> khỏi server. Họ pull lại sẽ conflict kinh khủng.
+        Quy tắc: <strong>chỉ rebase commit chưa share</strong>. Đã push lên branch chung (<code>main</code>, <code>develop</code>) thì
+        dùng <code>merge</code> hoặc <code>revert</code>.
+      </div>
+    </section>
+
+    <section>
+      <h2>4. Remote &amp; sync</h2>
+      <p>Remote là bản sao repo trên server (GitHub, GitLab, BitBucket). <code>origin</code> là tên remote mặc định khi clone.</p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> remote <span class="flag">-v</span>                    <span class="comment"># xem các remote đang config</span>
+<span class="prompt">$ </span><span class="cmd">git</span> remote add origin git@github.com:user/repo.git
+<span class="prompt">$ </span><span class="cmd">git</span> fetch origin                  <span class="comment"># tải về dữ liệu mới nhưng KHÔNG merge</span>
+<span class="prompt">$ </span><span class="cmd">git</span> pull origin main               <span class="comment"># = fetch + merge</span>
+<span class="prompt">$ </span><span class="cmd">git</span> pull <span class="flag">--rebase</span> origin main      <span class="comment"># = fetch + rebase (lịch sử thẳng hơn)</span>
+<span class="prompt">$ </span><span class="cmd">git</span> push origin main               <span class="comment"># đẩy commit local lên remote</span>
+<span class="prompt">$ </span><span class="cmd">git</span> push <span class="flag">-u</span> origin feature-x       <span class="comment"># -u: set upstream để lần sau chỉ cần `git push`</span></code></pre>
+
+      <h3><code>fetch</code> vs <code>pull</code> — khác chỗ nào?</h3>
+      <table>
+        <thead><tr><th>Lệnh</th><th>Tải về</th><th>Áp vào branch local</th><th>Khi nào dùng</th></tr></thead>
+        <tbody>
+          <tr><td><code>git fetch</code></td><td>✅</td><td>❌</td><td>Muốn xem có gì mới mà chưa muốn merge</td></tr>
+          <tr><td><code>git pull</code></td><td>✅</td><td>✅ (merge)</td><td>Muốn cập nhật ngay, có thể tạo merge commit</td></tr>
+          <tr><td><code>git pull --rebase</code></td><td>✅</td><td>✅ (rebase)</td><td>Muốn lịch sử thẳng, đặt commit mình lên trên</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Workflow chuẩn cho team</h3>
+      <ol>
+        <li><code>git switch -c feature-x</code> — tạo nhánh từ <code>main</code>.</li>
+        <li>Code, commit nhiều lần, message rõ ràng.</li>
+        <li><code>git fetch origin &amp;&amp; git rebase origin/main</code> — đồng bộ với main mới nhất.</li>
+        <li><code>git push -u origin feature-x</code> — đẩy lên remote.</li>
+        <li>Mở Pull Request trên GitHub, review, merge.</li>
+        <li><code>git switch main &amp;&amp; git pull &amp;&amp; git branch -d feature-x</code> — dọn dẹp.</li>
+      </ol>
+
+      <div class="callout danger">
+        <div class="callout-title">🛑 <code>git push --force</code> — vũ khí hủy diệt</div>
+        <code>--force</code> ghi đè branch trên remote, <em>xóa mọi commit người khác đã đẩy lên</em> trong lúc bạn không nhìn.
+        Nếu thực sự phải force push (vd sau khi rebase nhánh feature của riêng mình), dùng:
+        <pre style="margin-top:8px"><code><span class="prompt">$ </span><span class="cmd">git</span> push <span class="flag">--force-with-lease</span></code></pre>
+        Cờ này check xem remote có thay đổi từ lần fetch cuối không — nếu có (ai đó vừa push), nó <em>từ chối</em> ghi đè.
+        An toàn hơn nhiều. <strong>KHÔNG BAO GIỜ</strong> force push lên <code>main</code>/<code>master</code>.
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Stash &amp; undo — sửa sai</h2>
+      <p>Đây là phần "cứu sống" — biết undo đúng cách giúp bạn tự tin thử nghiệm.</p>
+
+      <h3><code>git stash</code> — cất tạm thay đổi</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> stash                      <span class="comment"># cất working dir + staging vào ngăn kéo</span>
+<span class="prompt">$ </span><span class="cmd">git</span> stash list                 <span class="comment"># xem các stash đang có</span>
+<span class="prompt">$ </span><span class="cmd">git</span> stash pop                  <span class="comment"># lấy lại stash mới nhất + xóa khỏi list</span>
+<span class="prompt">$ </span><span class="cmd">git</span> stash apply stash@{1}      <span class="comment"># lấy stash thứ 1 (giữ nguyên trong list)</span>
+<span class="prompt">$ </span><span class="cmd">git</span> stash drop stash@{0}       <span class="comment"># xóa stash</span></code></pre>
+      <p>Dùng khi: đang dở dang feature thì sếp bảo "fix bug production gấp" — stash, switch sang main, fix, push, rồi <code>stash pop</code> quay lại.</p>
+
+      <h3>Bảng "tôi muốn undo X → dùng lệnh nào"</h3>
+      <table>
+        <thead><tr><th>Tình huống</th><th>Lệnh</th></tr></thead>
+        <tbody>
+          <tr><td>Bỏ thay đổi chưa stage trên 1 file (về như commit cuối)</td><td><code>git restore file.js</code></td></tr>
+          <tr><td>Bỏ <code>git add</code> (unstage), giữ thay đổi</td><td><code>git restore --staged file.js</code></td></tr>
+          <tr><td>Sửa message commit cuối (chưa push)</td><td><code>git commit --amend</code></td></tr>
+          <tr><td>Bỏ commit cuối, giữ thay đổi đã staged</td><td><code>git reset --soft HEAD~1</code></td></tr>
+          <tr><td>Bỏ commit cuối, giữ thay đổi nhưng unstage</td><td><code>git reset --mixed HEAD~1</code> (mặc định)</td></tr>
+          <tr><td>Bỏ commit cuối + xóa luôn thay đổi (NGUY HIỂM)</td><td><code>git reset --hard HEAD~1</code></td></tr>
+          <tr><td>Đảo commit đã push (tạo commit mới đảo ngược)</td><td><code>git revert &lt;sha&gt;</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ <code>reset --soft</code> vs <code>--hard</code></div>
+        <code>--soft</code>: chỉ lùi con trỏ commit, file giữ nguyên + còn trong staging. <em>An toàn.</em><br>
+        <code>--mixed</code> (default): lùi commit, file giữ nguyên nhưng unstage.<br>
+        <code>--hard</code>: lùi commit + <strong>xóa hết thay đổi</strong> trong working dir. Mất sạch nếu chưa stash. Nghĩ kỹ.
+      </div>
+
+      <h3><code>revert</code> — undo "công khai" cho commit đã push</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">git</span> revert a1b2c3d              <span class="comment"># tạo commit MỚI đảo ngược a1b2c3d</span></code></pre>
+      <p>Khác <code>reset</code>: revert không xóa lịch sử, chỉ thêm commit mới — an toàn cho branch public.</p>
+    </section>
+
+    <section>
+      <h2>6. SSH cho git &amp; server</h2>
+      <p>SSH (Secure Shell) là cách <strong>xác thực không mật khẩu</strong> bằng cặp key public/private. Bạn cho server giữ public key, máy bạn giữ private key — server gửi thử thách, máy bạn ký bằng private key để chứng minh là bạn.</p>
+
+      <h3>Bước 1 — Sinh SSH key</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ssh-keygen</span> <span class="flag">-t</span> ed25519 <span class="flag">-C</span> "your.email@example.com"</code></pre>
+      <ul>
+        <li><code>-t ed25519</code>: thuật toán hiện đại, ngắn hơn và an toàn hơn RSA.</li>
+        <li><code>-C "..."</code>: comment để dễ nhận diện key (thường là email).</li>
+        <li>Khi hỏi passphrase: gõ một mật khẩu để bảo vệ private key (khuyến nghị) hoặc Enter để bỏ qua.</li>
+      </ul>
+      <p>Kết quả ra 2 file trong <code>~/.ssh/</code>:</p>
+      <ul>
+        <li><code>id_ed25519</code> — <strong>private key</strong>. KHÔNG share, không commit.</li>
+        <li><code>id_ed25519.pub</code> — <strong>public key</strong>. Đem dán cho GitHub/server.</li>
+      </ul>
+
+      <h3>Bước 2 — Copy public key vào GitHub/GitLab</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cat</span> ~/.ssh/id_ed25519.pub
+<span class="output">ssh-ed25519 AAAAC3Nza... your.email@example.com</span>
+<span class="prompt">$ </span><span class="cmd">pbcopy</span> &lt; ~/.ssh/id_ed25519.pub   <span class="comment"># macOS: copy thẳng vào clipboard</span></code></pre>
+      <p>Vào GitHub → Settings → SSH and GPG keys → New SSH key → paste public key → Save.</p>
+
+      <h3>Bước 3 — Test kết nối</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ssh</span> <span class="flag">-T</span> git@github.com
+<span class="output">Hi yourname! You've successfully authenticated, but GitHub does not provide shell access.</span></code></pre>
+      <p>Thấy "successfully authenticated" = thành công. Giờ clone repo bằng URL <code>git@github.com:user/repo.git</code> sẽ không bị hỏi password nữa.</p>
+
+      <h3><code>~/.ssh/config</code> — alias cho host</h3>
+      <p>Khi có nhiều server hoặc nhiều account GitHub, file config giúp gõ ngắn gọn:</p>
+      <pre><code><span class="comment"># ~/.ssh/config</span>
+Host github
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519
+
+Host myserver
+  HostName 203.0.113.42
+  User deploy
+  Port 2222
+  IdentityFile ~/.ssh/id_ed25519_server</code></pre>
+      <p>Sau khi config, bạn gõ:</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ssh</span> myserver                  <span class="comment"># thay vì ssh -p 2222 deploy@203.0.113.42</span>
+<span class="prompt">$ </span><span class="cmd">git</span> clone github:user/repo.git  <span class="comment"># dùng alias trong git URL</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 SSH config tip</div>
+        Nhớ <code>chmod 600 ~/.ssh/config</code> và <code>chmod 600 ~/.ssh/id_ed25519</code>. SSH sẽ <em>từ chối</em> dùng key
+        nếu permission quá lỏng — đó là tính năng bảo mật, không phải bug. Folder <code>~/.ssh</code> nên là <code>700</code>.
+      </div>
+
+      <h3><code>scp</code> &amp; <code>rsync</code> — copy file qua mạng</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">scp</span> file.txt myserver:~/uploads/         <span class="comment"># copy 1 file lên server</span>
+<span class="prompt">$ </span><span class="cmd">scp</span> <span class="flag">-r</span> dist/ myserver:/var/www/         <span class="comment"># copy folder (đệ quy)</span>
+<span class="prompt">$ </span><span class="cmd">scp</span> myserver:~/log.txt ./                <span class="comment"># tải về máy local</span>
+
+<span class="prompt">$ </span><span class="cmd">rsync</span> <span class="flag">-avzP</span> dist/ myserver:/var/www/    <span class="comment"># sync folder, chỉ copy file đã đổi</span>
+<span class="prompt">$ </span><span class="cmd">rsync</span> <span class="flag">-avzP --delete</span> dist/ myserver:/var/www/  <span class="comment"># xóa file thừa ở dest</span></code></pre>
+
+      <h3>Bảng so sánh <code>scp</code> vs <code>rsync</code></h3>
+      <table>
+        <thead><tr><th>Tiêu chí</th><th><code>scp</code></th><th><code>rsync</code></th></tr></thead>
+        <tbody>
+          <tr><td>Tốc độ khi sync lại folder lớn</td><td>Copy lại từ đầu</td><td>Chỉ copy file/khúc đã đổi (delta)</td></tr>
+          <tr><td>Resume khi mất mạng</td><td>❌ Bắt đầu lại từ 0</td><td>✅ Có (<code>-P</code>)</td></tr>
+          <tr><td>Compress khi truyền</td><td>❌</td><td>✅ (<code>-z</code>)</td></tr>
+          <tr><td>Hiển thị progress</td><td>Có (basic)</td><td>Có (<code>-P</code>) — chi tiết hơn</td></tr>
+          <tr><td>Đồng bộ 2 chiều / xóa file thừa</td><td>❌</td><td>✅ (<code>--delete</code>)</td></tr>
+          <tr><td>Có sẵn mặc định</td><td>Hầu hết hệ thống</td><td>Hầu hết hệ thống Unix</td></tr>
+        </tbody>
+      </table>
+      <p class="text-dim">Quy tắc đơn giản: copy 1 file nhỏ một lần → <code>scp</code>. Sync folder lớn / deploy / backup định kỳ → <code>rsync -avzP</code>.</p>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>Tập commit cycle ngay trong simulator — không sợ phá repo thật:</p>
+      <ol>
+        <li><code>mkdir myrepo &amp;&amp; cd myrepo</code></li>
+        <li><code>git init</code></li>
+        <li><code>echo "# My Repo" &gt; README.md</code></li>
+        <li><code>git status</code> — thấy README.md untracked</li>
+        <li><code>git add README.md</code></li>
+        <li><code>git commit -m "init"</code></li>
+        <li><code>git log --oneline</code></li>
+        <li><code>git switch -c feature-1</code></li>
+        <li><code>git branch</code> — xác nhận đang ở feature-1</li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong8 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Làm trên Terminal thật. Repo này thuộc về bạn — sai cứ <code>rm -rf .git</code> rồi làm lại:</p>
+      <ol>
+        <li>Tạo folder <code>~/Developer/git-practice</code>, <code>cd</code> vào, <code>git init</code>. Tạo <code>README.md</code>, commit đầu với message <code>"init"</code>.</li>
+        <li>Tạo branch <code>feature/hello</code> bằng <code>git switch -c</code>. Sửa <code>README.md</code>, commit. Quay về <code>main</code>, merge <code>feature/hello</code> vào.</li>
+        <li>Trên branch mới <code>feature/oops</code>, làm 3 commit lung tung. Dùng <code>git rebase -i HEAD~3</code> để squash 3 commit thành 1, đổi message thành <code>"feat: hello message"</code>.</li>
+        <li>Tạo file <code>secret.txt</code>, <code>git add</code> nó, rồi nhận ra không nên commit. Unstage bằng <code>git restore --staged secret.txt</code>.</li>
+        <li>Sinh SSH key ed25519 mới (nếu chưa có): <code>ssh-keygen -t ed25519 -C "email"</code>. Copy public key lên GitHub. Test bằng <code>ssh -T git@github.com</code>.</li>
+        <li>Tạo repo trống trên GitHub (qua web UI). Trên local, chạy <code>git remote add origin git@github.com:user/repo.git</code> rồi <code>git push -u origin main</code>.</li>
+        <li>Tạo file <code>~/.ssh/config</code> với một Host alias <code>github</code> trỏ đến <code>github.com</code>. <code>chmod 600 ~/.ssh/config</code>. Test bằng <code>ssh -T github</code>.</li>
+        <li>Tạo 2 folder <code>~/tmp/src</code> (chứa vài file) và <code>~/tmp/dst</code> (rỗng). Sync bằng <code>rsync -avzP ~/tmp/src/ ~/tmp/dst/</code>. Sửa 1 file ở src, chạy lại — thấy rsync chỉ copy file vừa đổi.</li>
+        <li>(Bonus) Cố tình tạo conflict: trên 2 branch sửa cùng dòng, merge, đọc dấu <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, resolve thủ công, commit.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ Vòng lặp git: <code>status → add → commit → log</code></li>
+        <li>✅ Branch &amp; merge: <code>switch -c</code>, <code>merge</code>, xem bằng <code>log --all --graph</code></li>
+        <li>✅ Rebase &amp; cherry-pick — dùng cẩn thận trên branch chưa public</li>
+        <li>✅ Sync với remote: <code>fetch</code> ≠ <code>pull</code>; <code>--force-with-lease</code> thay cho <code>--force</code></li>
+        <li>✅ Undo đúng cách: <code>restore</code>, <code>reset --soft/--hard</code>, <code>revert</code>, <code>stash</code></li>
+        <li>✅ SSH key ed25519 cho GitHub, <code>~/.ssh/config</code> với Host alias</li>
+        <li>✅ <code>scp</code> cho file lẻ, <code>rsync -avzP</code> cho folder lớn / deploy</li>
+      </ul>
+      <p class="text-dim">Chương 9 chúng ta học <em>tmux &amp; productivity</em> — chia terminal thành nhiều panel, để session chạy ngầm trên server, và những thói quen làm dev "đa nhiệm" thực sự.</p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong7.html">
+        <span class="label">Trước</span>
+        ← Chương 07: Shell scripting
+      </a>
+      <a href="chuong9.html">
+        <span class="label">Tiếp theo</span>
+        Chương 09: Tmux &amp; productivity →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 08
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Khác biệt chính giữa `git pull` và `git fetch + git merge`?",
+        options: [
+          "git pull nhanh hơn vì dùng giao thức khác",
+          "Không có khác biệt — pull = fetch + merge",
+          "git fetch chỉ tải về metadata, không tải code",
+          "git pull chỉ chạy được trên main"
+        ],
+        correct: 1,
+        explain: "git pull = git fetch + git merge (mặc định). Tách ra giúp bạn xem trước remote có gì mới (fetch + git log origin/main) rồi mới quyết định merge hay rebase."
+      },
+      {
+        q: "Tại sao KHÔNG nên rebase một branch đã push public?",
+        options: [
+          "Vì rebase chậm hơn merge",
+          "Vì rebase viết lại hash commit — đồng nghiệp đã pull về sẽ bị lệch lịch sử và conflict nặng",
+          "Vì GitHub không hỗ trợ rebase",
+          "Vì rebase xóa hết thay đổi"
+        ],
+        correct: 1,
+        explain: "Rebase tạo commit mới với hash khác. Nếu bạn force push lên branch chung, ai đã pull commit cũ sẽ thấy lịch sử của họ 'biến mất' — pull về sẽ tạo merge hỗn loạn. Quy tắc: chỉ rebase commit chưa share."
+      },
+      {
+        q: "Khác biệt giữa `git reset --soft HEAD~1` và `git reset --hard HEAD~1`?",
+        options: [
+          "Không khác — cả 2 đều xóa commit cuối",
+          "--soft xóa file, --hard giữ file",
+          "--soft chỉ lùi commit và giữ thay đổi trong staging; --hard lùi commit và XÓA luôn thay đổi",
+          "--soft chỉ chạy được khi chưa stage"
+        ],
+        correct: 2,
+        explain: "--soft: lùi con trỏ, file vẫn nguyên + đã staged. --mixed (default): lùi + unstage. --hard: lùi + xóa sạch working dir. --hard có thể làm mất code chưa commit, dùng cẩn thận."
+      },
+      {
+        q: "Lệnh nào sinh SSH key bằng thuật toán ed25519?",
+        options: [
+          "ssh-keygen -rsa 4096",
+          "ssh-keygen -t ed25519 -C \"email\"",
+          "ssh new ed25519",
+          "openssl gen-key ed25519"
+        ],
+        correct: 1,
+        explain: "ssh-keygen -t ed25519 -C \"email\". Cờ -t chọn thuật toán, -C thêm comment. ed25519 hiện đại hơn RSA: ngắn hơn, ký nhanh hơn, an toàn hơn."
+      },
+      {
+        q: "Bạn vừa `git add file.js` nhầm — muốn unstage nhưng giữ thay đổi. Lệnh nào?",
+        options: [
+          "git rm file.js",
+          "git restore file.js",
+          "git restore --staged file.js",
+          "git reset --hard HEAD"
+        ],
+        correct: 2,
+        explain: "git restore --staged file.js bỏ file ra khỏi staging area, giữ nguyên thay đổi trong working dir. git restore file.js (không --staged) sẽ XÓA thay đổi — khác hẳn."
+      },
+      {
+        q: "Đã push commit lỗi lên main. Cách nào ĐÚNG để undo?",
+        options: [
+          "git reset --hard HEAD~1 rồi git push --force",
+          "git revert <sha lỗi> rồi git push",
+          "Xóa repo và clone lại",
+          "git stash"
+        ],
+        correct: 1,
+        explain: "git revert tạo commit MỚI đảo ngược commit lỗi — an toàn cho branch public, không viết lại lịch sử. reset + force push lên main sẽ phá lịch sử team."
+      },
+      {
+        q: "Cần sync folder dist/ lên server, mạng chậm và hay rớt. Dùng gì?",
+        options: [
+          "scp -r dist/ server:/var/www/",
+          "rsync -avzP dist/ server:/var/www/",
+          "cp -r dist/ server:/var/www/",
+          "ftp upload dist/"
+        ],
+        correct: 1,
+        explain: "rsync -avzP: -a archive (giữ permission/symlink), -v verbose, -z compress khi truyền, -P progress + resume. Mất mạng giữa chừng có thể chạy lại — rsync chỉ copy phần còn thiếu. scp phải copy lại từ đầu."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

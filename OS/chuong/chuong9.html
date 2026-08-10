@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 09 — Paging & Page Replacement · OS Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">os-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong8.html">← Ch.08</a></li>
+        <li><a href="chuong9.html" class="active">Ch.09</a></li>
+        <li><a href="chuong10.html">Ch.10 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 09 · MEMORY · ~110 phút</div>
+      <h1>Paging<br/><span class="text-accent">&amp; Page Replacement</span></h1>
+      <p class="lead">
+        Khi RAM hết chỗ, đẩy page nào ra disk? Đây là chương về <strong>page fault, TLB, page replacement algorithms</strong> (FIFO, LRU, Clock, Optimal).
+        Hiểu chương này, bạn liên hệ trực tiếp tới CPU cache (L1/L2/L3) — cùng nguyên lý cách 1 tầng.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#fault">9.1 Page Fault</a></li>
+          <li><a href="#major-minor">9.2 Major vs Minor</a></li>
+          <li><a href="#tlb">9.3 TLB</a></li>
+          <li><a href="#replacement">9.4 Bài toán Replacement</a></li>
+          <li><a href="#fifo">9.5 FIFO + Belady's Anomaly</a></li>
+          <li><a href="#lru">9.6 LRU</a></li>
+          <li><a href="#clock">9.7 Clock (Second Chance)</a></li>
+          <li><a href="#optimal">9.8 Optimal</a></li>
+          <li><a href="#workingset">9.9 Working Set</a></li>
+          <li><a href="#thrashing">9.10 Thrashing</a></li>
+          <li><a href="#cache">9.11 CPU Cache</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 9.1 -->
+        <section id="fault">
+          <h2>9.1 Page Fault — hành trình 1 byte</h2>
+
+          <p>Khi process truy cập 1 virtual address, MMU tra page table:</p>
+          <ul>
+            <li>Nếu PTE có <strong>present bit = 1</strong>: page có trong RAM → dịch sang physical address, đọc → xong</li>
+            <li>Nếu present bit = 0: <strong>Page Fault</strong> → CPU trap vào kernel</li>
+          </ul>
+
+          <h3>Kernel xử lý page fault</h3>
+          <ol>
+            <li>Kernel kiểm tra: VA này có hợp lệ không?
+              <ul>
+                <li>Không hợp lệ (vd dereference NULL) → gửi <code>SIGSEGV</code> → process thường chết</li>
+                <li>Hợp lệ → tiếp</li>
+              </ul>
+            </li>
+            <li>Tìm physical frame trống trong RAM. Nếu hết → page replacement (xem 9.4)</li>
+            <li>Đọc nội dung page từ disk (hoặc zero-fill nếu là anon page mới)</li>
+            <li>Update PTE: present = 1, frame number = frame mới chọn</li>
+            <li>Resume instruction bị fail — bây giờ chạy bình thường</li>
+          </ol>
+
+          <p>Toàn bộ quá trình diễn ra trong vài microsecond đến vài millisecond (nếu phải đọc từ disk).</p>
+        </section>
+
+        <!-- 9.2 -->
+        <section id="major-minor">
+          <h2>9.2 Major vs Minor Page Fault</h2>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-green">Minor Fault</h4>
+              <ul>
+                <li>Page có trong RAM, chỉ thiếu PTE entry</li>
+                <li>Vd: page được share giữa 2 process, lần đầu process A truy cập → minor fault, kernel chỉ cần update page table</li>
+                <li>Cũng xảy ra với CoW: lần đầu ghi vào shared page, kernel copy page rồi update</li>
+                <li>Cost: ~vài microsecond (không IO)</li>
+              </ul>
+            </div>
+            <div class="bad">
+              <h4 class="text-amber">Major Fault</h4>
+              <ul>
+                <li>Page chưa có trong RAM — phải đọc từ disk (swap hoặc file)</li>
+                <li>Cost: <strong>~ms</strong> (HDD) hoặc ~100µs (SSD) — chậm hơn minor 1000x</li>
+                <li>Major fault nhiều = thrashing (xem 9.10)</li>
+              </ul>
+            </div>
+          </div>
+
+          <pre data-lang="bash"><code># Đếm major/minor fault của process
+ps -o min_flt,maj_flt,comm
+# min_flt   maj_flt COMMAND
+#   12345         3 bash     ← minor nhiều, major ít = lành mạnh
+#  123456     78901 some_app  ← major cao = thrashing</code></pre>
+        </section>
+
+        <!-- 9.3 -->
+        <section id="tlb">
+          <h2>9.3 TLB — Translation Lookaside Buffer</h2>
+
+          <p>
+            Mỗi instruction memory access đều cần dịch VA → PA qua page table. Multi-level page table = 4 memory access mỗi lần dịch → quá chậm.
+          </p>
+
+          <p>
+            <strong>TLB</strong> = cache nhỏ nằm trong MMU, lưu kết quả dịch gần đây. Hit TLB → 1 cycle. Miss TLB → vài chục cycle.
+          </p>
+
+          <pre data-lang="text"><code>     CPU virtual address ──▶ TLB ──┬─▶ HIT  → physical address (1 cycle)
+                                    │
+                                    └─▶ MISS → page table walk (4 levels)
+                                              → update TLB
+                                              → physical address</code></pre>
+
+          <h3>TLB size</h3>
+          <ul>
+            <li>L1 TLB: ~64 entries — gần CPU, 1 cycle</li>
+            <li>L2 TLB: ~1500 entries — chậm hơn nhưng lớn</li>
+            <li>Mỗi entry cover 1 page (4KB), nên L1 TLB cover ~256KB working set</li>
+          </ul>
+
+          <h3>TLB shootdown</h3>
+          <p>
+            Khi context switch giữa process A và B, TLB chứa entry của A vô nghĩa (PA của B khác). Cần "flush" hoặc tag entry với ASID (Address Space ID).
+          </p>
+
+          <h3>Huge Pages giúp giảm TLB miss</h3>
+          <p>
+            1 entry TLB cover 1 page. Nếu page = 2MB thay vì 4KB, cover 500x nhiều hơn → ít TLB miss. Database, JVM dùng huge pages.
+          </p>
+
+          <pre data-lang="bash"><code># Linux: enable transparent huge pages
+cat /sys/kernel/mm/transparent_hugepage/enabled
+# always madvise [never]</code></pre>
+        </section>
+
+        <!-- 9.4 -->
+        <section id="replacement">
+          <h2>9.4 Bài toán Page Replacement</h2>
+
+          <p>
+            Khi page fault xảy ra mà <strong>RAM đã hết frame trống</strong>, kernel phải "đẩy" 1 page hiện có ra disk (swap out) để lấy chỗ cho page mới.
+            Câu hỏi: <strong>đẩy page nào?</strong>
+          </p>
+
+          <p>Đó là bài toán page replacement. Mục tiêu: <em>chọn page ít có khả năng được dùng lại sớm nhất</em>.</p>
+
+          <p>Để đo hiệu quả, dùng metric: <strong>page fault rate</strong> với một dãy reference (chuỗi page truy cập).</p>
+        </section>
+
+        <!-- 9.5 -->
+        <section id="fifo">
+          <h2>9.5 FIFO — và Belady's Anomaly</h2>
+
+          <p>
+            Đẩy ra page <strong>vào RAM lâu nhất</strong> (dù vẫn đang được dùng).
+          </p>
+
+          <pre data-lang="text"><code>Reference: 1 2 3 4 1 2 5 1 2 3 4 5
+Frames=3:
+
+Step  1   2   3   4   1   2   5   1   2   3   4   5
+F1    1   1   1   4   4   4   5   5   5   5   5   5
+F2        2   2   2   1   1   1   1   1   3   3   3
+F3            3   3   3   2   2   2   2   2   4   4
+Fault X   X   X   X   X   X   X           X   X
+                                  (1,2 đã có)
+9 page faults</code></pre>
+
+          <h3>Belady's Anomaly</h3>
+          <p>
+            Trực giác: tăng số frame thì page fault giảm. <strong>Nhưng FIFO không có tính chất này!</strong>
+            Có dãy mà thêm frame lại làm <em>tăng</em> page fault. Belady (1969) chứng minh.
+          </p>
+
+          <pre data-lang="text"><code>Reference: 1 2 3 4 1 2 5 1 2 3 4 5
+Frames=3: 9 faults
+Frames=4: 10 faults  ← TĂNG khi tăng frame!</code></pre>
+
+          <p>Belady's anomaly là dấu hiệu thuật toán không tốt. LRU không có anomaly này.</p>
+        </section>
+
+        <!-- 9.6 -->
+        <section id="lru">
+          <h2>9.6 LRU — Least Recently Used</h2>
+
+          <p>Đẩy page <strong>lâu nhất chưa được dùng</strong> (dùng gần đây nhất → giữ lại). Dựa trên locality of reference.</p>
+
+          <pre data-lang="text"><code>Reference: 1 2 3 4 1 2 5 1 2 3 4 5
+Frames=3:
+
+Step  1   2   3   4   1   2   5   1   2   3   4   5
+F1    1   1   1   4   4   4   5   5   5   3   3   3
+F2        2   2   2   1   1   1   1   1   1   4   4
+F3            3   3   3   2   2   2   2   2   2   5
+Fault X   X   X   X   X   X   X           X   X   X
+10 page faults
+
+(LRU đôi khi nhiều fault hơn FIFO trên dãy ngắn,
+ nhưng không có Belady's Anomaly và tốt hơn average)</code></pre>
+
+          <h3>Cài đặt LRU</h3>
+
+          <ul>
+            <li><strong>Linked list</strong>: mỗi truy cập → di chuyển page lên đầu. Đẩy: lấy cuối list. O(1) move, O(1) evict — nhưng cần update mỗi access → tốn quá. Dùng cho cache application-level (Redis, LRUCache library).</li>
+            <li><strong>Page table accessed bit</strong>: hardware set bit khi page accessed. Kernel scan định kỳ — xấp xỉ LRU.</li>
+            <li>Linux dùng <strong>2 list LRU</strong>: active + inactive — gần đúng LRU với cost thấp.</li>
+          </ul>
+
+          <p>"True LRU" trong page replacement quá đắt — dùng xấp xỉ qua Clock algorithm.</p>
+        </section>
+
+        <!-- 9.7 -->
+        <section id="clock">
+          <h2>9.7 Clock (Second Chance)</h2>
+
+          <p>
+            Xấp xỉ LRU rẻ hơn nhiều. Sắp các page thành <em>vòng tròn</em>, có 1 con trỏ "kim đồng hồ".
+            Mỗi PTE có <strong>R bit</strong> (reference / accessed), hardware tự set khi truy cập.
+          </p>
+
+          <h3>Khi cần evict</h3>
+          <ol>
+            <li>Kim trỏ vào page hiện tại</li>
+            <li>Nếu R = 0 → evict page này, kim tiến 1</li>
+            <li>Nếu R = 1 → set R = 0, "tha thứ" lần này, kim tiến 1, lặp</li>
+          </ol>
+
+          <p>Page đang dùng thường xuyên có R = 1 → tha. Page lâu không dùng có R = 0 → evict. Xấp xỉ LRU.</p>
+
+          <h3>Linux thực tế</h3>
+          <p>
+            Linux dùng biến thể "two-handed clock" + active/inactive list. Phức tạp hơn pure clock nhưng cùng triết lý.
+          </p>
+        </section>
+
+        <!-- 9.8 -->
+        <section id="optimal">
+          <h2>9.8 Optimal (Belady's Algorithm) — không thể implement</h2>
+
+          <p>
+            Đẩy page <strong>sẽ được dùng lại lâu nhất trong tương lai</strong>. Đây là tối ưu lý thuyết, có thể chứng minh là cho fewest page fault.
+          </p>
+
+          <p>
+            Nhược: <strong>không thể biết tương lai</strong>. Optimal chỉ dùng để so sánh — đo distance giữa thuật toán thực với optimal.
+          </p>
+        </section>
+
+        <!-- 9.9 -->
+        <section id="workingset">
+          <h2>9.9 Working Set — kích thước memory thực sự cần</h2>
+
+          <p>
+            <strong>Working set</strong> của process tại thời điểm t = tập các page mà process đã truy cập trong khoảng thời gian Δ trước đó.
+          </p>
+
+          <p>
+            Quan sát: process có "locality" — chỉ dùng 1 phần memory mỗi giai đoạn. Nếu working set vừa đủ trong RAM, page fault thấp.
+            Nếu working set &gt; RAM, page fault cao.
+          </p>
+
+          <h3>Working Set Size — chỉ số quan trọng</h3>
+          <p>
+            OS có thể đo working set của mỗi process, dùng để:
+          </p>
+          <ul>
+            <li>Quyết định cấp bao nhiêu frame cho mỗi process</li>
+            <li>Tránh thrashing: nếu tổng working set &gt; RAM, suspend bớt process</li>
+          </ul>
+        </section>
+
+        <!-- 9.10 -->
+        <section id="thrashing">
+          <h2>9.10 Thrashing — máy "lag" không lý do</h2>
+
+          <p>
+            <strong>Thrashing</strong> = OS dành phần lớn thời gian cho page fault thay vì chạy code thực sự. CPU usage giảm, disk I/O tăng cao.
+          </p>
+
+          <h3>Tại sao xảy ra?</h3>
+          <p>
+            Quá nhiều process. Mỗi process được cấp ít frame → working set không đủ → page fault liên tục → swap in/out không ngừng → mọi process tiến triển chậm → OS tưởng cần chạy thêm process → cấp thêm → tệ hơn → tử vòng.
+          </p>
+
+          <h3>Dấu hiệu</h3>
+          <ul>
+            <li><code>vmstat</code>: <code>si</code>/<code>so</code> (swap in/out) cao</li>
+            <li>CPU idle cao mà mọi thứ chạy rất chậm</li>
+            <li>Disk I/O 100% liên tục</li>
+            <li>Tiếng ổ cứng kêu liên tục (HDD)</li>
+          </ul>
+
+          <h3>Khắc phục</h3>
+          <ul>
+            <li>Thêm RAM (giải pháp tự nhiên nhất)</li>
+            <li>Suspend bớt process (Linux OOM killer làm điều này)</li>
+            <li>Working set algorithm: chỉ schedule process có thể fit working set</li>
+            <li>Trong cloud: scale out instance thay vì cố nhồi nhiều workload</li>
+          </ul>
+        </section>
+
+        <!-- 9.11 -->
+        <section id="cache">
+          <h2>9.11 CPU Cache — paging thu nhỏ</h2>
+
+          <p>
+            CPU cache (L1/L2/L3) cùng nguyên lý với paging — chỉ khác cấp độ.
+          </p>
+
+          <table>
+            <thead>
+              <tr><th>Cấp</th><th>Kích thước</th><th>Latency</th><th>Quản lý bởi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Register</td><td>~256 byte</td><td>0 cycle</td><td>Compiler</td></tr>
+              <tr><td>L1 Cache</td><td>~64 KB</td><td>~1 cycle</td><td>Hardware</td></tr>
+              <tr><td>L2 Cache</td><td>~256 KB - 1 MB</td><td>~10 cycle</td><td>Hardware</td></tr>
+              <tr><td>L3 Cache</td><td>~8-30 MB</td><td>~40 cycle</td><td>Hardware</td></tr>
+              <tr><td>RAM</td><td>~16 GB</td><td>~100 cycle (~30 ns)</td><td>OS (paging)</td></tr>
+              <tr><td>SSD</td><td>~512 GB</td><td>~100,000 cycle (~50 µs)</td><td>OS (filesystem)</td></tr>
+              <tr><td>HDD</td><td>~2 TB</td><td>~10M cycle (~5 ms)</td><td>OS (filesystem)</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Cache line</h3>
+          <p>CPU cache đơn vị = <strong>cache line</strong> (64 byte trên x86). Đọc 1 byte → load cả cache line. Ghi 1 byte → đánh dấu cache line dirty.</p>
+
+          <h3>Locality of Reference — nguyên lý cốt lõi</h3>
+          <ul>
+            <li><strong>Spatial locality</strong>: đã truy cập x → có thể sắp truy cập x+1 (mảng tuần tự)</li>
+            <li><strong>Temporal locality</strong>: đã truy cập x → có thể truy cập lại x sớm</li>
+          </ul>
+
+          <p>Đây là nền tảng cho cả CPU cache hit rate cao lẫn LRU page replacement.</p>
+
+          <h3>False sharing — bug performance</h3>
+          <pre data-lang="c"><code>// Bug: 2 thread cùng đọc/ghi 2 biến KHÁC NHAU nhưng cùng cache line
+struct {
+    int a;  // thread 1 ghi
+    int b;  // thread 2 ghi
+} data;     // a, b ở cùng 64-byte cache line
+
+// Mỗi lần thread 1 ghi a, cache line bị invalidate trên CPU 2
+// → Thread 2 phải reload cache → SLOW
+
+// Fix: padding để a, b ở cache line khác nhau
+struct {
+    int a;
+    char pad[64];
+    int b;
+} data;</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Tính page fault</div>
+            <p>Reference: <code>7 0 1 2 0 3 0 4 2 3 0 3 2 1 2 0 1 7 0 1</code>. 3 frame. Tính page fault cho FIFO, LRU, Optimal.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Belady's Anomaly</div>
+            <p>Tìm 1 dãy reference + frame size mà FIFO có anomaly. Verify bằng cách tính tay.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Quan sát swap</div>
+            <p>Trên Linux, <code>vmstat 1</code> liên tục. Mở app nặng (Chrome 50 tab). Quan sát <code>si</code>/<code>so</code> (swap in/out KB/s).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Major fault</div>
+            <p>Đếm major page fault: <code>ps -o pid,maj_flt,comm</code>. Process nào major fault nhiều? Giải thích.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Cài đặt LRU cache trong JS</div>
+            <p>Cài LRU cache get/set O(1) bằng Map (giữ insertion order trong JS) hoặc DLL+HashMap.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — False sharing demo</div>
+            <p>Viết C program 2 thread inc 2 biến khác nhau. Test 2 trường hợp: (a) 2 biến cùng cache line; (b) 2 biến khác cache line (padding). So sánh thời gian.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 1.</strong> Page fault xảy ra khi?</p>
+              <ul class="quiz-options">
+                <li>RAM hỏng</li>
+                <li>Truy cập page có present bit = 0 — page chưa trong RAM hoặc PTE chưa setup</li>
+                <li>Process chia 0</li>
+                <li>Stack overflow</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: present bit = 0.</strong> Kernel xử lý: cấp frame + load (nếu major) hoặc chỉ update PTE (nếu minor).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 2.</strong> Major page fault khác Minor ở?</p>
+              <ul class="quiz-options">
+                <li>Major to hơn về kích thước</li>
+                <li>Cùng nghĩa</li>
+                <li>Major: page chưa trong RAM, phải đọc disk; Minor: page trong RAM, chỉ thiếu PTE</li>
+                <li>Major chỉ trên Linux</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Major = đọc disk.</strong> Cost cao hơn 1000× minor. Quá nhiều major = thrashing.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> TLB là gì?</p>
+              <ul class="quiz-options">
+                <li>Cache cho page table — nhớ kết quả dịch VA→PA gần đây</li>
+                <li>Một loại RAM</li>
+                <li>Tên của Linux scheduler</li>
+                <li>Một file system</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: cache cho page table.</strong> Thiếu TLB, mỗi instruction tốn 4 memory access → cực chậm.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Belady's Anomaly là gì?</p>
+              <ul class="quiz-options">
+                <li>Giảm RAM thì page fault giảm</li>
+                <li>LRU có anomaly</li>
+                <li>FIFO: tăng số frame có thể làm tăng page fault — phản trực giác</li>
+                <li>Page table không hoạt động</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: FIFO có thể tăng fault khi tăng frame.</strong> LRU và Optimal không có anomaly này.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Clock (Second Chance) algorithm là?</p>
+              <ul class="quiz-options">
+                <li>Đẩy page lâu nhất</li>
+                <li>Xấp xỉ LRU rẻ — dùng accessed bit, "tha" page có bit=1, evict bit=0</li>
+                <li>FIFO</li>
+                <li>Optimal</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: xấp xỉ LRU.</strong> True LRU quá đắt; Clock dùng accessed bit do hardware set, scan vòng tròn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Thrashing xảy ra khi?</p>
+              <ul class="quiz-options">
+                <li>CPU quá nóng</li>
+                <li>RAM bị virus</li>
+                <li>Tổng working set của các process &gt; RAM → page fault liên tục, OS dành phần lớn thời gian swap</li>
+                <li>HDD bị hỏng</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: working set &gt; RAM.</strong> Triệu chứng: vmstat si/so cao, CPU idle nhưng máy lag.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> CPU L1 cache truy cập tốn bao nhiêu cycle?</p>
+              <ul class="quiz-options">
+                <li>~100 cycle</li>
+                <li>~1 cycle</li>
+                <li>~1000 cycle</li>
+                <li>0 cycle</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ~1 cycle.</strong> RAM ~100 cycle, SSD ~100,000 cycle, HDD ~10M cycle.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 8.</strong> Locality of reference?</p>
+              <ul class="quiz-options">
+                <li>Process truy cập memory tập trung trong 1 vùng nhỏ thay vì rải đều — cơ sở của caching/paging</li>
+                <li>Process chỉ chạy trên 1 CPU</li>
+                <li>Process gần localhost</li>
+                <li>Process trên cùng máy</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: truy cập tập trung.</strong> Spatial (cùng vùng) + temporal (lặp lại). LRU hoạt động được nhờ tính chất này.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 9</h2>
+          <ul>
+            <li>✅ <strong>Page fault</strong> = present bit 0; kernel cấp frame + (nếu cần) load từ disk</li>
+            <li>✅ <strong>Major fault</strong> (đọc disk, ms) ≠ <strong>Minor fault</strong> (chỉ update PTE, µs)</li>
+            <li>✅ <strong>TLB</strong> = cache page table; quan trọng vì mỗi instruction đều dịch VA</li>
+            <li>✅ Page replacement algorithms: FIFO (đơn giản, có Belady's), <strong>LRU</strong> (tốt nhưng đắt), <strong>Clock</strong> (xấp xỉ LRU rẻ), Optimal (lý thuyết)</li>
+            <li>✅ Linux dùng biến thể Clock với active/inactive list</li>
+            <li>✅ <strong>Working Set</strong>: tập page đang được dùng; nếu vượt RAM → thrashing</li>
+            <li>✅ <strong>Thrashing</strong>: page fault liên tục, máy lag dù CPU idle</li>
+            <li>✅ <strong>CPU cache</strong> (L1/L2/L3) cùng nguyên lý paging; locality of reference làm cả hai work</li>
+            <li>✅ False sharing: 2 thread ghi 2 biến cùng cache line gây slow</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong8.html">
+        <span class="label">← Chương trước</span>
+        Chương 08: Memory Management
+      </a>
+      <a href="chuong10.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 10: File System →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">●</span> OS Mastery · Chương 09 · Paging &amp; Page Replacement
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

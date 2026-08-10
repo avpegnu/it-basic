@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 13 — Custom Paint &amp; Render · Flutter Sub-pillar</title>
+  <meta name="description" content="CustomPainter, Canvas API, Path, RenderObject intro, 3 cây Widget/Element/RenderObject deep dive." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 13</span>
+      </div>
+      <div class="chapter-num">Chương 13 · Custom Paint &amp; Render</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Custom Paint &amp; Render
+      </h1>
+      <p class="lead">
+        99% Flutter dev không bao giờ viết RenderObject custom. Nhưng <strong>50% sẽ cần CustomPainter</strong>
+        (chart, gauge, custom shape). Chương này dạy CustomPainter detail + intro 3 cây để hiểu Flutter render internals.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~990 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 2, 12 (animation)</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu khi nào cần xuống low-level (CustomPainter, RenderObject).</li>
+            <li>Sử dụng <code>CustomPainter</code> với <code>Canvas</code> API.</li>
+            <li>Vẽ shape: line, rect, circle, path, polygon.</li>
+            <li>Vẽ text với <code>TextPainter</code>.</li>
+            <li>Combine CustomPainter + AnimationController.</li>
+            <li>RenderObject hierarchy: RenderBox, RenderSliver, RenderObject.</li>
+            <li>Tạo custom RenderObject (intro).</li>
+            <li>Hit testing.</li>
+            <li>3 cây deep dive: Widget / Element / RenderObject.</li>
+          </ul>
+        </div>
+
+        <h2 id="khi-nao">1. Khi nào cần custom paint?</h2>
+        <ul>
+          <li>Chart không có package phù hợp (vd custom dashboard).</li>
+          <li>Gauge / speedometer / progress ring.</li>
+          <li>Badge shape phức tạp (ngôi sao, hình tim, polygon).</li>
+          <li>Gradient phức tạp (radial gradient với multi-stop).</li>
+          <li>Signature pad / drawing app.</li>
+          <li>Game UI 2D đơn giản.</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Trước khi custom paint, check package</div>
+          <p>
+            Đã có sẵn cho nhiều use case: <code>fl_chart</code>, <code>syncfusion_flutter_charts</code>, <code>percent_indicator</code>.
+            Tự viết khi requirement khác package + có thời gian.
+          </p>
+        </div>
+
+        <h2 id="custom-paint-basic">2. <code>CustomPaint</code> + <code>CustomPainter</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">CirclePainter</span> <span class="tok-kw">extends</span> <span class="tok-cls">CustomPainter</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Color</span> color;
+  <span class="tok-fn">CirclePainter</span>(<span class="tok-kw">this</span>.color);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">paint</span>(<span class="tok-cls">Canvas</span> canvas, <span class="tok-cls">Size</span> size) {
+    <span class="tok-kw">final</span> paint = <span class="tok-fn">Paint</span>()
+      ..color = color
+      ..style = <span class="tok-cls">PaintingStyle</span>.fill;
+
+    canvas.<span class="tok-fn">drawCircle</span>(
+      <span class="tok-fn">Offset</span>(size.width / <span class="tok-num">2</span>, size.height / <span class="tok-num">2</span>),
+      size.width / <span class="tok-num">3</span>,
+      paint,
+    );
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">bool</span> <span class="tok-fn">shouldRepaint</span>(<span class="tok-cls">CirclePainter</span> old) =&gt; old.color != color;
+}
+
+<span class="tok-com">// Use</span>
+<span class="tok-fn">CustomPaint</span>(
+  painter: <span class="tok-fn">CirclePainter</span>(<span class="tok-cls">Colors</span>.amber),
+  size: <span class="tok-kw">const</span> <span class="tok-cls">Size</span>(<span class="tok-num">200</span>, <span class="tok-num">200</span>),
+)</code></pre>
+
+        <h2 id="canvas-api">3. Canvas API</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Line</span>
+canvas.<span class="tok-fn">drawLine</span>(<span class="tok-cls">Offset</span>.zero, <span class="tok-fn">Offset</span>(size.width, size.height), paint);
+
+<span class="tok-com">// Rect</span>
+canvas.<span class="tok-fn">drawRect</span>(<span class="tok-cls">Rect</span>.<span class="tok-fn">fromLTWH</span>(<span class="tok-num">10</span>, <span class="tok-num">10</span>, <span class="tok-num">100</span>, <span class="tok-num">50</span>), paint);
+canvas.<span class="tok-fn">drawRRect</span>(<span class="tok-cls">RRect</span>.<span class="tok-fn">fromRectAndRadius</span>(rect, <span class="tok-cls">Radius</span>.<span class="tok-fn">circular</span>(<span class="tok-num">8</span>)), paint);
+
+<span class="tok-com">// Circle</span>
+canvas.<span class="tok-fn">drawCircle</span>(center, radius, paint);
+
+<span class="tok-com">// Arc</span>
+canvas.<span class="tok-fn">drawArc</span>(rect, startAngle, sweepAngle, useCenter, paint);
+
+<span class="tok-com">// Path</span>
+canvas.<span class="tok-fn">drawPath</span>(path, paint);
+
+<span class="tok-com">// Image</span>
+canvas.<span class="tok-fn">drawImage</span>(image, offset, paint);
+
+<span class="tok-com">// Points</span>
+canvas.<span class="tok-fn">drawPoints</span>(<span class="tok-cls">PointMode</span>.points, [<span class="tok-cls">Offset</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>), <span class="tok-cls">Offset</span>(<span class="tok-num">10</span>, <span class="tok-num">10</span>)], paint);
+
+<span class="tok-com">// Shadow</span>
+canvas.<span class="tok-fn">drawShadow</span>(path, <span class="tok-cls">Colors</span>.black26, <span class="tok-num">4</span>, <span class="tok-kw">true</span>);</code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Coordinate system</div>
+          <p>
+            <code>(0, 0)</code> ở <strong>top-left</strong>. X tăng sang phải, Y tăng <em>xuống dưới</em> (khác toán học truyền thống).
+            <code>Size</code> = (width, height) của vùng vẽ.
+          </p>
+        </div>
+
+        <h2 id="paint">4. <code>Paint</code> — properties</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> paint = <span class="tok-fn">Paint</span>()
+  ..color = <span class="tok-cls">Colors</span>.blue
+  ..style = <span class="tok-cls">PaintingStyle</span>.stroke    <span class="tok-com">// fill | stroke</span>
+  ..strokeWidth = <span class="tok-num">4</span>
+  ..strokeCap = <span class="tok-cls">StrokeCap</span>.round       <span class="tok-com">// butt | round | square</span>
+  ..strokeJoin = <span class="tok-cls">StrokeJoin</span>.round
+  ..isAntiAlias = <span class="tok-kw">true</span>;
+
+<span class="tok-com">// Gradient shader</span>
+<span class="tok-kw">final</span> grad = <span class="tok-fn">Paint</span>()
+  ..shader = <span class="tok-fn">LinearGradient</span>(colors: [<span class="tok-cls">Colors</span>.amber, <span class="tok-cls">Colors</span>.orange])
+      .<span class="tok-fn">createShader</span>(<span class="tok-cls">Rect</span>.<span class="tok-fn">fromLTWH</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>, size.width, size.height));
+
+<span class="tok-com">// Blur</span>
+<span class="tok-kw">final</span> blur = <span class="tok-fn">Paint</span>()
+  ..maskFilter = <span class="tok-fn">MaskFilter.blur</span>(<span class="tok-cls">BlurStyle</span>.normal, <span class="tok-num">5</span>);</code></pre>
+
+        <h2 id="path">5. <code>Path</code> — combine shapes</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> path = <span class="tok-fn">Path</span>();
+path.<span class="tok-fn">moveTo</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>);
+path.<span class="tok-fn">lineTo</span>(<span class="tok-num">100</span>, <span class="tok-num">0</span>);
+path.<span class="tok-fn">lineTo</span>(<span class="tok-num">100</span>, <span class="tok-num">100</span>);
+path.<span class="tok-fn">close</span>();    <span class="tok-com">// nối về moveTo</span>
+
+<span class="tok-com">// Bezier curves</span>
+path.<span class="tok-fn">quadraticBezierTo</span>(controlX, controlY, endX, endY);
+path.<span class="tok-fn">cubicTo</span>(c1x, c1y, c2x, c2y, endX, endY);
+
+<span class="tok-com">// Arc</span>
+path.<span class="tok-fn">arcTo</span>(<span class="tok-cls">Rect</span>.<span class="tok-fn">fromLTWH</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>, <span class="tok-num">100</span>, <span class="tok-num">100</span>), <span class="tok-num">0</span>, <span class="tok-num">3.14</span>, <span class="tok-kw">false</span>);
+
+<span class="tok-com">// Add other primitive</span>
+path.<span class="tok-fn">addRect</span>(<span class="tok-cls">Rect</span>.<span class="tok-fn">fromLTWH</span>(<span class="tok-num">10</span>, <span class="tok-num">10</span>, <span class="tok-num">50</span>, <span class="tok-num">50</span>));
+path.<span class="tok-fn">addOval</span>(rect);
+
+canvas.<span class="tok-fn">drawPath</span>(path, paint);</code></pre>
+
+        <h3 id="star-path">Ngôi sao 5 cánh</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Path</span> <span class="tok-fn">createStarPath</span>(<span class="tok-cls">Size</span> size) {
+  <span class="tok-kw">const</span> points = <span class="tok-num">5</span>;
+  <span class="tok-kw">final</span> outerRadius = size.width / <span class="tok-num">2</span>;
+  <span class="tok-kw">final</span> innerRadius = outerRadius / <span class="tok-num">2.5</span>;
+  <span class="tok-kw">final</span> center = <span class="tok-fn">Offset</span>(size.width / <span class="tok-num">2</span>, size.height / <span class="tok-num">2</span>);
+  <span class="tok-kw">final</span> path = <span class="tok-fn">Path</span>();
+  <span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; points * <span class="tok-num">2</span>; i++) {
+    <span class="tok-kw">final</span> isOuter = i % <span class="tok-num">2</span> == <span class="tok-num">0</span>;
+    <span class="tok-kw">final</span> r = isOuter ? outerRadius : innerRadius;
+    <span class="tok-kw">final</span> angle = -<span class="tok-num">3.14</span> / <span class="tok-num">2</span> + i * <span class="tok-num">3.14</span> / points;
+    <span class="tok-kw">final</span> x = center.dx + r * <span class="tok-fn">cos</span>(angle);
+    <span class="tok-kw">final</span> y = center.dy + r * <span class="tok-fn">sin</span>(angle);
+    <span class="tok-kw">if</span> (i == <span class="tok-num">0</span>) {
+      path.<span class="tok-fn">moveTo</span>(x, y);
+    } <span class="tok-kw">else</span> {
+      path.<span class="tok-fn">lineTo</span>(x, y);
+    }
+  }
+  path.<span class="tok-fn">close</span>();
+  <span class="tok-kw">return</span> path;
+}</code></pre>
+
+        <h2 id="text-painter">6. <code>TextPainter</code> — vẽ text</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">void</span> <span class="tok-fn">paintText</span>(<span class="tok-cls">Canvas</span> canvas, <span class="tok-cls">Offset</span> position, <span class="tok-cls">String</span> text) {
+  <span class="tok-kw">final</span> painter = <span class="tok-fn">TextPainter</span>(
+    text: <span class="tok-fn">TextSpan</span>(
+      text: text,
+      style: <span class="tok-kw">const</span> <span class="tok-fn">TextStyle</span>(color: <span class="tok-cls">Colors</span>.black, fontSize: <span class="tok-num">14</span>),
+    ),
+    textDirection: <span class="tok-cls">TextDirection</span>.ltr,
+  );
+  painter.<span class="tok-fn">layout</span>();    <span class="tok-com">// CRITICAL — phải gọi trước paint</span>
+  painter.<span class="tok-fn">paint</span>(canvas, position);
+}</code></pre>
+
+        <h2 id="save-restore">7. <code>save</code> / <code>restore</code></h2>
+        <pre data-lang="dart"><code class="language-dart">canvas.<span class="tok-fn">save</span>();           <span class="tok-com">// push state</span>
+canvas.<span class="tok-fn">translate</span>(<span class="tok-num">50</span>, <span class="tok-num">50</span>);
+canvas.<span class="tok-fn">rotate</span>(<span class="tok-num">0.5</span>);
+canvas.<span class="tok-fn">drawCircle</span>(<span class="tok-cls">Offset</span>.zero, <span class="tok-num">20</span>, paint);   <span class="tok-com">// drawn ở (50,50) rotated</span>
+canvas.<span class="tok-fn">restore</span>();        <span class="tok-com">// pop state</span>
+
+canvas.<span class="tok-fn">drawCircle</span>(<span class="tok-cls">Offset</span>.zero, <span class="tok-num">30</span>, paint);   <span class="tok-com">// drawn ở (0,0) no rotation</span></code></pre>
+
+        <h2 id="should-repaint">8. <code>shouldRepaint</code> — performance</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">@override</span>
+<span class="tok-type">bool</span> <span class="tok-fn">shouldRepaint</span>(<span class="tok-cls">MyPainter</span> old) {
+  <span class="tok-com">// Trả true khi data thay đổi cần redraw</span>
+  <span class="tok-kw">return</span> old.color != color || old.value != value;
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Đừng luôn return <code>true</code></div>
+          <p>
+            Mặc định painter trong CustomPaint chỉ repaint khi parent đổi hoặc <code>shouldRepaint</code> trả true.
+            Trả luôn true = repaint mọi frame nếu parent rebuild → waste CPU.
+          </p>
+        </div>
+
+        <h2 id="combine-animation">9. Combine với animation</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">ProgressRingPainter</span> <span class="tok-kw">extends</span> <span class="tok-cls">CustomPainter</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Animation</span>&lt;<span class="tok-type">double</span>&gt; progress;
+
+  <span class="tok-fn">ProgressRingPainter</span>(<span class="tok-kw">this</span>.progress) : <span class="tok-kw">super</span>(repaint: progress);
+  <span class="tok-com">// ↑ Pass animation vào super — mỗi tick → painter repaint tự động</span>
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">paint</span>(<span class="tok-cls">Canvas</span> canvas, <span class="tok-cls">Size</span> size) {
+    <span class="tok-kw">final</span> rect = <span class="tok-cls">Rect</span>.<span class="tok-fn">fromCircle</span>(
+      center: <span class="tok-fn">Offset</span>(size.width / <span class="tok-num">2</span>, size.height / <span class="tok-num">2</span>),
+      radius: size.width / <span class="tok-num">2</span> - <span class="tok-num">10</span>,
+    );
+    <span class="tok-kw">final</span> paint = <span class="tok-fn">Paint</span>()
+      ..color = <span class="tok-cls">Colors</span>.blue
+      ..style = <span class="tok-cls">PaintingStyle</span>.stroke
+      ..strokeWidth = <span class="tok-num">8</span>
+      ..strokeCap = <span class="tok-cls">StrokeCap</span>.round;
+
+    canvas.<span class="tok-fn">drawArc</span>(rect, -<span class="tok-num">1.57</span>, <span class="tok-num">6.28</span> * progress.value, <span class="tok-kw">false</span>, paint);
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">bool</span> <span class="tok-fn">shouldRepaint</span>(<span class="tok-cls">ProgressRingPainter</span> old) =&gt; <span class="tok-kw">false</span>;
+  <span class="tok-com">// shouldRepaint không cần custom — vì repaint: progress đã control</span>
+}</code></pre>
+
+        <h2 id="hit-test">10. Hit testing</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">@override</span>
+<span class="tok-type">bool</span>? <span class="tok-fn">hitTest</span>(<span class="tok-cls">Offset</span> position) {
+  <span class="tok-com">// Trả true nếu position trong shape (vd hit star icon area)</span>
+  <span class="tok-kw">final</span> path = <span class="tok-fn">createStarPath</span>(_size);
+  <span class="tok-kw">return</span> path.<span class="tok-fn">contains</span>(position);
+}
+
+<span class="tok-com">// Wrap CustomPaint với GestureDetector để nhận tap</span>
+<span class="tok-fn">GestureDetector</span>(
+  onTapDown: (details) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'tap at $</span>{details.localPosition}<span class="tok-str">'</span>),
+  child: <span class="tok-fn">CustomPaint</span>(painter: <span class="tok-fn">StarPainter</span>()),
+)</code></pre>
+
+        <h2 id="three-trees-deep">11. Three trees deep dive</h2>
+        <figure>
+          <svg viewBox="0 0 540 280" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .tt { font-family: var(--font-mono); font-size: 11px; fill: var(--ink); }
+              .tt-acc { font-family: var(--font-mono); font-size: 12px; fill: var(--accent); font-weight: 700; }
+              .bx { fill: var(--cyan-soft); stroke: var(--accent); rx: 5; ry: 5; }
+              .arr { stroke: var(--text-muted); stroke-width: 1.2; fill: none; }
+            </style>
+            <text class="tt-acc" x="270" y="22" text-anchor="middle">3 trees parallel</text>
+
+            <rect class="bx" x="20" y="60" width="140" height="60"/>
+            <text class="tt-acc" x="90" y="84" text-anchor="middle">Widget</text>
+            <text class="tt" x="90" y="104" text-anchor="middle">immutable spec</text>
+
+            <rect class="bx" x="200" y="60" width="140" height="60"/>
+            <text class="tt-acc" x="270" y="84" text-anchor="middle">Element</text>
+            <text class="tt" x="270" y="104" text-anchor="middle">instance + state + lifecycle</text>
+
+            <rect class="bx" x="380" y="60" width="140" height="60"/>
+            <text class="tt-acc" x="450" y="84" text-anchor="middle">RenderObject</text>
+            <text class="tt" x="450" y="104" text-anchor="middle">layout + paint thực sự</text>
+
+            <line class="arr" x1="160" y1="90" x2="200" y2="90" marker-end="url(#tar)"/>
+            <line class="arr" x1="340" y1="90" x2="380" y2="90" marker-end="url(#tar)"/>
+            <defs><marker id="tar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--text-muted)"/></marker></defs>
+
+            <text class="tt" x="270" y="170" text-anchor="middle" font-size="11">Widget tree tái tạo mỗi build (cheap).</text>
+            <text class="tt" x="270" y="190" text-anchor="middle" font-size="11">Element tree giữ identity + state — không tái tạo khi widget rebuild cùng type.</text>
+            <text class="tt" x="270" y="210" text-anchor="middle" font-size="11">RenderObject tree reuse — chỉ layout/paint thay đổi.</text>
+
+            <text class="tt-acc" x="270" y="250" text-anchor="middle">Element giữ state khi widget type giữ nguyên (key cũng giữ).</text>
+          </svg>
+        </figure>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao 3 cây?</div>
+          <ul>
+            <li><strong>Widget</strong> immutable → cheap create/recreate. Hot reload work nhờ đây.</li>
+            <li><strong>Element</strong> giữ state → swap widget cùng type giữ state.</li>
+            <li><strong>RenderObject</strong> heavy (layout, paint, hit test) → reuse giữa builds. Performance.</li>
+          </ul>
+        </div>
+
+        <h2 id="render-categories">12. RenderObject categories</h2>
+        <ul>
+          <li><strong><code>RenderBox</code></strong> — 2D Cartesian, đại đa số widget (Container, Padding, Row, Column).</li>
+          <li><strong><code>RenderSliver</code></strong> — scrollable area (ListView, GridView, CustomScrollView).</li>
+          <li><strong><code>RenderObject</code></strong> — generic root, ít dùng trực tiếp.</li>
+        </ul>
+
+        <h2 id="custom-render-object">13. Custom RenderBox (intro)</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Hiếm khi cần. CustomPaint cover 95% case.</span>
+<span class="tok-com">// Khi cần: widget vừa decide size vừa paint custom mà CustomPainter không đủ.</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">RedBox</span> <span class="tok-kw">extends</span> <span class="tok-cls">LeafRenderObjectWidget</span> {
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">RenderObject</span> <span class="tok-fn">createRenderObject</span>(<span class="tok-cls">BuildContext</span> context) =&gt; <span class="tok-fn">_RedBoxRender</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_RedBoxRender</span> <span class="tok-kw">extends</span> <span class="tok-cls">RenderBox</span> {
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">performLayout</span>() {
+    size = constraints.<span class="tok-fn">constrain</span>(<span class="tok-kw">const</span> <span class="tok-cls">Size</span>(<span class="tok-num">100</span>, <span class="tok-num">100</span>));
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">paint</span>(<span class="tok-cls">PaintingContext</span> context, <span class="tok-cls">Offset</span> offset) {
+    context.canvas.<span class="tok-fn">drawRect</span>(offset &amp; size, <span class="tok-fn">Paint</span>()..color = <span class="tok-cls">Colors</span>.red);
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">bool</span> <span class="tok-fn">hitTestSelf</span>(<span class="tok-cls">Offset</span> position) =&gt; <span class="tok-kw">true</span>;
+}</code></pre>
+
+        <h2 id="debug-paint">14. Debug paint flags</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:flutter/rendering.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  debugPaintSizeEnabled = <span class="tok-kw">true</span>;          <span class="tok-com">// vẽ border quanh mọi box</span>
+  debugPaintBaselinesEnabled = <span class="tok-kw">true</span>;     <span class="tok-com">// text baseline</span>
+  debugPaintPointersEnabled = <span class="tok-kw">true</span>;      <span class="tok-com">// highlight tap area</span>
+  debugRepaintRainbowEnabled = <span class="tok-kw">true</span>;     <span class="tok-com">// random color mỗi repaint</span>
+  <span class="tok-fn">runApp</span>(<span class="tok-kw">const</span> <span class="tok-cls">MyApp</span>());
+}</code></pre>
+
+        <p><code>debugRepaintRainbowEnabled</code> = tool tốt nhất để debug "tại sao widget này repaint nhiều thế".</p>
+
+        <h2 id="bai-tap" class="exercises">15. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Signature pad</h4>
+          <div class="exercise-body">
+            <p>Custom signature pad: <code>GestureDetector</code> capture pan, lưu list Offset, CustomPainter drawPath.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>onPanUpdate add point. Path moveTo first, lineTo rest. Stroke paint.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Donut chart 4 slice</h4>
+          <div class="exercise-body">
+            <p>
+              Donut chart hiển thị 4 slice từ data <code>[(label, value, color)]</code>.
+              Animate sweep từ 0 → full khi mount.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>drawArc cho mỗi slice. Sweep angle tỉ lệ value/total. Animate qua AnimationController + repaint param.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Progress ring</h4>
+          <div class="exercise-body">
+            <p>Custom progress ring với % ở giữa. Animate từ 0 → target khi value change.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Background ring (color nhạt) + foreground arc (color đậm, sweep theo progress). Text center qua TextPainter.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Gauge speedometer</h4>
+          <div class="exercise-body">
+            <p>Gauge: needle rotate -90° đến 90° theo value 0-100. Background scale lines.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>drawArc background scale. drawLine cho needle: save/translate/rotate/drawLine/restore.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Star rating</h4>
+          <div class="exercise-body">
+            <p>5 sao paint với fill % theo rating (vd 3.5 sao). Half star = clipPath.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>5 stars. Mỗi star: paint outline + fill clipped theo rating fraction. Path star từ section 5.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">16. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p>CustomPainter.shouldRepaint luôn trả true — vấn đề?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Repaint mọi frame nếu parent rebuild, perf kém. Trả true chỉ khi data đổi (compare old vs new fields).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>Canvas coordinate (0,0) ở đâu?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Top-left. Khác toán học truyền thống (gốc giữa).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>canvas.translate(50, 0)</code> rồi drawLine (0,0) → (100, 0) — vẽ đâu?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Từ (50, 0) đến (150, 0) screen. translate offset origin.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>TextPainter cần method nào trước paint?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>.layout()</code> — compute width/height. Bỏ → throw.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p>RenderObject vs CustomPainter — khác?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> CustomPainter chỉ paint trong size cấp. RenderObject cũng decide layout (size con + self).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p><code>RepaintBoundary</code> quanh CustomPaint giúp gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Isolate paint layer. Parent rebuild không trigger CustomPainter repaint.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Path đóng kín — method nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>path.close()</code> nối end về start.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>Animation passed vào painter constructor <code>super(repaint: anim)</code> — vai trò?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Mỗi tick anim → painter repaint tự động. Không cần shouldRepaint custom check value.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">17. Tổng kết</h2>
+        <ul>
+          <li>✅ CustomPaint + CustomPainter — 95% custom drawing.</li>
+          <li>✅ Canvas API: drawLine, drawRect, drawCircle, drawArc, drawPath, drawText (TextPainter).</li>
+          <li>✅ Paint properties: style, color, strokeWidth, shader (gradient), maskFilter (blur).</li>
+          <li>✅ Path build: moveTo + lineTo + bezier + arcTo + close.</li>
+          <li>✅ Save/restore canvas state cho transform isolate.</li>
+          <li>✅ shouldRepaint logic chính xác = performance.</li>
+          <li>✅ Combine với animation qua <code>super(repaint: animation)</code>.</li>
+          <li>✅ Hit testing trên CustomPainter shape.</li>
+          <li>✅ 3 cây: Widget (spec) / Element (instance) / RenderObject (layout+paint).</li>
+          <li>✅ RenderObject hiếm khi tự viết — CustomPainter đủ 95%.</li>
+          <li>✅ Debug flags: paintSize, repaintRainbow.</li>
+        </ul>
+
+        <h2 id="ket-noi">18. Kết nối</h2>
+        <ul>
+          <li><strong>Ch 12 — Animation:</strong> pair custom painter cho animated chart/gauge.</li>
+          <li><a href="chuong15.html"><strong>Ch 15:</strong></a> Performance overlay đo paint time.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong12.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">12 · Animation</div>
+          </a>
+          <a href="chuong14.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">14 · Testing</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#khi-nao">1. Khi nào custom paint</a></li>
+          <li><a href="#custom-paint-basic">2. CustomPaint + Painter</a></li>
+          <li><a href="#canvas-api">3. Canvas API</a></li>
+          <li><a href="#paint">4. Paint properties</a></li>
+          <li><a href="#path">5. Path</a></li>
+          <li><a href="#text-painter">6. TextPainter</a></li>
+          <li><a href="#save-restore">7. save/restore</a></li>
+          <li><a href="#should-repaint">8. shouldRepaint</a></li>
+          <li><a href="#combine-animation">9. + animation</a></li>
+          <li><a href="#hit-test">10. Hit testing</a></li>
+          <li><a href="#three-trees-deep">11. 3 cây</a></li>
+          <li><a href="#render-categories">12. RenderObject categories</a></li>
+          <li><a href="#custom-render-object">13. Custom RenderBox</a></li>
+          <li><a href="#debug-paint">14. Debug paint flags</a></li>
+          <li><a href="#bai-tap">15. Bài tập</a></li>
+          <li><a href="#quiz">16. Quiz</a></li>
+          <li><a href="#tong-ket">17. Tổng kết</a></li>
+          <li><a href="#ket-noi">18. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 13 · Pillar 9 — IT Basic<br/>
+        <a href="chuong12.html">← Chương 12</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong14.html">Chương 14 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

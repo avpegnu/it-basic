@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 1 — OOP Fundamentals & 4 Pillars</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 01 · Foundations</div>
+      <h1>OOP Fundamentals & 4 Pillars</h1>
+      <p class="subtitle">Từ procedural đến object-oriented. Class, object, và bốn trụ cột Encapsulation / Abstraction / Inheritance / Polymorphism — định nghĩa chính xác, ví dụ TypeScript.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao cần OOP?</a></li>
+        <li><a href="#class-object">2. Class & Object</a></li>
+        <li><a href="#encapsulation">3. Encapsulation</a></li>
+        <li><a href="#abstraction">4. Abstraction</a></li>
+        <li><a href="#inheritance">5. Inheritance</a></li>
+        <li><a href="#polymorphism">6. Polymorphism</a></li>
+        <li><a href="#dispatch">7. Static vs Dynamic dispatch</a></li>
+        <li><a href="#prototype">8. Class-based vs Prototype</a></li>
+        <li><a href="#paradigms">9. OOP vs FP vs Procedural</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao cần OOP?</h2>
+        <p>Hãy tưởng tượng bạn viết app banking theo kiểu <em>procedural</em>:</p>
+
+<pre><code class="language-typescript">// procedural style — data và function tách rời
+type Account = { id: number; balance: number; ownerId: number };
+
+const accounts: Account[] = [];
+
+function createAccount(ownerId: number): Account {
+  const acc = { id: Date.now(), balance: 0, ownerId };
+  accounts.push(acc);
+  return acc;
+}
+
+function deposit(id: number, amount: number) {
+  const acc = accounts.find(a =&gt; a.id === id);
+  if (!acc) throw new Error('not found');
+  if (amount &lt; 0) throw new Error('invalid');
+  acc.balance += amount;
+}
+
+function withdraw(id: number, amount: number) {
+  const acc = accounts.find(a =&gt; a.id === id);
+  if (!acc) throw new Error('not found');
+  if (amount &gt; acc.balance) throw new Error('insufficient');
+  acc.balance -= amount;
+}</code></pre>
+
+        <p>App nhỏ chạy được. Vấn đề khi quy mô tăng:</p>
+        <ul>
+          <li><strong>Data và function rời rạc</strong> — ai đó có thể <code>acc.balance = -1000</code> trực tiếp, bypass mọi check.</li>
+          <li><strong>Logic bị scatter</strong> — quy tắc validate "amount &gt; 0" copy ở 2 chỗ. Thêm 1 check mới phải tìm khắp codebase.</li>
+          <li><strong>Khó test</strong> — function đụng global array.</li>
+          <li><strong>Không có "ngữ nghĩa nghiệp vụ"</strong> — code thiếu khái niệm "account đang đóng vai trò gì" — chỉ là object plain.</li>
+        </ul>
+
+        <p>Cùng vấn đề viết theo OOP:</p>
+
+<pre><code class="language-typescript">class Account {
+  private balance: number = 0;
+
+  constructor(
+    public readonly id: number,
+    public readonly ownerId: number
+  ) {}
+
+  deposit(amount: number): void {
+    this.assertPositive(amount);
+    this.balance += amount;
+  }
+
+  withdraw(amount: number): void {
+    this.assertPositive(amount);
+    if (amount &gt; this.balance) throw new Error('insufficient');
+    this.balance -= amount;
+  }
+
+  getBalance(): number { return this.balance; }
+
+  private assertPositive(amount: number): void {
+    if (amount &lt;= 0) throw new Error('amount must be positive');
+  }
+}
+
+const acc = new Account(1, 100);
+acc.deposit(500);
+acc.balance = -1000;  // ❌ Compile error: balance is private</code></pre>
+
+        <p>Lợi ích:</p>
+        <ul>
+          <li><strong>Data và behavior gắn liền</strong> — mọi thao tác lên balance đi qua method, không thể bypass.</li>
+          <li><strong>Logic tập trung</strong> — quy tắc "amount &gt; 0" ở 1 chỗ duy nhất.</li>
+          <li><strong>Encapsulation</strong> — <code>balance</code> private, không ai sửa trực tiếp.</li>
+          <li><strong>Code phản ánh nghiệp vụ</strong> — đọc <code>account.deposit()</code> tự nhiên hơn <code>deposit(account.id)</code>.</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">OOP không phải "chỉ"</span>
+          OOP là 1 paradigm trong nhiều paradigm. FP (Functional Programming), procedural, logic programming đều có chỗ riêng.
+          OOP đặc biệt mạnh khi <strong>state và behavior đi cùng nhau</strong>, và domain có nhiều "thứ" (entity) tương tác.
+        </div>
+      </section>
+
+      <section id="class-object">
+        <h2>2. Class & Object — chính xác là gì?</h2>
+
+        <h3>2.1. Class</h3>
+        <p>
+          <strong>Class</strong> là <em>khuôn mẫu</em> mô tả cấu trúc và hành vi của một loại object. Chứa:
+        </p>
+        <ul>
+          <li><strong>Field</strong> (thuộc tính / member variable / property) — data.</li>
+          <li><strong>Method</strong> — function gắn với class.</li>
+          <li><strong>Constructor</strong> — hàm tạo, khởi tạo object mới.</li>
+          <li><strong>Static member</strong> — thuộc về class, không thuộc instance.</li>
+        </ul>
+
+<pre><code class="language-typescript">class User {
+  // field
+  private id: string;
+  public name: string;
+  public email: string;
+
+  // static field
+  static defaultRole = 'user';
+
+  // constructor
+  constructor(name: string, email: string) {
+    this.id = crypto.randomUUID();
+    this.name = name;
+    this.email = email;
+  }
+
+  // instance method
+  greet(): string {
+    return `Hello, I'm ${this.name}`;
+  }
+
+  // static method
+  static fromEmail(email: string): User {
+    return new User(email.split('@')[0], email);
+  }
+}</code></pre>
+
+        <h3>2.2. Object (Instance)</h3>
+        <p>
+          <strong>Object</strong> = instance của class. Mỗi <code>new ClassName()</code> tạo 1 object mới với state riêng.
+        </p>
+
+<pre><code class="language-typescript">const alice = new User('Alice', 'alice@x.com');   // object 1
+const bob   = new User('Bob',   'bob@x.com');     // object 2
+
+alice.greet();   // "Hello, I'm Alice"
+bob.greet();     // "Hello, I'm Bob"
+
+User.fromEmail('carol@x.com');  // gọi static method, không cần instance</code></pre>
+
+        <h3>2.3. <code>this</code> — tham chiếu instance hiện tại</h3>
+        <p>
+          Trong method, <code>this</code> trỏ đến object đang gọi method. Lỗi phổ biến của JS dev: <code>this</code> mất context khi pass method như callback.
+        </p>
+
+<pre><code class="language-typescript">class Counter {
+  count = 0;
+  increment() { this.count++; }
+}
+
+const c = new Counter();
+const inc = c.increment;
+inc();   // ❌ TypeError: Cannot read 'count' of undefined
+
+// Fix 1: bind
+const inc2 = c.increment.bind(c);
+
+// Fix 2: arrow function (lexical this)
+class Counter2 {
+  count = 0;
+  increment = () =&gt; this.count++;   // arrow auto-bind
+}</code></pre>
+
+        <h3>2.4. Constructor patterns</h3>
+<pre><code class="language-typescript">// TypeScript shorthand: parameter properties
+class Point {
+  constructor(
+    public readonly x: number,
+    public readonly y: number
+  ) {}
+  // Tương đương: declare 2 field + this.x = x; this.y = y;
+}
+
+// Multiple constructors qua static factory:
+class Date {
+  private constructor(public timestamp: number) {}
+
+  static now(): Date { return new Date(Date.now()); }
+  static fromString(s: string): Date { return new Date(Date.parse(s)); }
+  static epoch(): Date { return new Date(0); }
+}</code></pre>
+      </section>
+
+      <section id="encapsulation">
+        <h2>3. Encapsulation — đóng gói</h2>
+        <p>
+          Encapsulation = <strong>gói dữ liệu và hành vi trong cùng 1 đơn vị (class) + ẩn chi tiết bên trong</strong>.
+          Người dùng class chỉ tương tác qua <em>public interface</em>, không truy cập state trực tiếp.
+        </p>
+
+        <h3>3.1. Modifier (TypeScript)</h3>
+        <table>
+          <thead><tr><th>Modifier</th><th>Truy cập từ</th></tr></thead>
+          <tbody>
+            <tr><td><code>public</code> (default)</td><td>Mọi nơi</td></tr>
+            <tr><td><code>protected</code></td><td>Chính class + subclass</td></tr>
+            <tr><td><code>private</code></td><td>Chỉ chính class</td></tr>
+            <tr><td><code>readonly</code></td><td>Chỉ đọc, gán 1 lần ở constructor</td></tr>
+          </tbody>
+        </table>
+
+<pre><code class="language-typescript">class BankAccount {
+  private balance: number = 0;
+  protected owner: string;
+  public readonly accountNumber: string;
+
+  constructor(owner: string) {
+    this.owner = owner;
+    this.accountNumber = generateAccountNumber();
+  }
+
+  // Public method là "cửa" duy nhất tương tác với balance
+  deposit(amount: number) {
+    if (amount &lt;= 0) throw new Error('invalid');
+    this.balance += amount;
+    this.logTransaction('deposit', amount);   // private helper
+  }
+
+  getBalance() { return this.balance; }
+
+  private logTransaction(type: string, amount: number) {
+    console.log(`[${this.accountNumber}] ${type}: ${amount}`);
+  }
+}
+
+const acc = new BankAccount('Alice');
+acc.deposit(100);          // ✓
+acc.balance = 1_000_000;   // ❌ Compile error
+acc.logTransaction(...);   // ❌ private</code></pre>
+
+        <h3>3.2. JavaScript private (#)</h3>
+        <p>
+          ECMAScript chính thức hỗ trợ <strong>hard private</strong> qua prefix <code>#</code> (Node 12+, modern browser):
+        </p>
+
+<pre><code class="language-javascript">class Account {
+  #balance = 0;   // hard private — không truy cập được kể cả với reflection
+
+  deposit(amount) { this.#balance += amount; }
+  get balance() { return this.#balance; }
+}
+
+const a = new Account();
+a.deposit(100);
+console.log(a.balance);     // 100
+console.log(a.#balance);    // SyntaxError</code></pre>
+
+        <p>Khác với TypeScript <code>private</code> (chỉ check compile-time, runtime vẫn truy cập được), <code>#</code> là <em>hard private</em> — không thể bypass.</p>
+
+        <h3>3.3. Getter & Setter</h3>
+<pre><code class="language-typescript">class Temperature {
+  private celsius: number;
+
+  constructor(celsius: number) { this.celsius = celsius; }
+
+  get fahrenheit(): number {
+    return this.celsius * 9 / 5 + 32;
+  }
+
+  set fahrenheit(f: number) {
+    this.celsius = (f - 32) * 5 / 9;
+  }
+
+  get c(): number { return this.celsius; }
+}
+
+const t = new Temperature(20);
+console.log(t.fahrenheit);   // 68 — gọi như property, thực ra là method
+t.fahrenheit = 100;
+console.log(t.c);            // 37.77...</code></pre>
+
+        <p>Getter/setter giúp chuyển từ field sang computed mà không phá API public.</p>
+
+        <h3>3.4. Encapsulation ≠ chỉ là <code>private</code></h3>
+        <p>
+          Encapsulation thực sự là về <strong>che giấu lý do thay đổi</strong>. Class không nên expose field
+          mà chỉ vô tình "đóng gói" bằng <code>private</code>. Nếu mọi field đều có getter/setter trùng tên (anemic class),
+          bạn không có encapsulation thực sự — chỉ có "named struct".
+        </p>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Anemic Domain Model — anti-pattern</span>
+          Class chỉ chứa data + getter/setter, mọi logic ở "service" bên ngoài. Trông hướng đối tượng nhưng thực ra là procedural đội lốt OOP. Sẽ học cách tránh ở Ch3.
+        </div>
+      </section>
+
+      <section id="abstraction">
+        <h2>4. Abstraction — trừu tượng hóa</h2>
+        <p>
+          Abstraction = <strong>tách <em>cái gì</em> object làm khỏi <em>cách</em> nó làm</strong>. Người dùng class chỉ thấy interface,
+          không cần biết implementation.
+        </p>
+
+        <h3>4.1. Abstract class</h3>
+<pre><code class="language-typescript">abstract class Shape {
+  abstract area(): number;          // không có body
+  abstract perimeter(): number;
+
+  // Method concrete dùng abstract method
+  describe(): string {
+    return `Shape with area ${this.area()}, perimeter ${this.perimeter()}`;
+  }
+}
+
+class Circle extends Shape {
+  constructor(private radius: number) { super(); }
+  area() { return Math.PI * this.radius ** 2; }
+  perimeter() { return 2 * Math.PI * this.radius; }
+}
+
+class Rectangle extends Shape {
+  constructor(private w: number, private h: number) { super(); }
+  area() { return this.w * this.h; }
+  perimeter() { return 2 * (this.w + this.h); }
+}
+
+const shapes: Shape[] = [new Circle(5), new Rectangle(3, 4)];
+shapes.forEach(s =&gt; console.log(s.describe()));
+
+new Shape();   // ❌ Cannot create instance of abstract class</code></pre>
+
+        <h3>4.2. Interface</h3>
+        <p>Interface = contract <em>chỉ có signature</em>, không có implementation. Class implement interface phải cung cấp đủ method.</p>
+
+<pre><code class="language-typescript">interface Repository&lt;T&gt; {
+  save(entity: T): Promise&lt;void&gt;;
+  findById(id: string): Promise&lt;T | null&gt;;
+  findAll(): Promise&lt;T[]&gt;;
+  delete(id: string): Promise&lt;void&gt;;
+}
+
+class UserRepository implements Repository&lt;User&gt; {
+  async save(user: User) { /* ... */ }
+  async findById(id: string) { return null; }
+  async findAll() { return []; }
+  async delete(id: string) { /* ... */ }
+}
+
+// Code dùng chỉ phụ thuộc vào interface, không phụ thuộc vào implementation:
+async function backup(repo: Repository&lt;User&gt;) {
+  const all = await repo.findAll();
+  // ...
+}</code></pre>
+
+        <h3>4.3. Abstract class vs Interface</h3>
+        <table>
+          <thead><tr><th></th><th>Abstract class</th><th>Interface</th></tr></thead>
+          <tbody>
+            <tr><td>Có implementation</td><td>Có thể (method concrete)</td><td>Không (TypeScript)</td></tr>
+            <tr><td>Có field</td><td>Có</td><td>Không (chỉ shape)</td></tr>
+            <tr><td>Multiple inheritance</td><td>Không (TS/Java)</td><td>Có (implement nhiều interface)</td></tr>
+            <tr><td>Khi nào dùng</td><td>Có shared behavior, "is-a" mạnh</td><td>Chỉ định contract, "can-do"</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.4. Mức trừu tượng phù hợp</h3>
+        <p>Quy tắc: <strong>abstraction nên ở mức nghiệp vụ, không ở mức kỹ thuật</strong>. Đừng tạo <code>IFooManagerService</code> chỉ để có interface — chỉ tạo khi có ≥ 2 implementation thực tế hoặc cần cho test.</p>
+      </section>
+
+      <section id="inheritance">
+        <h2>5. Inheritance — kế thừa</h2>
+        <p>
+          Class <code>B extends A</code> → B có mọi field/method của A + có thể thêm/override. Mối quan hệ <strong>"is-a"</strong>:
+          <code>Dog is-an Animal</code>.
+        </p>
+
+<pre><code class="language-typescript">class Animal {
+  constructor(public name: string) {}
+
+  speak(): string { return 'Some sound'; }
+
+  describe(): string { return `${this.name} says ${this.speak()}`; }
+}
+
+class Dog extends Animal {
+  speak() { return 'Woof!'; }   // override
+}
+
+class Cat extends Animal {
+  speak() { return 'Meow!'; }
+}
+
+const animals: Animal[] = [new Dog('Rex'), new Cat('Whiskers')];
+animals.forEach(a =&gt; console.log(a.describe()));
+// Rex says Woof!
+// Whiskers says Meow!</code></pre>
+
+        <h3>5.1. <code>super</code></h3>
+        <p>Gọi method của parent từ subclass:</p>
+
+<pre><code class="language-typescript">class Logger {
+  log(msg: string) { console.log(`[LOG] ${msg}`); }
+}
+
+class TimestampLogger extends Logger {
+  log(msg: string) {
+    super.log(`${new Date().toISOString()} ${msg}`);   // gọi parent
+  }
+}</code></pre>
+
+        <p>Constructor subclass phải gọi <code>super(...)</code> trước khi dùng <code>this</code>:</p>
+
+<pre><code class="language-typescript">class Vehicle {
+  constructor(public wheels: number) {}
+}
+
+class Car extends Vehicle {
+  constructor(public brand: string) {
+    super(4);   // ❗ phải gọi trước this
+    // this.brand = brand;   // implicit do parameter property
+  }
+}</code></pre>
+
+        <h3>5.2. Vấn đề kế thừa đa cấp — "Fragile Base Class"</h3>
+        <p>
+          Cây kế thừa sâu (3+ cấp) tạo phụ thuộc khó debug. Sửa class A → tự nhiên B, C, D, E... vỡ.
+          Đây là <strong>"fragile base class problem"</strong>.
+        </p>
+
+        <div class="ascii">  Animal
+   ├── Mammal
+   │    ├── Dog
+   │    │    └── Poodle
+   │    │         └── ToyPoodle    ← 5 cấp, sửa Animal → ảnh hưởng tận đây
+   │    └── Cat
+   └── Bird</div>
+
+        <h3>5.3. <code>final</code> / <code>sealed</code></h3>
+        <p>Đa số ngôn ngữ cho phép đánh dấu class không cho extend:</p>
+<pre><code class="language-java">// Java:
+public final class String { ... }   // không ai extend được
+
+// Kotlin: class đóng kế thừa MẶC ĐỊNH (phải đánh dấu `open`)
+class Foo { ... }     // không extend được
+open class Bar { ... }  // extend được</code></pre>
+
+        <p>TypeScript chưa có <code>final</code> chính thức, nhưng có thể workaround qua private constructor + static factory.</p>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Quy tắc</span>
+          "Composition over Inheritance" — nguyên tắc Effective Java Item 18. Khi nghi ngờ, dùng composition (chứa object khác)
+          thay vì kế thừa. Sẽ phân tích kỹ ở Ch3.
+        </div>
+      </section>
+
+      <section id="polymorphism">
+        <h2>6. Polymorphism — đa hình</h2>
+        <p>
+          Cùng 1 method, nhiều type khác nhau cho hành vi khác nhau. Code gọi không cần biết type cụ thể.
+          3 loại chính:
+        </p>
+
+        <h3>6.1. Subtype Polymorphism (overriding)</h3>
+        <p>Đã thấy ở 5.0. Method <code>speak()</code> khác nhau theo subtype.</p>
+
+        <h3>6.2. Parametric Polymorphism (Generics)</h3>
+        <p>Cùng code, nhiều type:</p>
+
+<pre><code class="language-typescript">class Stack&lt;T&gt; {
+  private items: T[] = [];
+  push(x: T) { this.items.push(x); }
+  pop(): T | undefined { return this.items.pop(); }
+  peek(): T | undefined { return this.items[this.items.length - 1]; }
+}
+
+const numStack = new Stack&lt;number&gt;();
+const strStack = new Stack&lt;string&gt;();
+numStack.push(1);
+strStack.push('hello');
+
+// Generic function:
+function identity&lt;T&gt;(x: T): T { return x; }
+identity(5);        // T = number
+identity('hello');  // T = string</code></pre>
+
+        <h3>6.3. Ad-hoc Polymorphism (Overloading)</h3>
+        <p>Cùng tên, nhiều signature:</p>
+
+<pre><code class="language-typescript">// TypeScript overload (chỉ ở type level, runtime là 1 function):
+function add(a: number, b: number): number;
+function add(a: string, b: string): string;
+function add(a: any, b: any): any { return a + b; }
+
+add(1, 2);          // number
+add('a', 'b');      // string
+add(1, 'b');        // ❌ no matching overload
+
+// Java thật sự overload (compiler chọn dựa trên type):
+class Calculator {
+  int add(int a, int b)       { return a + b; }
+  double add(double a, double b) { return a + b; }
+  String add(String a, String b) { return a + b; }
+}</code></pre>
+
+        <h3>6.4. Polymorphism qua Duck Typing (Python, JS)</h3>
+        <p>"If it walks like a duck and quacks like a duck — it's a duck." Không cần inheritance:</p>
+
+<pre><code class="language-python">def make_speak(thing):
+    return thing.speak()
+
+class Dog:
+    def speak(self): return 'Woof'
+
+class Robot:
+    def speak(self): return 'Beep'
+
+make_speak(Dog())     # 'Woof'
+make_speak(Robot())   # 'Beep' — Robot không kế thừa gì, chỉ cần có method speak</code></pre>
+
+        <p>TypeScript có "structural typing" tương tự — type tương thích nếu shape khớp, không cần explicit implements.</p>
+
+        <h3>6.5. Sức mạnh thực sự của polymorphism</h3>
+        <p>Code "open for extension, closed for modification" — thêm type mới không cần sửa code cũ:</p>
+
+<pre><code class="language-typescript">// ❌ Procedural — sửa khi thêm shape:
+function area(shape: any): number {
+  if (shape.type === 'circle') return Math.PI * shape.r ** 2;
+  if (shape.type === 'rect') return shape.w * shape.h;
+  if (shape.type === 'triangle') return shape.b * shape.h / 2;
+  // Thêm shape mới → phải sửa hàm này
+}
+
+// ✓ Polymorphic — thêm shape mới chỉ cần thêm class:
+abstract class Shape { abstract area(): number; }
+class Circle    extends Shape { constructor(public r: number) { super(); } area() { return Math.PI * this.r ** 2; } }
+class Rect      extends Shape { constructor(public w: number, public h: number) { super(); } area() { return this.w * this.h; } }
+class Triangle  extends Shape { constructor(public b: number, public h: number) { super(); } area() { return this.b * this.h / 2; } }
+// Thêm Pentagon? Chỉ cần thêm class mới — không sửa code cũ.</code></pre>
+
+        <p>Đây là tinh thần <strong>Open/Closed Principle</strong> (sẽ học Ch2).</p>
+      </section>
+
+      <section id="dispatch">
+        <h2>7. Static vs Dynamic Dispatch</h2>
+        <p>Câu hỏi: khi gọi <code>obj.method()</code>, compiler/runtime <em>biết</em> hay <em>quyết định</em> method nào chạy?</p>
+
+        <h3>7.1. Static Dispatch (early binding)</h3>
+        <p>Compiler quyết định ở compile-time. Nhanh, không có overhead. C++ non-virtual function, Java static method.</p>
+
+        <h3>7.2. Dynamic Dispatch (late binding)</h3>
+        <p>Runtime quyết định dựa trên <em>actual type</em> của object. Cần "vtable" — bảng pointer đến method.</p>
+
+<pre><code class="language-typescript">abstract class Animal { abstract speak(): string; }
+class Dog extends Animal { speak() { return 'Woof'; } }
+class Cat extends Animal { speak() { return 'Meow'; } }
+
+function trigger(a: Animal) {
+  return a.speak();   // ← runtime: actual type Dog hay Cat?
+}
+
+trigger(new Dog());   // 'Woof'
+trigger(new Cat());   // 'Meow'</code></pre>
+
+        <p>Ở line <code>a.speak()</code>, compiler chỉ biết <code>a</code> là <code>Animal</code>. Phương thức nào chạy phụ thuộc <em>runtime type</em> — đây là dynamic dispatch.</p>
+
+        <h3>7.3. Cost của dynamic dispatch</h3>
+        <ul>
+          <li>1 indirection qua vtable lookup → ~1-2 ns/call. Hầu như không đáng kể.</li>
+          <li>Compiler khó inline. Trong hot loop, có thể thấy.</li>
+          <li>Modern JIT (V8, HotSpot) làm <em>inline caching</em> tối ưu.</li>
+        </ul>
+
+        <p>99% trường hợp: đừng lo overhead. Code rõ &gt; tối ưu sớm.</p>
+      </section>
+
+      <section id="prototype">
+        <h2>8. Class-based vs Prototype-based</h2>
+        <p>Hai cách triển khai OOP khác nhau:</p>
+
+        <div class="compare">
+          <div>
+            <h4>Class-based</h4>
+            <p>Class là <em>bản thiết kế</em>. Object là <em>instance</em>.</p>
+            <ul>
+              <li>Java, C++, Python, C#</li>
+              <li>Khái niệm rõ: class ≠ object</li>
+              <li>Inheritance qua extends</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Prototype-based</h4>
+            <p>Object kế thừa trực tiếp từ object khác (prototype).</p>
+            <ul>
+              <li>JavaScript (gốc), Lua, Self</li>
+              <li>Mỗi object có <code>__proto__</code></li>
+              <li>Inheritance qua prototype chain</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>8.1. JavaScript — prototype dưới capo</h3>
+<pre><code class="language-javascript">// "Class" trong JS thực ra là syntactic sugar cho prototype:
+class Animal {
+  constructor(name) { this.name = name; }
+  speak() { return 'Sound'; }
+}
+
+// Tương đương:
+function Animal(name) { this.name = name; }
+Animal.prototype.speak = function() { return 'Sound'; };
+
+// Khi gọi obj.speak():
+// 1. JS tìm 'speak' trên obj — không có
+// 2. Tìm trên obj.__proto__ (= Animal.prototype) — thấy → gọi
+// 3. Nếu vẫn không có, tiếp tục lên Object.prototype</code></pre>
+
+        <h3>8.2. Hệ quả của prototype</h3>
+        <ul>
+          <li>Có thể thêm method vào prototype <em>sau khi tạo</em> object — và mọi instance "tự nhiên" có method đó.</li>
+          <li>Không có "private" thực sự ở JS cũ (cho đến ECMAScript 2022 với <code>#</code>).</li>
+          <li><code>this</code> rebind theo cách gọi — gây nhiều confusion với người từ Java.</li>
+        </ul>
+
+        <p>Class syntax JS che giấu prototype, nhưng hiểu prototype giúp debug khi gặp bug khó.</p>
+      </section>
+
+      <section id="paradigms">
+        <h2>9. OOP vs FP vs Procedural — không loại trừ</h2>
+
+        <table>
+          <thead><tr><th>Paradigm</th><th>Tinh thần</th><th>Ngôn ngữ tiêu biểu</th></tr></thead>
+          <tbody>
+            <tr><td>Procedural</td><td>Function + sequence + state</td><td>C, Pascal</td></tr>
+            <tr><td>OOP</td><td>Object = data + behavior, message-passing</td><td>Smalltalk, Java, C++</td></tr>
+            <tr><td>Functional</td><td>Function thuần, immutable, no side-effect</td><td>Haskell, Elixir, Clojure</td></tr>
+            <tr><td>Multi-paradigm</td><td>Kết hợp nhiều</td><td>TypeScript, Scala, Kotlin, Rust, Python</td></tr>
+          </tbody>
+        </table>
+
+        <h3>9.1. Modern code: hybrid</h3>
+        <p>
+          Code hiện đại ít khi "thuần" 1 paradigm:
+        </p>
+        <ul>
+          <li>Class cho domain entities (Order, User).</li>
+          <li>Pure function cho business rule (calculate tax, validate).</li>
+          <li>Immutable Value Object thay mutable struct.</li>
+          <li><code>map/filter/reduce</code> thay for loop.</li>
+        </ul>
+
+<pre><code class="language-typescript">// Hybrid TypeScript:
+class Order {
+  constructor(
+    public readonly id: string,
+    public readonly items: ReadonlyArray&lt;LineItem&gt;,   // immutable
+    public readonly customer: Customer
+  ) {}
+
+  // Pure method — không mutate, trả Order mới:
+  addItem(item: LineItem): Order {
+    return new Order(this.id, [...this.items, item], this.customer);
+  }
+
+  // Tính tổng = pure function (no side-effect):
+  total(): Money {
+    return this.items
+      .map(i =&gt; i.subtotal())
+      .reduce((sum, m) =&gt; sum.add(m), Money.zero());
+  }
+}</code></pre>
+
+        <p>Class + immutability + pure method = best of both worlds. Sẽ chi tiết Ch3.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <ol>
+          <li>Tạo class <code>Rectangle</code> với <code>width</code>, <code>height</code> private. Public method <code>area()</code>, <code>perimeter()</code>, getter cho dimension. Throw error nếu width/height ≤ 0.</li>
+          <li>Refactor đoạn code sau từ procedural sang OOP:
+<pre><code class="language-typescript">type Cart = { items: Array&lt;{name: string; price: number; qty: number}&gt; };
+function addItem(cart: Cart, item) { cart.items.push(item); }
+function total(cart: Cart) { return cart.items.reduce((s, i) =&gt; s + i.price * i.qty, 0); }</code></pre>
+          </li>
+          <li>Tạo class <code>Shape</code> abstract + 4 subclass <code>Circle</code>, <code>Square</code>, <code>Rectangle</code>, <code>Triangle</code>. Function <code>totalArea(shapes: Shape[])</code> tính tổng area. Demo polymorphism.</li>
+          <li>Tạo generic class <code>Pair&lt;A, B&gt;</code> với 2 field, method <code>swap()</code> trả <code>Pair&lt;B, A&gt;</code>.</li>
+          <li>Giải thích sự khác biệt: <code>private</code> (TypeScript) vs <code>#field</code> (JavaScript). Khi nào nên dùng cái nào?</li>
+          <li>Tại sao kế thừa đa cấp (5+ level) lại nguy hiểm? Cho ví dụ "fragile base class".</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 1</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Encapsulation chủ yếu là về:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Đặt mọi field thành private</li>
+              <li class="quiz-option">Có nhiều getter/setter</li>
+              <li class="quiz-option">Gói data + behavior trong cùng đơn vị, ẩn chi tiết bên trong, chỉ lộ public interface</li>
+              <li class="quiz-option">Inheritance</li>
+            </ul>
+            <div class="quiz-explain">Encapsulation = đóng gói (data + behavior) + ẩn (information hiding). private chỉ là phương tiện. Class với mọi field private nhưng có getter/setter trùng tên (anemic) không có encapsulation thực.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Polymorphism qua overriding (subtype) cho phép:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">1 class có nhiều constructor</li>
+              <li class="quiz-option">Cùng method call hoạt động khác nhau với type khác nhau, code gọi không cần biết type cụ thể</li>
+              <li class="quiz-option">Generic type</li>
+              <li class="quiz-option">Multiple inheritance</li>
+            </ul>
+            <div class="quiz-explain">Subtype polymorphism: code gọi <code>animal.speak()</code> không quan tâm là Dog hay Cat. Runtime tự dispatch đến method đúng. Đây là sức mạnh chính của OOP cho mở rộng (Open/Closed Principle).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Abstract class khác Interface ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không có gì khác</li>
+              <li class="quiz-option">Interface chậm hơn</li>
+              <li class="quiz-option">Abstract class không có method</li>
+              <li class="quiz-option">Abstract class CÓ THỂ chứa implementation/state, interface chỉ là contract; class implement nhiều interface nhưng chỉ extend 1 abstract class</li>
+            </ul>
+            <div class="quiz-explain">Abstract class: có thể có concrete method, field, constructor. Interface: chỉ shape. TypeScript/Java single inheritance + multiple interfaces — pattern phổ biến. Khi có shared behavior thực sự → abstract class; khi chỉ contract → interface.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Composition over Inheritance là quy tắc:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Khi nghi ngờ, dùng "has-a" (chứa object khác) thay vì "is-a" (kế thừa)</li>
+              <li class="quiz-option">Không bao giờ dùng inheritance</li>
+              <li class="quiz-option">Mọi class phải có 1 parent</li>
+              <li class="quiz-option">Composition tốc độ nhanh hơn</li>
+            </ul>
+            <div class="quiz-explain">Inheritance tạo tight coupling và fragile base class. Composition (chứa object khác như field) linh hoạt hơn — có thể đổi behavior runtime, dễ test, không có vấn đề diamond. Effective Java Item 18.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Trong <code>obj.method()</code>, dynamic dispatch nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Method được tải từ network</li>
+              <li class="quiz-option">Compile-time chọn method</li>
+              <li class="quiz-option">Runtime quyết định method nào chạy dựa trên actual type của obj</li>
+              <li class="quiz-option">Method bị inline</li>
+            </ul>
+            <div class="quiz-explain">Late binding/dynamic dispatch là nền cho subtype polymorphism. Ở line gọi method, compiler chỉ biết static type. Runtime nhìn vào actual type (qua vtable) để chọn đúng implementation. Cost thường &lt; 1ns, không đáng kể.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">JavaScript dùng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Class-based OOP nguyên thủy</li>
+              <li class="quiz-option">Prototype-based — class syntax chỉ là sugar; mọi object kế thừa qua prototype chain</li>
+              <li class="quiz-option">Không hỗ trợ OOP</li>
+              <li class="quiz-option">Interface bắt buộc</li>
+            </ul>
+            <div class="quiz-explain">JS gốc prototype-based — object kế thừa trực tiếp từ object khác qua __proto__. ES2015 thêm class keyword nhưng dưới capo vẫn là prototype. Hiểu prototype giúp debug bug khó (this context, Object.create, etc.).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Anemic Domain Model là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Domain quá nhỏ</li>
+              <li class="quiz-option">Domain dùng quá nhiều RAM</li>
+              <li class="quiz-option">Domain không có UI</li>
+              <li class="quiz-option">Class chỉ chứa data + getter/setter, mọi logic ở "service" bên ngoài → procedural đội lốt OOP</li>
+            </ul>
+            <div class="quiz-explain">Anti-pattern: Order class chỉ có id, items, total (field) + setItems/setTotal. Logic "thêm item, tính total" nằm ở OrderService. Mất hết encapsulation, business rule scatter, khó maintain. Thay bằng "rich domain model" với behavior trong class.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Sức mạnh chính của polymorphism trong design:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Thêm type mới mà không cần sửa code cũ — Open/Closed Principle</li>
+              <li class="quiz-option">Tốc độ nhanh hơn</li>
+              <li class="quiz-option">Tiết kiệm RAM</li>
+              <li class="quiz-option">Compile nhanh hơn</li>
+            </ul>
+            <div class="quiz-explain">Polymorphism = thay if/else với type sang dispatch tự động. Thêm Pentagon vào Shape hierarchy chỉ cần thêm class mới, không sửa hàm <code>computeAreas</code>. Đây là cách OOP scale codebase phức tạp.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 1. Tiếp theo: <a href="chuong2.html"><strong>Chương 2 — SOLID Principles →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 1 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

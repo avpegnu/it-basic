@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3 — Git & Workflows</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 03 · Foundation</div>
+      <h1>Git & Workflows</h1>
+      <p class="subtitle">Git là thư viện code chung của thế giới. DevOps engineer phải hiểu hơn cú pháp lệnh — cần biết Git internals (object, ref, refspec), branching strategy nào dùng khi nào (Gitflow vs Trunk-based vs GitHub Flow), monorepo vs polyrepo, semantic versioning, và pull request workflow.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao Git? Lịch sử ngắn</a></li>
+        <li><a href="#internals">2. Git Internals</a></li>
+        <li><a href="#core-cmd">3. Lệnh cốt lõi nâng cao</a></li>
+        <li><a href="#rebase">4. Rebase vs Merge</a></li>
+        <li><a href="#strategy">5. Branching Strategies</a></li>
+        <li><a href="#trunk">6. Trunk-Based Development</a></li>
+        <li><a href="#monorepo">7. Monorepo vs Polyrepo</a></li>
+        <li><a href="#semver">8. Semantic Versioning</a></li>
+        <li><a href="#pr">9. Pull Request Workflow</a></li>
+        <li><a href="#hooks">10. Git Hooks & Pre-commit</a></li>
+        <li><a href="#exercises">11. Bài tập</a></li>
+        <li><a href="#quiz">12. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao Git?</h2>
+
+        <p>Năm 2005, Linus Torvalds mất quyền dùng BitKeeper (proprietary VCS lúc đó cho Linux kernel). Ông code Git trong 2 tuần. 20 năm sau, Git là VCS (version control system) phổ biến nhất, gần như độc tôn.</p>
+
+        <p>Git khác các VCS cũ (CVS, SVN) ở 3 điểm:</p>
+        <ol>
+          <li><strong>Distributed</strong> — mỗi clone là full repository có history. Không cần network để commit, branch, diff.</li>
+          <li><strong>Nhanh</strong> — operation chỉ trên local file system, không network roundtrip.</li>
+          <li><strong>Branching cheap</strong> — branch là 1 pointer 40 byte, tạo branch mất 1ms. Khuyến khích branching workflow.</li>
+        </ol>
+
+        <h3>1.1. Vì sao DevOps quan tâm Git?</h3>
+        <p>Git là <strong>nền tảng của CI/CD và GitOps</strong>:</p>
+        <ul>
+          <li>CI pipeline trigger bằng git push.</li>
+          <li>Deploy bằng git merge/tag.</li>
+          <li>GitOps: git là single source of truth của infra (ArgoCD/Flux sync từ git).</li>
+          <li>Rollback = git revert (immutable history).</li>
+          <li>Audit = git log (ai làm gì, khi nào, vì sao — qua commit message).</li>
+        </ul>
+
+        <p>Nếu Git là tool của tất cả engineer, thì DevOps engineer cần hiểu sâu hơn — không chỉ commit/push, mà còn rebase, cherry-pick, bisect, reflog để cứu khi đồng đội kẹt.</p>
+      </section>
+
+      <section id="internals">
+        <h2>2. Git Internals — Object Model</h2>
+
+        <p>Git rất đơn giản về internal: mọi thứ là <em>object</em> được lưu ở <code>.git/objects/</code>, identify bởi <strong>SHA-1 hash 40 ký tự</strong>.</p>
+
+        <h3>2.1. Bốn loại object</h3>
+
+        <table>
+          <thead><tr><th>Object</th><th>Nội dung</th><th>SHA của gì</th></tr></thead>
+          <tbody>
+            <tr><td><strong>blob</strong></td><td>Nội dung 1 file (chỉ data, không có tên)</td><td>SHA1 của data</td></tr>
+            <tr><td><strong>tree</strong></td><td>Directory: list (mode, type, sha, name)</td><td>SHA1 của tree content</td></tr>
+            <tr><td><strong>commit</strong></td><td>Snapshot: tree-sha + parent + author + msg</td><td>SHA1 của commit metadata</td></tr>
+            <tr><td><strong>tag</strong></td><td>Annotated tag: object-sha + tagger + message</td><td>SHA1 của tag content</td></tr>
+          </tbody>
+        </table>
+
+        <p>Cấu trúc gọn gàng:</p>
+
+        <div class="ascii">commit ← parent ← parent ← parent
+   │
+   tree (root dir)
+   ├── blob (file1.txt)
+   ├── blob (file2.js)
+   └── tree (subdir/)
+       ├── blob
+       └── blob</div>
+
+        <h3>2.2. Khám phá object thật</h3>
+
+<pre><code class="language-bash">cd myrepo
+echo "Hello" > file.txt
+git add file.txt
+git commit -m "init"
+
+# Xem object database
+ls .git/objects/
+# 8b/  e6/  fa/  info/  pack/
+
+# Lấy SHA của HEAD commit
+git rev-parse HEAD
+# fa1234abcd...
+
+# Inspect commit object
+git cat-file -p HEAD
+# tree 8b1234...
+# author Alice &lt;alice@example.com&gt; 1700000000 +0700
+# committer Alice &lt;alice@example.com&gt; 1700000000 +0700
+#
+# init
+
+# Inspect tree
+git cat-file -p 8b1234
+# 100644 blob e69de29...    file.txt
+
+# Inspect blob (= content of file)
+git cat-file -p e69de29
+# Hello
+
+# Type of object
+git cat-file -t HEAD       # → commit
+git cat-file -t 8b1234     # → tree
+</code></pre>
+
+        <h3>2.3. Refs — pointer tới commits</h3>
+
+        <p>Branch và tag chỉ là <em>file text chứa SHA</em>:</p>
+
+<pre><code class="language-bash">cat .git/refs/heads/main
+# fa1234abcd... ← chỉ là 1 commit SHA
+
+cat .git/HEAD
+# ref: refs/heads/main ← HEAD trỏ tới branch main
+
+git update-ref refs/heads/myfeature fa1234
+# = tạo branch myfeature trỏ tới commit fa1234 (low-level)
+</code></pre>
+
+        <p>Hiểu điều này:</p>
+        <ul>
+          <li>Branch chỉ là pointer. Tạo/xóa branch không động đến commit.</li>
+          <li>"Detached HEAD" = HEAD trỏ commit thay vì branch.</li>
+          <li><code>git reset --hard SHA</code> = thay đổi pointer của branch, không xóa commit (commit vẫn nằm ở object DB cho đến khi GC).</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Hệ quả thực tế</span>
+          Lỡ xóa commit chứa code quan trọng? Đừng panic — chạy <code>git reflog</code> để tìm SHA, rồi <code>git reset --hard SHA</code> hoặc <code>git checkout -b recover SHA</code>. Git GC mặc định 90 ngày — đủ thời gian recover.
+        </div>
+
+        <h3>2.4. Index (staging area)</h3>
+
+        <p>Khi <code>git add file.txt</code>, Git tạo blob object cho file content và update <code>.git/index</code> (binary file, list pending changes). Khi <code>git commit</code>, Git tạo tree từ index → tạo commit object trỏ tới tree đó.</p>
+
+        <div class="ascii">Working Dir ──add──→ Index ──commit──→ Repository
+                                              ↓
+                                           push
+                                              ↓
+                                          Remote</div>
+      </section>
+
+      <section id="core-cmd">
+        <h2>3. Lệnh cốt lõi — vượt git add/commit/push</h2>
+
+        <h3>3.1. git log — đọc history thông minh</h3>
+
+<pre><code class="language-bash"># Compact 1 dòng/commit
+git log --oneline                       # ngắn
+git log --oneline --graph --all         # đồ thị mọi branch
+git log --oneline --graph --decorate    # show ref names
+
+# Filter theo author/date/message
+git log --author="Alice"
+git log --since="2 weeks ago"
+git log --grep="bugfix"                  # search commit message
+git log -S "TODO"                        # search code: commit nào add/remove "TODO"
+git log -G "regex"                       # tương tự nhưng regex
+
+# Show file
+git log -p file.txt                      # patch (diff) mỗi commit động vào file
+git log --stat file.txt                  # số dòng đổi
+git log --follow file.txt                # follow rename
+
+# Format custom
+git log --pretty=format:"%h %an %ar %s"
+# %h = short SHA, %an = author name, %ar = ago time, %s = subject
+
+# Số commit
+git log --oneline | wc -l
+git log --oneline --since="1 month ago" | wc -l
+</code></pre>
+
+        <h3>3.2. git diff</h3>
+
+<pre><code class="language-bash">git diff                                # working dir vs index
+git diff --staged                        # index vs HEAD (= --cached)
+git diff HEAD                            # working dir vs HEAD
+git diff main..feature                   # so 2 branch (commit cuối)
+git diff main...feature                  # = main vs (common ancestor of main, feature)
+git diff main feature -- file.txt        # chỉ 1 file
+git diff --stat                          # tóm tắt
+git diff --name-only                     # chỉ tên file
+</code></pre>
+
+        <h3>3.3. git stash — pause work</h3>
+
+<pre><code class="language-bash">git stash                                # save current changes
+git stash push -m "WIP feature X"        # với message
+git stash push -u                        # bao gồm untracked files
+git stash list                           # xem stash
+
+git stash pop                            # apply + xóa stash
+git stash apply                          # apply, giữ stash
+git stash apply stash@{2}                # apply stash thứ 3
+
+git stash drop                           # xóa stash mới nhất
+git stash clear                          # xóa hết
+</code></pre>
+
+        <h3>3.4. git cherry-pick — chọn commit</h3>
+
+<pre><code class="language-bash">git cherry-pick abc1234                  # apply commit này lên branch hiện tại
+git cherry-pick abc1234..def5678         # range (exclusive abc1234)
+git cherry-pick abc1234^..def5678        # range (inclusive)
+
+# Conflict?
+git cherry-pick --continue
+git cherry-pick --abort
+
+# Use case: hotfix có ở main, cần backport sang release branch v1.2
+git checkout v1.2
+git cherry-pick &lt;hotfix-commit&gt;
+</code></pre>
+
+        <h3>3.5. git revert — "undo" an toàn</h3>
+
+<pre><code class="language-bash">git revert HEAD                          # tạo commit mới đảo ngược HEAD
+git revert abc1234                       # đảo ngược commit cụ thể
+
+# KHÁC reset:
+# - reset xóa commit khỏi history → KHÔNG dùng cho branch đã push
+# - revert tạo commit mới → SAFE cho shared branch
+</code></pre>
+
+        <h3>3.6. git reset — di chuyển HEAD</h3>
+
+<pre><code class="language-bash">git reset HEAD~1                         # = --mixed: undo commit, keep changes in working dir
+git reset --soft HEAD~1                  # undo commit, keep changes in index
+git reset --hard HEAD~1                  # undo commit, DISCARD changes (DANGEROUS)
+git reset --hard origin/main             # reset to remote (mất changes local)
+
+# Use cases:
+# --soft: gộp 2 commit cuối: reset --soft HEAD~2 && commit
+# --mixed (default): undo add: reset HEAD file.txt
+# --hard: bỏ hoàn toàn local changes (reset --hard HEAD)
+</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">DANGER — git reset --hard</span>
+          <code>--hard</code> xóa working dir changes vĩnh viễn (không vào reflog!). Trước khi chạy, luôn <code>git stash</code> hoặc verify không có việc đang dở.
+        </div>
+
+        <h3>3.7. git reflog — cứu commit "đã mất"</h3>
+
+<pre><code class="language-bash">git reflog
+# fa1234 HEAD@{0}: commit: latest work
+# de5678 HEAD@{1}: reset: moving to HEAD~1
+# ab9012 HEAD@{2}: commit: lost commit !!
+
+# Recover commit "lost"
+git reset --hard ab9012
+# hoặc tạo branch:
+git checkout -b recovered ab9012
+</code></pre>
+
+        <h3>3.8. git bisect — tìm commit gây bug</h3>
+
+<pre><code class="language-bash"># Bug có ở HEAD nhưng không có ở commit 3 tuần trước
+git bisect start
+git bisect bad HEAD
+git bisect good 3-weeks-ago-sha
+
+# Git tự checkout midpoint
+# Test xem bug có không, rồi:
+git bisect good        # nếu không có bug
+# hoặc
+git bisect bad         # nếu có bug
+
+# Lặp đến khi git tìm ra commit gây bug
+git bisect reset       # về branch ban đầu
+
+# Tự động hóa
+git bisect run npm test    # chạy test ở mỗi midpoint, đánh dấu auto
+</code></pre>
+
+        <p>Bisect dùng binary search — 1024 commit chỉ mất 10 lần test để tìm commit lỗi. Cứu sinh khi truy "regression bug".</p>
+      </section>
+
+      <section id="rebase">
+        <h2>4. Rebase vs Merge — debate kinh điển</h2>
+
+        <h3>4.1. Merge — giữ history thật</h3>
+
+<pre><code class="language-bash"># Trên branch feature, merge main vào để cập nhật
+git checkout feature
+git merge main
+
+# Hoặc trên main, merge feature in
+git checkout main
+git merge feature
+</code></pre>
+
+        <p>Khi merge có divergent history, Git tạo <strong>merge commit</strong> với 2 parent:</p>
+
+        <div class="ascii">main:    A ─── B ─── C ─── M ←─ HEAD (main)
+                  ╲           ╱
+feature:           D ─── E ──╯</div>
+
+        <h3>4.2. Rebase — viết lại history</h3>
+
+<pre><code class="language-bash"># Trên branch feature, rebase lên main mới nhất
+git checkout feature
+git rebase main
+</code></pre>
+
+        <p>Rebase: lấy commit feature, "play lại" trên đỉnh main mới:</p>
+
+        <div class="ascii">Trước:
+main:    A ─── B ─── C
+                  ╲
+feature:           D ─── E
+
+Sau git rebase main (đứng ở feature):
+main:    A ─── B ─── C
+                       ╲
+feature:                D' ─── E'    ← commit MỚI, history phẳng</div>
+
+        <p>Quan trọng: D', E' là <em>commit mới</em> (SHA khác). History bị viết lại.</p>
+
+        <h3>4.3. Khi nào dùng cái nào?</h3>
+
+        <div class="compare">
+          <div>
+            <h4>Merge</h4>
+            <ul>
+              <li>Branch shared (nhiều người làm)</li>
+              <li>Muốn giữ "context" branching</li>
+              <li>Long-running release branch</li>
+              <li>An toàn — không viết lại history</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Rebase</h4>
+            <ul>
+              <li>Branch cá nhân (chỉ bạn)</li>
+              <li>Muốn history thẳng, dễ đọc</li>
+              <li>Trước khi merge PR (clean up)</li>
+              <li>Chú ý: KHÔNG rebase branch đã push share</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Golden Rule of Rebase</span>
+          <strong>Đừng bao giờ rebase branch đã push lên remote và đang được người khác dùng.</strong> Rebase tạo commit mới (SHA khác); người khác đã pull commit cũ sẽ bị conflict không thể giải.
+        </div>
+
+        <h3>4.4. Interactive rebase — clean up trước PR</h3>
+
+<pre><code class="language-bash">git rebase -i HEAD~5
+# Mở editor:
+# pick fa1234 add login form
+# pick de5678 fix typo
+# pick ab9012 add validation
+# pick cd3456 fix typo again
+# pick ef7890 final touch
+
+# Bạn sửa thành:
+# pick fa1234 add login form
+# squash de5678 fix typo
+# pick ab9012 add validation
+# squash cd3456 fix typo again
+# squash ef7890 final touch
+
+# → 5 commit gộp thành 2: "add login form" + "add validation"
+# Action có thể: pick, reword (sửa msg), edit (pause để sửa), squash (gộp), fixup (squash + bỏ msg), drop (xóa)
+</code></pre>
+
+        <h3>4.5. git pull — merge hay rebase?</h3>
+
+<pre><code class="language-bash"># Pull = fetch + merge (default)
+git pull origin main
+
+# Pull với rebase (history phẳng hơn)
+git pull --rebase origin main
+
+# Set default cho repo
+git config pull.rebase true
+
+# Set default cho global
+git config --global pull.rebase true
+</code></pre>
+
+        <p>Tip: bật <code>pull.rebase</code> để tránh "Merge branch 'main' of github.com..." commit rác trong history khi nhiều người làm cùng main.</p>
+      </section>
+
+      <section id="strategy">
+        <h2>5. Branching Strategies — chọn cái nào?</h2>
+
+        <p>Không có chiến lược "đúng" — tùy team size, release cadence, deployment model.</p>
+
+        <h3>5.1. Gitflow (Vincent Driessen, 2010)</h3>
+
+        <div class="ascii">main      ────●────────●────────●────  ← prod, only releases
+              │        │        │
+release       │        ●        │        ← release prep
+              │        │        │
+develop   ──●─┴────●───┴────●───┴─       ← integration
+            │      │        │
+feature     ●──●───●        │            ← short-lived
+                            │
+hotfix                      ●            ← urgent fix from main</div>
+
+        <p><strong>Branches</strong>:</p>
+        <ul>
+          <li><code>main</code> — production code, mỗi merge = release.</li>
+          <li><code>develop</code> — integration branch, code "next release".</li>
+          <li><code>feature/*</code> — branch từ develop, merge về develop.</li>
+          <li><code>release/*</code> — branch từ develop khi sắp release, chỉ fix bug.</li>
+          <li><code>hotfix/*</code> — branch từ main cho urgent fix, merge cả main và develop.</li>
+        </ul>
+
+        <p><strong>Use case</strong>: app desktop/mobile có release cycle dài (mỗi vài tuần-tháng), cần maintain nhiều version song song.</p>
+
+        <p><strong>Vấn đề</strong>: phức tạp, merge conflict cao, không phù hợp web app deploy hàng ngày. Chính Driessen đã viết lại post 2020 nói "Gitflow không còn phù hợp cho hầu hết web app".</p>
+
+        <h3>5.2. GitHub Flow (2011)</h3>
+
+        <div class="ascii">main  ────●────●────●────●────●────●────  ← always deployable
+            ╲   ╲        ╲   ╲
+feature      ●   ●        ●   ●          ← branch + PR
+              ╲   ╲        ╲   ╲
+               └───┴────────┴───┴── merge via PR</div>
+
+        <p><strong>Quy tắc</strong>:</p>
+        <ol>
+          <li>main luôn deployable.</li>
+          <li>Branch off main → feature.</li>
+          <li>Push lên remote, mở PR.</li>
+          <li>Review + CI pass.</li>
+          <li>Merge vào main.</li>
+          <li>Deploy main ngay (nếu CD).</li>
+        </ol>
+
+        <p><strong>Use case</strong>: web app, SaaS, deploy nhiều lần/ngày. Đơn giản, ít branch.</p>
+
+        <h3>5.3. GitLab Flow</h3>
+
+        <p>GitHub Flow + thêm <strong>environment branches</strong>: main → pre-prod → production. Mỗi env là 1 branch. Merge vào main → CI tự deploy staging. Sau test, merge staging → production. Tốt nếu cần release window.</p>
+
+        <h3>5.4. Trunk-Based Development (TBD)</h3>
+
+        <p>Tên gọi cũ "Continuous Integration" theo nghĩa đúng. Mọi người làm trên main (trunk), commit nhỏ + thường xuyên (nhiều lần/ngày). Branch chỉ tồn tại vài giờ-ngày, gọi là "short-lived feature branch".</p>
+
+        <div class="ascii">main  ●●●●●●●●●●●●●●●●●●●●●●●●●●●  ← mọi người commit thẳng
+        ╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲╲
+short    ●●●●●●●●●●●●●●●●●●●●  ← merge trong vài giờ</div>
+
+        <p><strong>Đây là chiến lược của Google, Facebook, Netflix</strong> — mục mục 6.</p>
+
+        <h3>5.5. So sánh nhanh</h3>
+
+        <table>
+          <thead>
+            <tr><th>Strategy</th><th>Phù hợp với</th><th>Branch lifetime</th><th>Deploy frequency</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Gitflow</td><td>Mobile/desktop, multi-version</td><td>Tuần-tháng</td><td>Mỗi vài tuần</td></tr>
+            <tr><td>GitHub Flow</td><td>Web app, SaaS</td><td>Vài ngày</td><td>Hàng ngày</td></tr>
+            <tr><td>GitLab Flow</td><td>Có release gate</td><td>Vài ngày</td><td>Hàng ngày</td></tr>
+            <tr><td>Trunk-Based</td><td>High-performing team</td><td>Vài giờ</td><td>Nhiều lần/ngày</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="trunk">
+        <h2>6. Trunk-Based Development — chuẩn của Elite</h2>
+
+        <p>Nghiên cứu DORA (Accelerate book) chứng minh: <strong>Trunk-Based correlate mạnh với high-performing team</strong>. Cụ thể:</p>
+        <ul>
+          <li>≤ 3 active branches tại bất kỳ thời điểm.</li>
+          <li>Branch lifetime &lt; 1 ngày.</li>
+          <li>Mọi commit đi qua CI.</li>
+          <li>Không có code freeze.</li>
+        </ul>
+
+        <h3>6.1. Cách làm cụ thể</h3>
+
+        <ol>
+          <li><strong>Commit trực tiếp main</strong> nếu thay đổi nhỏ + có test. (Hoặc PR siêu nhanh review trong giờ.)</li>
+          <li><strong>Feature flag</strong> cho thay đổi lớn — code merge nhưng tắt feature.</li>
+          <li><strong>Branch by abstraction</strong> — refactor lớn: tạo abstraction layer trước, swap implementation sau, không cần long branch.</li>
+          <li><strong>Strong CI</strong> — mọi commit chạy đầy đủ test (&lt; 10 phút), block nếu fail.</li>
+          <li><strong>Code review nhanh</strong> — PR &lt; 200 dòng, review trong giờ.</li>
+        </ol>
+
+        <h3>6.2. Feature flag pattern</h3>
+
+<pre><code class="language-typescript">// Old: feature on long branch
+// New: merge to main, hide behind flag
+
+if (featureFlags.isEnabled('new-checkout', userId)) {
+  return renderNewCheckout();
+} else {
+  return renderOldCheckout();
+}
+
+// Roll out:
+// Day 1: flag off (0% users)
+// Day 2: 5% users (monitor metrics)
+// Day 3: 50% users
+// Day 4: 100% users
+// Day 7: remove flag + old code
+</code></pre>
+
+        <p>Ưu điểm: deploy thường xuyên (low risk per deploy), tách deploy/release, A/B test built-in, instant rollback (tắt flag không cần redeploy).</p>
+
+        <p>Tools: LaunchDarkly, Unleash, Flagsmith, hoặc tự host.</p>
+
+        <h3>6.3. Vấn đề thường gặp khi chuyển sang TBD</h3>
+
+        <ul>
+          <li><strong>"Code chưa xong sẽ vào main!"</strong> → dùng feature flag.</li>
+          <li><strong>"CI quá chậm"</strong> → đầu tư vào speed CI là điều kiện tiên quyết.</li>
+          <li><strong>"Ai review nhanh được?"</strong> → văn hóa: review trong giờ là priority cao nhất.</li>
+          <li><strong>"Junior chưa đủ trình"</strong> → pair programming, mob programming.</li>
+        </ul>
+
+        <p>Trừ khi build distributed software (Linux kernel, PostgreSQL) — TBD nên là default. Phần lớn web app, microservice, SaaS phù hợp TBD.</p>
+      </section>
+
+      <section id="monorepo">
+        <h2>7. Monorepo vs Polyrepo</h2>
+
+        <h3>7.1. Định nghĩa</h3>
+        <ul>
+          <li><strong>Polyrepo</strong> — mỗi service/lib một repo. (Default ở hầu hết startup.)</li>
+          <li><strong>Monorepo</strong> — toàn bộ code công ty trong 1 repo. (Google, Meta, Twitter.)</li>
+        </ul>
+
+        <h3>7.2. So sánh</h3>
+
+        <table>
+          <thead>
+            <tr><th>Khía cạnh</th><th>Polyrepo</th><th>Monorepo</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Visibility</td>
+              <td>Khó browse code khác team</td>
+              <td>Tất cả code 1 chỗ — easy to discover</td>
+            </tr>
+            <tr>
+              <td>Atomic refactor</td>
+              <td>Khó (đổi API → cập nhật N consumer ở N PR)</td>
+              <td>Dễ (1 PR sửa cả lib + consumer)</td>
+            </tr>
+            <tr>
+              <td>Versioning</td>
+              <td>SemVer giữa lib (publish package)</td>
+              <td>Single version (latest commit là current)</td>
+            </tr>
+            <tr>
+              <td>Build/CI</td>
+              <td>Đơn giản (1 repo = 1 pipeline)</td>
+              <td>Phức tạp (build chỉ phần đổi — Bazel, Nx, Turborepo)</td>
+            </tr>
+            <tr>
+              <td>Repo size</td>
+              <td>Nhỏ, fast clone</td>
+              <td>Khổng lồ — cần partial clone, sparse checkout</td>
+            </tr>
+            <tr>
+              <td>Team autonomy</td>
+              <td>Cao (mỗi team owns repo)</td>
+              <td>Thấp (chia sẻ code base, có policy)</td>
+            </tr>
+            <tr>
+              <td>Tooling required</td>
+              <td>Standard Git</td>
+              <td>Build tool đặc biệt (Bazel, Pants, Nx)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>7.3. Khi nào chọn monorepo?</h3>
+        <ul>
+          <li>Có nhiều shared lib giữa services.</li>
+          <li>Refactor cross-service thường xuyên.</li>
+          <li>Có resource đầu tư build infrastructure (Bazel learning curve cao).</li>
+          <li>Team size đủ lớn (50+ engineer) để biện minh tooling.</li>
+        </ul>
+
+        <h3>7.4. Tools cho monorepo</h3>
+
+        <table>
+          <thead><tr><th>Tool</th><th>Languages</th><th>Used by</th></tr></thead>
+          <tbody>
+            <tr><td>Bazel</td><td>Mọi ngôn ngữ</td><td>Google, Spotify, Stripe</td></tr>
+            <tr><td>Nx</td><td>JS/TS</td><td>Modern web</td></tr>
+            <tr><td>Turborepo</td><td>JS/TS</td><td>Vercel, smaller teams</td></tr>
+            <tr><td>Pants</td><td>Python, JVM</td><td>Twitter, Toolchain</td></tr>
+            <tr><td>Lerna</td><td>JS</td><td>Babel, Jest (legacy)</td></tr>
+          </tbody>
+        </table>
+
+        <p>Đa số startup nên start polyrepo. Chuyển sang monorepo khi pain point rõ (atomic refactor khó, code duplication nhiều).</p>
+      </section>
+
+      <section id="semver">
+        <h2>8. Semantic Versioning — MAJOR.MINOR.PATCH</h2>
+
+        <p>SemVer chuẩn (semver.org): <code>vMAJOR.MINOR.PATCH</code></p>
+
+        <ul>
+          <li><strong>MAJOR</strong> — breaking change (API thay đổi backward-incompat).</li>
+          <li><strong>MINOR</strong> — feature mới, backward-compatible.</li>
+          <li><strong>PATCH</strong> — bug fix, không thay đổi API.</li>
+        </ul>
+
+        <p>Ví dụ:</p>
+        <ul>
+          <li><code>1.4.2</code> → patch fix → <code>1.4.3</code></li>
+          <li><code>1.4.3</code> → add feature → <code>1.5.0</code></li>
+          <li><code>1.5.0</code> → breaking → <code>2.0.0</code></li>
+        </ul>
+
+        <h3>8.1. Pre-release</h3>
+        <p><code>1.0.0-alpha.1</code>, <code>1.0.0-beta.2</code>, <code>1.0.0-rc.1</code> (release candidate). Order: alpha &lt; beta &lt; rc &lt; release.</p>
+
+        <h3>8.2. Build metadata</h3>
+        <p><code>1.0.0+20240115.abc1234</code> — sau dấu +, không ảnh hưởng version compare.</p>
+
+        <h3>8.3. Tag trong Git</h3>
+
+<pre><code class="language-bash"># Annotated tag (khuyến nghị — có message + author)
+git tag -a v1.4.2 -m "Release 1.4.2"
+git push origin v1.4.2
+
+# Lightweight tag (chỉ pointer)
+git tag v1.4.2
+
+# List tag
+git tag                                  # tất cả
+git tag -l "v1.*"                        # filter
+
+# Xem tag
+git show v1.4.2
+
+# Xóa tag
+git tag -d v1.4.2                        # local
+git push origin :refs/tags/v1.4.2        # remote
+
+# Checkout tag (detached HEAD)
+git checkout v1.4.2
+</code></pre>
+
+        <h3>8.4. Conventional Commits — auto generate version</h3>
+
+        <p>Convention quy định format commit message:</p>
+
+<pre><code>&lt;type&gt;[optional scope]: &lt;description&gt;
+
+[optional body]
+
+[optional footer]
+
+# Examples:
+feat(auth): add OAuth2 login
+fix(api): handle null in user response
+docs: update README
+refactor(db): split queries into modules
+test(payment): cover edge cases
+chore(deps): upgrade lodash to 4.17
+
+# Breaking change:
+feat(api)!: rename /users to /accounts
+# OR in footer:
+feat(api): rename users endpoint
+BREAKING CHANGE: /users renamed to /accounts
+</code></pre>
+
+        <p>Tools tự động bump version + generate CHANGELOG:</p>
+        <ul>
+          <li><strong>standard-version</strong> / <strong>semantic-release</strong> (JS).</li>
+          <li><strong>commitizen</strong> — interactive prompt để format đúng.</li>
+          <li><strong>cz-conventional-changelog</strong>.</li>
+        </ul>
+
+        <p>Quy tắc:</p>
+        <ul>
+          <li><code>fix:</code> → bump PATCH</li>
+          <li><code>feat:</code> → bump MINOR</li>
+          <li><code>BREAKING CHANGE:</code> → bump MAJOR</li>
+        </ul>
+      </section>
+
+      <section id="pr">
+        <h2>9. Pull Request Workflow</h2>
+
+        <h3>9.1. Quy trình chuẩn</h3>
+
+        <ol class="steps">
+          <li><strong>Branch off main</strong>:
+<pre><code class="language-bash">git checkout main && git pull
+git checkout -b feature/add-search</code></pre>
+          </li>
+
+          <li><strong>Commit nhỏ, có message tốt</strong>:
+<pre><code class="language-bash">git add .
+git commit -m "feat(search): add basic search by name"</code></pre>
+          </li>
+
+          <li><strong>Push lên remote</strong>:
+<pre><code class="language-bash">git push -u origin feature/add-search</code></pre>
+          </li>
+
+          <li><strong>Mở Pull Request</strong> trên GitHub/GitLab. PR description gồm:
+            <ul>
+              <li><strong>What</strong> — thay đổi gì.</li>
+              <li><strong>Why</strong> — lý do (link issue/ticket).</li>
+              <li><strong>How</strong> — approach kỹ thuật.</li>
+              <li><strong>How to test</strong> — cách reviewer verify.</li>
+              <li><strong>Screenshots</strong> nếu UI.</li>
+            </ul>
+          </li>
+
+          <li><strong>CI chạy tự động</strong> — lint, test, security scan.</li>
+
+          <li><strong>Code review</strong> — ít nhất 1 approve, không có "request changes" pending.</li>
+
+          <li><strong>Address feedback</strong>:
+<pre><code class="language-bash"># Sửa code...
+git add .
+git commit -m "address review feedback"
+git push                                 # tự update PR</code></pre>
+          </li>
+
+          <li><strong>Squash merge</strong> hoặc rebase trước merge để clean history.</li>
+        </ol>
+
+        <h3>9.2. Code review checklist</h3>
+
+        <ul>
+          <li>✓ Logic đúng? Edge case?</li>
+          <li>✓ Test coverage cho thay đổi?</li>
+          <li>✓ Naming rõ ràng?</li>
+          <li>✓ Không có TODO không cần thiết?</li>
+          <li>✓ Không leak secret (key, password)?</li>
+          <li>✓ Không over-engineer (premature abstraction)?</li>
+          <li>✓ Backward compatible?</li>
+          <li>✓ Documentation/changelog updated nếu cần?</li>
+          <li>✓ Performance OK?</li>
+        </ul>
+
+        <h3>9.3. Branch protection</h3>
+
+        <p>GitHub/GitLab settings → Branches → Protect main:</p>
+        <ul>
+          <li>Require PR before merge (no direct push).</li>
+          <li>Require ≥ 1 approver.</li>
+          <li>Require CI checks pass.</li>
+          <li>Require branch up-to-date với main.</li>
+          <li>Dismiss stale review khi push mới.</li>
+          <li>Require linear history (no merge commit).</li>
+          <li>Block force push.</li>
+          <li>Restrict who can push (chỉ release manager).</li>
+        </ul>
+
+        <h3>9.4. Merge strategies</h3>
+
+        <table>
+          <thead><tr><th>Strategy</th><th>Kết quả</th><th>Khi nào</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Merge commit</td>
+              <td>Tạo merge commit có 2 parent</td>
+              <td>Giữ branch context, multi-author PR</td>
+            </tr>
+            <tr>
+              <td>Squash and merge</td>
+              <td>Gộp tất cả commit của PR thành 1</td>
+              <td>Default cho hầu hết PR feature</td>
+            </tr>
+            <tr>
+              <td>Rebase and merge</td>
+              <td>Apply commit lên main không tạo merge commit</td>
+              <td>Muốn linear history, giữ chi tiết</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>Đa số team chọn <strong>squash and merge</strong> — main history clean, mỗi PR = 1 commit, dễ revert.</p>
+      </section>
+
+      <section id="hooks">
+        <h2>10. Git Hooks & Pre-commit</h2>
+
+        <h3>10.1. Git hooks native</h3>
+
+        <p>Hooks là script chạy tự động ở các giai đoạn Git workflow. Lưu trong <code>.git/hooks/</code>:</p>
+
+        <table>
+          <thead><tr><th>Hook</th><th>Khi chạy</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td>pre-commit</td><td>Trước commit (sau git add)</td><td>Lint, format, test nhanh</td></tr>
+            <tr><td>commit-msg</td><td>Sau khi viết commit message</td><td>Validate format (Conventional)</td></tr>
+            <tr><td>pre-push</td><td>Trước git push</td><td>Run full test, integration</td></tr>
+            <tr><td>post-merge</td><td>Sau git merge</td><td>Re-install dependency nếu package.json đổi</td></tr>
+          </tbody>
+        </table>
+
+<pre><code class="language-bash"># .git/hooks/pre-commit (chmod +x)
+#!/bin/bash
+# Run linter trước commit
+npm run lint
+if [ $? -ne 0 ]; then
+  echo "❌ Lint failed. Fix errors before committing."
+  exit 1
+fi
+
+# Bypass hook (cẩn thận):
+git commit --no-verify
+</code></pre>
+
+        <h3>10.2. pre-commit framework — share hooks giữa team</h3>
+
+        <p>Vấn đề với <code>.git/hooks/</code>: không được commit (Git ignore <code>.git/</code>). Mỗi dev tự setup → không sync.</p>
+
+        <p><a href="https://pre-commit.com">pre-commit</a> là framework Python solve vấn đề: define hooks trong <code>.pre-commit-config.yaml</code> commit vào repo.</p>
+
+<pre><code class="language-yaml"># .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black                          # Python formatter
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        files: \.[jt]sx?$
+        types: [file]
+
+  - repo: https://github.com/zricethezav/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks                       # detect secrets!
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.86.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+</code></pre>
+
+<pre><code class="language-bash"># Setup
+pip install pre-commit
+pre-commit install                         # install hooks vào .git/hooks
+pre-commit run --all-files                 # chạy thủ công
+pre-commit autoupdate                      # update version
+</code></pre>
+
+        <h3>10.3. Husky (JS ecosystem)</h3>
+
+<pre><code class="language-bash">npm install -D husky lint-staged
+npx husky install
+npx husky add .husky/pre-commit "npx lint-staged"
+
+# package.json
+{
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx}": ["eslint --fix", "prettier --write"],
+    "*.{json,md}": ["prettier --write"]
+  }
+}
+</code></pre>
+
+        <h3>10.4. Server-side hooks (CI là good enough)</h3>
+
+        <p>Git hỗ trợ pre-receive, update, post-receive trên server, nhưng modern workflow dùng CI (GitHub Actions, GitLab CI) để enforce checks. Pre-commit hooks là <em>convenience</em> cho dev — CI là <em>gate</em>.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>11. Bài tập</h2>
+
+        <ol>
+          <li><strong>Git internals</strong>: tạo repo mới, commit 1 file, dùng <code>git cat-file -p</code> để inspect commit, tree, blob. Vẽ relationship.</li>
+
+          <li><strong>Recover commit</strong>: tạo 3 commit, <code>git reset --hard HEAD~3</code> để "xóa". Dùng reflog tìm và recover commit cuối cùng.</li>
+
+          <li><strong>Bisect drill</strong>: tạo repo với 20 commit, 1 commit ở giữa làm app crash. Dùng <code>git bisect run</code> tự động tìm commit lỗi với binary search.</li>
+
+          <li><strong>Interactive rebase</strong>: tạo 5 commit messy ("WIP", "fix typo", "more fixes"). Squash thành 2 commit có message ý nghĩa.</li>
+
+          <li><strong>Cherry-pick hotfix</strong>: tạo 2 branch (main, release/v1.0). Hotfix critical commit ở main. Cherry-pick sang release/v1.0.</li>
+
+          <li><strong>Trunk-based với feature flag</strong>: implement feature lớn (vd checkout flow mới) bằng feature flag. Commit nhỏ vào main, flag tắt. Bật flag cho 10% user, monitor, dần roll out.</li>
+
+          <li><strong>Conventional Commits + semantic-release</strong>: setup repo với semantic-release. Commit feat:, fix:, BREAKING CHANGE:. Verify version + changelog tự động.</li>
+
+          <li><strong>Pre-commit hooks</strong>: setup pre-commit framework với gitleaks, eslint, prettier. Cố tình commit secret API key, verify hook block.</li>
+
+          <li><strong>So sánh strategy</strong>: cho 3 scenario (mobile app monthly release / SaaS web daily / open source library) — chọn strategy nào? Tại sao?</li>
+
+          <li><strong>Branch protection</strong>: trên GitHub repo của bạn, set branch protection cho main: require PR + 1 approver + CI pass + linear history. Test bằng cách thử push thẳng main.</li>
+
+          <li><strong>Recovery exercise</strong>: bạn rebase một branch đã push (vi phạm Golden Rule). Đồng đội đã pull. Bây giờ làm sao "fix" mà không làm hỏng work của họ?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>12. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 3</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Branch trong Git là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Một bản sao của toàn bộ codebase</li>
+              <li class="quiz-option">Một file lớn chứa diff</li>
+              <li class="quiz-option">Một file text 41 byte chứa SHA của commit (pointer)</li>
+              <li class="quiz-option">Một database riêng</li>
+            </ul>
+            <div class="quiz-explain">Branch chỉ là <code>.git/refs/heads/&lt;branch-name&gt;</code> chứa SHA của commit. Tạo/xóa branch là tạo/xóa file 41 byte → cực rẻ. Đây là lý do Git khuyến khích branching workflow. So với SVN: branch là copy thư mục, đắt → ít người dùng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">"Golden Rule of Rebase" là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Luôn rebase trước khi push</li>
+              <li class="quiz-option">Đừng bao giờ rebase branch đã push share với người khác</li>
+              <li class="quiz-option">Rebase nhanh hơn merge</li>
+              <li class="quiz-option">Chỉ rebase khi không có conflict</li>
+            </ul>
+            <div class="quiz-explain">Rebase tạo commit mới (SHA khác). Người khác đã pull commit cũ → khi pull lại sẽ thấy 2 history khác nhau, conflict không thể giải. Nguyên tắc: chỉ rebase branch <em>cá nhân, chưa share</em>. Đã push share → dùng merge.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">git revert KHÁC git reset như thế nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Revert nhanh hơn</li>
+              <li class="quiz-option">Reset tốt hơn cho remote branch</li>
+              <li class="quiz-option">Hai lệnh giống hệt</li>
+              <li class="quiz-option">Revert tạo commit mới đảo ngược (an toàn cho shared branch); Reset xóa commit khỏi history (chỉ dùng cho local)</li>
+            </ul>
+            <div class="quiz-explain">Revert: thêm commit mới có content "ngược lại" — history immutable, không break collaborator. Reset: thay đổi pointer của branch, commit cũ bị bỏ — nếu đã push, force push gây loss code. Quy tắc: shared branch → revert; local branch → reset OK.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">SemVer 1.4.2 → 2.0.0 nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Breaking change — API thay đổi backward-incompatible</li>
+              <li class="quiz-option">Bug fix lớn</li>
+              <li class="quiz-option">Feature mới</li>
+              <li class="quiz-option">Pre-release version</li>
+            </ul>
+            <div class="quiz-explain">MAJOR.MINOR.PATCH. Bump MAJOR khi có breaking change (consumer phải sửa code). Bump MINOR khi add feature backward-compatible. Bump PATCH khi fix bug. Conventional Commits + semantic-release tự động bump dựa trên commit message (feat → MINOR, fix → PATCH, BREAKING → MAJOR).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Trunk-Based Development KHUYẾN NGHỊ branch lifetime:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Vài tuần</li>
+              <li class="quiz-option">1 sprint (2 tuần)</li>
+              <li class="quiz-option">Vài giờ → 1 ngày</li>
+              <li class="quiz-option">Càng dài càng tốt</li>
+            </ul>
+            <div class="quiz-explain">TBD: branch tồn tại &lt; 1 ngày, ≤ 3 active branches tại bất kỳ thời điểm. Feature lớn → dùng feature flag (commit nhỏ vào main, flag off). Nghiên cứu DORA: TBD correlate mạnh với high-performing team. Long branch → merge conflict → fear of merging → infrequent deploy.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Khi cần cứu commit "đã mất" sau git reset --hard:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không thể cứu</li>
+              <li class="quiz-option">Dùng git reflog tìm SHA, rồi git reset hoặc git checkout về SHA đó</li>
+              <li class="quiz-option">Phải clone lại repo</li>
+              <li class="quiz-option">Xin admin restore backup</li>
+            </ul>
+            <div class="quiz-explain">git reflog log mọi thay đổi của HEAD/branch trong 90 ngày (default). Commit "deleted" vẫn ở object DB cho đến khi GC. Tìm SHA, <code>git reset --hard SHA</code> hoặc tạo branch <code>git checkout -b recovered SHA</code>. Lưu ý: <code>git reset --hard</code> xóa working dir changes (không vào reflog) — nên stash trước.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Conventional Commits prefix nào trigger MAJOR version bump?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">feat:</li>
+              <li class="quiz-option">fix:</li>
+              <li class="quiz-option">BREAKING CHANGE: trong footer hoặc dấu ! sau type (feat!: hoặc fix!:)</li>
+              <li class="quiz-option">refactor:</li>
+            </ul>
+            <div class="quiz-explain">feat: → MINOR; fix: → PATCH; BREAKING CHANGE: hoặc <code>!</code> → MAJOR. semantic-release đọc commit từ tag cuối → tự bump version. <code>chore:</code>, <code>docs:</code>, <code>test:</code>, <code>refactor:</code> mặc định không bump version.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Monorepo phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Có nhiều shared lib + atomic refactor cross-service thường xuyên + đầu tư build tooling (Bazel)</li>
+              <li class="quiz-option">Team chỉ có 2-3 dev</li>
+              <li class="quiz-option">Mỗi service độc lập hoàn toàn</li>
+              <li class="quiz-option">Open source library</li>
+            </ul>
+            <div class="quiz-explain">Monorepo benefits: atomic refactor (1 PR cho lib + tất cả consumer), shared code, single version. Costs: build tooling phức tạp (Bazel learning curve), repo size lớn cần partial clone, tooling phổ biến (IDE, Git GUI) đôi khi không scale. Google/FB/Twitter có monorepo vì có resource đầu tư. Startup nhỏ nên start polyrepo.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">git cherry-pick dùng khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Merge nhiều branch cùng lúc</li>
+              <li class="quiz-option">Reset branch về commit cũ</li>
+              <li class="quiz-option">Tạo branch mới</li>
+              <li class="quiz-option">Apply chỉ 1 commit (hoặc range) từ branch khác lên branch hiện tại — vd hotfix backport sang release branch</li>
+            </ul>
+            <div class="quiz-explain">Use case classic: hotfix critical commit ở main (vd CVE patch), cần backport sang release/v1.2 đang chạy production. <code>git cherry-pick &lt;hotfix-sha&gt;</code> trên branch v1.2. Lưu ý: cherry-pick tạo commit mới (SHA khác), nội dung tương tự — không phải same commit.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Pre-commit framework (.pre-commit-config.yaml) tốt hơn .git/hooks/ ở điểm nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Chạy nhanh hơn</li>
+              <li class="quiz-option">Có thể commit vào repo → share giữa team (file .git/hooks/ không được Git track)</li>
+              <li class="quiz-option">Có nhiều hook hơn</li>
+              <li class="quiz-option">Bypass được</li>
+            </ul>
+            <div class="quiz-explain">.git/hooks/ ở trong .git/ — Git không track. Mỗi dev phải tự setup. Pre-commit framework: file YAML commit vào repo. Khi clone, dev chạy <code>pre-commit install</code> để setup. Bonus: ecosystem của hook (gitleaks, trufflehog, terraform_fmt, ...) sẵn có.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 3. Tiếp theo: <a href="chuong4.html"><strong>Chương 4 — CI/CD Fundamentals →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 3 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

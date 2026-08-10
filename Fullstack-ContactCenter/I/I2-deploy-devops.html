@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I2 · Deploy & DevOps</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-i">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">I2 · Deploy & DevOps</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần I · System Design</div>
+      <nav class="nav">
+        <a href="I1-system-design-realtime.html">I1 · System Design realtime</a>
+        <a href="I2-deploy-devops.html" class="active">I2 · Deploy & DevOps</a>
+        <a href="I3-capstone-mock-interview.html">I3 · Capstone: Mock phỏng vấn</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#docker">① Docker & container</a>
+        <a href="#compose">② Docker Compose</a>
+        <a href="#cicd">③ CI/CD pipeline</a>
+        <a href="#strategies">④ Chiến lược deploy</a>
+        <a href="#monitoring">⑤ Monitoring & logging</a>
+        <a href="#health">⑥ Health check & scaling</a>
+        <a href="#infra">⑦ Reverse proxy, PM2, K8s</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần I · System Design &nbsp;›&nbsp; <b>I2 · Deploy & DevOps</b></div>
+      <div class="live-pill"><span class="blink"></span> ship it</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần I · Chương 2</span>
+        <h1>Deploy, Docker, CI/CD & Monitoring</h1>
+        <p class="lead">Đưa service lên production an toàn: container hóa, pipeline CI/CD, chiến lược deploy không downtime và giám sát hệ thống.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phân biệt <b>container vs máy ảo</b>, hiểu image/layer/Dockerfile và viết được <b>multi-stage build</b> gọn cho service Node.js.</p>
+        <p>• Dựng môi trường local với <b>Docker Compose</b> (app + database + Redis) và hiểu mạng/volume giữa các container.</p>
+        <p>• Mô tả một <b>pipeline CI/CD</b> đầy đủ: lint → test → build image → đẩy registry → deploy, và biết khi nào pipeline nên fail.</p>
+        <p>• So sánh các <b>chiến lược deploy</b> (recreate, rolling, blue-green, canary) và giải thích cách đạt <b>zero-downtime</b>.</p>
+        <p>• Nắm <b>3 trụ cột observability</b> (metrics, logs, traces), thiết kế <b>health check</b> (liveness/readiness) và <b>autoscaling</b>.</p>
+        <p>• Hiểu vai trò <b>reverse proxy (nginx)</b>, <b>PM2 cluster</b>, <b>Kubernetes</b> cơ bản và cách quản lý <b>secret</b> an toàn.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế — vì sao DevOps quan trọng với Contact Center</div>
+        <p>Một hệ thống tổng đài chạy <b>24/7</b>: lúc nào cũng có cuộc gọi, phiên chat, agent đang trực. Mỗi lần deploy không khéo là <b>rớt cuộc gọi đang diễn ra</b>, mất tin nhắn chưa lưu, agent bị đăng xuất giữa ca. Chương này dạy cách <b>ship code mà người dùng không hề biết</b>: container hóa để chạy giống nhau ở mọi nơi, pipeline tự kiểm thử trước khi lên, chiến lược deploy không downtime, và giám sát để phát hiện sự cố <i>trước</i> khi khách hàng phàn nàn. Đây là phần kết hợp tư duy thiết kế của <a href="I1-system-design-realtime.html">I1</a> với vận hành thực tế.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="docker"><span class="ico">①</span> Docker & Container</h2>
+      <p>Vấn đề kinh điển: "<i>chạy ngon trên máy tôi mà</i>". Code chạy được trên laptop của bạn nhưng lên server lại lỗi vì khác phiên bản Node, thiếu thư viện hệ thống, khác biến môi trường. <strong>Container</strong> giải quyết bằng cách đóng gói code + runtime + thư viện + cấu hình thành một <b>đơn vị bất biến</b>, chạy giống hệt nhau ở mọi nơi.</p>
+
+      <h3>Container vs Máy ảo (VM)</h3>
+      <p>Cả hai đều cô lập ứng dụng, nhưng ở tầng khác nhau. VM ảo hóa <b>phần cứng</b> — mỗi VM có nguyên một hệ điều hành riêng. Container ảo hóa <b>hệ điều hành</b> — chia sẻ chung kernel của host, chỉ cô lập tiến trình.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>Máy ảo (VM)</th><th>Container</th></tr></thead>
+          <tbody>
+            <tr><td>Cô lập tầng</td><td>Phần cứng (qua hypervisor)</td><td>Tiến trình (chia sẻ kernel host)</td></tr>
+            <tr><td>Kích thước</td><td>GB (kèm cả OS)</td><td>MB (chỉ app + thư viện)</td></tr>
+            <tr><td>Thời gian khởi động</td><td>Hàng chục giây → phút</td><td>Mili-giây → giây</td></tr>
+            <tr><td>Mức cô lập</td><td>Rất cao (kernel riêng)</td><td>Vừa (chung kernel)</td></tr>
+            <tr><td>Mật độ trên 1 host</td><td>Ít</td><td>Nhiều (nhẹ)</td></tr>
+            <tr><td>Hợp với</td><td>Chạy OS khác, cô lập cứng</td><td>Microservice, scale nhanh, CI/CD</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Vì sao Contact Center thích container</div>
+        <p>Hệ thống tổng đài gồm nhiều service nhỏ: <code>call-service</code>, <code>chat-service</code>, <code>routing-engine</code>, <code>ticket-api</code>... Mỗi cái cần scale độc lập theo tải. Container nhẹ, khởi động nhanh nên có thể <b>thêm/bớt instance trong vài giây</b> khi lượng cuộc gọi tăng đột biến giờ cao điểm — điều mà VM nặng nề khó làm kịp.</p>
+      </div>
+
+      <h3>Image, Layer & Dockerfile</h3>
+      <p>Cần phân biệt rõ 2 khái niệm cốt lõi:</p>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">📦</span> Image</div><p>Bản thiết kế <b>bất biến</b> (read-only), đóng gói filesystem + metadata. Giống "class" trong OOP.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">▶️</span> Container</div><p>Một <b>instance đang chạy</b> của image, có thêm tầng ghi (writable layer). Giống "object".</p></div>
+      </div>
+      <p>Image được xây từ nhiều <strong>layer</strong> xếp chồng. Mỗi lệnh trong Dockerfile tạo ra một layer. Docker <b>cache</b> từng layer: nếu một layer không đổi, các build sau dùng lại cache thay vì xây lại. Đây là lý do <b>thứ tự lệnh rất quan trọng</b> — đặt phần ít thay đổi (cài dependency) lên trước, phần hay thay đổi (copy source code) xuống dưới.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">Dockerfile (naïve — chưa tối ưu)</span><span class="lang">Docker</span></div>
+        <pre><code><span class="tok-key">FROM</span> node:20
+<span class="tok-key">WORKDIR</span> /app
+<span class="tok-key">COPY</span> . .                  <span class="tok-com"># copy CẢ source trước → mọi thay đổi code phá cache npm install</span>
+<span class="tok-key">RUN</span> npm install
+<span class="tok-key">EXPOSE</span> 3000
+<span class="tok-key">CMD</span> [<span class="tok-str">"node"</span>, <span class="tok-str">"src/index.js"</span>]</code></pre>
+      </div>
+      <p>Vấn đề: mỗi lần sửa 1 dòng code, <code>COPY . .</code> đổi → layer <code>npm install</code> phải chạy lại từ đầu (chậm). Sửa bằng cách tách <code>package.json</code> ra trước:</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">Dockerfile (tận dụng layer cache)</span><span class="lang">Docker</span></div>
+        <pre><code><span class="tok-key">FROM</span> node:20-alpine
+<span class="tok-key">WORKDIR</span> /app
+<span class="tok-key">COPY</span> package*.json ./       <span class="tok-com"># chỉ copy manifest trước</span>
+<span class="tok-key">RUN</span> npm ci                  <span class="tok-com"># layer này được cache nếu package.json không đổi</span>
+<span class="tok-key">COPY</span> . .                    <span class="tok-com"># copy code sau → đổi code KHÔNG phá cache npm</span>
+<span class="tok-key">EXPOSE</span> 3000
+<span class="tok-key">CMD</span> [<span class="tok-str">"node"</span>, <span class="tok-str">"src/index.js"</span>]</code></pre>
+      </div>
+      <div class="callout info">
+        <div class="c-title">📝 <code>npm ci</code> vs <code>npm install</code></div>
+        <p>Trong môi trường build/CI nên dùng <code>npm ci</code>: nó cài <b>chính xác theo <code>package-lock.json</code></b>, xóa <code>node_modules</code> cũ, nhanh và <b>tái lập được (reproducible)</b>. <code>npm install</code> có thể cập nhật lock file ngoài ý muốn — không hợp cho build bất biến.</p>
+      </div>
+
+      <h3>Multi-stage build — image production gọn & an toàn</h3>
+      <p>Build app thường cần devDependencies (TypeScript, eslint, công cụ build) nhưng <b>runtime production thì không</b>. Multi-stage build dùng nhiều <code>FROM</code>: một stage để build, một stage runtime chỉ copy <b>artifact đã build</b>. Kết quả: image nhỏ hơn nhiều, ít lỗ hổng bảo mật hơn (ít gói thừa), không lộ source/công cụ build.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">Dockerfile — multi-stage cho TS call-service</span><span class="lang">Docker</span></div>
+        <pre><code><span class="tok-com"># ---------- Stage 1: builder ----------</span>
+<span class="tok-key">FROM</span> node:20-alpine <span class="tok-key">AS</span> builder
+<span class="tok-key">WORKDIR</span> /app
+<span class="tok-key">COPY</span> package*.json ./
+<span class="tok-key">RUN</span> npm ci                    <span class="tok-com"># cài cả devDependencies để build</span>
+<span class="tok-key">COPY</span> . .
+<span class="tok-key">RUN</span> npm run build            <span class="tok-com"># tsc → xuất ra /app/dist</span>
+
+<span class="tok-com"># ---------- Stage 2: runtime (gọn) ----------</span>
+<span class="tok-key">FROM</span> node:20-alpine
+<span class="tok-key">WORKDIR</span> /app
+<span class="tok-key">ENV</span> NODE_ENV=production
+<span class="tok-key">COPY</span> package*.json ./
+<span class="tok-key">RUN</span> npm ci --omit=dev         <span class="tok-com"># CHỈ dependencies production</span>
+<span class="tok-key">COPY</span> --from=builder /app/dist ./dist   <span class="tok-com"># lấy artifact từ stage builder</span>
+<span class="tok-key">USER</span> node                    <span class="tok-com"># không chạy bằng root → an toàn hơn</span>
+<span class="tok-key">EXPOSE</span> 3000
+<span class="tok-key">CMD</span> [<span class="tok-str">"node"</span>, <span class="tok-str">"dist/index.js"</span>]</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Đừng quên <code>.dockerignore</code></div>
+        <p>Tạo <code>.dockerignore</code> để loại <code>node_modules</code>, <code>.git</code>, <code>.env</code>, log... khỏi build context. Nếu không, <code>COPY . .</code> sẽ kéo cả <code>node_modules</code> local (sai kiến trúc/OS) và <b>có thể lộ secret</b> trong <code>.env</code> vào image.</p>
+      </div>
+
+      <h3>Registry — kho chứa image</h3>
+      <p>Sau khi build, image cần được đẩy lên <strong>registry</strong> (Docker Hub, GitHub Container Registry, hoặc registry nội bộ) để server/cluster kéo về deploy. Image được gắn <b>tag</b> để định danh phiên bản.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">build & push</span><span class="lang">bash</span></div>
+        <pre><code><span class="tok-com"># build với 2 tag: số phiên bản cụ thể + git SHA (truy vết được)</span>
+docker build -t registry.example.com/call-service:1.4.0 \
+             -t registry.example.com/call-service:$(git rev-parse --short HEAD) .
+
+docker push registry.example.com/call-service:1.4.0
+docker push registry.example.com/call-service:$(git rev-parse --short HEAD)</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Đừng deploy bằng tag <code>latest</code></div>
+        <p>Tag <code>latest</code> không bất biến — nó trỏ tới image khác nhau theo thời gian. Production phải dùng tag <b>cố định</b> (số phiên bản hoặc git SHA) để biết <i>chính xác</i> đang chạy code nào và <b>rollback</b> được. Dùng <code>latest</code> khiến không reproduce nổi sự cố.</p>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="compose"><span class="ico">②</span> Docker Compose — dựng môi trường local</h2>
+      <p>Một service thực tế hiếm khi đứng một mình. <code>call-service</code> cần một <b>database</b> (lưu cuộc gọi, ticket) và <b>Redis</b> (pub/sub realtime, cache trạng thái agent, hàng đợi). Chạy tay từng container rất phiền. <strong>Docker Compose</strong> mô tả nhiều service trong một file YAML và khởi động tất cả bằng một lệnh.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">docker-compose.yml — app + db + redis</span><span class="lang">YAML</span></div>
+        <pre><code><span class="tok-typ">services</span>:
+  <span class="tok-typ">app</span>:
+    <span class="tok-typ">build</span>: .
+    <span class="tok-typ">ports</span>:
+      - <span class="tok-str">"3000:3000"</span>
+    <span class="tok-typ">environment</span>:
+      - DB_URL=postgres://cc:secret@db:5432/contactcenter
+      - REDIS_URL=redis://redis:6379
+    <span class="tok-typ">depends_on</span>:
+      <span class="tok-typ">db</span>:
+        <span class="tok-typ">condition</span>: service_healthy   <span class="tok-com"># chờ db SẴN SÀNG, không chỉ "đã start"</span>
+      <span class="tok-typ">redis</span>:
+        <span class="tok-typ">condition</span>: service_started
+
+  <span class="tok-typ">db</span>:
+    <span class="tok-typ">image</span>: postgres:16-alpine
+    <span class="tok-typ">environment</span>:
+      - POSTGRES_USER=cc
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=contactcenter
+    <span class="tok-typ">volumes</span>:
+      - db-data:/var/lib/postgresql/data   <span class="tok-com"># dữ liệu tồn tại qua restart</span>
+    <span class="tok-typ">healthcheck</span>:
+      <span class="tok-typ">test</span>: [<span class="tok-str">"CMD-SHELL"</span>, <span class="tok-str">"pg_isready -U cc"</span>]
+      <span class="tok-typ">interval</span>: 5s
+      <span class="tok-typ">retries</span>: 5
+
+  <span class="tok-typ">redis</span>:
+    <span class="tok-typ">image</span>: redis:7-alpine
+
+<span class="tok-typ">volumes</span>:
+  <span class="tok-typ">db-data</span>:</code></pre>
+      </div>
+      <div class="callout info">
+        <div class="c-title">📝 2 thứ Compose lo giúp bạn</div>
+        <p><b>Mạng nội bộ:</b> Compose tạo một network chung; container gọi nhau qua <b>tên service</b> như hostname (<code>db:5432</code>, <code>redis:6379</code>) — không cần biết IP. <b>Volume:</b> dữ liệu DB nằm trong named volume <code>db-data</code> nên không mất khi container restart/rebuild.</p>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ <code>depends_on</code> không đợi "sẵn sàng"</div>
+        <p>Mặc định <code>depends_on</code> chỉ chờ container <b>start</b>, không chờ DB <b>chấp nhận kết nối</b>. Postgres start xong vẫn cần vài giây để nhận query. Vì vậy phải kèm <code>healthcheck</code> + <code>condition: service_healthy</code>, và app vẫn nên có <b>retry connect</b> khi khởi động.</p>
+      </div>
+      <p class="muted">Lệnh hay dùng: <code>docker compose up -d</code> (chạy nền), <code>docker compose logs -f app</code> (xem log), <code>docker compose down -v</code> (dừng & xóa cả volume). Lưu ý: Compose tiện cho <b>local/dev</b>; production thường dùng orchestrator như Kubernetes.</p>
+
+      <!-- 3 -->
+      <h2 id="cicd"><span class="ico">③</span> CI/CD Pipeline</h2>
+      <p><strong>CI (Continuous Integration)</strong>: mỗi lần push code, hệ thống tự động lint + test + build để phát hiện lỗi sớm. <strong>CD (Continuous Delivery/Deployment)</strong>: tự động đóng gói image và đưa lên môi trường (staging/production). Mục tiêu: <b>mỗi commit đều ở trạng thái deploy được</b>, và việc lên production trở nên nhàm chán (theo nghĩa tốt — an toàn, lặp lại được).</p>
+      <div class="flow">
+        <span class="node">push code</span><span class="arr">→</span>
+        <span class="node">lint</span><span class="arr">→</span>
+        <span class="node">test (unit + integration)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">build image</span><span class="arr">→</span>
+        <span class="node">push registry</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--accent)">deploy</span>
+      </div>
+      <p>Mỗi bước là một <b>cổng kiểm soát (gate)</b>: nếu lint fail hoặc test fail, pipeline <b>dừng ngay</b>, image không được build, code không lên production. Đây chính là giá trị cốt lõi — ngăn code lỗi tới tay người dùng.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">.github/workflows/ci.yml (minh họa khái niệm)</span><span class="lang">YAML</span></div>
+        <pre><code><span class="tok-typ">name</span>: CI/CD
+<span class="tok-typ">on</span>:
+  <span class="tok-typ">push</span>:
+    <span class="tok-typ">branches</span>: [main]
+
+<span class="tok-typ">jobs</span>:
+  <span class="tok-typ">test</span>:
+    <span class="tok-typ">runs-on</span>: ubuntu-latest
+    <span class="tok-typ">steps</span>:
+      - <span class="tok-typ">uses</span>: actions/checkout@v4
+      - <span class="tok-typ">uses</span>: actions/setup-node@v4
+        <span class="tok-typ">with</span>: { node-version: 20, cache: npm }
+      - <span class="tok-typ">run</span>: npm ci
+      - <span class="tok-typ">run</span>: npm run lint        <span class="tok-com"># gate 1: chuẩn code</span>
+      - <span class="tok-typ">run</span>: npm test            <span class="tok-com"># gate 2: hành vi đúng</span>
+
+  <span class="tok-typ">build-and-push</span>:
+    <span class="tok-typ">needs</span>: test               <span class="tok-com"># CHỈ chạy nếu test pass</span>
+    <span class="tok-typ">runs-on</span>: ubuntu-latest
+    <span class="tok-typ">steps</span>:
+      - <span class="tok-typ">uses</span>: actions/checkout@v4
+      - <span class="tok-typ">run</span>: |
+          docker build -t $REGISTRY/call-service:${{ github.sha }} .
+          echo "$REG_TOKEN" | docker login $REGISTRY -u ci --password-stdin
+          docker push $REGISTRY/call-service:${{ github.sha }}
+        <span class="tok-typ">env</span>:
+          REG_TOKEN: ${{ secrets.REGISTRY_TOKEN }}   <span class="tok-com"># secret, KHÔNG hard-code</span>
+
+  <span class="tok-typ">deploy</span>:
+    <span class="tok-typ">needs</span>: build-and-push
+    <span class="tok-typ">runs-on</span>: ubuntu-latest
+    <span class="tok-typ">steps</span>:
+      - <span class="tok-typ">run</span>: kubectl set image deploy/call-service app=$REGISTRY/call-service:${{ github.sha }}</code></pre>
+      </div>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🔍</span> Lint</div><p>Bắt lỗi cú pháp/style sớm, đồng nhất code base. Rẻ và nhanh nên đặt đầu pipeline.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🧪</span> Test</div><p>Unit (logic routing cuộc gọi) + integration (API ticket gọi DB thật/test container). Gate quan trọng nhất.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚀</span> Deploy</div><p>Cập nhật image trên cluster. Có thể yêu cầu <b>duyệt thủ công</b> trước khi lên production.</p></div>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Nguyên tắc thiết kế pipeline tốt</div>
+        <p><b>Fail fast & rõ ràng:</b> bước rẻ (lint) chạy trước bước đắt (test tích hợp, build). <b>Bất biến:</b> build <i>một</i> image rồi promote nguyên image đó qua staging → production (không build lại). <b>Truy vết:</b> gắn git SHA vào tag image để biết mỗi deploy tương ứng commit nào. <b>Tự động hóa rollback:</b> nếu health check sau deploy fail thì tự quay về phiên bản cũ.</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="strategies"><span class="ico">④</span> Chiến lược deploy</h2>
+      <p>Cùng một image mới, nhưng <b>cách thay thế phiên bản cũ</b> quyết định người dùng có bị gián đoạn không. Với Contact Center 24/7, đây là phần sống còn: chọn sai chiến lược là rớt hàng loạt cuộc gọi.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Chiến lược</th><th>Cách làm</th><th>Downtime</th><th>Đánh đổi</th></tr></thead>
+          <tbody>
+            <tr><td><b>Recreate</b></td><td>Tắt hết bản cũ → bật bản mới</td><td><span class="badge red">Có</span></td><td>Đơn giản nhất nhưng có khoảng "chết". Chỉ hợp dev/job nền.</td></tr>
+            <tr><td><b>Rolling</b></td><td>Thay từng phần instance, cũ & mới chạy song song một lúc</td><td><span class="badge green">Không</span></td><td>Zero-downtime mặc định của K8s. Nhưng 2 phiên bản chạy đồng thời → cần tương thích.</td></tr>
+            <tr><td><b>Blue-Green</b></td><td>Dựng full môi trường mới (green) song song với cũ (blue), gạt traffic một phát</td><td><span class="badge green">Không</span></td><td>Rollback <b>tức thì</b> (gạt về blue). Tốn gấp đôi tài nguyên lúc chuyển.</td></tr>
+            <tr><td><b>Canary</b></td><td>Cho bản mới nhận <b>% nhỏ</b> traffic (5% → 25% → 100%), theo dõi rồi mở rộng</td><td><span class="badge green">Không</span></td><td>Phát hiện lỗi với phạm vi ảnh hưởng nhỏ. Phức tạp hơn, cần đo lường tốt.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Rolling update — cơ chế zero-downtime</h3>
+      <p>Rolling thay từng instance một, dựa vào 2 tham số: <code>maxUnavailable</code> (tối đa bao nhiêu instance được phép thiếu) và <code>maxSurge</code> (được tạo thêm bao nhiêu instance tạm thời). Kết hợp với <b>readiness probe</b>: instance mới chỉ nhận traffic khi đã "sẵn sàng", instance cũ chỉ bị tắt sau khi instance mới lên.</p>
+      <div class="flow">
+        <span class="node">3× v1 (đang phục vụ)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">+1 v2 (chờ readiness)</span><span class="arr">→</span>
+        <span class="node">v2 ready → −1 v1</span><span class="arr">→</span>
+        <span class="node">lặp lại</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--accent)">3× v2</span>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Bẫy lớn: hai phiên bản chạy đồng thời</div>
+        <p>Trong rolling và canary, <b>v1 và v2 cùng chạy một khoảng</b>. Nếu deploy có <b>migration DB phá vỡ tương thích</b> (vd đổi tên cột mà v1 vẫn đọc cột cũ), v1 sẽ lỗi giữa chừng. Quy tắc: migration phải <b>tương thích ngược (backward-compatible)</b> — thêm cột/bảng trước, đổi code đọc/ghi sau, xóa cột cũ ở deploy tiếp theo (expand–contract). Đây là tư duy thiết kế bắt buộc khi muốn zero-downtime.</p>
+      </div>
+
+      <h3>Blue-Green vs Canary — chọn cái nào?</h3>
+      <div class="two-col">
+        <div class="callout info"><div class="c-title">🔵🟢 Blue-Green</div>
+          <p>Hai môi trường <b>hoàn chỉnh</b>. Traffic chuyển <b>toàn bộ</b> một lúc. Ưu: rollback tức thì, kiểm thử green kỹ trước khi gạt. Nhược: tốn gấp đôi tài nguyên, "big bang" — lỗi thì 100% user dính ngay khi gạt.</p></div>
+        <div class="callout tip"><div class="c-title">🐤 Canary</div>
+          <p>Mở van traffic <b>từ từ</b>. Ưu: lỗi chỉ ảnh hưởng nhóm nhỏ, quan sát metrics (lỗi gọi, độ trễ) trước khi mở rộng. Nhược: cần hạ tầng định tuyến % + giám sát mạnh; thời gian rollout lâu hơn.</p></div>
+      </div>
+      <p>Với tổng đài: <b>canary</b> hợp khi đổi logic <b>routing cuộc gọi</b> hay <b>tính phí</b> (rủi ro cao, muốn thử trên ít cuộc gọi trước); <b>blue-green</b> hợp khi cần <b>rollback cực nhanh</b> và môi trường đủ tài nguyên.</p>
+
+      <!-- 5 -->
+      <h2 id="monitoring"><span class="ico">⑤</span> Monitoring & Logging — 3 trụ cột Observability</h2>
+      <p>Deploy xong không phải là hết. Bạn cần biết hệ thống đang <b>khỏe hay ốm</b>, và khi có sự cố thì <b>vì sao</b>. <strong>Observability</strong> (khả năng quan sát) dựng trên 3 trụ cột bổ sung cho nhau:</p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">📊</span> Metrics</div><p>Số liệu theo thời gian: RPS, độ trễ p95/p99, CPU, số cuộc gọi đồng thời. Trả lời "<b>cái gì</b> đang xảy ra".</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📜</span> Logs</div><p>Bản ghi sự kiện chi tiết (có <code>traceId</code>). Trả lời "<b>vì sao</b> nó xảy ra", phục vụ điều tra.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔗</span> Traces</div><p>Hành trình một request qua nhiều service. Trả lời "<b>ở đâu</b> chậm/lỗi" trong chuỗi gọi.</p></div>
+      </div>
+
+      <h3>Metrics — Prometheus & Grafana</h3>
+      <p><b>Prometheus</b> định kỳ "scrape" (kéo) metrics từ endpoint <code>/metrics</code> của từng service và lưu dạng time-series. <b>Grafana</b> vẽ dashboard và đặt cảnh báo. Service tự bóc tách (instrument) các chỉ số quan trọng:</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">metrics.js — đo nghiệp vụ tổng đài</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-key">const</span> client = <span class="tok-fn">require</span>(<span class="tok-str">'prom-client'</span>);
+client.<span class="tok-fn">collectDefaultMetrics</span>();   <span class="tok-com">// CPU, RAM, event loop lag...</span>
+
+<span class="tok-com">// Counter: tổng số cuộc gọi đã nhận (chỉ tăng)</span>
+<span class="tok-key">const</span> callsTotal = <span class="tok-key">new</span> client.<span class="tok-typ">Counter</span>({
+  name: <span class="tok-str">'calls_total'</span>, help: <span class="tok-str">'Tổng cuộc gọi'</span>, labelNames: [<span class="tok-str">'status'</span>],
+});
+<span class="tok-com">// Gauge: số cuộc gọi đang diễn ra (tăng/giảm)</span>
+<span class="tok-key">const</span> activeCalls = <span class="tok-key">new</span> client.<span class="tok-typ">Gauge</span>({ name: <span class="tok-str">'active_calls'</span>, help: <span class="tok-str">'Cuộc gọi đang diễn ra'</span> });
+<span class="tok-com">// Histogram: phân bố thời gian chờ trong hàng đợi</span>
+<span class="tok-key">const</span> queueWait = <span class="tok-key">new</span> client.<span class="tok-typ">Histogram</span>({
+  name: <span class="tok-str">'queue_wait_seconds'</span>, help: <span class="tok-str">'Thời gian chờ trước khi gặp agent'</span>,
+  buckets: [<span class="tok-num">1</span>, <span class="tok-num">5</span>, <span class="tok-num">15</span>, <span class="tok-num">30</span>, <span class="tok-num">60</span>, <span class="tok-num">120</span>],
+});
+
+app.<span class="tok-fn">get</span>(<span class="tok-str">'/metrics'</span>, <span class="tok-key">async</span> (req, res) => {
+  res.<span class="tok-fn">set</span>(<span class="tok-str">'Content-Type'</span>, client.register.contentType);
+  res.<span class="tok-fn">end</span>(<span class="tok-key">await</span> client.register.<span class="tok-fn">metrics</span>());
+});</code></pre>
+      </div>
+      <div class="callout info">
+        <div class="c-title">📝 3 loại metric cần phân biệt khi phỏng vấn</div>
+        <p><b>Counter</b> chỉ tăng (tổng cuộc gọi, tổng lỗi). <b>Gauge</b> lên/xuống (cuộc gọi đang active, số agent online). <b>Histogram</b> đo phân bố để tính p95/p99 (thời gian chờ, độ trễ API) — trung bình che giấu đuôi xấu, nên realtime luôn nhìn percentile.</p>
+      </div>
+
+      <h3>Logging tập trung & Tracing</h3>
+      <p>Trong hệ phân tán, log nằm rải rác ở chục container. <b>Log tập trung</b> (gom về một nơi như ELK/Loki) cho phép tìm kiếm xuyên service. Quy tắc vàng: <b>log có cấu trúc (JSON)</b> và đính kèm <code>traceId</code> để nối các dòng log của cùng một request lại với nhau.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">structured log + traceId</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-com">// Tệ: log chuỗi tự do, không grep nổi xuyên service</span>
+console.<span class="tok-fn">log</span>(<span class="tok-str">'call '</span> + callId + <span class="tok-str">' routed to agent '</span> + agentId);
+
+<span class="tok-com">// Tốt: JSON có cấu trúc, có traceId để nối chuỗi request</span>
+logger.<span class="tok-fn">info</span>({
+  event: <span class="tok-str">'call_routed'</span>,
+  traceId: req.traceId,
+  callId, agentId,
+  queueWaitMs: <span class="tok-num">8200</span>,
+});</code></pre>
+      </div>
+      <p><b>Tracing</b> (OpenTelemetry) gắn mỗi request một <code>traceId</code> xuyên suốt: gateway → routing-engine → call-service → DB. Khi một cuộc gọi bị chậm 3 giây, trace cho thấy <i>chính xác</i> bước nào ngốn thời gian thay vì đoán mò.</p>
+
+      <h3>Alerting — cảnh báo dựa trên triệu chứng</h3>
+      <div class="callout tip">
+        <div class="c-title">💡 Cảnh báo theo "triệu chứng" chứ không theo "nguyên nhân"</div>
+        <p>Đừng báo động "CPU 90%" (có thể vô hại). Hãy báo động khi <b>người dùng thực sự đau</b>: "tỷ lệ cuộc gọi thất bại &gt; 2% trong 5 phút", "p99 thời gian kết nối &gt; 3s", "không còn agent nào online". Cảnh báo tốt phải <b>actionable</b> (gắn với hành động cụ thể), tránh "alert fatigue" — báo nhiều quá đến mức ai cũng phớt lờ.</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="health"><span class="ico">⑥</span> Health Check & Scaling</h2>
+      <h3>Liveness vs Readiness probe</h3>
+      <p>Orchestrator (K8s) cần biết container có khỏe không, qua 2 loại probe <b>khác mục đích</b>:</p>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">💓</span> Liveness</div><p>"Tiến trình còn <b>sống</b> không?" Nếu fail → K8s <b>restart</b> container. Dùng để thoát deadlock/treo.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Readiness</div><p>"Đã <b>sẵn sàng nhận traffic</b> chưa?" Nếu fail → tạm <b>cắt traffic</b> (không restart). Dùng khi đang warmup/mất kết nối DB.</p></div>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">health endpoints</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-com">// Liveness: chỉ cần process trả lời được là sống</span>
+app.<span class="tok-fn">get</span>(<span class="tok-str">'/healthz'</span>, (req, res) => res.<span class="tok-fn">send</span>(<span class="tok-str">'ok'</span>));
+
+<span class="tok-com">// Readiness: kiểm tra phụ thuộc — DB, Redis kết nối được mới nhận traffic</span>
+app.<span class="tok-fn">get</span>(<span class="tok-str">'/readyz'</span>, <span class="tok-key">async</span> (req, res) => {
+  <span class="tok-key">try</span> {
+    <span class="tok-key">await</span> db.<span class="tok-fn">ping</span>();
+    <span class="tok-key">await</span> redis.<span class="tok-fn">ping</span>();
+    res.<span class="tok-fn">send</span>(<span class="tok-str">'ready'</span>);
+  } <span class="tok-key">catch</span> (e) {
+    res.<span class="tok-fn">status</span>(<span class="tok-num">503</span>).<span class="tok-fn">send</span>(<span class="tok-str">'not ready'</span>);  <span class="tok-com">// tạm rút khỏi pool, không restart</span>
+  }
+});</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Bẫy cổ điển: nhầm readiness vào liveness</div>
+        <p>Nếu để liveness probe kiểm tra DB và DB sập 30 giây, K8s sẽ <b>restart liên tục mọi container</b> (dù bản thân app vẫn ổn) → biến sự cố nhỏ thành thảm họa lan rộng. Quy tắc: liveness chỉ kiểm tra <b>bản thân tiến trình</b>; phụ thuộc ngoài (DB, Redis) thuộc <b>readiness</b>.</p>
+      </div>
+
+      <h3>Graceful shutdown — không rớt cuộc gọi khi deploy</h3>
+      <p>Khi rolling update tắt một pod cũ, K8s gửi <code>SIGTERM</code>. App phải: (1) ngừng nhận request mới, (2) hoàn tất request/cuộc gọi đang xử lý, (3) đóng WebSocket/DB/queue, rồi mới exit. Nếu không, cuộc gọi đang diễn ra bị cắt đột ngột.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">graceful shutdown</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-typ">process</span>.<span class="tok-fn">on</span>(<span class="tok-str">'SIGTERM'</span>, <span class="tok-key">async</span> () => {
+  ready = <span class="tok-key">false</span>;                 <span class="tok-com">// /readyz trả 503 → K8s cắt traffic mới</span>
+  server.<span class="tok-fn">close</span>();                  <span class="tok-com">// ngừng nhận HTTP request mới</span>
+  <span class="tok-key">await</span> <span class="tok-fn">drainActiveCalls</span>();      <span class="tok-com">// chờ cuộc gọi đang diễn ra kết thúc (có timeout)</span>
+  <span class="tok-key">await</span> redis.<span class="tok-fn">quit</span>();
+  <span class="tok-key">await</span> db.<span class="tok-fn">end</span>();
+  <span class="tok-typ">process</span>.<span class="tok-fn">exit</span>(<span class="tok-num">0</span>);
+});</code></pre>
+      </div>
+      <p class="muted">Liên hệ chương <a href="../B/B1-kien-truc-nodejs.html">B1</a> (xử lý tín hiệu <code>process</code>) — đây là ứng dụng thực tế của graceful shutdown trong vòng đời deploy.</p>
+
+      <h3>Autoscaling — HPA</h3>
+      <p><b>Horizontal Pod Autoscaler</b> tự tăng/giảm số instance theo tải. Có thể scale theo CPU, hoặc tốt hơn là theo <b>metric nghiệp vụ</b> (số cuộc gọi đồng thời, độ dài hàng đợi). Giờ cao điểm → thêm pod; đêm vắng → bớt pod để tiết kiệm.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">hpa.yaml</span><span class="lang">YAML</span></div>
+        <pre><code><span class="tok-typ">apiVersion</span>: autoscaling/v2
+<span class="tok-typ">kind</span>: HorizontalPodAutoscaler
+<span class="tok-typ">spec</span>:
+  <span class="tok-typ">scaleTargetRef</span>: { kind: Deployment, name: call-service }
+  <span class="tok-typ">minReplicas</span>: 3
+  <span class="tok-typ">maxReplicas</span>: 20
+  <span class="tok-typ">metrics</span>:
+    - <span class="tok-typ">type</span>: Resource
+      <span class="tok-typ">resource</span>: { name: cpu, target: { type: Utilization, averageUtilization: 65 } }</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Scale ngang chỉ hiệu quả khi service "stateless"</div>
+        <p>Thêm pod chỉ giúp được nếu state (phiên agent, trạng thái cuộc gọi) nằm <b>ngoài</b> pod — trong Redis/DB, không phải bộ nhớ pod. Đây là điểm nối với <a href="I1-system-design-realtime.html">I1</a>: kiến trúc realtime phải tách state ra (Redis pub/sub, sticky session hoặc shared adapter) thì autoscaling mới chạy đúng.</p>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="infra"><span class="ico">⑦</span> Reverse Proxy, PM2 & Kubernetes</h2>
+      <h3>Reverse Proxy (nginx)</h3>
+      <p>Đặt <b>nginx</b> trước các instance Node để làm: TLS termination (kết thúc HTTPS), load balancing, nén, rate limiting, và <b>nâng cấp WebSocket</b>. Node tập trung vào nghiệp vụ, việc "lớp vỏ" giao cho proxy.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">nginx.conf — proxy + WebSocket cho realtime</span><span class="lang">nginx</span></div>
+        <pre><code><span class="tok-key">upstream</span> call_backend {
+  server app1:3000;
+  server app2:3000;       <span class="tok-com"># load balance giữa các instance</span>
+}
+<span class="tok-key">server</span> {
+  listen 443 ssl;
+  location /socket.io/ {
+    proxy_pass http://call_backend;
+    proxy_set_header Upgrade $http_upgrade;        <span class="tok-com"># bắt buộc cho WebSocket</span>
+    proxy_set_header Connection <span class="tok-str">"upgrade"</span>;
+    proxy_read_timeout 3600s;                       <span class="tok-com"># kết nối realtime sống lâu</span>
+  }
+  location / { proxy_pass http://call_backend; }
+}</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ WebSocket cần cấu hình đặc biệt</div>
+        <p>Quên 2 header <code>Upgrade</code>/<code>Connection</code> là WebSocket/Socket.IO <b>không kết nối được</b> — lỗi rất hay gặp trong hệ realtime. Ngoài ra timeout mặc định của proxy thường ngắn, phải nâng lên cho kết nối lâu dài (cuộc gọi/phiên chat).</p>
+      </div>
+
+      <h3>PM2 — chạy nhiều instance khi chưa dùng K8s</h3>
+      <p>Trên một máy chủ đơn lẻ, <b>PM2</b> chạy Node ở chế độ <code>cluster</code>: fork nhiều process tận dụng đa nhân, tự restart khi crash, hỗ trợ <b>reload không downtime</b>. Đây là bậc thang trước Kubernetes.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">ecosystem.config.js</span><span class="lang">PM2</span></div>
+        <pre><code>module.exports = {
+  apps: [{
+    name: <span class="tok-str">'call-service'</span>,
+    script: <span class="tok-str">'dist/index.js'</span>,
+    instances: <span class="tok-str">'max'</span>,        <span class="tok-com">// 1 process / 1 CPU core</span>
+    exec_mode: <span class="tok-str">'cluster'</span>,    <span class="tok-com">// nhiều process cùng nghe 1 port</span>
+    max_memory_restart: <span class="tok-str">'500M'</span>, <span class="tok-com">// rò bộ nhớ → tự restart</span>
+  }],
+};
+<span class="tok-com">// pm2 reload call-service  → reload từng instance, KHÔNG downtime</span></code></pre>
+      </div>
+
+      <h3>Kubernetes — cơ bản & quản lý secret</h3>
+      <p>Khi nhiều service và nhiều máy, cần <b>orchestrator</b>. Kubernetes tự lên lịch container, tự healing (pod chết → tạo lại), rolling update, scaling. Vài khái niệm cốt lõi:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Khái niệm</th><th>Vai trò</th></tr></thead>
+          <tbody>
+            <tr><td><b>Pod</b></td><td>Đơn vị nhỏ nhất, bọc 1 (hoặc vài) container chạy chung.</td></tr>
+            <tr><td><b>Deployment</b></td><td>Quản lý số bản sao của pod, lo rolling update & rollback.</td></tr>
+            <tr><td><b>Service</b></td><td>Tên/IP ổn định + load balance tới các pod (pod đến/đi liên tục).</td></tr>
+            <tr><td><b>ConfigMap</b></td><td>Cấu hình <b>không nhạy cảm</b> (URL, feature flag).</td></tr>
+            <tr><td><b>Secret</b></td><td>Dữ liệu <b>nhạy cảm</b> (mật khẩu DB, JWT secret, API key).</td></tr>
+            <tr><td><b>Ingress</b></td><td>Định tuyến HTTP từ ngoài vào các Service (như reverse proxy của cluster).</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Quản lý secret & env — đừng commit bí mật</div>
+        <p>Config tách khỏi code (12-factor): inject qua <b>biến môi trường</b>. Bí mật (mật khẩu DB, token) <b>không bao giờ</b> hard-code hay commit vào git — dùng Secret của K8s (hoặc Vault/cloud secret manager) và mount vào pod. Lưu ý K8s Secret mặc định chỉ <b>base64</b> (không phải mã hóa) → cần bật encryption-at-rest và phân quyền RBAC chặt. Lộ <code>.env</code> chứa secret là một trong những sự cố bảo mật phổ biến nhất.</p>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">deployment.yaml — secret + probes + image cố định</span><span class="lang">YAML</span></div>
+        <pre><code><span class="tok-typ">spec</span>:
+  <span class="tok-typ">containers</span>:
+    - <span class="tok-typ">name</span>: app
+      <span class="tok-typ">image</span>: registry.example.com/call-service:1.4.0   <span class="tok-com"># tag cố định, KHÔNG :latest</span>
+      <span class="tok-typ">env</span>:
+        - <span class="tok-typ">name</span>: DB_PASSWORD
+          <span class="tok-typ">valueFrom</span>:
+            <span class="tok-typ">secretKeyRef</span>: { name: cc-secrets, key: db-password }  <span class="tok-com"># từ Secret</span>
+      <span class="tok-typ">livenessProbe</span>:
+        <span class="tok-typ">httpGet</span>: { path: /healthz, port: 3000 }
+        <span class="tok-typ">initialDelaySeconds</span>: 10
+      <span class="tok-typ">readinessProbe</span>:
+        <span class="tok-typ">httpGet</span>: { path: /readyz, port: 3000 }</code></pre>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Deploy bằng <code>:latest</code></div><p>Không reproduce/rollback được. Luôn tag bằng version hoặc git SHA cố định.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Chạy container bằng root</div><p>Lỗ hổng escalation. Thêm <code>USER node</code>, dùng base image gọn (alpine/distroless).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Liveness kiểm tra DB</div><p>DB sập → restart bão cả cluster. DB thuộc readiness, không phải liveness.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Migration phá tương thích</div><p>Rolling/canary có 2 phiên bản chạy chung → dùng expand–contract, tương thích ngược.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Bỏ graceful shutdown</div><p>SIGTERM không xử lý → rớt cuộc gọi mỗi lần deploy. Drain rồi mới exit.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Commit secret vào git</div><p>Lộ mật khẩu/token. Inject qua env/Secret, có <code>.dockerignore</code> & <code>.gitignore</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Cảnh báo theo CPU thuần</div><p>Alert fatigue. Báo động theo triệu chứng người dùng (lỗi gọi, p99).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Image phình to</div><p>Quên multi-stage & <code>.dockerignore</code> → image vài GB, nhiều CVE. Tách build/runtime.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Tối ưu Dockerfile</div>
+        <p>Cho một Dockerfile dùng <code>FROM node:20</code>, <code>COPY . .</code> rồi <code>npm install</code>, chạy <code>node src/index.js</code> bằng root. Hãy chỉ ra <b>3 vấn đề</b> và viết lại thành multi-stage gọn, an toàn.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">(1) Base image nặng → dùng <code>node:20-alpine</code>. (2) <code>COPY . .</code> trước <code>npm install</code> phá layer cache → tách <code>COPY package*.json</code> + <code>npm ci</code> trước. (3) Chạy root → thêm <code>USER node</code>. Thêm: multi-stage (builder build TS, runtime <code>npm ci --omit=dev</code> + copy <code>dist</code>), thêm <code>.dockerignore</code>, <code>ENV NODE_ENV=production</code>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Chọn chiến lược deploy</div>
+        <p>Bạn sắp deploy thay đổi lớn cho <b>routing-engine</b> (logic phân phối cuộc gọi cho agent). Rủi ro cao, traffic 24/7. Chọn chiến lược nào? Cần chuẩn bị gì để không rớt cuộc gọi?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Chọn <b>canary</b>: cho bản mới nhận 5% cuộc gọi, theo dõi tỷ lệ định tuyến lỗi & thời gian chờ hàng đợi, rồi mới mở rộng. Chuẩn bị: readiness probe đúng, graceful shutdown (drain cuộc gọi), migration tương thích ngược, dashboard metrics nghiệp vụ + alert theo triệu chứng, cơ chế rollback tự động nếu lỗi vượt ngưỡng.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Thiết kế health probe</div>
+        <p><code>chat-service</code> phụ thuộc Postgres + Redis. Hãy thiết kế <code>/healthz</code> và <code>/readyz</code> sao cho: Redis sập 20s thì service tạm ngừng nhận tin nhắn nhưng <b>không bị restart hàng loạt</b>.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px"><code>/healthz</code> (liveness) chỉ trả <code>200</code> nếu process sống — KHÔNG ping Redis. <code>/readyz</code> (readiness) ping Redis + Postgres, trả <code>503</code> nếu hỏng. Redis sập → readiness fail → K8s cắt traffic (pod bị rút khỏi Service) nhưng liveness vẫn ok nên không restart. Redis hồi → readiness pass → pod nhận traffic lại.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Khác biệt cốt lõi giữa container và VM?</div>
+          <div class="opt">Container luôn an toàn hơn VM</div>
+          <div class="opt" data-correct="true">Container chia sẻ kernel host (ảo hóa OS), VM ảo hóa phần cứng với OS riêng</div>
+          <div class="opt">VM khởi động nhanh hơn container</div>
+          <div class="explain"><b>Chia sẻ kernel.</b> Container nhẹ & khởi động nhanh vì không gánh cả OS như VM.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Mục đích chính của multi-stage build?</div>
+          <div class="opt">Chạy nhiều container cùng lúc</div>
+          <div class="opt" data-correct="true">Image runtime gọn & an toàn — chỉ chứa artifact, bỏ devDependencies/công cụ build</div>
+          <div class="opt">Tự động scale theo CPU</div>
+          <div class="explain"><b>Image gọn.</b> Stage builder build, stage runtime chỉ copy artifact đã build → nhỏ, ít CVE.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Chiến lược deploy nào cho bản mới nhận % nhỏ traffic trước?</div>
+          <div class="opt">Recreate</div>
+          <div class="opt">Blue-Green</div>
+          <div class="opt" data-correct="true">Canary</div>
+          <div class="explain"><b>Canary.</b> Mở van traffic từ từ (5%→25%→100%), giới hạn phạm vi ảnh hưởng khi có lỗi.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Probe nào KHÔNG nên kiểm tra kết nối DB?</div>
+          <div class="opt" data-correct="true">Liveness — vì DB sập sẽ gây restart hàng loạt container</div>
+          <div class="opt">Readiness — nó phải kiểm tra DB</div>
+          <div class="opt">Cả hai đều phải kiểm tra DB</div>
+          <div class="explain"><b>Liveness.</b> Liveness chỉ kiểm tra process còn sống; phụ thuộc ngoài thuộc readiness (cắt traffic chứ không restart).</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> 3 trụ cột observability là?</div>
+          <div class="opt">CPU, RAM, Disk</div>
+          <div class="opt" data-correct="true">Metrics, Logs, Traces</div>
+          <div class="opt">Lint, Test, Deploy</div>
+          <div class="explain"><b>Metrics, Logs, Traces.</b> Lần lượt trả lời "cái gì", "vì sao", "ở đâu" khi điều tra sự cố.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Deploy, Docker, CI/CD & vận hành — phần đánh giá tư duy production.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Container là gì? Khác VM thế nào? Vì sao nên dùng container?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Container đóng gói code + runtime + thư viện + cấu hình thành đơn vị bất biến, cô lập ở tầng tiến trình và <b>chia sẻ kernel của host</b>. VM thì ảo hóa phần cứng, mỗi VM có OS riêng nên nặng GB và khởi động chậm. Container nhẹ (MB), bật trong giây, mật độ cao trên một host. Ưu điểm: chạy giống nhau ở mọi môi trường ("hết cảnh works on my machine"), scale nhanh, hợp microservice & CI/CD. Với tổng đài, container cho phép thêm/bớt instance trong vài giây khi tải cuộc gọi tăng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Image vs Container? Layer cache hoạt động ra sao?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Image là bản thiết kế bất biến (read-only), container là instance đang chạy của image (có thêm writable layer) — giống class vs object. Mỗi lệnh Dockerfile tạo một layer; Docker cache từng layer và dùng lại nếu layer đó không đổi. Nên đặt phần ít thay đổi (copy <code>package.json</code> + <code>npm ci</code>) <b>trước</b>, phần hay đổi (copy source) <b>sau</b>, để sửa code không phá cache install — build nhanh hơn nhiều.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Multi-stage build là gì? Vì sao quan trọng?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Dùng nhiều <code>FROM</code> trong một Dockerfile: stage <i>builder</i> cài cả devDependencies và build (vd tsc → dist), stage <i>runtime</i> chỉ copy artifact đã build và cài dependencies production (<code>npm ci --omit=dev</code>). Kết quả: image production nhỏ hơn nhiều, ít gói thừa nên ít lỗ hổng bảo mật, không lộ source/công cụ build. Kèm <code>.dockerignore</code> và <code>USER node</code> để gọn và an toàn.</p>
+        <p class="trap">⚠️ Bẫy: quên <code>.dockerignore</code> khiến <code>COPY . .</code> kéo cả <code>node_modules</code> local và có thể đưa <code>.env</code> chứa secret vào image.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Mô tả một pipeline CI/CD đầy đủ. Mỗi bước để làm gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> push → <b>lint</b> (chuẩn code, rẻ nên chạy đầu) → <b>test</b> (unit + integration, gate quan trọng nhất) → <b>build image</b> (tag bằng git SHA) → <b>push registry</b> → <b>deploy</b>. Mỗi bước là một gate: fail thì dừng, code không lên production. Nguyên tắc: fail fast, build một image rồi promote nguyên image qua staging→prod (không build lại), gắn SHA để truy vết, và rollback tự động nếu health check sau deploy fail.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>So sánh recreate, rolling, blue-green, canary.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>Recreate</b>: tắt cũ rồi bật mới — có downtime, chỉ hợp dev. <b>Rolling</b>: thay từng instance, cũ & mới chạy song song — zero-downtime, mặc định của K8s. <b>Blue-green</b>: dựng full môi trường mới rồi gạt toàn bộ traffic — rollback tức thì nhưng tốn gấp đôi tài nguyên. <b>Canary</b>: bản mới nhận % nhỏ traffic rồi tăng dần — giới hạn phạm vi lỗi, cần giám sát mạnh.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Làm sao deploy zero-downtime cho hệ thống 24/7?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Kết hợp nhiều thứ: (1) rolling/blue-green/canary thay vì recreate; (2) <b>readiness probe</b> để instance mới chỉ nhận traffic khi sẵn sàng, instance cũ chỉ tắt sau đó; (3) <b>graceful shutdown</b> — bắt SIGTERM, ngừng nhận request mới, drain cuộc gọi đang xử lý rồi mới exit; (4) <b>migration tương thích ngược</b> (expand–contract) vì có lúc 2 phiên bản chạy chung; (5) state để ngoài (Redis/DB) để pod thay được mà không mất phiên. Reverse proxy/load balancer phối hợp rút pod cũ ra khỏi pool.</p>
+        <p class="trap">⚠️ Bẫy: chỉ trả lời "dùng rolling" là chưa đủ — phỏng vấn muốn nghe readiness + graceful shutdown + migration tương thích ngược.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Blue-green vs canary — khi nào chọn cái nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Blue-green hợp khi cần <b>rollback cực nhanh</b> và đủ tài nguyên để chạy gấp đôi — gạt traffic toàn bộ, lỗi thì gạt ngược về blue tức thì; nhược là "big bang", 100% user dính ngay khi gạt. Canary hợp khi thay đổi <b>rủi ro cao</b> muốn thử trên nhóm nhỏ trước (vd logic routing/tính phí cuộc gọi) — phát hiện lỗi với phạm vi nhỏ, nhưng cần hạ tầng định tuyến % và giám sát mạnh, rollout lâu hơn.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>3 trụ cột observability là gì? Phân biệt Counter/Gauge/Histogram.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Metrics (số liệu time-series — cái gì), Logs (sự kiện chi tiết — vì sao), Traces (hành trình request qua các service — ở đâu). Về metric: <b>Counter</b> chỉ tăng (tổng cuộc gọi, tổng lỗi); <b>Gauge</b> lên/xuống (cuộc gọi đang active, agent online); <b>Histogram</b> đo phân bố để tính p95/p99 (thời gian chờ, độ trễ). Realtime luôn nhìn percentile chứ không nhìn trung bình vì trung bình che giấu phần đuôi xấu.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Liveness vs readiness probe khác nhau ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Liveness trả lời "process còn sống không" — fail thì K8s <b>restart</b> container (thoát treo/deadlock). Readiness trả lời "đã sẵn sàng nhận traffic chưa" — fail thì K8s <b>cắt traffic</b> tạm thời (không restart), dùng khi đang warmup hoặc mất kết nối DB/Redis. Quan trọng: liveness chỉ kiểm tra bản thân process; phụ thuộc ngoài (DB, Redis) thuộc readiness.</p>
+        <p class="trap">⚠️ Bẫy: để liveness ping DB. DB sập sẽ làm K8s restart bão toàn bộ pod dù app vẫn khỏe.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Autoscaling (HPA) hoạt động thế nào? Điều kiện để scale ngang hiệu quả?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> HPA tự tăng/giảm số replica theo metric (CPU, hoặc tốt hơn là metric nghiệp vụ như số cuộc gọi đồng thời/độ dài hàng đợi) trong khoảng min–max. Điều kiện cốt lõi: service phải <b>stateless</b> — state (phiên agent, trạng thái cuộc gọi) phải nằm ngoài pod, trong Redis/DB. Nếu state nằm trong bộ nhớ pod thì thêm pod không giúp được mà còn gây mất phiên khi scale. Cần kèm graceful shutdown để scale-in không rớt cuộc gọi.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Quản lý secret và config thế nào cho an toàn?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Theo 12-factor: tách config khỏi code, inject qua <b>biến môi trường</b>. Config không nhạy cảm dùng ConfigMap; bí mật (mật khẩu DB, JWT secret, API key) dùng <b>Secret</b> (hoặc Vault/cloud secret manager) và mount vào pod. Tuyệt đối không hard-code/commit secret vào git; thêm <code>.gitignore</code>/<code>.dockerignore</code> cho <code>.env</code>. Lưu ý K8s Secret mặc định chỉ base64 (không phải mã hóa) → bật encryption-at-rest và siết RBAC. Nên xoay vòng (rotate) secret định kỳ.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Vì sao nên container hóa thay vì deploy trực tiếp lên server?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Container đảm bảo môi trường <b>nhất quán</b> giữa dev/staging/production (không còn lệch phiên bản Node/thư viện), <b>cô lập</b> giữa các service trên cùng host, <b>tái lập & rollback</b> dễ (image bất biến có tag), tích hợp mượt với CI/CD và orchestrator (K8s tự healing, scaling, rolling update). Deploy thẳng lên server dễ gặp "drift" cấu hình, khó tái lập sự cố, scale và rollback chật vật.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương I2</button>
+      </div>
+
+      <div class="pager">
+        <a href="I1-system-design-realtime.html"><span class="dir">← Trước</span><span class="ttl">I1 · System Design realtime</span></a>
+        <a href="I3-capstone-mock-interview.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">I3 · Capstone: Mock phỏng vấn</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='I2',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành I2 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương I2'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

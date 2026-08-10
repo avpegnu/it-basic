@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — Error Handling &amp; Defensive Patterns · JavaScript Sub-pillar</title>
+  <meta name="description" content="Error object, try/catch/finally, custom error class, Result type, fail-fast, defensive copy, global error handler — viết JS không sập im lặng." />
+  <meta name="theme-color" content="#c8961a" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-js">JS</span>
+        JavaScript · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 7</span>
+      </div>
+      <div class="chapter-num">Chương 07 · Error Handling &amp; Defensive Patterns</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Xử lý lỗi và các pattern phòng thủ
+      </h1>
+      <p class="lead">
+        Code production khác code demo ở chỗ: <strong>luôn có thứ hỏng</strong> — mạng rớt, API trả 500, user nhập rác, file mất.
+        Chương này dạy bạn 3 việc: (1) <strong>throw</strong> đúng cách khi gặp lỗi, (2) <strong>catch</strong> đúng nơi để
+        không nuốt im lặng, (3) thiết kế code <strong>phòng thủ</strong> sao cho mỗi error có một "vùng" xử lý rõ ràng — không
+        làm cả app sập.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~800 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-6</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu <code>Error</code> object và các built-in subclass (<code>TypeError</code>, <code>RangeError</code>, <code>SyntaxError</code>, <code>ReferenceError</code>).</li>
+            <li>Master <code>try/catch/finally</code>, kể cả khi mix với <code>async/await</code>.</li>
+            <li>Tự tạo <strong>custom error class</strong> để phân biệt loại lỗi.</li>
+            <li>Biết các anti-pattern phổ biến: <em>swallow error</em>, <em>log không re-throw</em>.</li>
+            <li>Hiểu <strong>Result type</strong> — pattern lấy cảm hứng từ Rust, ép caller phải xử lý lỗi.</li>
+            <li>Thiết kế <strong>fail-fast</strong>, <strong>defensive copy</strong>, <strong>error boundary</strong> ở UI.</li>
+            <li>Cài <strong>global error handler</strong> ở browser và Node — lớp phòng cuối.</li>
+          </ul>
+        </div>
+
+        <h2 id="error-object">1. <code>Error</code> object trong JavaScript</h2>
+
+        <p>
+          JS có một type built-in tên <code>Error</code>. Khi có sự cố runtime (chia cho 0 trên BigInt, gọi method của
+          <code>undefined</code>, parse JSON sai...), JS tự throw một instance của <code>Error</code> (hoặc subclass).
+          Developer cũng có thể <strong>chủ động throw</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Anatomy of an Error</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> err = <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'Something broke'</span>);
+
+err.name;     <span class="tok-com">// 'Error'      — tên loại</span>
+err.message;  <span class="tok-com">// 'Something broke' — chuỗi cho người đọc</span>
+err.stack;    <span class="tok-com">// 'Error: Something broke\n    at <anonymous>:1:13\n ...' — vị trí throw</span>
+
+<span class="tok-com">// throw nó để dừng chương trình (cho đến khi có catch)</span>
+<span class="tok-kw">throw</span> err;</code></pre>
+        </div>
+
+        <h3 id="builtin-errors">1.1. Các subclass built-in</h3>
+
+        <p>JS có sẵn nhiều subclass của <code>Error</code>. Mỗi cái mô tả một loại lỗi khác nhau.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Class</th><th>Khi nào sinh ra</th><th>Ví dụ trigger</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Error</code></td><td>Generic — base class</td><td><code>new Error('msg')</code></td></tr>
+              <tr><td><code>TypeError</code></td><td>Sai type khi vận hành</td><td><code>null.foo</code>, gọi non-function</td></tr>
+              <tr><td><code>RangeError</code></td><td>Giá trị vượt range hợp lệ</td><td><code>new Array(-1)</code>, recursion quá sâu</td></tr>
+              <tr><td><code>SyntaxError</code></td><td>Code không parse được</td><td><code>JSON.parse('xx')</code>, eval string sai</td></tr>
+              <tr><td><code>ReferenceError</code></td><td>Truy cập biến chưa khai báo / TDZ</td><td><code>console.log(notDeclared)</code></td></tr>
+              <tr><td><code>URIError</code></td><td>URI function lỗi</td><td><code>decodeURIComponent('%')</code></td></tr>
+              <tr><td><code>EvalError</code></td><td>Lịch sử (ít dùng)</td><td>—</td></tr>
+              <tr><td><code>AggregateError</code></td><td>Gom nhiều error (Promise.any reject hết)</td><td><code>Promise.any([reject, reject])</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Built-in errors in action</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// TypeError</span>
+<span class="tok-kw">const</span> x = <span class="tok-kw">null</span>;
+x.foo;  <span class="tok-com">// TypeError: Cannot read properties of null (reading 'foo')</span>
+
+<span class="tok-com">// RangeError</span>
+<span class="tok-kw">new</span> <span class="tok-cls">Array</span>(-<span class="tok-num">1</span>);  <span class="tok-com">// RangeError: Invalid array length</span>
+
+<span class="tok-com">// SyntaxError (runtime, từ JSON.parse)</span>
+<span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'not json'</span>);  <span class="tok-com">// SyntaxError: Unexpected token 'o'</span>
+
+<span class="tok-com">// ReferenceError</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(notDeclared);  <span class="tok-com">// ReferenceError: notDeclared is not defined</span></code></pre>
+        </div>
+
+        <p>Vì tất cả subclass đều kế thừa <code>Error</code>, bạn có thể check loại lỗi bằng <code>instanceof</code>:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">try</span> {
+  <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'xx'</span>);
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-kw">if</span> (e <span class="tok-kw">instanceof</span> <span class="tok-cls">SyntaxError</span>) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'JSON sai cú pháp'</span>);
+  } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (e <span class="tok-kw">instanceof</span> <span class="tok-cls">Error</span>) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Lỗi khác:'</span>, e.message);
+  }
+}</code></pre>
+        </div>
+
+        <h3 id="anti-throw-string">1.2. Anti-pattern: <code>throw 'string'</code></h3>
+
+        <p>
+          JavaScript cho phép throw <em>bất kỳ value gì</em> — string, number, object thường. <strong>Không nên</strong>.
+          Khi throw string, bạn mất stack trace, <code>e.message</code>, <code>instanceof Error</code>.
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Đừng làm thế này</div>
+<pre><code><span class="tok-kw">throw</span> <span class="tok-str">'Something broke'</span>;   <span class="tok-com">// ❌ không có stack, không có name</span>
+<span class="tok-kw">throw</span> <span class="tok-num">404</span>;                  <span class="tok-com">// ❌ developer phải đoán nghĩa</span>
+<span class="tok-kw">throw</span> { code: <span class="tok-num">404</span> };          <span class="tok-com">// ❌ không là Error → instanceof fail</span>
+
+<span class="tok-com">// ✅ Đúng:</span>
+<span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'Something broke'</span>);</code></pre>
+          <p style="margin-top: 8px;">
+            Quy tắc: <strong>luôn throw một instance của <code>Error</code></strong> (hoặc subclass). Tự đặt rule này trong
+            ESLint với <code>no-throw-literal</code>.
+          </p>
+        </div>
+
+        <h2 id="try-catch-finally">2. <code>try / catch / finally</code></h2>
+
+        <p>
+          Cấu trúc cơ bản để bắt lỗi <em>synchronous</em>. Khi code trong <code>try</code> throw, control nhảy ngay sang
+          <code>catch</code>. <code>finally</code> chạy <strong>luôn luôn</strong> — bất kể có lỗi hay không, kể cả khi
+          <code>catch</code> re-throw.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Basic try/catch/finally</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">divide</span>(a, b) {
+  <span class="tok-kw">if</span> (b === <span class="tok-num">0</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'Division by zero'</span>);
+  <span class="tok-kw">return</span> a / b;
+}
+
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">const</span> r = <span class="tok-fn">divide</span>(<span class="tok-num">10</span>, <span class="tok-num">0</span>);
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'kết quả:'</span>, r);     <span class="tok-com">// không chạy</span>
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'lỗi:'</span>, e.message); <span class="tok-com">// 'lỗi: Division by zero'</span>
+} <span class="tok-kw">finally</span> {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'luôn chạy'</span>);          <span class="tok-com">// chạy</span>
+}</code></pre>
+        </div>
+
+        <h3 id="finally-detail">2.1. <code>finally</code> chạy khi nào</h3>
+
+        <p>Ngắn gọn: <strong>mọi lúc</strong>. Kể cả khi <code>try</code> hoặc <code>catch</code> có <code>return</code> hoặc re-throw.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>finally — luôn chạy</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">readFile</span>(path) {
+  <span class="tok-kw">const</span> file = <span class="tok-fn">openFile</span>(path);
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">return</span> file.<span class="tok-fn">readAll</span>();          <span class="tok-com">// có return — finally vẫn chạy</span>
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">`Read failed: </span><span class="tok-op">${</span>e.message<span class="tok-op">}</span><span class="tok-str">`</span>); <span class="tok-com">// re-throw — finally vẫn chạy</span>
+  } <span class="tok-kw">finally</span> {
+    file.<span class="tok-fn">close</span>();                  <span class="tok-com">// ✅ luôn đóng file</span>
+  }
+}</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — RAII bằng finally</div>
+          <p>
+            Trong C++ có <em>RAII</em>: object tự dọn resource khi out of scope (destructor). JS không có destructor, nhưng
+            <code>finally</code> là cách thủ công: <strong>"resource mở trong try, dọn trong finally"</strong>. Áp dụng cho
+            file handle, DB connection, lock, timer, event listener.
+          </p>
+        </div>
+
+        <h3 id="optional-catch">2.2. <code>catch</code> không cần binding (ES2019)</h3>
+
+        <p>
+          Trước ES2019, bạn phải viết <code>catch (e)</code> dù không dùng <code>e</code>. ES2019 cho phép bỏ luôn:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com">// Cũ:</span>
+<span class="tok-kw">try</span> { <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(input); }
+<span class="tok-kw">catch</span> (e) { <span class="tok-kw">return</span> <span class="tok-kw">null</span>; }   <span class="tok-com">// `e` không dùng nhưng vẫn phải khai báo</span>
+
+<span class="tok-com">// ES2019:</span>
+<span class="tok-kw">try</span> { <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(input); }
+<span class="tok-kw">catch</span> { <span class="tok-kw">return</span> <span class="tok-kw">null</span>; }       <span class="tok-com">// ✅ không cần (e)</span></code></pre>
+        </div>
+
+        <h2 id="custom-error">3. Custom Error class — phân biệt loại lỗi</h2>
+
+        <p>
+          Trong code thật, bạn cần phân biệt: lỗi validation (user gõ sai), lỗi network (API timeout), lỗi authorization
+          (token expired)... Mỗi loại có cách xử lý khác. Cách clean nhất là tạo <strong>subclass của Error</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ValidationError</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">ValidationError</span> <span class="tok-kw">extends</span> <span class="tok-cls">Error</span> {
+  <span class="tok-fn">constructor</span>(field, message) {
+    <span class="tok-fn">super</span>(message);          <span class="tok-com">// gọi Error constructor — set this.message</span>
+    <span class="tok-kw">this</span>.name = <span class="tok-str">'ValidationError'</span>;  <span class="tok-com">// override để log đẹp + instanceof</span>
+    <span class="tok-kw">this</span>.field = field;       <span class="tok-com">// thêm thông tin nghiệp vụ</span>
+  }
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">NotFoundError</span> <span class="tok-kw">extends</span> <span class="tok-cls">Error</span> {
+  <span class="tok-fn">constructor</span>(resource) {
+    <span class="tok-fn">super</span>(<span class="tok-str">`</span><span class="tok-op">${</span>resource<span class="tok-op">}</span><span class="tok-str"> not found`</span>);
+    <span class="tok-kw">this</span>.name = <span class="tok-str">'NotFoundError'</span>;
+    <span class="tok-kw">this</span>.resource = resource;
+  }
+}
+
+<span class="tok-com">// Sử dụng</span>
+<span class="tok-kw">function</span> <span class="tok-fn">getUser</span>(id) {
+  <span class="tok-kw">if</span> (<span class="tok-kw">typeof</span> id !== <span class="tok-str">'number'</span>) {
+    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">ValidationError</span>(<span class="tok-str">'id'</span>, <span class="tok-str">'id phải là number'</span>);
+  }
+  <span class="tok-kw">const</span> u = db.<span class="tok-fn">find</span>(id);
+  <span class="tok-kw">if</span> (!u) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">NotFoundError</span>(<span class="tok-str">'User'</span>);
+  <span class="tok-kw">return</span> u;
+}
+
+<span class="tok-com">// Caller dispatch theo loại</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-fn">getUser</span>(<span class="tok-str">'abc'</span>);
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-kw">if</span> (e <span class="tok-kw">instanceof</span> <span class="tok-cls">ValidationError</span>) {
+    ui.<span class="tok-fn">showFieldError</span>(e.field, e.message);
+  } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (e <span class="tok-kw">instanceof</span> <span class="tok-cls">NotFoundError</span>) {
+    ui.<span class="tok-fn">show404</span>();
+  } <span class="tok-kw">else</span> {
+    ui.<span class="tok-fn">showGenericError</span>();
+    <span class="tok-fn">reportToSentry</span>(e);
+  }
+}</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Luôn set <code>this.name</code></div>
+          <p>
+            Mặc định <code>this.name</code> kế thừa từ <code>Error</code> nên sẽ là <code>'Error'</code>, không phải tên
+            class mới. Khi log <code>err.toString()</code> sẽ ra <code>"Error: msg"</code> thay vì <code>"ValidationError: msg"</code>.
+            Luôn override <code>this.name = 'TenClass'</code> trong constructor.
+          </p>
+        </div>
+
+        <h2 id="async-error">4. <code>try/catch</code> với <code>async/await</code></h2>
+
+        <p>
+          Đây là điểm hay nhất của <code>async/await</code> so với <code>.then().catch()</code>: bạn dùng được
+          <strong>cùng một cấu trúc</strong> <code>try/catch</code> cho cả sync và async.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>async try/catch</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">loadUser</span>(id) {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">const</span> res = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(<span class="tok-str">`/api/users/</span><span class="tok-op">${</span>id<span class="tok-op">}</span><span class="tok-str">`</span>);
+    <span class="tok-kw">if</span> (!res.ok) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">`HTTP </span><span class="tok-op">${</span>res.status<span class="tok-op">}</span><span class="tok-str">`</span>);
+    <span class="tok-kw">return</span> <span class="tok-kw">await</span> res.<span class="tok-fn">json</span>();
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'loadUser failed:'</span>, e);
+    <span class="tok-kw">throw</span> e;   <span class="tok-com">// re-throw cho caller cao hơn</span>
+  }
+}</code></pre>
+        </div>
+
+        <p>So sánh với <code>.then().catch()</code>:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com">// Promise chain</span>
+<span class="tok-kw">function</span> <span class="tok-fn">loadUserChain</span>(id) {
+  <span class="tok-kw">return</span> <span class="tok-fn">fetch</span>(<span class="tok-str">`/api/users/</span><span class="tok-op">${</span>id<span class="tok-op">}</span><span class="tok-str">`</span>)
+    .<span class="tok-fn">then</span>(res =&gt; {
+      <span class="tok-kw">if</span> (!res.ok) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">`HTTP </span><span class="tok-op">${</span>res.status<span class="tok-op">}</span><span class="tok-str">`</span>);
+      <span class="tok-kw">return</span> res.<span class="tok-fn">json</span>();
+    })
+    .<span class="tok-fn">catch</span>(e =&gt; {
+      <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'loadUser failed:'</span>, e);
+      <span class="tok-kw">throw</span> e;
+    });
+}</code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">⚖️ try/catch async bắt cả 2 loại</div>
+          <p>
+            Trong block <code>try { await foo(); }</code>, <code>catch</code> sẽ bắt:
+          </p>
+          <ol>
+            <li>Lỗi <strong>sync</strong> ném ra <em>trước khi</em> Promise được tạo (vd: <code>foo</code> sai signature).</li>
+            <li>Promise <strong>reject</strong> trả về từ <code>await foo()</code>.</li>
+          </ol>
+          <p>
+            Đó là lý do nó rất gọn. Nhưng nhớ: <code>try/catch</code> <strong>không bắt</strong> được error xảy ra trong
+            callback <code>setTimeout</code>, <code>setInterval</code>, hoặc Promise nào không có <code>await</code>.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Bẫy quên await</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">bad</span>() {
+  <span class="tok-kw">try</span> {
+    <span class="tok-fn">foo</span>();   <span class="tok-com">// ❌ quên await — Promise reject không bị bắt</span>
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'never reaches here'</span>);
+  }
+}
+
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">good</span>() {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">await</span> <span class="tok-fn">foo</span>();   <span class="tok-com">// ✅</span>
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'caught'</span>, e);
+  }
+}</code></pre>
+        </div>
+
+        <h2 id="anti-swallow">5. Anti-pattern: nuốt lỗi (swallow)</h2>
+
+        <p>
+          Đây là <strong>tội lỗi số 1</strong> trong code production. <code>try/catch</code> không có nội dung — error
+          biến mất, bug ẩn đi mãi mãi.
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Đừng làm thế này — silent swallow</div>
+<pre><code><span class="tok-com">// ❌ Tệ — không ai biết có lỗi xảy ra</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">const</span> data = <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(input);
+  <span class="tok-fn">save</span>(data);
+} <span class="tok-kw">catch</span> {}
+
+<span class="tok-com">// ❌ Cũng tệ — log nhưng không re-throw, UI thinks success</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">submit</span>() {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">await</span> <span class="tok-fn">api</span>.<span class="tok-fn">save</span>(data);
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(e);  <span class="tok-com">// log xong... rồi sao?</span>
+  }
+  <span class="tok-kw">return</span> { ok: <span class="tok-kw">true</span> };  <span class="tok-com">// UI hiện "lưu thành công" dù lỗi 🔥</span>
+}</code></pre>
+          <p style="margin-top: 8px;">
+            Bug này cực kỳ phổ biến. User báo "tôi bấm save mà data không lưu" — bạn không thấy gì trong log production
+            (vì console.log không gửi đi đâu). Hàng giờ debug.
+          </p>
+        </div>
+
+        <p><strong>Quy tắc:</strong> nếu bạn <code>catch</code>, bạn phải làm <em>ít nhất</em> 1 trong 3 việc sau:</p>
+
+        <ol>
+          <li><strong>Re-throw</strong> — không xử lý được, để caller xử lý: <code>throw e;</code></li>
+          <li><strong>Recover</strong> — có fallback rõ ràng: <code>return defaultValue;</code></li>
+          <li><strong>Báo cáo error state</strong> — return <code>{ok: false, error: e}</code> để caller biết.</li>
+        </ol>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Fix swallow — 3 cách</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ✅ Cách 1: re-throw</span>
+<span class="tok-kw">try</span> { <span class="tok-fn">risky</span>(); }
+<span class="tok-kw">catch</span> (e) {
+  logger.<span class="tok-fn">error</span>(<span class="tok-str">'risky failed'</span>, e);
+  <span class="tok-kw">throw</span> e;
+}
+
+<span class="tok-com">// ✅ Cách 2: recover với default</span>
+<span class="tok-kw">function</span> <span class="tok-fn">safeParse</span>(s) {
+  <span class="tok-kw">try</span> { <span class="tok-kw">return</span> <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(s); }
+  <span class="tok-kw">catch</span> { <span class="tok-kw">return</span> {}; }   <span class="tok-com">// chấp nhận parse fail → object rỗng</span>
+}
+
+<span class="tok-com">// ✅ Cách 3: return error state (Result type)</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">submit</span>() {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">await</span> <span class="tok-fn">api</span>.<span class="tok-fn">save</span>(data);
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">true</span> };
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error: e };
+  }
+}</code></pre>
+        </div>
+
+        <h2 id="result-type">6. Result type pattern — học từ Rust</h2>
+
+        <p>
+          Rust không có exception. Mọi hàm có thể fail đều trả về <code>Result&lt;T, E&gt;</code> — kiểu union giữa
+          <em>thành công + value</em> và <em>thất bại + error</em>. Lợi ích: <strong>compiler ép caller xử lý</strong>.
+          JS không có compiler ép, nhưng pattern vẫn rất giá trị: caller <em>thấy</em> hàm có thể fail.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Result type cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Type: { ok: true, value: T } | { ok: false, error: E }</span>
+
+<span class="tok-kw">function</span> <span class="tok-fn">ok</span>(value)  { <span class="tok-kw">return</span> { ok: <span class="tok-kw">true</span>,  value }; }
+<span class="tok-kw">function</span> <span class="tok-fn">err</span>(error) { <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error }; }
+
+<span class="tok-kw">function</span> <span class="tok-fn">parseAge</span>(input) {
+  <span class="tok-kw">const</span> n = <span class="tok-cls">Number</span>(input);
+  <span class="tok-kw">if</span> (<span class="tok-cls">Number</span>.<span class="tok-fn">isNaN</span>(n)) <span class="tok-kw">return</span> <span class="tok-fn">err</span>(<span class="tok-str">'not a number'</span>);
+  <span class="tok-kw">if</span> (n &lt; <span class="tok-num">0</span>) <span class="tok-kw">return</span> <span class="tok-fn">err</span>(<span class="tok-str">'negative'</span>);
+  <span class="tok-kw">if</span> (n &gt; <span class="tok-num">150</span>) <span class="tok-kw">return</span> <span class="tok-fn">err</span>(<span class="tok-str">'too large'</span>);
+  <span class="tok-kw">return</span> <span class="tok-fn">ok</span>(n);
+}
+
+<span class="tok-com">// Caller buộc phải check .ok trước khi truy cập value/error</span>
+<span class="tok-kw">const</span> r = <span class="tok-fn">parseAge</span>(input);
+<span class="tok-kw">if</span> (r.ok) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Tuổi:'</span>, r.value);
+} <span class="tok-kw">else</span> {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Lỗi:'</span>, r.error);
+}</code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">⚖️ Throw vs Result — chọn cái nào</div>
+          <ul>
+            <li>
+              <strong>Throw</strong> khi lỗi là <em>exceptional</em> — bất thường, ngoài dự tính. Vd: out of memory,
+              bug logic, DB chết.
+            </li>
+            <li>
+              <strong>Result</strong> khi lỗi là <em>expected</em> — nằm trong "happy path" mở rộng. Vd: validate user
+              input, parse, lookup không tìm thấy.
+            </li>
+          </ul>
+          <p>
+            Rule of thumb: nếu bạn <strong>biết trước</strong> sẽ có case fail (parse JSON từ user), dùng Result.
+            Nếu fail là <strong>"không nên xảy ra"</strong>, throw.
+          </p>
+        </div>
+
+        <h2 id="fail-fast">7. Fail-fast pattern</h2>
+
+        <p>
+          Triết lý: <strong>chết ngay từ đầu hàm</strong> còn hơn để code chạy nửa chừng rồi mới phát hiện. Validate
+          input ở dòng đầu, throw nếu sai. Tránh state nửa-vời.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Fail-fast vs lazy check</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ Lazy — check muộn, có thể đã ghi DB rồi mới phát hiện</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">createOrder</span>(items, userId) {
+  <span class="tok-kw">await</span> db.orders.<span class="tok-fn">insert</span>({ items, userId });
+  <span class="tok-kw">await</span> billing.<span class="tok-fn">charge</span>(userId, <span class="tok-fn">sum</span>(items));   <span class="tok-com">// quá muộn nếu items rỗng</span>
+}
+
+<span class="tok-com">// ✅ Fail-fast — validate trước, chỉ ghi khi chắc</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">createOrder</span>(items, userId) {
+  <span class="tok-kw">if</span> (!<span class="tok-cls">Array</span>.<span class="tok-fn">isArray</span>(items) || items.length === <span class="tok-num">0</span>) {
+    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">ValidationError</span>(<span class="tok-str">'items'</span>, <span class="tok-str">'phải có ít nhất 1 sản phẩm'</span>);
+  }
+  <span class="tok-kw">if</span> (<span class="tok-kw">typeof</span> userId !== <span class="tok-str">'number'</span>) {
+    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">ValidationError</span>(<span class="tok-str">'userId'</span>, <span class="tok-str">'phải là number'</span>);
+  }
+
+  <span class="tok-kw">await</span> db.orders.<span class="tok-fn">insert</span>({ items, userId });
+  <span class="tok-kw">await</span> billing.<span class="tok-fn">charge</span>(userId, <span class="tok-fn">sum</span>(items));
+}</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Tại sao fail-fast tốt</div>
+          <ul>
+            <li><strong>Half-done state là kẻ thù.</strong> Order đã insert, nhưng charge fail — DB dirty.</li>
+            <li><strong>Stack trace gần root cause.</strong> Throw sớm = log ngay nơi lỗi thực sự.</li>
+            <li><strong>Code reader dễ hiểu.</strong> Đọc 3 dòng đầu hàm là biết preconditions.</li>
+          </ul>
+        </div>
+
+        <h2 id="defensive-copy">8. Defensive copy</h2>
+
+        <p>
+          Khi hàm nhận object/array từ caller, <strong>đừng mutate</strong> nó trực tiếp. Caller có thể không biết bạn
+          sửa, dẫn đến bug "sao state ở chỗ khác cũng đổi?". Pattern: <em>clone trước khi mutate</em>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Defensive copy</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ Mutate input — surprise bug</span>
+<span class="tok-kw">function</span> <span class="tok-fn">addTimestamp</span>(obj) {
+  obj.timestamp = <span class="tok-cls">Date</span>.<span class="tok-fn">now</span>();
+  <span class="tok-kw">return</span> obj;
+}
+
+<span class="tok-kw">const</span> user = { name: <span class="tok-str">'An'</span> };
+<span class="tok-fn">addTimestamp</span>(user);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(user);  <span class="tok-com">// { name: 'An', timestamp: ... } 🔥 caller bị mutate</span>
+
+<span class="tok-com">// ✅ Defensive copy — clone trước</span>
+<span class="tok-kw">function</span> <span class="tok-fn">addTimestamp</span>(obj) {
+  <span class="tok-kw">return</span> { ...obj, timestamp: <span class="tok-cls">Date</span>.<span class="tok-fn">now</span>() };
+}
+
+<span class="tok-com">// Cho object lồng nhau, dùng structuredClone (hiện đại) hoặc deepClone lib</span>
+<span class="tok-kw">function</span> <span class="tok-fn">deepUpdate</span>(obj, path, value) {
+  <span class="tok-kw">const</span> clone = <span class="tok-fn">structuredClone</span>(obj);
+  <span class="tok-cls">_</span>.<span class="tok-fn">set</span>(clone, path, value);
+  <span class="tok-kw">return</span> clone;
+}</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Pattern liên quan</div>
+          <p>
+            Defensive copy là nền của <strong>immutable data</strong> — triết lý "không bao giờ sửa, luôn tạo bản mới".
+            Đây là cách React, Redux, và các state library hoạt động. Sẽ học sâu ở chương sau và Pillar OOP/FP.
+          </p>
+        </div>
+
+        <h2 id="global-handler">9. Global error handler — lớp phòng cuối</h2>
+
+        <p>
+          Dù bạn <code>try/catch</code> kỹ, vẫn có error lọt — uncaught exception, unhandled promise rejection. Khi đó
+          program có thể crash. Bạn cần một <strong>global handler</strong> để log + cứu vãn graceful.
+        </p>
+
+        <h3 id="browser-handler">9.1. Browser</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Browser global handlers</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Bắt sync error không catch</span>
+window.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'error'</span>, (event) =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Uncaught error:'</span>, event.error);
+  <span class="tok-fn">reportToServer</span>({
+    type: <span class="tok-str">'error'</span>,
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    stack: event.error?.stack,
+  });
+});
+
+<span class="tok-com">// Bắt promise reject không catch</span>
+window.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'unhandledrejection'</span>, (event) =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Unhandled rejection:'</span>, event.reason);
+  <span class="tok-fn">reportToServer</span>({
+    type: <span class="tok-str">'unhandledrejection'</span>,
+    reason: <span class="tok-cls">String</span>(event.reason),
+    stack: event.reason?.stack,
+  });
+});</code></pre>
+        </div>
+
+        <h3 id="node-handler">9.2. Node.js</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Node global handlers</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>process.<span class="tok-fn">on</span>(<span class="tok-str">'uncaughtException'</span>, (err) =&gt; {
+  logger.<span class="tok-fn">fatal</span>({ err }, <span class="tok-str">'Uncaught exception'</span>);
+  <span class="tok-com">// Process ở state không chắc chắn — gracefully exit</span>
+  process.<span class="tok-fn">exit</span>(<span class="tok-num">1</span>);
+});
+
+process.<span class="tok-fn">on</span>(<span class="tok-str">'unhandledRejection'</span>, (reason) =&gt; {
+  logger.<span class="tok-fn">error</span>({ reason }, <span class="tok-str">'Unhandled promise rejection'</span>);
+  <span class="tok-com">// Từ Node 15+: mặc định cũng exit. Có thể override.</span>
+});</code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Đây là lớp phòng CUỐI</div>
+          <p>
+            Đừng dùng global handler thay cho <code>try/catch</code>. Mục đích của nó: <strong>log</strong> để bạn biết
+            có bug nào lọt, sau đó <strong>graceful shutdown</strong> (Node) hoặc <strong>show fallback UI</strong>
+            (browser). Không phải để "tiếp tục như bình thường" sau khi crash — state có thể đã hỏng.
+          </p>
+        </div>
+
+        <h2 id="ui-error-boundary">10. Error boundary trong UI framework</h2>
+
+        <p>
+          Trong UI declarative (React, Vue, Flutter), một component lỗi có thể làm crash cả cây render. Framework cung
+          cấp <strong>error boundary</strong> — một component "khoanh vùng" lỗi, fallback UI thay vì trắng màn hình.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>React ErrorBoundary</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">ErrorBoundary</span> <span class="tok-kw">extends</span> <span class="tok-cls">React</span>.<span class="tok-cls">Component</span> {
+  state = { hasError: <span class="tok-kw">false</span>, error: <span class="tok-kw">null</span> };
+
+  <span class="tok-kw">static</span> <span class="tok-fn">getDerivedStateFromError</span>(error) {
+    <span class="tok-kw">return</span> { hasError: <span class="tok-kw">true</span>, error };
+  }
+
+  <span class="tok-fn">componentDidCatch</span>(error, info) {
+    <span class="tok-fn">reportToSentry</span>(error, { extra: info });
+  }
+
+  <span class="tok-fn">render</span>() {
+    <span class="tok-kw">if</span> (<span class="tok-kw">this</span>.state.hasError) {
+      <span class="tok-kw">return</span> &lt;<span class="tok-cls">FallbackUI</span> error={<span class="tok-kw">this</span>.state.error} /&gt;;
+    }
+    <span class="tok-kw">return</span> <span class="tok-kw">this</span>.props.children;
+  }
+}
+
+<span class="tok-com">// Bọc khu vực rủi ro:</span>
+&lt;<span class="tok-cls">ErrorBoundary</span>&gt;
+  &lt;<span class="tok-cls">UserDashboard</span> /&gt;
+&lt;/<span class="tok-cls">ErrorBoundary</span>&gt;</code></pre>
+        </div>
+
+        <p>
+          Flutter có khái niệm tương đương: <code>ErrorWidget.builder</code> để override widget hiển thị khi build lỗi.
+          Sẽ học sâu ở Flutter Chương 6 (Widget) và Chương 10 (Error handling).
+        </p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Thiết kế "error zones"</div>
+          <p>
+            Đừng đặt 1 ErrorBoundary ở root rồi xong. Đặt <strong>nhiều boundary nhỏ</strong> ở các vùng độc lập (sidebar,
+            content, footer). Khi widget X lỗi, chỉ vùng X hỏng — phần còn lại app vẫn dùng được. Đây là nguyên tắc
+            <em>blast radius containment</em>.
+          </p>
+        </div>
+
+        <h2 id="logging-error">11. Log error đúng cách</h2>
+
+        <p>
+          Lỗi phổ biến: <code>console.log(JSON.stringify(err))</code> → ra <code>'{}'</code> vì <code>Error</code> có
+          property <code>name</code>, <code>message</code>, <code>stack</code> là <strong>non-enumerable</strong>.
+          JSON.stringify bỏ qua chúng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Log Error đúng vs sai</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> err = <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'oops'</span>);
+
+<span class="tok-com">// ❌ Tệ — mất hết info</span>
+<span class="tok-cls">JSON</span>.<span class="tok-fn">stringify</span>(err);                  <span class="tok-com">// '{}' 🔥</span>
+
+<span class="tok-com">// ✅ Đúng — extract field tay</span>
+<span class="tok-cls">JSON</span>.<span class="tok-fn">stringify</span>({
+  name: err.name,
+  message: err.message,
+  stack: err.stack,
+});
+
+<span class="tok-com">// ✅ Hoặc dùng helper:</span>
+<span class="tok-kw">function</span> <span class="tok-fn">serializeError</span>(err) {
+  <span class="tok-kw">if</span> (!(err <span class="tok-kw">instanceof</span> <span class="tok-cls">Error</span>)) <span class="tok-kw">return</span> { value: <span class="tok-cls">String</span>(err) };
+  <span class="tok-kw">return</span> {
+    name: err.name,
+    message: err.message,
+    stack: err.stack,
+    ...err,   <span class="tok-com">// spread bao luôn custom properties</span>
+  };
+}
+
+<span class="tok-com">// ✅ Console.log nhận Error object trực tiếp — devtools format đẹp</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">error</span>(err);   <span class="tok-com">// hiển thị stack + clickable line</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Sentry / DataDog ở production</div>
+          <p>
+            Đừng tự build error reporting. Dùng <strong>Sentry</strong>, <strong>DataDog RUM</strong>, hoặc
+            <strong>Bugsnag</strong> — chúng tự capture stack, breadcrumb (action user trước khi crash), source map
+            (de-minify), release version. Cài 5 phút, tiết kiệm 5 tuần debug.
+          </p>
+        </div>
+
+        <h2 id="ket-noi-tu-tuong">12. Tư duy phòng thủ tổng thể</h2>
+
+        <p>Tổng hợp 4 nguyên tắc của chương:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nguyên tắc</th><th>Vùng áp dụng</th><th>Pattern cụ thể</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Fail fast</td><td>Đầu hàm, đầu request</td><td>Validate input → throw <code>ValidationError</code></td></tr>
+              <tr><td>Result over throw cho expected error</td><td>Parse, validate, lookup</td><td>Return <code>{ok, value/error}</code></td></tr>
+              <tr><td>Defensive copy</td><td>Hàm public, library API</td><td>Spread <code>...</code>, <code>structuredClone</code></td></tr>
+              <tr><td>Blast radius</td><td>UI tree, request handler</td><td>ErrorBoundary, middleware</td></tr>
+              <tr><td>Last-resort logging</td><td>Toàn app</td><td>Global handler + Sentry</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — <code>ApiError</code> với metadata</h4>
+            <div class="exercise-body">
+              <p>
+                Viết class <code>ApiError extends Error</code> có thêm <code>statusCode</code> (number) và
+                <code>endpoint</code> (string). Sau đó viết function <code>callApi(url)</code> dùng
+                <code>fetch</code>, throw <code>ApiError</code> khi response không 2xx.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án mẫu</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">ApiError</span> <span class="tok-kw">extends</span> <span class="tok-cls">Error</span> {
+  <span class="tok-fn">constructor</span>(statusCode, endpoint, message) {
+    <span class="tok-fn">super</span>(message ?? <span class="tok-str">`API </span><span class="tok-op">${</span>endpoint<span class="tok-op">}</span><span class="tok-str"> failed with </span><span class="tok-op">${</span>statusCode<span class="tok-op">}</span><span class="tok-str">`</span>);
+    <span class="tok-kw">this</span>.name = <span class="tok-str">'ApiError'</span>;
+    <span class="tok-kw">this</span>.statusCode = statusCode;
+    <span class="tok-kw">this</span>.endpoint = endpoint;
+  }
+}
+
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">callApi</span>(url) {
+  <span class="tok-kw">const</span> res = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url);
+  <span class="tok-kw">if</span> (!res.ok) {
+    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">ApiError</span>(res.status, url);
+  }
+  <span class="tok-kw">return</span> <span class="tok-kw">await</span> res.<span class="tok-fn">json</span>();
+}
+
+<span class="tok-com">// Sử dụng</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">const</span> data = <span class="tok-kw">await</span> <span class="tok-fn">callApi</span>(<span class="tok-str">'/api/users/999'</span>);
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-kw">if</span> (e <span class="tok-kw">instanceof</span> <span class="tok-cls">ApiError</span> &amp;&amp; e.statusCode === <span class="tok-num">404</span>) {
+    ui.<span class="tok-fn">show404</span>();
+  } <span class="tok-kw">else</span> {
+    <span class="tok-kw">throw</span> e;
+  }
+}</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — <code>safeFetch</code> trả Result type</h4>
+            <div class="exercise-body">
+              <p>
+                Viết <code>safeFetch(url)</code> trả <code>{ok: true, value: data}</code> khi thành công, <code>{ok: false, error}</code> khi fail.
+                Cover 3 case: network error, non-2xx, JSON parse fail. Không bao giờ throw.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án mẫu</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">safeFetch</span>(url) {
+  <span class="tok-kw">let</span> res;
+  <span class="tok-kw">try</span> {
+    res = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url);
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error: { kind: <span class="tok-str">'network'</span>, cause: e } };
+  }
+
+  <span class="tok-kw">if</span> (!res.ok) {
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error: { kind: <span class="tok-str">'http'</span>, status: res.status } };
+  }
+
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">const</span> data = <span class="tok-kw">await</span> res.<span class="tok-fn">json</span>();
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">true</span>, value: data };
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error: { kind: <span class="tok-str">'parse'</span>, cause: e } };
+  }
+}
+
+<span class="tok-com">// Caller</span>
+<span class="tok-kw">const</span> r = <span class="tok-kw">await</span> <span class="tok-fn">safeFetch</span>(<span class="tok-str">'/api/users'</span>);
+<span class="tok-kw">if</span> (r.ok) {
+  <span class="tok-fn">render</span>(r.value);
+} <span class="tok-kw">else</span> <span class="tok-kw">switch</span> (r.error.kind) {
+  <span class="tok-kw">case</span> <span class="tok-str">'network'</span>: ui.<span class="tok-fn">showOffline</span>(); <span class="tok-kw">break</span>;
+  <span class="tok-kw">case</span> <span class="tok-str">'http'</span>:    ui.<span class="tok-fn">showHttpError</span>(r.error.status); <span class="tok-kw">break</span>;
+  <span class="tok-kw">case</span> <span class="tok-str">'parse'</span>:   ui.<span class="tok-fn">showServerError</span>(); <span class="tok-kw">break</span>;
+}</code></pre>
+                  <p>Lưu ý: error kind là string literal → ở TypeScript sẽ dùng discriminated union (chương 9).</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — <code>withRetry</code> có điều kiện</h4>
+            <div class="exercise-body">
+              <p>
+                Viết <code>withRetry(fn, retries, shouldRetry)</code>:
+              </p>
+              <ul>
+                <li><code>fn</code>: async function không tham số.</li>
+                <li><code>retries</code>: số lần retry tối đa.</li>
+                <li><code>shouldRetry(error)</code>: predicate quyết định có retry không (vd: chỉ retry network error, không retry 4xx).</li>
+              </ul>
+              <p>Nếu vượt số retry, throw error cuối cùng.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án mẫu</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">withRetry</span>(fn, retries, shouldRetry) {
+  <span class="tok-kw">let</span> lastError;
+  <span class="tok-kw">for</span> (<span class="tok-kw">let</span> attempt = <span class="tok-num">0</span>; attempt &lt;= retries; attempt++) {
+    <span class="tok-kw">try</span> {
+      <span class="tok-kw">return</span> <span class="tok-kw">await</span> <span class="tok-fn">fn</span>();
+    } <span class="tok-kw">catch</span> (e) {
+      lastError = e;
+      <span class="tok-kw">if</span> (attempt === retries || !<span class="tok-fn">shouldRetry</span>(e)) <span class="tok-kw">throw</span> e;
+      <span class="tok-com">// Backoff đơn giản: 100ms, 200ms, 400ms...</span>
+      <span class="tok-kw">await</span> <span class="tok-kw">new</span> <span class="tok-cls">Promise</span>(r =&gt; <span class="tok-fn">setTimeout</span>(r, <span class="tok-num">100</span> * <span class="tok-num">2</span> ** attempt));
+    }
+  }
+  <span class="tok-kw">throw</span> lastError;
+}
+
+<span class="tok-com">// Sử dụng — chỉ retry khi network hoặc 5xx</span>
+<span class="tok-kw">const</span> data = <span class="tok-kw">await</span> <span class="tok-fn">withRetry</span>(
+  () =&gt; <span class="tok-fn">callApi</span>(<span class="tok-str">'/api/data'</span>),
+  <span class="tok-num">3</span>,
+  (e) =&gt; e <span class="tok-kw">instanceof</span> <span class="tok-cls">ApiError</span> ? e.statusCode &gt;= <span class="tok-num">500</span> : <span class="tok-kw">true</span>
+);</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Tìm bug nuốt lỗi</h4>
+            <div class="exercise-body">
+              <p>Code dưới có 1 bug khiến lỗi từ <code>saveUser</code> bị nuốt. Tìm và sửa.</p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">register</span>(form) {
+  <span class="tok-kw">try</span> {
+    <span class="tok-fn">validate</span>(form);
+    saveUser(form);   <span class="tok-com">// hàm async</span>
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">true</span> };
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error: e.message };
+  }
+}</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+                  <p>
+                    Bug: thiếu <code>await</code> trước <code>saveUser(form)</code>. Function async return Promise — nếu
+                    không await, Promise reject ở ngoài <code>try/catch</code>, trở thành <em>unhandled rejection</em>.
+                    <code>register</code> sẽ return <code>{ok: true}</code> dù save fail.
+                  </p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">register</span>(form) {
+  <span class="tok-kw">try</span> {
+    <span class="tok-fn">validate</span>(form);
+    <span class="tok-kw">await</span> <span class="tok-fn">saveUser</span>(form);   <span class="tok-com">// ✅ thêm await</span>
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">true</span> };
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">return</span> { ok: <span class="tok-kw">false</span>, error: e.message };
+  }
+}</code></pre>
+                  <p>
+                    ESLint rule <code>@typescript-eslint/no-floating-promises</code> hoặc <code>require-await</code>
+                    sẽ catch bug này tự động.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Global error logger vào <code>localStorage</code></h4>
+            <div class="exercise-body">
+              <p>
+                Setup 2 listener <code>window.addEventListener('error')</code> và <code>'unhandledrejection'</code>.
+                Mỗi error append vào array trong <code>localStorage</code> key <code>'errorLog'</code> (max 50 entry,
+                xoá entry cũ nhất khi đầy). Mỗi entry gồm: <code>timestamp</code>, <code>type</code>, <code>message</code>,
+                <code>stack</code>.
+              </p>
+              <p>Test: trigger 1 sync error (<code>null.foo</code>) và 1 async error (<code>Promise.reject('x')</code>), kiểm tra log.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án mẫu</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">const</span> <span class="tok-cls">MAX_LOG</span> = <span class="tok-num">50</span>;
+<span class="tok-kw">const</span> <span class="tok-cls">LOG_KEY</span> = <span class="tok-str">'errorLog'</span>;
+
+<span class="tok-kw">function</span> <span class="tok-fn">appendLog</span>(entry) {
+  <span class="tok-kw">let</span> log = [];
+  <span class="tok-kw">try</span> {
+    log = <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(localStorage.<span class="tok-fn">getItem</span>(<span class="tok-cls">LOG_KEY</span>) ?? <span class="tok-str">'[]'</span>);
+  } <span class="tok-kw">catch</span> { log = []; }
+  log.<span class="tok-fn">push</span>(entry);
+  <span class="tok-kw">if</span> (log.length &gt; <span class="tok-cls">MAX_LOG</span>) log = log.<span class="tok-fn">slice</span>(-<span class="tok-cls">MAX_LOG</span>);
+  localStorage.<span class="tok-fn">setItem</span>(<span class="tok-cls">LOG_KEY</span>, <span class="tok-cls">JSON</span>.<span class="tok-fn">stringify</span>(log));
+}
+
+window.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'error'</span>, (event) =&gt; {
+  <span class="tok-fn">appendLog</span>({
+    timestamp: <span class="tok-kw">new</span> <span class="tok-cls">Date</span>().<span class="tok-fn">toISOString</span>(),
+    type: <span class="tok-str">'error'</span>,
+    message: event.message,
+    stack: event.error?.stack ?? <span class="tok-kw">null</span>,
+  });
+});
+
+window.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'unhandledrejection'</span>, (event) =&gt; {
+  <span class="tok-kw">const</span> reason = event.reason;
+  <span class="tok-fn">appendLog</span>({
+    timestamp: <span class="tok-kw">new</span> <span class="tok-cls">Date</span>().<span class="tok-fn">toISOString</span>(),
+    type: <span class="tok-str">'unhandledrejection'</span>,
+    message: reason <span class="tok-kw">instanceof</span> <span class="tok-cls">Error</span> ? reason.message : <span class="tok-cls">String</span>(reason),
+    stack: reason?.stack ?? <span class="tok-kw">null</span>,
+  });
+});
+
+<span class="tok-com">// Trigger để test:</span>
+<span class="tok-fn">setTimeout</span>(() =&gt; { <span class="tok-kw">null</span>.foo; }, <span class="tok-num">100</span>);            <span class="tok-com">// sync</span>
+<span class="tok-cls">Promise</span>.<span class="tok-fn">reject</span>(<span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'async fail'</span>));            <span class="tok-com">// async</span>
+
+<span class="tok-com">// Kiểm tra:</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(localStorage.<span class="tok-fn">getItem</span>(<span class="tok-cls">LOG_KEY</span>)));</code></pre>
+                  <p>
+                    Lưu ý: <code>localStorage</code> dung lượng giới hạn (~5MB) — nhớ cap số entry. Production nên gửi
+                    log lên server (Sentry / endpoint riêng) thay vì lưu local.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>throw 'oops'</code> khác <code>throw new Error('oops')</code> ở chỗ nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>throw 'oops'</code> ném string trần — <strong>không có stack trace</strong>, không có
+                <code>.message</code>, <code>instanceof Error</code> trả false. Catcher khó debug và khó dispatch theo
+                loại. Luôn dùng <code>new Error(...)</code> (hoặc subclass) — ESLint rule <code>no-throw-literal</code>
+                bắt vi phạm tự động.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>try { await foo() } catch(e) { ... }</code> — <code>catch</code> sẽ bắt loại lỗi nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Cả hai: (1) lỗi <strong>sync throw</strong> trước khi Promise được tạo (vd: gọi <code>foo</code> trong
+                điều kiện sai), và (2) Promise <strong>reject</strong> trả về từ <code>await foo()</code>.
+                Đây là điểm hay nhất của <code>async/await</code> — bạn dùng cùng một cấu trúc cho cả sync và async.
+                Không bắt được: error trong callback của <code>setTimeout</code>/event listener, hoặc Promise quên
+                <code>await</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>finally</code> có chạy nếu <code>catch</code> re-throw không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Có. <code>finally</code> chạy <strong>luôn luôn</strong> — bất kể <code>try</code> success, <code>catch</code>
+                được kích hoạt, <code>catch</code> re-throw, hay có <code>return</code> sớm. Đây là đặc tính cốt lõi:
+                <code>finally</code> đảm bảo cleanup (đóng file, release lock) chạy trong mọi trường hợp.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Trong <code>try { risky(); } catch(e) { logger.log(e); }</code> — error có propagate lên hàm gọi <code>risky</code> không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Không. <code>catch</code> đã "tiêu thụ" error — control flow tiếp tục bình thường sau block. Để propagate,
+                phải <code>throw e;</code> (hoặc throw error mới) trong <code>catch</code>. Đây là anti-pattern phổ biến:
+                log nhưng không re-throw → caller tưởng thành công.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>JSON.parse('xx')</code> throw cái gì, và <code>instanceof Error</code> có trả true không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Throw một <code>SyntaxError</code>. Vì <code>SyntaxError</code> kế thừa <code>Error</code>, cả hai check
+                đều true:
+              </p>
+<pre><code><span class="tok-kw">try</span> { <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'xx'</span>); }
+<span class="tok-kw">catch</span> (e) {
+  e <span class="tok-kw">instanceof</span> <span class="tok-cls">SyntaxError</span>;  <span class="tok-com">// true</span>
+  e <span class="tok-kw">instanceof</span> <span class="tok-cls">Error</span>;        <span class="tok-com">// true (kế thừa)</span>
+}</code></pre>
+              <p>Đó là lý do <code>catch (e) { if (e instanceof Error) ... }</code> rất an toàn cho mọi error built-in.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Khi nào nên <code>throw</code> error, khi nào nên <code>return</code> error?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Throw</strong> cho lỗi <em>exceptional</em> — bất ngờ, ngoài happy path, không nên xảy ra
+                (out-of-memory, bug logic, network down, DB chết).
+                <strong>Return Result</strong> (<code>{ok, value/error}</code>) cho lỗi <em>expected</em> — nằm trong
+                kịch bản dự kiến, caller chắc chắn phải xử lý (parse user input, validate form, lookup không tìm thấy).
+                Pattern Result lấy cảm hứng từ Rust, ép caller check trước khi truy cập value.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p><code>Promise.reject(new Error('x'))</code> không có <code>.catch()</code> đi kèm — chuyện gì xảy ra?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Trigger event <code>'unhandledrejection'</code>:
+              </p>
+              <ul>
+                <li><strong>Browser</strong>: <code>window.addEventListener('unhandledrejection', ...)</code> nhận event. Mặc định console log warning, app tiếp tục chạy.</li>
+                <li><strong>Node.js</strong>: <code>process.on('unhandledRejection', ...)</code> nhận event. Từ Node 15+ <strong>process exit với mã 1</strong> (mặc định) nếu không handler — coi như crash.</li>
+              </ul>
+              <p>
+                Luôn handle Promise reject: <code>.catch()</code>, <code>try/catch</code> với <code>await</code>, hoặc
+                đảm bảo có global handler. Trong test, unhandled rejection thường làm test fail.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 7, bạn nên master:</p>
+        <ul>
+          <li><strong>Error object</strong>: cấu trúc <code>name/message/stack</code>, các subclass built-in, luôn throw instance của <code>Error</code>.</li>
+          <li><strong>try/catch/finally</strong>: cú pháp đầy đủ, <code>finally</code> luôn chạy, <code>catch</code> không cần binding (ES2019).</li>
+          <li><strong>Custom error class</strong>: extends Error, set <code>this.name</code>, thêm field nghiệp vụ — dispatch bằng <code>instanceof</code>.</li>
+          <li><strong>async/await + try/catch</strong>: bắt cả sync throw và Promise reject. Cẩn thận quên <code>await</code>.</li>
+          <li><strong>Anti-pattern</strong>: nuốt lỗi (catch rỗng), log không re-throw. Nếu catch, phải re-throw / recover / báo error state.</li>
+          <li><strong>Result type</strong>: pattern Rust — return <code>{ok, value/error}</code> cho expected error.</li>
+          <li><strong>Fail-fast + defensive copy</strong>: validate đầu hàm, clone object trước khi mutate.</li>
+          <li><strong>Global handler + Error boundary</strong>: lớp phòng cuối ở browser/Node và UI framework.</li>
+          <li><strong>Log đúng cách</strong>: không JSON.stringify Error (mất stack), dùng Sentry ở production.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 6 (Async)</strong> — error trong Promise chain (<code>.catch</code>) liên kết trực tiếp với try/catch async ở đây.</li>
+          <li><strong>Chương 8 (Modules)</strong> — module boundary là nơi tự nhiên đặt error policy: validate input, expose typed error.</li>
+          <li><strong>Chương 9 (TypeScript)</strong> — Result type lên một level với <strong>discriminated union</strong> + exhaustive check. Error kind trở thành type literal compiler ép xử lý đủ case.</li>
+          <li><strong>Dart Chương 5</strong> — exception trong Dart có syntax tương tự (<code>try/on/catch/finally</code>), thêm <code>rethrow</code> keyword. Sound null safety giảm hẳn <code>TypeError</code>.</li>
+          <li><strong>Flutter Chương 6 (Widgets)</strong> — <code>ErrorWidget.builder</code> để override khi build error.</li>
+          <li><strong>Flutter Chương 10 (Error handling)</strong> — <code>FlutterError.onError</code>, <code>PlatformDispatcher.instance.onError</code>, integrate Sentry/Crashlytics.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong6.html" class="prev">
+            <div class="dir">← Chương 6</div>
+            <div class="label">Async &amp; Promises</div>
+          </a>
+          <a href="chuong8.html" class="next">
+            <div class="dir">Chương 8 →</div>
+            <div class="label">Modules &amp; Bundlers</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#error-object">1. Error object</a></li>
+          <li class="level-3"><a href="#builtin-errors">1.1. Built-in subclass</a></li>
+          <li class="level-3"><a href="#anti-throw-string">1.2. Đừng throw string</a></li>
+          <li><a href="#try-catch-finally">2. try/catch/finally</a></li>
+          <li class="level-3"><a href="#finally-detail">2.1. finally luôn chạy</a></li>
+          <li class="level-3"><a href="#optional-catch">2.2. catch không binding</a></li>
+          <li><a href="#custom-error">3. Custom Error class</a></li>
+          <li><a href="#async-error">4. try/catch với async</a></li>
+          <li><a href="#anti-swallow">5. Anti-pattern: nuốt lỗi</a></li>
+          <li><a href="#result-type">6. Result type</a></li>
+          <li><a href="#fail-fast">7. Fail-fast</a></li>
+          <li><a href="#defensive-copy">8. Defensive copy</a></li>
+          <li><a href="#global-handler">9. Global error handler</a></li>
+          <li class="level-3"><a href="#browser-handler">9.1. Browser</a></li>
+          <li class="level-3"><a href="#node-handler">9.2. Node.js</a></li>
+          <li><a href="#ui-error-boundary">10. Error boundary UI</a></li>
+          <li><a href="#logging-error">11. Log error đúng</a></li>
+          <li><a href="#ket-noi-tu-tuong">12. Tư duy tổng thể</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 7 — Error Handling &amp; Defensive Patterns · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong6.html">← Chương 6</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong8.html">Chương 8 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3 — Data Structures: list, tuple, dict, set · Python Sub-pillar</title>
+  <meta name="description" content="Cấu trúc dữ liệu built-in của Python: list, tuple, dict, set, frozenset. Slicing, comprehension (list/dict/set/generator), collections stdlib (Counter, defaultdict, deque, namedtuple). Tiếng Việt đầy đủ." />
+  <meta name="theme-color" content="#306998" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-py">Py</span>
+        Python · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../../Flutter/index.html">Flutter</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../index.html" class="active">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Python</a><span class="sep">/</span>
+        <span>Chương 3</span>
+      </div>
+      <div class="chapter-num">Chương 03 · Data Structures</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        list, tuple, dict, set — bộ tứ cấu trúc dữ liệu cốt lõi
+      </h1>
+      <p class="lead">
+        Sau biến và toán tử, đây là chương <strong>quan trọng nhất</strong> trong hành trình Python. Hầu hết
+        công việc thực tế là biến đổi danh sách, đếm tần suất, tra cứu theo khoá, gom nhóm phần tử. Python có 4
+        cấu trúc dữ liệu built-in cực mạnh: <code>list</code>, <code>tuple</code>, <code>dict</code>,
+        <code>set</code> — cộng <strong>comprehension</strong> và thư viện <code>collections</code> — đủ giải
+        quyết 90% bài toán mà không cần thư viện ngoài.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-2</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phân biệt rạch ròi <strong>4 cấu trúc</strong> built-in: khi nào <code>list</code>, khi nào <code>tuple</code>, khi nào <code>dict</code>, khi nào <code>set</code>.</li>
+            <li>Hiểu khái niệm <strong>hashable</strong> — lý do tuple làm được dict key còn list thì không.</li>
+            <li>Master <strong>slicing</strong> <code>[start:stop:step]</code> — áp dụng cho list/tuple/string/bytes.</li>
+            <li>Master <strong>comprehension</strong> (list / dict / set / generator) — viết Pythonic, không loop tay.</li>
+            <li>Biết khi nào dùng <strong>generator expression</strong> thay list (lazy, tiết kiệm RAM).</li>
+            <li>Biết các <strong>helper stdlib</strong>: <code>Counter</code>, <code>defaultdict</code>, <code>deque</code>, <code>namedtuple</code>.</li>
+            <li>Hiểu <strong>dict ordered từ Python 3.7+</strong> — không cần <code>OrderedDict</code> trừ trường hợp đặc biệt.</li>
+          </ul>
+        </div>
+
+        <h2 id="list">1. <code>list</code> — chuỗi có thứ tự, có thể thay đổi</h2>
+
+        <p>
+          <code>list</code> là cấu trúc dữ liệu được dùng nhiều nhất Python. Nó là <strong>mutable sequence</strong>:
+          giữ thứ tự chèn, cho phép trùng, cho phép sửa/thêm/xoá in-place. Implementation bên dưới là
+          <em>dynamic array</em> (resize khi đầy) — không phải linked list.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Tạo và truy cập list</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># 1. Literal — cách dùng 99% trường hợp</span>
+nums = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>]
+mixed = [<span class="tok-num">1</span>, <span class="tok-str">"hai"</span>, <span class="tok-num">3.0</span>, <span class="tok-kw">True</span>, <span class="tok-kw">None</span>]   <span class="tok-com"># Python list cho phép mọi type, trộn lẫn được</span>
+
+<span class="tok-com"># 2. Constructor list() từ iterable bất kỳ</span>
+chars = <span class="tok-fn">list</span>(<span class="tok-str">"abc"</span>)            <span class="tok-com"># ['a', 'b', 'c']</span>
+rng   = <span class="tok-fn">list</span>(<span class="tok-fn">range</span>(<span class="tok-num">5</span>))         <span class="tok-com"># [0, 1, 2, 3, 4]</span>
+
+<span class="tok-com"># 3. Repeat operator * — cẩn thận với mutable reference!</span>
+zeros = [<span class="tok-num">0</span>] * <span class="tok-num">5</span>             <span class="tok-com"># [0, 0, 0, 0, 0] — OK với int</span>
+grid  = [[<span class="tok-num">0</span>] * <span class="tok-num">3</span>] * <span class="tok-num">3</span>          <span class="tok-com"># 🔥 3 reference TRỎ CÙNG 1 inner list!</span>
+grid[<span class="tok-num">0</span>][<span class="tok-num">0</span>] = <span class="tok-num">9</span>
+<span class="tok-fn">print</span>(grid)                <span class="tok-com"># [[9,0,0],[9,0,0],[9,0,0]] ← sai!</span>
+
+<span class="tok-com"># Cách đúng tạo 2D list:</span>
+grid = [[<span class="tok-num">0</span>] * <span class="tok-num">3</span> <span class="tok-kw">for</span> _ <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">3</span>)]   <span class="tok-com"># 3 inner list độc lập</span>
+
+<span class="tok-com"># Truy cập (zero-indexed). Index âm đếm từ cuối</span>
+nums[<span class="tok-num">0</span>]      <span class="tok-com"># 1   — phần tử đầu</span>
+nums[-<span class="tok-num">1</span>]     <span class="tok-com"># 4   — phần tử cuối</span>
+<span class="tok-fn">len</span>(nums)   <span class="tok-com"># 4</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — repeat operator với mutable</div>
+          <p>
+            <code>[[0]*3]*3</code> không tạo ma trận 3x3 đúng — Python tạo <em>một</em> inner list rồi nhân 3
+            reference. Sửa 1 phần tử inner sẽ "lan" sang 2 hàng còn lại. Quy tắc: <strong>mỗi khi nhân list
+            chứa mutable, hãy dùng comprehension thay vì <code>*</code></strong>.
+          </p>
+        </div>
+
+        <h3 id="list-methods">1.1. Method của <code>list</code></h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Method</th><th>Mô tả</th><th>Mutate?</th><th>Trả về</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>append(x)</code></td><td>Thêm 1 phần tử vào cuối</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>extend(it)</code></td><td>Nối từng phần tử của iterable vào cuối</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>insert(i, x)</code></td><td>Chèn tại index i (O(n) vì shift)</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>pop(i=-1)</code></td><td>Xoá &amp; trả phần tử (mặc định cuối)</td><td>Có</td><td>phần tử bị xoá</td></tr>
+              <tr><td><code>remove(x)</code></td><td>Xoá phần tử <em>đầu tiên</em> bằng x; lỗi nếu không có</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>clear()</code></td><td>Xoá hết phần tử</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>sort(key=..., reverse=...)</code></td><td>Sort in-place</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>reverse()</code></td><td>Đảo ngược in-place</td><td>Có</td><td><code>None</code></td></tr>
+              <tr><td><code>index(x)</code></td><td>Trả index đầu tiên của x; lỗi nếu không có</td><td>Không</td><td><code>int</code></td></tr>
+              <tr><td><code>count(x)</code></td><td>Đếm số lần x xuất hiện</td><td>Không</td><td><code>int</code></td></tr>
+              <tr><td><code>copy()</code></td><td>Shallow copy (giống <code>lst[:]</code>)</td><td>Không</td><td><code>list</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Method thường dùng — ví dụ</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>lst = [<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">4</span>]
+
+lst.<span class="tok-fn">append</span>(<span class="tok-num">5</span>)              <span class="tok-com"># [3, 1, 4, 5]</span>
+lst.<span class="tok-fn">extend</span>([<span class="tok-num">9</span>, <span class="tok-num">2</span>])         <span class="tok-com"># [3, 1, 4, 5, 9, 2]</span>
+lst.<span class="tok-fn">insert</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>)            <span class="tok-com"># [0, 3, 1, 4, 5, 9, 2]   (chèn đầu)</span>
+last = lst.<span class="tok-fn">pop</span>()           <span class="tok-com"># last = 2; lst = [0, 3, 1, 4, 5, 9]</span>
+lst.<span class="tok-fn">remove</span>(<span class="tok-num">1</span>)              <span class="tok-com"># xoá giá trị 1 đầu tiên</span>
+
+<span class="tok-com"># sort() in-place vs sorted() trả mới</span>
+lst.<span class="tok-fn">sort</span>()                  <span class="tok-com"># mutate lst, return None</span>
+new = <span class="tok-fn">sorted</span>(lst, reverse=<span class="tok-kw">True</span>) <span class="tok-com"># trả list mới, lst nguyên vẹn</span>
+
+<span class="tok-com"># Sort theo key (giống ORDER BY trong SQL)</span>
+people = [(<span class="tok-str">"An"</span>, <span class="tok-num">25</span>), (<span class="tok-str">"Bình"</span>, <span class="tok-num">17</span>), (<span class="tok-str">"Cường"</span>, <span class="tok-num">30</span>)]
+people.<span class="tok-fn">sort</span>(key=<span class="tok-kw">lambda</span> p: p[<span class="tok-num">1</span>])   <span class="tok-com"># sort theo tuổi</span>
+
+<span class="tok-com"># index / count — KHÔNG mutate</span>
+lst = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">2</span>, <span class="tok-num">1</span>]
+lst.<span class="tok-fn">index</span>(<span class="tok-num">2</span>)                <span class="tok-com"># 1 — lần xuất hiện đầu</span>
+lst.<span class="tok-fn">count</span>(<span class="tok-num">1</span>)                <span class="tok-com"># 2</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Đừng quên <code>sort()</code> trả <code>None</code></div>
+          <p>
+            Lỗi cực phổ biến với người mới: <code>x = lst.sort()</code> — <code>x</code> sẽ là <code>None</code>!
+            <code>list.sort()</code> mutate và trả <code>None</code> (convention Python: method mutate không trả
+            value để tránh nhầm). Cần list mới sort, dùng <code>sorted(lst)</code>.
+          </p>
+        </div>
+
+        <h2 id="tuple">2. <code>tuple</code> — chuỗi có thứ tự, bất biến</h2>
+
+        <p>
+          <code>tuple</code> giống <code>list</code> ở chỗ có thứ tự, cho phép trùng, truy cập theo index. Khác
+          ở chỗ <strong>immutable</strong>: tạo xong không sửa được. Đổi lại, tuple <em>hashable</em> (nếu các
+          phần tử trong nó cũng hashable) — dùng được làm <strong>dict key</strong> hoặc <strong>set element</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Tạo tuple</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Có thể có hoặc không có dấu ngoặc</span>
+t1 = (<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>)
+t2 = <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>          <span class="tok-com"># giống y hệt t1 — dấu phẩy mới tạo tuple, không phải ()</span>
+
+<span class="tok-com"># 🔥 Gotcha: 1 phần tử BẮT BUỘC có dấu phẩy</span>
+a = (<span class="tok-num">1</span>)                <span class="tok-com"># 🛑 đây là int 1, không phải tuple</span>
+b = (<span class="tok-num">1</span>,)               <span class="tok-com"># ✅ tuple 1 phần tử</span>
+<span class="tok-fn">type</span>(a), <span class="tok-fn">type</span>(b)      <span class="tok-com"># &lt;class 'int'&gt;, &lt;class 'tuple'&gt;</span>
+
+<span class="tok-com"># Tuple rỗng</span>
+empty = ()                <span class="tok-com"># hoặc tuple()</span>
+
+<span class="tok-com"># Từ iterable</span>
+<span class="tok-fn">tuple</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])         <span class="tok-com"># (1, 2, 3)</span>
+<span class="tok-fn">tuple</span>(<span class="tok-str">"abc"</span>)             <span class="tok-com"># ('a', 'b', 'c')</span>
+
+<span class="tok-com"># Method ít — chỉ có count và index (không mutate được)</span>
+t = (<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">2</span>, <span class="tok-num">1</span>)
+t.<span class="tok-fn">count</span>(<span class="tok-num">2</span>)               <span class="tok-com"># 2</span>
+t.<span class="tok-fn">index</span>(<span class="tok-num">3</span>)               <span class="tok-com"># 2</span>
+
+<span class="tok-com"># Thử sửa → TypeError</span>
+t[<span class="tok-num">0</span>] = <span class="tok-num">99</span>               <span class="tok-com"># TypeError: 'tuple' object does not support item assignment</span></code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">⚖️ <code>list</code> hay <code>tuple</code>?</div>
+          <ul>
+            <li><strong>list</strong> khi bạn sẽ sửa/thêm/xoá dần (sequence động): danh sách user, todo, kết quả query.</li>
+            <li><strong>tuple</strong> khi gói nhiều giá trị thành <em>record cố định</em>: toạ độ <code>(x, y)</code>, RGB <code>(r, g, b)</code>, return nhiều giá trị.</li>
+            <li>Quy tắc <em>tinh thần</em>: list = "danh sách đồng dạng" (nhiều thứ cùng kiểu), tuple = "bộ ghi danh" (vài trường khác nhau).</li>
+            <li>Tuple <strong>hashable</strong> → dùng được làm dict key, set element. List <strong>không hashable</strong>.</li>
+            <li>Tuple <em>tiết kiệm memory hơn</em> chút ít vì không cần slot dư cho việc grow.</li>
+          </ul>
+        </div>
+
+        <h3 id="unpacking">3. Tuple unpacking — gán nhiều biến cùng lúc</h3>
+
+        <p>
+          Đây là <strong>tính năng đẹp nhất của Python</strong> cho việc xử lý tuple. Nhờ nó, bạn ít khi phải
+          gọi <code>t[0]</code>, <code>t[1]</code>... mà tách thẳng thành biến có tên.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Unpacking nhiều cấp</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># 1. Cơ bản</span>
+x, y = <span class="tok-num">1</span>, <span class="tok-num">2</span>                  <span class="tok-com"># x=1, y=2</span>
+a, b, c = [<span class="tok-num">10</span>, <span class="tok-num">20</span>, <span class="tok-num">30</span>]          <span class="tok-com"># a=10, b=20, c=30 — unpack được mọi iterable</span>
+
+<span class="tok-com"># 2. Swap không cần biến tạm — idiom Pythonic kinh điển</span>
+a, b = b, a
+
+<span class="tok-com"># 3. Return nhiều giá trị từ function (thực ra là return 1 tuple)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">divmod_simple</span>(a, b):
+    <span class="tok-kw">return</span> a // b, a % b   <span class="tok-com"># tuple ngầm</span>
+
+q, r = <span class="tok-fn">divmod_simple</span>(<span class="tok-num">17</span>, <span class="tok-num">5</span>)       <span class="tok-com"># q=3, r=2</span>
+
+<span class="tok-com"># 4. Star unpacking — gom phần còn lại</span>
+first, *rest = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>]    <span class="tok-com"># first=1, rest=[2,3,4]</span>
+*init, last = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>]     <span class="tok-com"># init=[1,2,3], last=4</span>
+head, *mid, tail = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>]   <span class="tok-com"># head=1, mid=[2,3,4], tail=5</span>
+
+<span class="tok-com"># 5. Bỏ qua giá trị bằng _ (convention)</span>
+_, year, _ = (<span class="tok-str">"2026-05-20"</span>).<span class="tok-fn">split</span>(<span class="tok-str">"-"</span>)   <span class="tok-com"># lấy year, bỏ 2 phần</span>
+
+<span class="tok-com"># 6. Nested unpacking</span>
+((a, b), c) = ((<span class="tok-num">1</span>, <span class="tok-num">2</span>), <span class="tok-num">3</span>)         <span class="tok-com"># a=1, b=2, c=3
+
+# 7. Unpacking trong vòng lặp — siêu phổ biến với dict.items()</span>
+pairs = [(<span class="tok-str">"a"</span>, <span class="tok-num">1</span>), (<span class="tok-str">"b"</span>, <span class="tok-num">2</span>), (<span class="tok-str">"c"</span>, <span class="tok-num">3</span>)]
+<span class="tok-kw">for</span> key, value <span class="tok-kw">in</span> pairs:
+    <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{key}<span class="tok-str">: </span>{value}<span class="tok-str">"</span>)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Pythonic — luôn ưu tiên unpacking</div>
+          <p>
+            So sánh <code>x, y, z = point</code> vs <code>x = point[0]; y = point[1]; z = point[2]</code>. Cái đầu
+            ngắn hơn, đọc rõ tên, và Python <em>đảm bảo</em> length đúng (nếu lệch sẽ throw <code>ValueError</code> —
+            giúp catch bug sớm). Cái sau im lặng nếu length không đúng.
+          </p>
+        </div>
+
+        <h2 id="dict">4. <code>dict</code> — bảng băm key → value</h2>
+
+        <p>
+          <code>dict</code> là cấu trúc dữ liệu <em>quan trọng số một</em> Python — dùng nó nhiều hơn list. Nó là
+          <strong>hash map</strong>: tra cứu / chèn / xoá theo key đều O(1) trung bình. Mọi key phải
+          <strong>hashable</strong> (immutable + có <code>__hash__</code>).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Tạo dict và truy cập</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># 1. Literal</span>
+user = {<span class="tok-str">"name"</span>: <span class="tok-str">"An"</span>, <span class="tok-str">"age"</span>: <span class="tok-num">25</span>, <span class="tok-str">"city"</span>: <span class="tok-str">"Hà Nội"</span>}
+
+<span class="tok-com"># 2. Constructor dict() — keyword form (key phải là valid identifier)</span>
+user2 = <span class="tok-fn">dict</span>(name=<span class="tok-str">"Bình"</span>, age=<span class="tok-num">22</span>)
+
+<span class="tok-com"># 3. Từ iterable of pairs</span>
+user3 = <span class="tok-fn">dict</span>([(<span class="tok-str">"name"</span>, <span class="tok-str">"Cường"</span>), (<span class="tok-str">"age"</span>, <span class="tok-num">30</span>)])
+
+<span class="tok-com"># 4. dict comprehension (xem mục 9)</span>
+sq = {x: x**<span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>)}    <span class="tok-com"># {0:0, 1:1, 2:4, 3:9, 4:16}</span>
+
+<span class="tok-com"># --- Truy cập ---</span>
+user[<span class="tok-str">"name"</span>]                <span class="tok-com"># 'An'</span>
+user[<span class="tok-str">"unknown"</span>]             <span class="tok-com"># KeyError: 'unknown' 🔥</span>
+
+user.<span class="tok-fn">get</span>(<span class="tok-str">"name"</span>)            <span class="tok-com"># 'An' — an toàn, không lỗi</span>
+user.<span class="tok-fn">get</span>(<span class="tok-str">"unknown"</span>)         <span class="tok-com"># None</span>
+user.<span class="tok-fn">get</span>(<span class="tok-str">"unknown"</span>, <span class="tok-num">0</span>)      <span class="tok-com"># 0 — default tự chọn</span>
+
+<span class="tok-com"># Check key tồn tại</span>
+<span class="tok-str">"name"</span> <span class="tok-kw">in</span> user             <span class="tok-com"># True   — O(1) hash lookup, nhanh!</span>
+<span class="tok-str">"age"</span> <span class="tok-kw">not</span> <span class="tok-kw">in</span> user         <span class="tok-com"># False</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>d[k]</code> vs <code>d.get(k)</code></div>
+          <p>
+            Quy tắc: <code>d[k]</code> dùng khi bạn <em>chắc chắn</em> key tồn tại (hoặc cố tình muốn raise nếu
+            không). <code>d.get(k, default)</code> dùng khi key có thể không có và bạn có giá trị fallback.
+          </p>
+          <p style="margin-top: 8px;">
+            Đây là biểu hiện của triết lý <strong>EAFP</strong> (Easier to Ask Forgiveness than Permission) vs
+            <strong>LBYL</strong> (Look Before You Leap). Python idiomatic thường dùng EAFP với try/except, nhưng
+            với dict thì cả hai đều OK — <code>.get()</code> ngắn hơn.
+          </p>
+        </div>
+
+        <h3 id="dict-methods">4.1. Method của <code>dict</code></h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Method</th><th>Mô tả</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>d[k] = v</code></td><td>Thêm hoặc cập nhật</td></tr>
+              <tr><td><code>d.get(k, default=None)</code></td><td>Lấy giá trị, có default an toàn</td></tr>
+              <tr><td><code>d.setdefault(k, v)</code></td><td>Nếu k chưa có thì <code>d[k]=v</code>; luôn trả giá trị hiện tại</td></tr>
+              <tr><td><code>d.pop(k, default)</code></td><td>Xoá &amp; trả value (default nếu không có)</td></tr>
+              <tr><td><code>d.popitem()</code></td><td>Xoá &amp; trả cặp cuối được chèn (LIFO từ 3.7+)</td></tr>
+              <tr><td><code>d.update(other)</code></td><td>Merge từ dict/iterable khác (other override)</td></tr>
+              <tr><td><code>d.keys()</code></td><td>View các key (live view, không phải snapshot)</td></tr>
+              <tr><td><code>d.values()</code></td><td>View các value</td></tr>
+              <tr><td><code>d.items()</code></td><td>View các <code>(key, value)</code> tuple</td></tr>
+              <tr><td><code>d.clear()</code></td><td>Xoá tất cả</td></tr>
+              <tr><td><code>d.copy()</code></td><td>Shallow copy</td></tr>
+              <tr><td><code>d1 | d2</code></td><td>Merge (Python 3.9+), trả dict mới</td></tr>
+              <tr><td><code>d1 |= d2</code></td><td>Update in-place (3.9+)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>setdefault + items() + update — ví dụ</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># setdefault — pattern xây dict-of-list không cần check key</span>
+words = [<span class="tok-str">"apple"</span>, <span class="tok-str">"ant"</span>, <span class="tok-str">"bat"</span>, <span class="tok-str">"banana"</span>, <span class="tok-str">"cat"</span>]
+groups = {}
+<span class="tok-kw">for</span> w <span class="tok-kw">in</span> words:
+    groups.<span class="tok-fn">setdefault</span>(w[<span class="tok-num">0</span>], []).<span class="tok-fn">append</span>(w)
+<span class="tok-com"># {'a': ['apple','ant'], 'b': ['bat','banana'], 'c': ['cat']}</span>
+<span class="tok-com"># defaultdict (xem mục 11) thanh lịch hơn cho pattern này.</span>
+
+<span class="tok-com"># items() — iterate cả key + value</span>
+<span class="tok-kw">for</span> k, v <span class="tok-kw">in</span> user.<span class="tok-fn">items</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{k}<span class="tok-str"> = </span>{v}<span class="tok-str">"</span>)
+
+<span class="tok-com"># update — merge</span>
+defaults = {<span class="tok-str">"theme"</span>: <span class="tok-str">"light"</span>, <span class="tok-str">"lang"</span>: <span class="tok-str">"vi"</span>}
+prefs    = {<span class="tok-str">"theme"</span>: <span class="tok-str">"dark"</span>}
+defaults.<span class="tok-fn">update</span>(prefs)        <span class="tok-com"># defaults = {'theme': 'dark', 'lang': 'vi'}</span>
+
+<span class="tok-com"># Python 3.9+ — merge operator | (giống Object spread của JS)</span>
+merged = defaults | prefs    <span class="tok-com"># mới, không mutate</span></code></pre>
+        </div>
+
+        <h3 id="dict-ordered">5. Dict ordered từ Python 3.7+</h3>
+
+        <div class="py-feature">
+          <h4>Dict bảo toàn thứ tự chèn (insertion-ordered)</h4>
+          <p>
+            Trước Python 3.6, <code>dict</code> <strong>không đảm bảo</strong> thứ tự — iterate ra theo hash bucket,
+            có thể khác nhau giữa các run. Người ta phải dùng <code>collections.OrderedDict</code> nếu cần thứ tự.
+          </p>
+          <p>
+            Từ <strong>CPython 3.6</strong> (implementation detail) và <strong>Python 3.7+</strong> (chính thức
+            vào language spec), <code>dict</code> bảo toàn <strong>insertion order</strong>: iterate ra theo
+            đúng thứ tự bạn chèn. Vì vậy bây giờ bạn ít khi cần <code>OrderedDict</code> — chỉ dùng khi cần
+            method đặc biệt như <code>move_to_end()</code>.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Insertion order</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>d = {}
+d[<span class="tok-str">"c"</span>] = <span class="tok-num">3</span>
+d[<span class="tok-str">"a"</span>] = <span class="tok-num">1</span>
+d[<span class="tok-str">"b"</span>] = <span class="tok-num">2</span>
+
+<span class="tok-fn">list</span>(d)            <span class="tok-com"># ['c', 'a', 'b']  — đúng thứ tự chèn, không sort</span>
+<span class="tok-fn">list</span>(d.<span class="tok-fn">items</span>())    <span class="tok-com"># [('c', 3), ('a', 1), ('b', 2)]</span>
+
+<span class="tok-com"># Update giá trị key đã có KHÔNG đổi vị trí</span>
+d[<span class="tok-str">"c"</span>] = <span class="tok-num">99</span>
+<span class="tok-fn">list</span>(d)            <span class="tok-com"># ['c', 'a', 'b']  — 'c' vẫn ở đầu</span>
+
+<span class="tok-com"># Xoá + chèn lại = đẩy 'c' về cuối</span>
+<span class="tok-kw">del</span> d[<span class="tok-str">"c"</span>]
+d[<span class="tok-str">"c"</span>] = <span class="tok-num">99</span>
+<span class="tok-fn">list</span>(d)            <span class="tok-com"># ['a', 'b', 'c']</span></code></pre>
+        </div>
+
+        <h2 id="set">6. <code>set</code> — tập hợp unique, không thứ tự</h2>
+
+        <p>
+          <code>set</code> là tập hợp các phần tử <strong>duy nhất, hashable, không có thứ tự</strong>. Dùng để
+          loại trùng (dedupe), check membership cực nhanh (O(1) hash lookup), và thực hiện phép toán tập hợp
+          (union, intersection, difference).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Tạo và thao tác set</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># 1. Literal</span>
+s = {<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>}
+
+<span class="tok-com"># 🔥 Gotcha: {} là DICT rỗng, không phải set rỗng</span>
+empty_dict = {}              <span class="tok-com"># dict, không phải set</span>
+empty_set  = <span class="tok-fn">set</span>()           <span class="tok-com"># cách duy nhất tạo set rỗng</span>
+
+<span class="tok-fn">type</span>({})                    <span class="tok-com"># &lt;class 'dict'&gt;</span>
+<span class="tok-fn">type</span>(<span class="tok-fn">set</span>())                 <span class="tok-com"># &lt;class 'set'&gt;</span>
+
+<span class="tok-com"># 2. Từ iterable — dedupe trick kinh điển</span>
+<span class="tok-fn">set</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">3</span>, <span class="tok-num">3</span>])     <span class="tok-com"># {1, 2, 3}</span>
+<span class="tok-fn">set</span>(<span class="tok-str">"mississippi"</span>)            <span class="tok-com"># {'m', 'i', 's', 'p'}</span>
+
+<span class="tok-com"># --- Thao tác cơ bản ---</span>
+s.<span class="tok-fn">add</span>(<span class="tok-num">4</span>)                    <span class="tok-com"># {1, 2, 3, 4}</span>
+s.<span class="tok-fn">add</span>(<span class="tok-num">2</span>)                    <span class="tok-com"># không thay đổi — đã có 2</span>
+s.<span class="tok-fn">discard</span>(<span class="tok-num">5</span>)                <span class="tok-com"># OK, không lỗi nếu không có</span>
+s.<span class="tok-fn">remove</span>(<span class="tok-num">5</span>)                 <span class="tok-com"># KeyError nếu không có</span>
+s.<span class="tok-fn">pop</span>()                      <span class="tok-com"># xoá &amp; trả 1 phần tử bất kỳ</span>
+
+<span class="tok-com"># Membership — siêu nhanh O(1)</span>
+<span class="tok-num">2</span> <span class="tok-kw">in</span> s                       <span class="tok-com"># True</span></code></pre>
+        </div>
+
+        <h3 id="set-ops">6.1. Phép toán tập hợp</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Phép toán</th><th>Operator</th><th>Method</th><th>Ý nghĩa</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Hợp (union)</td><td><code>a | b</code></td><td><code>a.union(b)</code></td><td>Mọi phần tử của a hoặc b</td></tr>
+              <tr><td>Giao (intersection)</td><td><code>a &amp; b</code></td><td><code>a.intersection(b)</code></td><td>Phần tử có trong cả a và b</td></tr>
+              <tr><td>Hiệu (difference)</td><td><code>a - b</code></td><td><code>a.difference(b)</code></td><td>Trong a nhưng không trong b</td></tr>
+              <tr><td>Hiệu đối xứng</td><td><code>a ^ b</code></td><td><code>a.symmetric_difference(b)</code></td><td>Trong a hoặc b nhưng không cả hai</td></tr>
+              <tr><td>Tập con</td><td><code>a &lt;= b</code></td><td><code>a.issubset(b)</code></td><td>Mọi phần tử của a có trong b</td></tr>
+              <tr><td>Tập cha</td><td><code>a &gt;= b</code></td><td><code>a.issuperset(b)</code></td><td>Mọi phần tử của b có trong a</td></tr>
+              <tr><td>Rời nhau</td><td>—</td><td><code>a.isdisjoint(b)</code></td><td>Không có phần tử chung</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Set operations</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>a = {<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>}
+b = {<span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>, <span class="tok-num">6</span>}
+
+a | b                  <span class="tok-com"># {1, 2, 3, 4, 5, 6}     hợp</span>
+a &amp; b                  <span class="tok-com"># {3, 4}                 giao</span>
+a - b                  <span class="tok-com"># {1, 2}                 a trừ b</span>
+a ^ b                  <span class="tok-com"># {1, 2, 5, 6}           hiệu đối xứng</span>
+
+{<span class="tok-num">1</span>, <span class="tok-num">2</span>} &lt;= a              <span class="tok-com"># True — {1,2} là tập con của a</span>
+a.<span class="tok-fn">isdisjoint</span>({<span class="tok-num">7</span>, <span class="tok-num">8</span>})    <span class="tok-com"># True — không có phần tử chung</span>
+
+<span class="tok-com"># Use case thực tế: tìm common tags</span>
+post1_tags = {<span class="tok-str">"python"</span>, <span class="tok-str">"web"</span>, <span class="tok-str">"flask"</span>}
+post2_tags = {<span class="tok-str">"python"</span>, <span class="tok-str">"data"</span>, <span class="tok-str">"web"</span>}
+common = post1_tags &amp; post2_tags    <span class="tok-com"># {'python', 'web'}</span></code></pre>
+        </div>
+
+        <h2 id="frozenset">7. <code>frozenset</code> — set bất biến</h2>
+
+        <p>
+          <code>frozenset</code> giống <code>set</code> nhưng <strong>immutable</strong>: tạo xong không add/remove
+          được. Vì immutable nên nó <em>hashable</em> → dùng được làm dict key hoặc làm phần tử của một set khác.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>frozenset</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>fs = <span class="tok-fn">frozenset</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])
+fs.<span class="tok-fn">add</span>(<span class="tok-num">4</span>)                  <span class="tok-com"># AttributeError — không có method add</span>
+
+<span class="tok-com"># Vẫn dùng được mọi phép | & - ^</span>
+fs | {<span class="tok-num">4</span>}                    <span class="tok-com"># frozenset({1, 2, 3, 4})</span>
+
+<span class="tok-com"># Use case: set chứa các "tổ hợp" không thay đổi</span>
+combos = {
+    <span class="tok-fn">frozenset</span>([<span class="tok-str">"red"</span>, <span class="tok-str">"green"</span>]),
+    <span class="tok-fn">frozenset</span>([<span class="tok-str">"blue"</span>, <span class="tok-str">"yellow"</span>]),
+}                              <span class="tok-com"># OK — frozenset hashable</span>
+
+<span class="tok-com"># dict key là một tổ hợp role chẳng hạn</span>
+permissions = {
+    <span class="tok-fn">frozenset</span>([<span class="tok-str">"read"</span>]): <span class="tok-str">"viewer"</span>,
+    <span class="tok-fn">frozenset</span>([<span class="tok-str">"read"</span>, <span class="tok-str">"write"</span>]): <span class="tok-str">"editor"</span>,
+    <span class="tok-fn">frozenset</span>([<span class="tok-str">"read"</span>, <span class="tok-str">"write"</span>, <span class="tok-str">"admin"</span>]): <span class="tok-str">"owner"</span>,
+}</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Hashable — định nghĩa kỹ</div>
+          <p>
+            Một object <strong>hashable</strong> nếu nó có giá trị hash không đổi suốt vòng đời (<code>__hash__</code>)
+            và so sánh được với object khác (<code>__eq__</code>). Quy tắc dễ nhớ:
+          </p>
+          <ul>
+            <li><strong>Hashable</strong>: <code>int</code>, <code>float</code>, <code>bool</code>, <code>str</code>, <code>tuple</code> (nếu mọi phần tử cũng hashable), <code>frozenset</code>, <code>None</code>.</li>
+            <li><strong>Không hashable</strong>: <code>list</code>, <code>dict</code>, <code>set</code>, hầu hết class tự định nghĩa (trừ khi có <code>__hash__</code>).</li>
+          </ul>
+          <p style="margin-top: 6px;">
+            Quy tắc trực giác: <em>mutable thì không hashable</em>. Vì nếu hash thay đổi sau khi đã lưu vào set/dict,
+            ta không thể tìm lại được nó.
+          </p>
+        </div>
+
+        <h2 id="slicing">8. Slicing — <code>[start:stop:step]</code></h2>
+
+        <p>
+          Một trong những tính năng <em>đẹp nhất</em> Python. Áp dụng cho mọi sequence: <code>list</code>,
+          <code>tuple</code>, <code>str</code>, <code>bytes</code>, <code>range</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Slicing — cú pháp đầy đủ</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>s = [<span class="tok-num">0</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>, <span class="tok-num">6</span>, <span class="tok-num">7</span>, <span class="tok-num">8</span>, <span class="tok-num">9</span>]
+
+<span class="tok-com"># Cú pháp: s[start:stop:step]</span>
+<span class="tok-com"># - start mặc định 0 (hoặc len-1 nếu step âm)</span>
+<span class="tok-com"># - stop mặc định len (hoặc -len-1 nếu step âm). KHÔNG bao gồm stop!</span>
+<span class="tok-com"># - step mặc định 1</span>
+
+s[<span class="tok-num">2</span>:<span class="tok-num">5</span>]            <span class="tok-com"># [2, 3, 4]       — từ index 2 đến 4 (5 không gồm)</span>
+s[:<span class="tok-num">3</span>]             <span class="tok-com"># [0, 1, 2]       — 3 phần tử đầu</span>
+s[-<span class="tok-num">3</span>:]            <span class="tok-com"># [7, 8, 9]       — 3 phần tử cuối</span>
+s[:]              <span class="tok-com"># bản copy của toàn bộ s (shallow)</span>
+s[::<span class="tok-num">2</span>]            <span class="tok-com"># [0, 2, 4, 6, 8] — mọi index chẵn</span>
+s[<span class="tok-num">1</span>::<span class="tok-num">2</span>]           <span class="tok-com"># [1, 3, 5, 7, 9] — mọi index lẻ</span>
+s[::-<span class="tok-num">1</span>]           <span class="tok-com"># [9, 8, 7, ... 0] ← REVERSE idiom kinh điển</span>
+s[<span class="tok-num">8</span>:<span class="tok-num">2</span>:-<span class="tok-num">1</span>]        <span class="tok-com"># [8, 7, 6, 5, 4, 3] — từ 8 ngược về 3</span>
+
+<span class="tok-com"># Out-of-range KHÔNG lỗi (khác với indexing!)</span>
+s[<span class="tok-num">100</span>:<span class="tok-num">200</span>]        <span class="tok-com"># []  — slice rỗng, không IndexError</span>
+s[<span class="tok-num">100</span>]            <span class="tok-com"># IndexError 🔥</span>
+
+<span class="tok-com"># String là sequence của ký tự → slicing hoạt động như list</span>
+<span class="tok-str">"Python"</span>[::-<span class="tok-num">1</span>]     <span class="tok-com"># 'nohtyP'</span>
+<span class="tok-str">"Hello World"</span>[<span class="tok-num">6</span>:]   <span class="tok-com"># 'World'
+
+# Slice assignment — chỉ với list (mutable sequence)</span>
+lst = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>]
+lst[<span class="tok-num">1</span>:<span class="tok-num">3</span>] = [<span class="tok-num">20</span>, <span class="tok-num">30</span>]  <span class="tok-com"># [1, 20, 30, 4, 5]
+lst[</span><span class="tok-num">1</span>:<span class="tok-num">3</span><span class="tok-com">] = []          # [1, 4, 5] — xoá range bằng gán list rỗng</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mẹo nhớ slicing</div>
+          <ul>
+            <li><strong>Stop không bao gồm</strong> — half-open interval <code>[start, stop)</code>. Vì vậy <code>s[0:len(s)]</code> = toàn bộ s, và length của slice = <code>stop - start</code> (khi step=1).</li>
+            <li><strong>Slicing không bao giờ raise IndexError</strong> — out-of-range tự cắt về cuối. Khác với <code>s[i]</code>.</li>
+            <li><strong>Step âm</strong> = duyệt ngược. <code>s[::-1]</code> là idiom reverse phổ biến nhất.</li>
+            <li><strong>Shallow copy</strong>: <code>s[:]</code> hoặc <code>s.copy()</code> hoặc <code>list(s)</code> — cả 3 tương đương.</li>
+          </ul>
+        </div>
+
+        <h2 id="comprehension">9. Comprehension — viết Pythonic, không loop tay</h2>
+
+        <p>
+          Comprehension là <strong>chữ ký Python</strong>. Một dòng comprehension thay được 3-5 dòng for-loop +
+          <code>append</code>. Có 4 loại: list / dict / set / generator.
+        </p>
+
+        <div class="comprehension-viz">
+          <h4 style="margin: 0 0 10px; font-family: var(--font-display);">Cấu trúc comprehension</h4>
+          <p style="margin: 0 0 14px; color: var(--text-soft);">Đọc từ trái sang phải: <em>output</em> ← <em>nguồn</em> ← <em>điều kiện</em>.</p>
+          <div class="steps">
+            <div class="step">
+              <div class="step-title">Expression</div>
+              <div class="step-content">x ** 2</div>
+            </div>
+            <div class="step">
+              <div class="step-title">For clause</div>
+              <div class="step-content">for x in range(10)</div>
+            </div>
+            <div class="step">
+              <div class="step-title">If filter (tuỳ chọn)</div>
+              <div class="step-content">if x % 2 == 0</div>
+            </div>
+          </div>
+          <p style="margin: 8px 0 0; font-family: var(--font-mono); font-size: 0.92rem; text-align: center; color: var(--accent-deep);">
+            [<strong>x ** 2</strong> <strong>for x in range(10)</strong> <strong>if x % 2 == 0</strong>] → [0, 4, 16, 36, 64]
+          </p>
+        </div>
+
+        <h3 id="list-comp">9.1. List comprehension</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>List comprehension — cơ bản đến nâng cao</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># So sánh: loop truyền thống vs comprehension</span>
+<span class="tok-com"># 1. Loop truyền thống — 4 dòng</span>
+squares = []
+<span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>):
+    squares.<span class="tok-fn">append</span>(x ** <span class="tok-num">2</span>)
+
+<span class="tok-com"># 2. List comprehension — 1 dòng</span>
+squares = [x ** <span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>)]
+<span class="tok-com"># [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]</span>
+
+<span class="tok-com"># 3. Có filter (if)</span>
+evens = [x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>) <span class="tok-kw">if</span> x % <span class="tok-num">2</span> == <span class="tok-num">0</span>]
+<span class="tok-com"># [0, 2, 4, 6, 8]</span>
+
+<span class="tok-com"># 4. Có if/else trong expression (chú ý vị trí trước for)</span>
+labels = [<span class="tok-str">"chẵn"</span> <span class="tok-kw">if</span> x % <span class="tok-num">2</span> == <span class="tok-num">0</span> <span class="tok-kw">else</span> <span class="tok-str">"lẻ"</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>)]
+<span class="tok-com"># ['chẵn', 'lẻ', 'chẵn', 'lẻ', 'chẵn']</span>
+
+<span class="tok-com"># 5. Nested loop — đọc giống for/for lồng nhau</span>
+pairs = [(x, y) <span class="tok-kw">for</span> x <span class="tok-kw">in</span> [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>] <span class="tok-kw">for</span> y <span class="tok-kw">in</span> [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>]]
+<span class="tok-com"># [(1,'a'),(1,'b'),(2,'a'),(2,'b'),(3,'a'),(3,'b')]</span>
+
+<span class="tok-com"># 6. Flatten 2D list</span>
+matrix = [[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>], [<span class="tok-num">4</span>, <span class="tok-num">5</span>, <span class="tok-num">6</span>], [<span class="tok-num">7</span>, <span class="tok-num">8</span>, <span class="tok-num">9</span>]]
+flat = [x <span class="tok-kw">for</span> row <span class="tok-kw">in</span> matrix <span class="tok-kw">for</span> x <span class="tok-kw">in</span> row]
+<span class="tok-com"># [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# 7. Transpose ma trận</span>
+T = [[row[i] <span class="tok-kw">for</span> row <span class="tok-kw">in</span> matrix] <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">3</span>)]
+<span class="tok-com"># [[1,4,7], [2,5,8], [3,6,9]]</span></code></pre>
+        </div>
+
+        <h3 id="dict-set-comp">9.2. Dict / Set comprehension</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Dict + set comprehension</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Dict comprehension — key: value</span>
+sq_dict = {x: x ** <span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>)}
+<span class="tok-com"># {0:0, 1:1, 2:4, 3:9, 4:16}</span>
+
+<span class="tok-com"># Invert dict (swap key/value)</span>
+d = {<span class="tok-str">"a"</span>: <span class="tok-num">1</span>, <span class="tok-str">"b"</span>: <span class="tok-num">2</span>, <span class="tok-str">"c"</span>: <span class="tok-num">3</span>}
+inv = {v: k <span class="tok-kw">for</span> k, v <span class="tok-kw">in</span> d.<span class="tok-fn">items</span>()}
+<span class="tok-com"># {1: 'a', 2: 'b', 3: 'c'}</span>
+
+<span class="tok-com"># Filter dict theo value</span>
+prices = {<span class="tok-str">"a"</span>: <span class="tok-num">100</span>, <span class="tok-str">"b"</span>: <span class="tok-num">250</span>, <span class="tok-str">"c"</span>: <span class="tok-num">50</span>}
+expensive = {k: v <span class="tok-kw">for</span> k, v <span class="tok-kw">in</span> prices.<span class="tok-fn">items</span>() <span class="tok-kw">if</span> v &gt; <span class="tok-num">100</span>}
+<span class="tok-com"># {'b': 250}
+
+# Set comprehension</span>
+mod5 = {x % <span class="tok-num">5</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">20</span>)}
+<span class="tok-com"># {0, 1, 2, 3, 4}  — tự dedupe
+
+# Unique vowels từ string</span>
+vowels = {c <span class="tok-kw">for</span> c <span class="tok-kw">in</span> <span class="tok-str">"hello world"</span> <span class="tok-kw">if</span> c <span class="tok-kw">in</span> <span class="tok-str">"aeiou"</span>}
+<span class="tok-com"># {'e', 'o'}</span></code></pre>
+        </div>
+
+        <h3 id="gen-expr">9.3. Generator expression — lazy</h3>
+
+        <p>
+          Generator expression có cú pháp <em>giống hệt</em> list comprehension nhưng dùng <strong>dấu ngoặc tròn
+          <code>()</code></strong>. Khác biệt then chốt: <strong>lazy</strong> — không tạo list trong RAM, sinh
+          từng phần tử khi được yêu cầu.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>List comp vs generator expression</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># List comprehension — EAGER, tạo list ngay</span>
+lst = [x ** <span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span><span class="tok-num">_000_000</span>)]
+<span class="tok-com"># Cấp phát ~80MB RAM ngay lập tức 🔥</span>
+
+<span class="tok-com"># Generator expression — LAZY, chỉ tính khi cần</span>
+gen = (x ** <span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span><span class="tok-num">_000_000</span>))
+<span class="tok-com"># Cấp phát ~200 byte — chỉ là object generator!
+
+# Tính tổng — không cần lưu trung gian</span>
+total = <span class="tok-fn">sum</span>(x ** <span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span><span class="tok-num">_000_000</span>))
+<span class="tok-com"># Idiom: khi truyền vào sum/min/max/any/all/... có thể BỎ () thừa</span>
+
+<span class="tok-com"># Iterate qua từng phần tử</span>
+<span class="tok-kw">for</span> v <span class="tok-kw">in</span> gen:
+    <span class="tok-kw">if</span> v &gt; <span class="tok-num">1000</span>:
+        <span class="tok-kw">break</span>
+
+<span class="tok-com"># 🔥 Generator dùng 1 lần — sau khi cạn không reset được</span>
+gen2 = (x * <span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">3</span>))
+<span class="tok-fn">list</span>(gen2)              <span class="tok-com"># [0, 2, 4]</span>
+<span class="tok-fn">list</span>(gen2)              <span class="tok-com"># []  — đã cạn!</span></code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">⚖️ Khi nào list, khi nào generator?</div>
+          <ul>
+            <li><strong>List</strong> khi cần dùng nhiều lần, cần <code>len()</code>, cần index, cần sort, cần truyền cho hàm yêu cầu sequence.</li>
+            <li><strong>Generator</strong> khi chỉ duyệt 1 lần (đặc biệt là khi truyền vào <code>sum</code>/<code>any</code>/<code>all</code>/<code>min</code>/<code>max</code>), hoặc khi dữ liệu rất lớn / vô hạn.</li>
+            <li>Chương 6 sẽ đào sâu generator (<code>yield</code>, lazy, <code>itertools</code>).</li>
+          </ul>
+        </div>
+
+        <h2 id="counter">10. <code>collections.Counter</code> — đếm tần suất</h2>
+
+        <p>
+          <code>Counter</code> là <code>dict</code> subclass chuyên đếm. Khởi tạo từ iterable thì nó tự đếm số lần
+          xuất hiện. Dùng cho thống kê tần suất ký tự, từ, log entry, v.v.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Counter — ví dụ đầy đủ</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> collections <span class="tok-kw">import</span> Counter
+
+<span class="tok-com"># 1. Từ string — đếm ký tự</span>
+c = <span class="tok-fn">Counter</span>(<span class="tok-str">"mississippi"</span>)
+<span class="tok-com"># Counter({'i': 4, 's': 4, 'p': 2, 'm': 1})</span>
+c[<span class="tok-str">"s"</span>]                    <span class="tok-com"># 4</span>
+c[<span class="tok-str">"z"</span>]                    <span class="tok-com"># 0 — Counter trả 0 cho key vắng (KHÔNG raise KeyError)</span>
+
+<span class="tok-com"># 2. Từ list of words</span>
+words = <span class="tok-str">"to be or not to be"</span>.<span class="tok-fn">split</span>()
+wc = <span class="tok-fn">Counter</span>(words)
+<span class="tok-com"># Counter({'to': 2, 'be': 2, 'or': 1, 'not': 1})
+
+# 3. most_common(n) — top n phổ biến nhất</span>
+wc.<span class="tok-fn">most_common</span>(<span class="tok-num">2</span>)
+<span class="tok-com"># [('to', 2), ('be', 2)]
+
+# 4. Update / subtract</span>
+c.<span class="tok-fn">update</span>(<span class="tok-str">"missing"</span>)         <span class="tok-com"># cộng dồn count</span>
+c.<span class="tok-fn">subtract</span>(<span class="tok-str">"mi"</span>)            <span class="tok-com"># trừ count
+
+# 5. Math operations — cộng / trừ 2 Counter</span>
+a = <span class="tok-fn">Counter</span>(<span class="tok-str">"abracadabra"</span>)
+b = <span class="tok-fn">Counter</span>(<span class="tok-str">"alacazam"</span>)
+a + b                    <span class="tok-com"># cộng count tương ứng</span>
+a - b                    <span class="tok-com"># trừ (không cho âm)
+a &amp; b                    # min(a, b) — intersection
+a | b                    # max(a, b) — union
+
+# 6. Total + reset</span>
+c.<span class="tok-fn">total</span>()                  <span class="tok-com"># 3.10+ — tổng count
++c                       # bỏ count ≤ 0</span></code></pre>
+        </div>
+
+        <h2 id="defaultdict">11. <code>collections.defaultdict</code> — tự khởi tạo default</h2>
+
+        <p>
+          <code>defaultdict(factory)</code> là <code>dict</code> subclass: khi truy cập key chưa có, nó <strong>tự
+          tạo</strong> bằng cách gọi <code>factory()</code>. Tránh được boilerplate <code>if k not in d:</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>defaultdict — pattern phổ biến</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> collections <span class="tok-kw">import</span> defaultdict
+
+<span class="tok-com"># 1. dict-of-list — gom nhóm</span>
+words = [<span class="tok-str">"apple"</span>, <span class="tok-str">"ant"</span>, <span class="tok-str">"bat"</span>, <span class="tok-str">"banana"</span>, <span class="tok-str">"cat"</span>]
+groups = <span class="tok-fn">defaultdict</span>(<span class="tok-fn">list</span>)
+<span class="tok-kw">for</span> w <span class="tok-kw">in</span> words:
+    groups[w[<span class="tok-num">0</span>]].<span class="tok-fn">append</span>(w)
+<span class="tok-com"># defaultdict(list, {'a': ['apple','ant'], 'b': ['bat','banana'], 'c': ['cat']})
+
+# So với dict thường — phải setdefault hoặc check:
+# if w[0] not in groups: groups[w[0]] = []
+# groups[w[0]].append(w)
+
+# 2. dict-of-int — đếm (tương đương Counter)</span>
+counts = <span class="tok-fn">defaultdict</span>(<span class="tok-fn">int</span>)
+<span class="tok-kw">for</span> c <span class="tok-kw">in</span> <span class="tok-str">"mississippi"</span>:
+    counts[c] += <span class="tok-num">1</span>
+<span class="tok-com"># {'m': 1, 'i': 4, 's': 4, 'p': 2}
+
+# 3. dict-of-set — gom unique</span>
+tags_by_user = <span class="tok-fn">defaultdict</span>(<span class="tok-fn">set</span>)
+events = [(<span class="tok-str">"an"</span>, <span class="tok-str">"login"</span>), (<span class="tok-str">"an"</span>, <span class="tok-str">"login"</span>), (<span class="tok-str">"binh"</span>, <span class="tok-str">"click"</span>)]
+<span class="tok-kw">for</span> user, tag <span class="tok-kw">in</span> events:
+    tags_by_user[user].<span class="tok-fn">add</span>(tag)
+<span class="tok-com"># {'an': {'login'}, 'binh': {'click'}}
+
+# 4. Nested defaultdict</span>
+tree = <span class="tok-fn">defaultdict</span>(<span class="tok-kw">lambda</span>: <span class="tok-fn">defaultdict</span>(<span class="tok-fn">int</span>))
+tree[<span class="tok-str">"a"</span>][<span class="tok-str">"x"</span>] = <span class="tok-num">1</span>
+tree[<span class="tok-str">"a"</span>][<span class="tok-str">"y"</span>] = <span class="tok-num">2</span>
+tree[<span class="tok-str">"b"</span>][<span class="tok-str">"z"</span>] = <span class="tok-num">3</span></code></pre>
+        </div>
+
+        <h2 id="deque">12. <code>collections.deque</code> — hàng đợi hai đầu</h2>
+
+        <p>
+          <code>deque</code> (double-ended queue) cho phép thêm/xoá ở <strong>cả 2 đầu trong O(1)</strong>. Với
+          <code>list</code>, <code>list.insert(0, x)</code> là O(n) — phải shift toàn bộ. Vì vậy khi cần queue
+          hoặc sliding window, dùng <code>deque</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>deque — queue, sliding window</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> collections <span class="tok-kw">import</span> deque
+
+<span class="tok-com"># Cơ bản</span>
+dq = <span class="tok-fn">deque</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])
+dq.<span class="tok-fn">append</span>(<span class="tok-num">4</span>)              <span class="tok-com"># deque([1, 2, 3, 4])</span>
+dq.<span class="tok-fn">appendleft</span>(<span class="tok-num">0</span>)          <span class="tok-com"># deque([0, 1, 2, 3, 4])  — O(1)!</span>
+dq.<span class="tok-fn">pop</span>()                  <span class="tok-com"># 4 — từ phải</span>
+dq.<span class="tok-fn">popleft</span>()              <span class="tok-com"># 0 — từ trái, O(1)
+
+# Queue FIFO</span>
+queue = <span class="tok-fn">deque</span>()
+queue.<span class="tok-fn">append</span>(<span class="tok-str">"job1"</span>)
+queue.<span class="tok-fn">append</span>(<span class="tok-str">"job2"</span>)
+queue.<span class="tok-fn">popleft</span>()             <span class="tok-com"># 'job1' — first in first out
+
+# Bounded deque — như buffer cố định kích thước</span>
+recent = <span class="tok-fn">deque</span>(maxlen=<span class="tok-num">3</span>)
+<span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>):
+    recent.<span class="tok-fn">append</span>(i)
+<span class="tok-fn">list</span>(recent)              <span class="tok-com"># [2, 3, 4] — chỉ giữ 3 cuối
+
+# Rotate — xoay vòng</span>
+dq = <span class="tok-fn">deque</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>])
+dq.<span class="tok-fn">rotate</span>(<span class="tok-num">2</span>)              <span class="tok-com"># deque([4, 5, 1, 2, 3])</span>
+dq.<span class="tok-fn">rotate</span>(-<span class="tok-num">1</span>)             <span class="tok-com"># deque([5, 1, 2, 3, 4])</span></code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">⚖️ <code>list</code> vs <code>deque</code></div>
+          <ul>
+            <li><strong>append cuối</strong>: list O(1) amortized, deque O(1). Cả hai OK.</li>
+            <li><strong>append/pop đầu</strong>: list O(n) (phải shift), deque O(1). Deque thắng tuyệt đối.</li>
+            <li><strong>index ngẫu nhiên</strong>: list O(1), deque O(n). List thắng — deque không có random access nhanh.</li>
+            <li><strong>Slicing</strong>: chỉ list hỗ trợ. Deque phải convert ra list trước.</li>
+            <li>Quy tắc: <em>cần queue / sliding window / append đầu</em> → <code>deque</code>. Còn lại dùng <code>list</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="namedtuple">13. <code>namedtuple</code> &amp; <code>dataclass</code> — tuple có tên</h2>
+
+        <p>
+          Khi viết <code>point[0]</code>, <code>point[1]</code> nhiều, code mất ý nghĩa. <code>namedtuple</code>
+          tạo subclass của tuple có <strong>tên field</strong> — vừa giữ ưu điểm immutable/hashable của tuple,
+          vừa truy cập bằng <code>.x</code>, <code>.y</code> rõ ràng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>namedtuple vs dataclass</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> collections <span class="tok-kw">import</span> namedtuple
+
+<span class="tok-com"># 1. Tạo namedtuple class</span>
+Point = <span class="tok-fn">namedtuple</span>(<span class="tok-str">"Point"</span>, [<span class="tok-str">"x"</span>, <span class="tok-str">"y"</span>])
+p = <span class="tok-fn">Point</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>)
+p.x, p.y                  <span class="tok-com"># 3, 4 — truy cập bằng tên</span>
+p[<span class="tok-num">0</span>], p[<span class="tok-num">1</span>]              <span class="tok-com"># 3, 4 — vẫn truy cập bằng index được</span>
+x, y = p                  <span class="tok-com"># unpacking như tuple thường</span>
+<span class="tok-fn">isinstance</span>(p, <span class="tok-fn">tuple</span>)      <span class="tok-com"># True — là subclass của tuple
+
+# Immutable</span>
+p.x = <span class="tok-num">99</span>                  <span class="tok-com"># AttributeError
+
+# 2. Class-based syntax (typing.NamedTuple) — có type hints</span>
+<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> NamedTuple
+<span class="tok-kw">class</span> <span class="tok-cls">User</span>(<span class="tok-cls">NamedTuple</span>):
+    name: <span class="tok-fn">str</span>
+    age: <span class="tok-fn">int</span>
+    city: <span class="tok-fn">str</span> = <span class="tok-str">"Hà Nội"</span>      <span class="tok-com"># default value</span>
+
+u = <span class="tok-fn">User</span>(<span class="tok-str">"An"</span>, <span class="tok-num">25</span>)
+u.name                    <span class="tok-com"># 'An'
+
+# 3. dataclass (chương 5 sẽ đào sâu) — mutable + nhiều tính năng hơn</span>
+<span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
+
+<span class="tok-dec">@dataclass</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Product</span>:
+    name: <span class="tok-fn">str</span>
+    price: <span class="tok-fn">float</span>
+    stock: <span class="tok-fn">int</span> = <span class="tok-num">0</span>
+
+prod = <span class="tok-fn">Product</span>(<span class="tok-str">"Book"</span>, <span class="tok-num">19.99</span>)
+prod.price = <span class="tok-num">14.99</span>         <span class="tok-com"># OK — dataclass mặc định mutable</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Chọn cấu trúc record</div>
+          <ul>
+            <li><strong>tuple</strong>: gói nhanh 2-3 giá trị, không có ý nghĩa lâu dài.</li>
+            <li><strong>namedtuple</strong>: record bất biến, cần hashable (làm dict key).</li>
+            <li><strong>dataclass</strong>: record có thể thay đổi, nhiều method, validation, default phức tạp. Mặc định hiện đại (chương 5).</li>
+            <li><strong>dict</strong>: schema động, key thay đổi theo runtime (config JSON).</li>
+          </ul>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — <code>count_vowels(s: str) -&gt; dict[str, int]</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết hàm đếm số lần xuất hiện của mỗi nguyên âm (<code>a</code>, <code>e</code>, <code>i</code>,
+                <code>o</code>, <code>u</code>) trong chuỗi <code>s</code> (case-insensitive). Trả dict có 5 key
+                tương ứng, kể cả khi count = 0.
+              </p>
+              <pre><code><span class="tok-fn">count_vowels</span>(<span class="tok-str">"Hello World"</span>)
+<span class="tok-com"># {'a': 0, 'e': 1, 'i': 0, 'o': 2, 'u': 0}</span></code></pre>
+              <p>Implement 2 cách: (a) manual dict + loop, (b) dùng <code>Counter</code>.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">from</span> collections <span class="tok-kw">import</span> Counter
+
+<span class="tok-com"># Cách (a) — manual dict + loop</span>
+<span class="tok-kw">def</span> <span class="tok-fn">count_vowels</span>(s: <span class="tok-fn">str</span>) -&gt; <span class="tok-fn">dict</span>[<span class="tok-fn">str</span>, <span class="tok-fn">int</span>]:
+    result = {v: <span class="tok-num">0</span> <span class="tok-kw">for</span> v <span class="tok-kw">in</span> <span class="tok-str">"aeiou"</span>}
+    <span class="tok-kw">for</span> c <span class="tok-kw">in</span> s.<span class="tok-fn">lower</span>():
+        <span class="tok-kw">if</span> c <span class="tok-kw">in</span> result:
+            result[c] += <span class="tok-num">1</span>
+    <span class="tok-kw">return</span> result
+
+<span class="tok-com"># Cách (b) — Counter</span>
+<span class="tok-kw">def</span> <span class="tok-fn">count_vowels_v2</span>(s: <span class="tok-fn">str</span>) -&gt; <span class="tok-fn">dict</span>[<span class="tok-fn">str</span>, <span class="tok-fn">int</span>]:
+    c = <span class="tok-fn">Counter</span>(ch <span class="tok-kw">for</span> ch <span class="tok-kw">in</span> s.<span class="tok-fn">lower</span>() <span class="tok-kw">if</span> ch <span class="tok-kw">in</span> <span class="tok-str">"aeiou"</span>)
+    <span class="tok-kw">return</span> {v: c[v] <span class="tok-kw">for</span> v <span class="tok-kw">in</span> <span class="tok-str">"aeiou"</span>}     <span class="tok-com"># đảm bảo có đủ 5 key</span></code></pre>
+                  <p>
+                    Counter trả <code>0</code> khi tra key vắng nên <code>c[v]</code> không lỗi. Generator
+                    expression bên trong <code>Counter()</code> tránh tạo list trung gian.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — <code>group_by_first_letter(words) -&gt; dict[str, list[str]]</code></h4>
+            <div class="exercise-body">
+              <p>Gom danh sách từ thành dict theo ký tự đầu (chữ thường):</p>
+              <pre><code><span class="tok-fn">group_by_first_letter</span>([<span class="tok-str">"apple"</span>, <span class="tok-str">"ant"</span>, <span class="tok-str">"bat"</span>, <span class="tok-str">"banana"</span>, <span class="tok-str">"cat"</span>])
+<span class="tok-com"># {'a': ['apple', 'ant'], 'b': ['bat', 'banana'], 'c': ['cat']}</span></code></pre>
+              <p>Dùng <code>defaultdict(list)</code>.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">from</span> collections <span class="tok-kw">import</span> defaultdict
+
+<span class="tok-kw">def</span> <span class="tok-fn">group_by_first_letter</span>(words: <span class="tok-fn">list</span>[<span class="tok-fn">str</span>]) -&gt; <span class="tok-fn">dict</span>[<span class="tok-fn">str</span>, <span class="tok-fn">list</span>[<span class="tok-fn">str</span>]]:
+    groups = <span class="tok-fn">defaultdict</span>(<span class="tok-fn">list</span>)
+    <span class="tok-kw">for</span> w <span class="tok-kw">in</span> words:
+        groups[w[<span class="tok-num">0</span>].<span class="tok-fn">lower</span>()].<span class="tok-fn">append</span>(w)
+    <span class="tok-kw">return</span> <span class="tok-fn">dict</span>(groups)        <span class="tok-com"># trả dict thường, không lộ defaultdict ra ngoài</span>
+
+<span class="tok-com"># Không có defaultdict, bạn sẽ phải:
+# - Check `if k not in groups: groups[k] = []`
+# - Hoặc dùng setdefault: groups.setdefault(k, []).append(w)
+# Cả hai dài hơn defaultdict.</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Unique sorted desc</h4>
+            <div class="exercise-body">
+              <p>
+                Cho list <code>[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]</code>. Tạo list mới chứa các phần tử
+                <strong>unique</strong>, sắp xếp <strong>giảm dần</strong>. Dùng comprehension + set + sorted —
+                không loop tay.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code>nums = [<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">4</span>, <span class="tok-num">1</span>, <span class="tok-num">5</span>, <span class="tok-num">9</span>, <span class="tok-num">2</span>, <span class="tok-num">6</span>, <span class="tok-num">5</span>, <span class="tok-num">3</span>, <span class="tok-num">5</span>]
+
+<span class="tok-com"># Ngắn gọn nhất — dedupe bằng set, sort giảm dần</span>
+result = <span class="tok-fn">sorted</span>(<span class="tok-fn">set</span>(nums), reverse=<span class="tok-kw">True</span>)
+<span class="tok-com"># [9, 6, 5, 4, 3, 2, 1]
+
+# Tương đương với set comprehension:</span>
+result_v2 = <span class="tok-fn">sorted</span>({x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> nums}, reverse=<span class="tok-kw">True</span>)
+
+<span class="tok-com"># Hoặc nếu chỉ muốn comprehension (vẫn dùng set bên trong):</span>
+seen = <span class="tok-fn">set</span>()
+result_v3 = <span class="tok-fn">sorted</span>(
+    [x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> nums <span class="tok-kw">if</span> <span class="tok-kw">not</span> (x <span class="tok-kw">in</span> seen <span class="tok-kw">or</span> seen.<span class="tok-fn">add</span>(x))],
+    reverse=<span class="tok-kw">True</span>,
+)
+<span class="tok-com"># Trick: seen.add(x) trả None (falsy) — nên expression cuối luôn là (x in seen)</span></code></pre>
+                  <p>Pythonic = dùng <code>set</code> + <code>sorted(reverse=True)</code>. Ngắn, đọc rõ ý.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — <code>flatten(lst)</code> N-level</h4>
+            <div class="exercise-body">
+              <p>
+                Cho list lồng nhiều cấp (không biết độ sâu), trả list 1 cấp chứa mọi phần tử leaf. Ví dụ:
+              </p>
+              <pre><code><span class="tok-fn">flatten</span>([<span class="tok-num">1</span>, [<span class="tok-num">2</span>, [<span class="tok-num">3</span>, [<span class="tok-num">4</span>, [<span class="tok-num">5</span>]]], <span class="tok-num">6</span>])
+<span class="tok-com"># [1, 2, 3, 4, 5, 6]</span></code></pre>
+              <p>Viết version đệ quy. Bonus: viết bằng comprehension lồng nhau.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com"># Version 1 — đệ quy explicit</span>
+<span class="tok-kw">def</span> <span class="tok-fn">flatten</span>(lst):
+    result = []
+    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> lst:
+        <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(x, <span class="tok-fn">list</span>):
+            result.<span class="tok-fn">extend</span>(<span class="tok-fn">flatten</span>(x))    <span class="tok-com"># gọi đệ quy</span>
+        <span class="tok-kw">else</span>:
+            result.<span class="tok-fn">append</span>(x)
+    <span class="tok-kw">return</span> result
+
+<span class="tok-com"># Version 2 — generator (lazy, đẹp hơn)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">flatten_gen</span>(lst):
+    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> lst:
+        <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(x, <span class="tok-fn">list</span>):
+            <span class="tok-kw">yield from</span> <span class="tok-fn">flatten_gen</span>(x)     <span class="tok-com"># yield from = chuyển tiếp generator</span>
+        <span class="tok-kw">else</span>:
+            <span class="tok-kw">yield</span> x
+
+<span class="tok-fn">list</span>(<span class="tok-fn">flatten_gen</span>([<span class="tok-num">1</span>, [<span class="tok-num">2</span>, [<span class="tok-num">3</span>, [<span class="tok-num">4</span>]]]]))    <span class="tok-com"># [1, 2, 3, 4]
+
+# Version 3 — comprehension 1 cấp (KHÔNG đệ quy được trong comprehension)
+# Chỉ flatten 1 cấp:</span>
+<span class="tok-fn">flatten_1</span> = <span class="tok-kw">lambda</span> lst: [x <span class="tok-kw">for</span> sub <span class="tok-kw">in</span> lst <span class="tok-kw">for</span> x <span class="tok-kw">in</span> sub]</code></pre>
+                  <p>
+                    <code>yield from</code> là Python 3.3+ — chuyển tiếp toàn bộ giá trị từ sub-generator. Đẹp
+                    hơn <code>for x in flatten_gen(...): yield x</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Sliding window <code>windows(arr, size)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Trả về list các sub-list kích thước cố định <code>size</code>, di chuyển 1 bước mỗi lần.
+              </p>
+              <pre><code><span class="tok-fn">windows</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>], <span class="tok-num">2</span>)
+<span class="tok-com"># [[1, 2], [2, 3], [3, 4]]
+
+</span><span class="tok-fn">windows</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>], <span class="tok-num">3</span>)
+<span class="tok-com"># [[1, 2, 3], [2, 3, 4], [3, 4, 5]]</span></code></pre>
+              <p>Viết 2 version: (a) dùng index + slicing, (b) dùng <code>deque(maxlen=size)</code>. So sánh.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com"># (a) Slicing — đơn giản nhất</span>
+<span class="tok-kw">def</span> <span class="tok-fn">windows</span>(arr, size):
+    <span class="tok-kw">return</span> [arr[i:i+size] <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-fn">len</span>(arr) - size + <span class="tok-num">1</span>)]
+
+<span class="tok-com"># (b) deque — efficient với stream / iterable không có len()</span>
+<span class="tok-kw">from</span> collections <span class="tok-kw">import</span> deque
+
+<span class="tok-kw">def</span> <span class="tok-fn">windows_deque</span>(arr, size):
+    it = <span class="tok-fn">iter</span>(arr)
+    dq = <span class="tok-fn">deque</span>(maxlen=size)
+    result = []
+    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> it:
+        dq.<span class="tok-fn">append</span>(x)
+        <span class="tok-kw">if</span> <span class="tok-fn">len</span>(dq) == size:
+            result.<span class="tok-fn">append</span>(<span class="tok-fn">list</span>(dq))    <span class="tok-com"># copy ra list — deque sẽ bị mutate ở lần lặp sau</span>
+    <span class="tok-kw">return</span> result
+
+<span class="tok-com"># So sánh:
+# - Slicing: O(n*size) total, ngắn, đọc rõ — đủ cho list trong memory.
+# - Deque: O(n) total, dùng được với iterable lazy (file lines, network stream).
+# Python 3.10+ có itertools.pairwise(arr) — windows size 2 built-in.</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>{}</code> tạo ra gì? Làm sao tạo set rỗng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>{}</code> tạo <strong>dict rỗng</strong>, KHÔNG phải set rỗng (vì dict ra đời trước, đã
+                "chiếm" cú pháp này). Set rỗng phải dùng <code>set()</code>. Còn <code>{1, 2}</code> mới là set
+                literal (có ít nhất một phần tử). Đây là một trong những gotcha nhớ đời với người mới Python.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>(1)</code> và <code>(1,)</code> khác gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>(1)</code> là <strong>int 1</strong> — dấu ngoặc ở đây chỉ là dấu nhóm biểu thức (như toán
+                học). <code>(1,)</code> mới là <strong>tuple 1 phần tử</strong>. Trong Python, <em>dấu phẩy</em>
+                là cái tạo tuple, không phải dấu ngoặc. Vì vậy <code>1, 2, 3</code> không có ngoặc vẫn là tuple.
+                Cũng vì lý do này: <code>type(())</code> = tuple (tuple rỗng), <code>type((1))</code> = int.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>List comprehension và generator expression khác gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Cú pháp</strong>: list comp dùng <code>[...]</code>, gen expr dùng <code>(...)</code>.
+                <strong>Hành vi</strong>: list comp là <em>eager</em> — tính toàn bộ và lưu trong RAM ngay. Gen
+                expr là <em>lazy</em> — chỉ lưu state, sinh từng phần tử khi được iterate. Vì vậy với dữ liệu
+                lớn (hoặc infinite), gen expr tiết kiệm memory. Đổi lại, gen expr chỉ duyệt được <strong>1
+                lần</strong>; sau đó cạn. List có thể duyệt lại tuỳ ý.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Vì sao <code>set</code> lookup nhanh hơn <code>list</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>set</code> implement bằng <strong>hash table</strong>: lookup là O(1) trung bình — tính
+                hash(x), nhảy đến bucket tương ứng, so sánh. <code>list</code> phải duyệt tuần tự từng phần tử
+                cho đến khi tìm thấy (hoặc hết) — O(n). Với danh sách lớn, sự khác biệt có thể lên đến hàng
+                nghìn lần. Khi cần check membership lặp lại (đặc biệt trong vòng lặp), <em>luôn convert sang
+                set</em>: <code>seen = set(big_list)</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>d.get('key')</code> và <code>d['key']</code> khác gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>d['key']</code> raise <code>KeyError</code> nếu key không tồn tại. <code>d.get('key')</code>
+                trả <code>None</code> (hoặc default tự chọn) — không lỗi. Dùng <code>d['key']</code> khi bạn
+                <em>chắc chắn</em> key có (lỗi sớm tốt — fail fast). Dùng <code>d.get('key', default)</code> khi
+                key có thể vắng và bạn có giá trị fallback (ví dụ: load config, parse JSON optional field).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Có thể dùng <code>list</code> làm dict key không? Tuple thì sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong> với list — list <em>mutable</em>, không hashable, raise
+                <code>TypeError: unhashable type: 'list'</code>. <strong>Được</strong> với tuple, miễn là mọi
+                phần tử bên trong tuple cũng hashable. Ví dụ <code>(1, 2)</code> OK; <code>(1, [2])</code> không
+                (vì chứa list bên trong). Nếu cần set/dict key biểu diễn "danh sách phần tử bất kỳ thứ tự",
+                dùng <code>frozenset</code> thay tuple.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p><code>sorted(lst)</code> và <code>lst.sort()</code> khác gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>sorted(lst)</code> là <strong>built-in function</strong>, không mutate, trả <em>list mới
+                đã sort</em>. Áp dụng được cho <strong>mọi iterable</strong> (tuple, set, generator) — luôn trả
+                list. <code>lst.sort()</code> là <strong>method của list</strong>, mutate in-place, trả
+                <code>None</code>. Quy tắc Python: method mutate thì không trả value (để tránh chain nhầm như
+                <code>x = lst.sort()</code>). Cả hai chấp nhận <code>key=</code>, <code>reverse=</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Vì sao Python 3.7+ guarantee dict ordered?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Từ <strong>CPython 3.6</strong>, implementation của dict được viết lại (compact dict design của
+                Raymond Hettinger) — vô tình bảo toàn insertion order như effect phụ. Đến <strong>Python
+                3.7</strong>, điều này được nâng lên thành <em>language spec</em> chính thức (PEP không cụ thể —
+                quyết định ở mailing list / dev meeting), có nghĩa là <em>mọi implementation của Python</em>
+                (CPython, PyPy, MicroPython...) phải bảo toàn insertion order. Trước 3.6, thứ tự là không xác
+                định — phải dùng <code>collections.OrderedDict</code>. Bây giờ <code>OrderedDict</code> vẫn còn,
+                chỉ dùng khi cần method đặc biệt như <code>move_to_end()</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 3, bạn nên đã master:</p>
+        <ul>
+          <li><strong>4 cấu trúc built-in</strong>: list (mutable sequence), tuple (immutable sequence + hashable), dict (hash map, ordered từ 3.7), set (unique unordered).</li>
+          <li><strong>frozenset</strong>: immutable set, hashable, dùng được làm dict key / set element.</li>
+          <li><strong>Hashable</strong>: int/float/bool/str/tuple-of-hashable/frozenset/None hashable; list/dict/set không. Mutable thì không hashable.</li>
+          <li><strong>Tuple unpacking</strong>: swap <code>a, b = b, a</code>; return nhiều giá trị; star unpack <code>first, *rest</code>; nested.</li>
+          <li><strong>Slicing</strong> <code>[start:stop:step]</code>: reverse <code>[::-1]</code>, step <code>[::2]</code>, slice không bao giờ raise IndexError.</li>
+          <li><strong>Comprehension</strong>: list / dict / set / generator — Pythonic, ngắn, đẹp. Nested + filter.</li>
+          <li><strong>Generator expression</strong>: lazy, tiết kiệm RAM, idiom <code>sum(x for x in ...)</code>.</li>
+          <li><strong>collections stdlib</strong>: <code>Counter</code> (đếm tần suất), <code>defaultdict</code> (auto-init), <code>deque</code> (queue O(1) 2 đầu), <code>namedtuple</code> (tuple có tên).</li>
+          <li><strong>Gotcha</strong>: <code>{}</code> là dict rỗng (set rỗng = <code>set()</code>); <code>(1)</code> là int; <code>list.sort()</code> trả <code>None</code>; <code>[[0]*3]*3</code> chia sẻ reference.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 4 (Control Flow &amp; Functions)</strong> — comprehension là syntactic sugar cho <code>for</code> loop; <code>match</code> statement (3.10+) destructure được dict/tuple.</li>
+          <li><strong>Chương 5 (OOP in Python)</strong> — <code>@dataclass</code> là phiên bản hiện đại của namedtuple, có method, default, validation.</li>
+          <li><strong>Chương 6 (Iterators &amp; Generators)</strong> — đào sâu generator expression, <code>yield</code>, <code>itertools</code> (chain, groupby, accumulate, pairwise).</li>
+          <li><strong>Chương 9 (Typing)</strong> — type hints cho <code>list[int]</code>, <code>dict[str, list[str]]</code>, <code>tuple[int, ...]</code>, <code>TypedDict</code>, <code>NamedTuple</code>.</li>
+          <li><strong>Dart Chương 6 (Collections)</strong> — đối chiếu <code>List</code>/<code>Set</code>/<code>Map</code> Dart, <code>const</code> collection, spread operator. Dart không có comprehension built-in nhưng có collection-if + collection-for tương tự.</li>
+          <li><strong>JavaScript Chương 5 (Arrays &amp; Iterables)</strong> — JS không có comprehension; phải dùng <code>map</code>/<code>filter</code>/<code>reduce</code>. Set/Map JS gần giống Python nhưng key bất kỳ.</li>
+        </ul>
+
+        <div class="zen-quote">
+          There should be one — and preferably only one — obvious way to do it.<br/>
+          — <em>Zen of Python (PEP 20)</em>
+        </div>
+
+        <p style="color: var(--text-soft); margin-top: 18px;">
+          Trong chương này, comprehension chính là <em>"the one obvious way"</em> cho việc biến đổi collection.
+          Khi đã quen, bạn sẽ thấy loop + <code>append</code> rất dài dòng so với 1 dòng comprehension. Đó là
+          Pythonic.
+        </p>
+
+        <nav class="chapter-nav">
+          <a href="chuong2.html" class="prev">
+            <div class="dir">← Chương 2</div>
+            <div class="label">Variables, Types &amp; Operators</div>
+          </a>
+          <a href="chuong4.html" class="next">
+            <div class="dir">Chương 4 →</div>
+            <div class="label">Control Flow &amp; Functions</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#list">1. list — mutable sequence</a></li>
+          <li class="level-3"><a href="#list-methods">1.1. Method của list</a></li>
+          <li><a href="#tuple">2. tuple — immutable sequence</a></li>
+          <li><a href="#unpacking">3. Tuple unpacking</a></li>
+          <li><a href="#dict">4. dict — hash map</a></li>
+          <li class="level-3"><a href="#dict-methods">4.1. Method của dict</a></li>
+          <li><a href="#dict-ordered">5. Dict ordered 3.7+</a></li>
+          <li><a href="#set">6. set — unique unordered</a></li>
+          <li class="level-3"><a href="#set-ops">6.1. Phép toán tập hợp</a></li>
+          <li><a href="#frozenset">7. frozenset</a></li>
+          <li><a href="#slicing">8. Slicing</a></li>
+          <li><a href="#comprehension">9. Comprehension</a></li>
+          <li class="level-3"><a href="#list-comp">9.1. List comp</a></li>
+          <li class="level-3"><a href="#dict-set-comp">9.2. Dict / Set comp</a></li>
+          <li class="level-3"><a href="#gen-expr">9.3. Generator expr</a></li>
+          <li><a href="#counter">10. Counter</a></li>
+          <li><a href="#defaultdict">11. defaultdict</a></li>
+          <li><a href="#deque">12. deque</a></li>
+          <li><a href="#namedtuple">13. namedtuple &amp; dataclass</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 3 — Data Structures: list, tuple, dict, set · Python sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong2.html">← Chương 2</a> · <a href="../index.html">Python TOC</a> · <a href="chuong4.html">Chương 4 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 04 — UDP · Networking Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">net-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong3.html">← Ch.03</a></li>
+        <li><a href="chuong4.html" class="active">Ch.04</a></li>
+        <li><a href="chuong5.html">Ch.05 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 04 · TRANSPORT · ~80 phút</div>
+      <h1>UDP<br/><span class="text-accent">Khi nào không cần TCP?</span></h1>
+      <p class="lead">
+        UDP là "ngược lại" TCP — không bắt tay, không đảm bảo, nhưng cực nhanh và đơn giản.
+        Là nền tảng của <strong>DNS, video call, game online, QUIC (HTTP/3)</strong>. Hiểu chương này, bạn biết khi nào nên TCP, khi nào nên UDP.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#what">4.1 UDP là gì?</a></li>
+          <li><a href="#header">4.2 UDP header</a></li>
+          <li><a href="#vs-tcp">4.3 UDP vs TCP</a></li>
+          <li><a href="#usecase">4.4 Use cases</a></li>
+          <li><a href="#hol">4.5 Head-of-line blocking</a></li>
+          <li><a href="#quic">4.6 QUIC</a></li>
+          <li><a href="#webrtc">4.7 WebRTC</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 4.1 -->
+        <section id="what">
+          <h2>4.1 UDP là gì?</h2>
+
+          <p>
+            <strong>UDP</strong> (User Datagram Protocol) gửi data từ máy A đến máy B mà <em>không cần connection</em>, <em>không đảm bảo gì</em>.
+            "Fire and forget".
+          </p>
+
+          <p>3 tính chất chính:</p>
+          <ol>
+            <li><strong>Connectionless</strong>: không có handshake. Cứ gửi.</li>
+            <li><strong>Unreliable</strong>: packet có thể mất, lặp, đến lộn xộn — UDP không quan tâm.</li>
+            <li><strong>No flow / congestion control</strong>: gửi với tốc độ bao nhiêu cũng được.</li>
+          </ol>
+
+          <p>Nghe tệ, nhưng đó cũng là <em>điểm mạnh</em>: không overhead, latency thấp, đơn giản.</p>
+        </section>
+
+        <!-- 4.2 -->
+        <section id="header">
+          <h2>4.2 UDP Header — chỉ 8 byte (so với TCP 20+ byte)</h2>
+
+          <pre data-lang="text"><code>  0      7 8     15 16    23 24    31
+ +--------+--------+--------+--------+
+ |   Source Port   | Destination Port|     ← 4 byte
+ +--------+--------+--------+--------+
+ |     Length      |    Checksum     |     ← 4 byte
+ +--------+--------+--------+--------+
+ |          Data (variable)          |
+ +-----------------------------------+
+
+Total header: 8 byte (TCP: 20+)</code></pre>
+
+          <p>4 trường, không có sequence, không có ACK, không có window — toàn bộ "luggage" mà TCP mang theo, UDP bỏ.</p>
+
+          <p><strong>Hệ quả:</strong></p>
+          <ul>
+            <li>Header overhead nhỏ → nhiều data hơn trong cùng MTU</li>
+            <li>CPU xử lý ít hơn</li>
+            <li>Không state lưu trong kernel → server có thể handle nhiều flow hơn</li>
+          </ul>
+        </section>
+
+        <!-- 4.3 -->
+        <section id="vs-tcp">
+          <h2>4.3 UDP vs TCP — bảng đối chiếu</h2>
+
+          <table>
+            <thead>
+              <tr><th>Tính chất</th><th>TCP</th><th>UDP</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Connection</td><td>Có (3-way handshake)</td><td>Không (connectionless)</td></tr>
+              <tr><td>Reliability</td><td>Có (retransmit, ACK)</td><td>Không (mất là mất)</td></tr>
+              <tr><td>Ordering</td><td>Đảm bảo</td><td>Không đảm bảo</td></tr>
+              <tr><td>Flow control</td><td>Có (sliding window)</td><td>Không</td></tr>
+              <tr><td>Congestion control</td><td>Có (slow start, AIMD)</td><td>Không</td></tr>
+              <tr><td>Header size</td><td>20-60 byte</td><td>8 byte</td></tr>
+              <tr><td>Setup latency</td><td>1.5 RTT</td><td>0 RTT</td></tr>
+              <tr><td>Throughput</td><td>Cao nhưng có overhead</td><td>Có thể cao hơn (less overhead)</td></tr>
+              <tr><td>Use case</td><td>HTTP, SSH, file, email</td><td>DNS, video, game, voice</td></tr>
+              <tr><td>Broadcast/multicast</td><td>Không</td><td>Có</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Quote nổi tiếng</h3>
+          <blockquote class="callout note">
+            <em>"TCP gives you reliability you may not need, at a cost you may not want to pay."</em>
+            <br/><br/>
+            Đôi khi chậm 100ms vì TCP retransmit còn tệ hơn mất 1 frame video.
+          </blockquote>
+        </section>
+
+        <!-- 4.4 -->
+        <section id="usecase">
+          <h2>4.4 Use cases — UDP "lên ngôi" ở đâu?</h2>
+
+          <h3>4.4.1 DNS</h3>
+          <p>
+            Mỗi DNS query là 1 request nhỏ (domain name) + 1 response nhỏ (IP). Dùng TCP tốn 1.5 RTT handshake mới gửi được query.
+            UDP: gửi ngay, nhận ngay = <strong>1 RTT total</strong>.
+          </p>
+          <p>Nếu UDP packet mất → client tự retry. Đơn giản hơn nhiều.</p>
+          <p>(DNS có dùng TCP cho response &gt; 512 byte hoặc DNSSEC — nhưng default là UDP)</p>
+
+          <h3>4.4.2 Video / Voice (streaming, VoIP)</h3>
+          <p>
+            Video 30fps = 1 frame mỗi 33ms. Nếu mất 1 frame, retransmit qua TCP mất ~100-500ms — lúc đó user đã thấy frame mới hơn rồi.
+            <strong>Bỏ qua frame mất, chạy tiếp</strong> = trải nghiệm tốt hơn.
+          </p>
+          <p>Apps: Zoom, Skype, Discord voice, Twitch, YouTube live, RTMP, RTP.</p>
+
+          <h3>4.4.3 Online Game</h3>
+          <p>
+            Position update mỗi 50ms. Mất 1 update không sao — update sau đè lên. Reliability không quan trọng bằng latency.
+          </p>
+          <p>Ngược lại, TCP head-of-line blocking (xem 4.5) sẽ "freeze" game khi packet mất.</p>
+
+          <h3>4.4.4 NTP, DHCP, mDNS</h3>
+          <p>
+            Các giao thức infrastructure short-message. Tránh overhead TCP.
+          </p>
+
+          <h3>4.4.5 Multicast / Broadcast</h3>
+          <p>
+            TCP yêu cầu connection 1-1 → không broadcast được. UDP có thể gửi 1 packet đến nhiều receiver (vd discovery, IPTV).
+          </p>
+
+          <h3>4.4.6 IoT / Sensor</h3>
+          <p>
+            Device tài nguyên hạn chế. Connection-state TCP tốn RAM. UDP nhẹ hơn.
+          </p>
+        </section>
+
+        <!-- 4.5 -->
+        <section id="hol">
+          <h2>4.5 Head-of-Line Blocking — gót chân Asin của TCP</h2>
+
+          <p>
+            TCP đảm bảo data <strong>đúng thứ tự</strong>. Nếu segment thứ 5 trong 10 segment bị mất:
+          </p>
+          <ul>
+            <li>Receiver đã có segment 1-4 và 6-10</li>
+            <li>Nhưng <strong>không thể đẩy lên app</strong> vì chưa có 5 (sẽ mất thứ tự)</li>
+            <li>Sender phải retransmit segment 5</li>
+            <li>App phải <em>đợi</em> đến khi segment 5 đến → mọi data sau bị "block" theo</li>
+          </ul>
+
+          <p>Đây là <strong>head-of-line blocking (HOL)</strong>. Tệ hơn: HTTP/2 multiplex nhiều stream trên 1 TCP connection — 1 packet mất block <em>mọi</em> stream.</p>
+
+          <div class="ascii-art">
+   TCP với 1 stream:
+   App receives:  [1][2][3][4]  ────────  [5][6][7][8][9][10]
+                              ↑ stuck đây
+                              chờ segment 5
+
+   HTTP/2 (nhiều stream trên 1 TCP):
+   Stream A: [a1][a2]                    [a3][a4]
+   Stream B: [b1]    [b2 LOST]           [b2-retx][b3]
+   Stream C: [c1][c2][c3]                [c4]
+
+   Tất cả stream đều bị block đợi b2 retx, dù A và C không liên quan!
+          </div>
+
+          <p>UDP không có vấn đề này vì không guarantee order — app tự xử lý.</p>
+        </section>
+
+        <!-- 4.6 -->
+        <section id="quic">
+          <h2>4.6 QUIC — HTTP/3 chạy trên UDP</h2>
+
+          <p>
+            <strong>QUIC</strong> (Quick UDP Internet Connections, Google 2012) là protocol "tái implement" reliability + ordering ở
+            <em>user space</em> trên UDP, kèm mã hoá và stream multiplexing.
+          </p>
+
+          <h3>Tại sao xây trên UDP?</h3>
+          <ul>
+            <li>TCP "đông cứng" trong kernel — khó deploy thuật toán mới</li>
+            <li>Phần cứng router xử lý UDP/IP → QUIC chạy được trên Internet hiện tại</li>
+            <li>Có thể update QUIC chỉ cần update trình duyệt + server, không cần đụng OS</li>
+          </ul>
+
+          <h3>Lợi ích QUIC</h3>
+          <ul>
+            <li><strong>0-RTT connection</strong> với resumption (vs TCP+TLS = 3 RTT)</li>
+            <li><strong>Per-stream HOL blocking</strong>: 1 stream mất packet không block stream khác</li>
+            <li><strong>Connection migration</strong>: đổi mạng (Wi-Fi → 4G) không phải reconnect</li>
+            <li><strong>Encryption built-in</strong>: TLS 1.3 luôn luôn</li>
+          </ul>
+
+          <p>Browser/server hiện đại đều support: Chrome, Firefox, Safari, nginx (qua module), Cloudflare. HTTP/3 = HTTP-over-QUIC.</p>
+        </section>
+
+        <!-- 4.7 -->
+        <section id="webrtc">
+          <h2>4.7 WebRTC — peer-to-peer trên browser</h2>
+
+          <p>
+            <strong>WebRTC</strong> cho phép browser-to-browser <em>không qua server</em> để truyền video/audio/data.
+            Dùng UDP (qua DTLS để mã hoá).
+          </p>
+
+          <h3>NAT traversal — vấn đề hard</h3>
+          <p>
+            Cả 2 peer đều ở sau NAT → không direct connect được. WebRTC dùng:
+          </p>
+          <ul>
+            <li><strong>STUN</strong>: peer hỏi server "IP public của tôi là gì?", lấy được IP+port public của mình sau NAT</li>
+            <li><strong>TURN</strong>: nếu STUN không đủ (NAT khó), relay qua server (peer ↔ TURN server ↔ peer)</li>
+            <li><strong>ICE</strong>: thử mọi candidate path, chọn cái tốt nhất</li>
+          </ul>
+
+          <h3>Use case</h3>
+          <p>Google Meet, Discord voice, ưng dụng video call, P2P file sharing trên browser.</p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — UDP echo với netcat</div>
+            <p>Server: <code>nc -ul 8080</code> (UDP listen). Client: <code>nc -u localhost 8080</code>. Gõ message — quan sát.
+            Khác gì so với TCP <code>nc -l</code> + <code>nc localhost</code>?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — DNS qua UDP</div>
+            <p>Wireshark filter <code>udp.port==53</code>. Chạy <code>dig google.com</code>. Quan sát: 1 query packet, 1 response packet, không có handshake.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Use case nào?</div>
+            <p>Mỗi scenario sau dùng TCP hay UDP, tại sao? (a) Bank transfer; (b) Live stream YouTube; (c) Online chess; (d) Video call Zoom; (e) DNS query; (f) git clone; (g) FPS game.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — HOL blocking</div>
+            <p>Giải thích head-of-line blocking. Vẽ ví dụ HTTP/2 trên TCP bị HOL.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — HTTP/3 thực tế</div>
+            <p>Browse 1 trang Cloudflare-hosted (vd <code>cloudflare.com</code>). Chrome DevTools → Network → cột Protocol. Có thấy <code>h3</code>?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — QUIC trên Wireshark</div>
+            <p>Mở Wireshark, filter <code>quic</code>. Truy cập google.com. Quan sát các packet UDP đến port 443.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> UDP header bao nhiêu byte?</p>
+              <ul class="quiz-options">
+                <li>20 byte</li>
+                <li>40 byte</li>
+                <li>8 byte</li>
+                <li>16 byte</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 8 byte.</strong> 4 field × 2 byte: src port, dst port, length, checksum. TCP 20+ byte.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> DNS dùng UDP vì?</p>
+              <ul class="quiz-options">
+                <li>Mỗi query nhỏ + cần latency thấp; TCP handshake là overhead không cần thiết</li>
+                <li>UDP an toàn hơn</li>
+                <li>DNS không cần internet</li>
+                <li>UDP cho phép broadcast</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: short message + low latency.</strong> 1 RTT cho cả query+response. Nếu mất packet → client retry, đơn giản hơn handshake.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Tại sao game online thường dùng UDP?</p>
+              <ul class="quiz-options">
+                <li>Vì game cần encryption</li>
+                <li>Vì TCP không hoạt động trên Internet</li>
+                <li>Latency &gt; reliability — mất packet position update không sao, nhưng đợi retransmit thì game đứng hình</li>
+                <li>UDP rẻ hơn</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: latency &gt; reliability.</strong> TCP HOL blocking sẽ "freeze" game khi packet mất.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> Head-of-Line blocking trong TCP là?</p>
+              <ul class="quiz-options">
+                <li>Server quá tải</li>
+                <li>1 packet mất → mọi data sau (đã đến) phải đợi retransmit, không thể đẩy lên app</li>
+                <li>Network bị tắc</li>
+                <li>DNS lỗi</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: HOL block do guaranteed ordering.</strong> Đặc biệt tệ với HTTP/2 nhiều stream trên 1 TCP.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> QUIC build trên UDP để?</p>
+              <ul class="quiz-options">
+                <li>Vì UDP chạy nhanh hơn TCP</li>
+                <li>Vì cần broadcast</li>
+                <li>Để deploy được trên Internet hiện tại + dễ update (không phụ thuộc kernel TCP) + tránh HOL blocking</li>
+                <li>Vì Google không thích TCP</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: deploy + per-stream HOL.</strong> TCP "đông" trong kernel; UDP cho phép QUIC update qua browser/server.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 6.</strong> HTTP/3 chạy trên?</p>
+              <ul class="quiz-options">
+                <li>QUIC (UDP)</li>
+                <li>TCP</li>
+                <li>SCTP</li>
+                <li>WebSocket</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: QUIC.</strong> HTTP/1.1, HTTP/2 trên TCP. HTTP/3 trên QUIC (UDP).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> WebRTC dùng UDP và NAT traversal qua?</p>
+              <ul class="quiz-options">
+                <li>BGP</li>
+                <li>STUN + TURN + ICE</li>
+                <li>DNS</li>
+                <li>HTTP</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: STUN/TURN/ICE.</strong> STUN tìm public IP, TURN relay nếu STUN fail, ICE chọn path tốt nhất.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> UDP có thể broadcast/multicast, TCP thì không. Tại sao?</p>
+              <ul class="quiz-options">
+                <li>Vì UDP nhanh hơn</li>
+                <li>Vì TCP có encryption</li>
+                <li>TCP yêu cầu connection 1-1 (handshake, ACK), broadcast/multicast là 1-nhiều — không thể track state</li>
+                <li>UDP hỗ trợ IPv6 tốt hơn</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: TCP yêu cầu connection 1-1.</strong> 1-nhiều cần dùng UDP (mDNS, IGMP).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 4</h2>
+          <ul>
+            <li>✅ UDP = connectionless, unreliable, no flow/congestion control — "fire and forget"</li>
+            <li>✅ Header chỉ 8 byte (TCP 20+); 0 RTT setup</li>
+            <li>✅ Use case: <strong>DNS, video, game, voice, NTP, DHCP, IoT, multicast</strong></li>
+            <li>✅ <strong>Head-of-line blocking</strong>: gót chân Asin của TCP — đặc biệt tệ với HTTP/2 multiplex</li>
+            <li>✅ <strong>QUIC</strong>: reliable + ordered ở user space trên UDP; per-stream HOL; 0-RTT resume; HTTP/3 dùng nó</li>
+            <li>✅ <strong>WebRTC</strong>: peer-to-peer browser, dùng UDP + STUN/TURN/ICE NAT traversal</li>
+            <li>✅ Quy tắc chọn: cần reliability + ordering → TCP; cần latency thấp + chấp nhận mất → UDP</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong3.html">
+        <span class="label">← Chương trước</span>
+        Chương 03: TCP
+      </a>
+      <a href="chuong5.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 05: HTTP →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◆</span> Networking Mastery · Chương 04 · UDP
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

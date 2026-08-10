@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 02 — Process & PCB · OS Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">os-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong1.html">← Ch.01</a></li>
+        <li><a href="chuong2.html" class="active">Ch.02</a></li>
+        <li><a href="chuong3.html">Ch.03 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 02 · PROCESS · ~110 phút</div>
+      <h1>Process<br/><span class="text-orange">&amp; Process Control Block</span></h1>
+      <p class="lead">
+        <strong>Process</strong> = chương trình đang chạy. Đây là khái niệm cốt lõi nhất của OS.
+        Học chương này, bạn nắm: memory layout 1 process, PCB là gì, vòng đời 5 trạng thái, fork/exec, zombie/orphan,
+        và cách dùng <code>ps</code>/<code>top</code>/<code>/proc</code> để quan sát process thật.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#program-vs-process">2.1 Program vs Process</a></li>
+          <li><a href="#layout">2.2 Memory layout</a></li>
+          <li><a href="#pcb">2.3 Process Control Block</a></li>
+          <li><a href="#states">2.4 Process States</a></li>
+          <li><a href="#fork">2.5 fork()</a></li>
+          <li><a href="#exec">2.6 exec()</a></li>
+          <li><a href="#wait-exit">2.7 wait() &amp; exit()</a></li>
+          <li><a href="#zombie">2.8 Zombie &amp; Orphan</a></li>
+          <li><a href="#observe">2.9 Quan sát process</a></li>
+          <li><a href="#node">2.10 Node.js child_process</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 2.1 -->
+        <section id="program-vs-process">
+          <h2>2.1 Program vs Process — đừng nhầm!</h2>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-cyan">Program</h4>
+              <ul>
+                <li>File <strong>tĩnh</strong> trên disk (vd <code>/usr/bin/ls</code>)</li>
+                <li>Chứa instructions + initial data</li>
+                <li>Không "chạy", không có state</li>
+                <li>Là một entity <em>passive</em></li>
+              </ul>
+            </div>
+            <div class="good">
+              <h4 class="text-green">Process</h4>
+              <ul>
+                <li>Program <strong>đang chạy</strong> trong RAM</li>
+                <li>Có PID, state, registers, stack, heap riêng</li>
+                <li>Được kernel quản lý qua PCB</li>
+                <li>Là một entity <em>active</em></li>
+              </ul>
+            </div>
+          </div>
+
+          <p>
+            <strong>1 program → nhiều process:</strong> mở 5 cửa sổ Chrome = 1 program nhưng nhiều process.
+            <strong>1 process → 1 program tại 1 thời điểm:</strong> nhưng có thể "thay" program khác qua <code>execve</code> (xem 2.6).
+          </p>
+        </section>
+
+        <!-- 2.2 -->
+        <section id="layout">
+          <h2>2.2 Memory Layout của 1 Process</h2>
+
+          <p>Khi process chạy, kernel cấp cho nó một virtual address space, chia làm các vùng:</p>
+
+          <div class="ascii-art">
+   High address
+   ┌─────────────────────┐ 0x7fff...
+   │   <span class="text-amber">Stack</span>             │  ← function call frames, local vars
+   │     ↓ grows down    │     (LIFO)
+   │                     │
+   │                     │
+   │     ↑ grows up      │
+   │   <span class="text-cyan">Heap</span>              │  ← malloc, new — dynamic alloc
+   ├─────────────────────┤
+   │   <span class="text-green">BSS</span>               │  ← uninit'd globals (set 0)
+   ├─────────────────────┤
+   │   <span class="text-green">Data</span>              │  ← init'd globals/static
+   ├─────────────────────┤
+   │   <span class="text-orange">Text (Code)</span>       │  ← machine instructions
+   └─────────────────────┘ 0x0000...
+   Low address
+          </div>
+
+          <h3>Chi tiết từng vùng</h3>
+          <ul>
+            <li><strong>Text (Code):</strong> instructions của program. Read-only — bảo vệ khỏi modify.</li>
+            <li><strong>Data:</strong> biến global đã khởi tạo (vd <code>int x = 5;</code>).</li>
+            <li><strong>BSS:</strong> biến global chưa khởi tạo (vd <code>int y;</code>) — kernel zero-fill khi load.</li>
+            <li><strong>Heap:</strong> cấp phát động bằng <code>malloc</code>/<code>new</code>. Tăng lên (low → high) qua syscall <code>brk</code>/<code>sbrk</code>.</li>
+            <li><strong>Stack:</strong> function call. Mỗi call push 1 frame (return address, params, local vars). Tăng xuống (high → low).</li>
+          </ul>
+
+          <h3>Phân biệt 3 lỗi memory phổ biến</h3>
+
+          <table>
+            <thead><tr><th>Lỗi</th><th>Nguyên nhân</th><th>Vùng liên quan</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Stack Overflow</strong></td><td>Đệ quy quá sâu, mảng stack quá lớn</td><td>Stack đụng heap</td></tr>
+              <tr><td><strong>Heap Overflow / Buffer Overflow</strong></td><td>Ghi quá kích thước buffer cấp phát</td><td>Heap</td></tr>
+              <tr><td><strong>Memory Leak</strong></td><td>Cấp phát mà quên free</td><td>Heap (lớn dần không thu hồi)</td></tr>
+              <tr><td><strong>Use-after-free</strong></td><td>Dùng pointer sau khi free</td><td>Heap (UB)</td></tr>
+              <tr><td><strong>Segmentation Fault</strong></td><td>Truy cập memory không thuộc process</td><td>Bất kỳ — kernel block</td></tr>
+            </tbody>
+          </table>
+
+          <pre data-lang="bash"><code># Xem memory layout của process running trên Linux
+cat /proc/$$/maps | head
+# 555555554000-555555558000 r--p 00000000 fd:01 ...   /usr/bin/bash  (text)
+# 555555558000-555555637000 r-xp 00004000 fd:01 ...   /usr/bin/bash  (text exec)
+# ...
+# 7fffffde0000-7fffffe01000 rw-p 00000000 00:00 0     [stack]
+# ...</code></pre>
+        </section>
+
+        <!-- 2.3 -->
+        <section id="pcb">
+          <h2>2.3 Process Control Block (PCB) — "thẻ căn cước" của process</h2>
+
+          <p>
+            Kernel quản lý mỗi process bằng cấu trúc <strong>PCB</strong> (trong Linux gọi là <code>task_struct</code>, ~10KB).
+            Mỗi process có 1 PCB lưu mọi thứ cần để khôi phục trạng thái khi switch CPU.
+          </p>
+
+          <h3>PCB chứa gì?</h3>
+
+          <div class="ascii-art">
+   ┌─────────────────────────────────────────┐
+   │  PROCESS CONTROL BLOCK (task_struct)    │
+   ├─────────────────────────────────────────┤
+   │  PID (Process ID)                       │
+   │  PPID (Parent PID)                      │
+   │  UID, GID (owner)                       │
+   │  State (Ready / Running / Blocked / ...)│
+   │  Priority &amp; nice value                  │
+   ├─────────────────────────────────────────┤
+   │  CPU registers snapshot (khi switch)    │
+   │  Program counter                        │
+   │  Stack pointer                          │
+   ├─────────────────────────────────────────┤
+   │  Memory info (page table pointer,       │
+   │     mm_struct, vm areas)                │
+   ├─────────────────────────────────────────┤
+   │  File descriptor table (mảng fd)        │
+   │  Working directory                      │
+   ├─────────────────────────────────────────┤
+   │  Signal handlers                        │
+   │  Pending signals                        │
+   ├─────────────────────────────────────────┤
+   │  Statistics: CPU time used,             │
+   │     start time, page faults, ...        │
+   ├─────────────────────────────────────────┤
+   │  Pointers: parent, children, siblings   │
+   └─────────────────────────────────────────┘
+          </div>
+
+          <p>
+            Khi <strong>context switch</strong> xảy ra, kernel:
+          </p>
+          <ol>
+            <li>Lưu CPU state hiện tại vào PCB của process đang chạy</li>
+            <li>Load CPU state từ PCB của process kế tiếp</li>
+            <li>Nhảy đến program counter của process mới → process tiếp tục</li>
+          </ol>
+
+          <p>Tất cả diễn ra trong &lt;1 microsecond. Hàng nghìn lần mỗi giây trên máy bận.</p>
+        </section>
+
+        <!-- 2.4 -->
+        <section id="states">
+          <h2>2.4 Process States — vòng đời 5 trạng thái</h2>
+
+          <div class="ascii-art">
+                ┌──────────────┐
+        admit   │              │   exit
+       ───────▶ │     <span class="text-cyan">NEW</span>      │ ──┐
+                │              │   │
+                └──────┬───────┘   │
+                       │ scheduler │
+                       ▼           │
+       <span class="text-cyan">┌──────────────┐</span>           │
+       <span class="text-cyan">│              │</span>           │
+       <span class="text-cyan">│    READY     │</span>◀────┐     │
+       <span class="text-cyan">│              │</span>     │     │
+       <span class="text-cyan">└──────┬───────┘</span>     │     │
+              │ dispatch    │     │
+              ▼             │     │
+       <span class="text-green">┌──────────────┐</span>     │     │
+       <span class="text-green">│              │</span> done│     ▼
+       <span class="text-green">│   RUNNING    │</span>─────┴───▶ <span class="text-red">┌────────────┐</span>
+       <span class="text-green">│              │</span>           <span class="text-red">│ TERMINATED │</span>
+       <span class="text-green">└──────┬───────┘</span>           <span class="text-red">└────────────┘</span>
+              │ I/O wait
+              ▼
+       <span class="text-amber">┌──────────────┐</span>
+       <span class="text-amber">│              │</span>
+       <span class="text-amber">│   BLOCKED    │</span>
+       <span class="text-amber">│   (waiting)  │</span>
+       <span class="text-amber">└──────────────┘</span>
+              │ I/O ready
+              └─────────────▶ READY
+          </div>
+
+          <ul>
+            <li><span class="process-state ready">NEW</span> — vừa được tạo, chưa load đầy đủ</li>
+            <li><span class="process-state ready">READY</span> — sẵn sàng chạy, đang đợi CPU</li>
+            <li><span class="process-state running">RUNNING</span> — đang sử dụng CPU</li>
+            <li><span class="process-state blocked">BLOCKED</span> — đợi I/O hoặc event (vd đọc file, đợi network)</li>
+            <li><span class="process-state terminated">TERMINATED</span> — đã exit, đợi parent collect</li>
+          </ul>
+
+          <h3>Linux state code (xem trong <code>ps</code>)</h3>
+          <table>
+            <thead><tr><th>Code</th><th>Ý nghĩa</th></tr></thead>
+            <tbody>
+              <tr><td><code>R</code></td><td>Running hoặc Runnable (ready)</td></tr>
+              <tr><td><code>S</code></td><td>Sleeping (interruptible — đợi I/O bình thường)</td></tr>
+              <tr><td><code>D</code></td><td>Uninterruptible sleep (không thể bị interrupt — vd đợi disk)</td></tr>
+              <tr><td><code>Z</code></td><td>Zombie</td></tr>
+              <tr><td><code>T</code></td><td>Stopped (bằng SIGSTOP)</td></tr>
+            </tbody>
+          </table>
+
+          <pre data-lang="bash"><code>ps -ax -o pid,state,comm | head
+#   PID S COMMAND
+#     1 S systemd
+#   123 S /usr/bin/python
+#   456 R top
+#   789 D rsync       ← đợi disk, không thể kill được</code></pre>
+        </section>
+
+        <!-- 2.5 -->
+        <section id="fork">
+          <h2>2.5 fork() — sao chép process</h2>
+
+          <p>
+            <code>fork()</code> tạo process con bằng cách <strong>sao chép parent</strong>. Sau khi gọi:
+          </p>
+          <ul>
+            <li>Có 2 process: parent và child</li>
+            <li>Child có PID khác, PPID = PID của parent</li>
+            <li>Child có copy của memory parent (text, data, heap, stack)</li>
+            <li>Child có copy của file descriptors (cả 2 cùng trỏ vào file đang mở)</li>
+            <li><code>fork()</code> trả về <strong>2 lần</strong>: trong parent trả PID con; trong child trả 0</li>
+          </ul>
+
+          <pre data-lang="c"><code>#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+int main() {
+    pid_t pid = fork();
+
+    if (pid &lt; 0) {
+        perror("fork failed");
+        return 1;
+    } else if (pid == 0) {
+        // Child code
+        printf("[child]  PID=%d, PPID=%d\n", getpid(), getppid());
+    } else {
+        // Parent code
+        printf("[parent] PID=%d, child PID=%d\n", getpid(), pid);
+    }
+    return 0;
+}
+
+// Output (thứ tự có thể khác do scheduling):
+// [parent] PID=1234, child PID=1235
+// [child]  PID=1235, PPID=1234</code></pre>
+
+          <h3>Copy-on-Write — tối ưu thông minh</h3>
+          <p>
+            Tưởng <code>fork</code> phải copy hàng GB memory? Không! Linux dùng <strong>Copy-on-Write (CoW)</strong>:
+          </p>
+          <ul>
+            <li>Sau fork, parent &amp; child ban đầu <em>chia sẻ</em> page memory (đánh dấu read-only)</li>
+            <li>Khi <strong>một bên ghi</strong> vào page, kernel mới copy page đó cho bên kia</li>
+            <li>Trong nhiều trường hợp (fork rồi exec ngay), không bao giờ phải copy thật</li>
+          </ul>
+
+          <p>Đây là lý do <code>fork</code> trong Linux nhanh đến không ngờ.</p>
+        </section>
+
+        <!-- 2.6 -->
+        <section id="exec">
+          <h2>2.6 exec() — biến process thành program khác</h2>
+
+          <p>
+            <code>exec()</code> family (<code>execve</code>, <code>execvp</code>...) <strong>thay thế</strong> toàn bộ memory image của process hiện tại
+            bằng program mới. Cùng PID, cùng PPID, nhưng code hoàn toàn khác.
+          </p>
+
+          <pre data-lang="c"><code>#include &lt;unistd.h&gt;
+int main() {
+    char *args[] = { "/bin/ls", "-l", "/tmp", NULL };
+    execv("/bin/ls", args);
+    // Nếu thành công, dòng này không bao giờ được chạy
+    perror("exec failed");
+    return 1;
+}</code></pre>
+
+          <h3>Pattern fork + exec — chạy program khác</h3>
+
+          <pre data-lang="c"><code>// Đây là cách Unix shell chạy command:
+pid_t pid = fork();
+if (pid == 0) {
+    // Child: replace mình thành /bin/ls
+    execlp("ls", "ls", "-l", NULL);
+    exit(1);  // chỉ chạy nếu exec fail
+} else {
+    // Parent: đợi child kết thúc
+    int status;
+    waitpid(pid, &amp;status, 0);
+}</code></pre>
+
+          <p>Bash, zsh, sh đều làm thế này khi bạn gõ command. Đó là tại sao child process có cùng PPID = shell PID.</p>
+        </section>
+
+        <!-- 2.7 -->
+        <section id="wait-exit">
+          <h2>2.7 wait() &amp; exit() — kết thúc process</h2>
+
+          <p>
+            <code>exit(code)</code> kết thúc process, trả về exit code (0 = success, ≠ 0 = error).
+            <code>wait(&amp;status)</code> hoặc <code>waitpid()</code> để parent đợi child kết thúc và lấy exit code.
+          </p>
+
+          <pre data-lang="c"><code>pid_t pid = fork();
+if (pid == 0) {
+    // Child
+    sleep(2);
+    exit(42);  // exit code 42
+} else {
+    int status;
+    waitpid(pid, &amp;status, 0);
+    if (WIFEXITED(status)) {
+        printf("Child exit code: %d\n", WEXITSTATUS(status));
+    }
+}
+// Output: Child exit code: 42</code></pre>
+
+          <h3>Trong shell</h3>
+
+          <pre data-lang="bash"><code>ls /no-such-dir
+echo $?    # 2 — exit code của lệnh trước
+
+true
+echo $?    # 0
+
+# Chạy chain dựa trên exit code
+make &amp;&amp; ./run    # chỉ chạy ./run nếu make success
+make || echo "build failed"</code></pre>
+        </section>
+
+        <!-- 2.8 -->
+        <section id="zombie">
+          <h2>2.8 Zombie &amp; Orphan Process — bug "kinh dị" cần biết</h2>
+
+          <h3>Zombie Process 🧟</h3>
+          <p>
+            Khi child kết thúc (<code>exit</code>) nhưng <strong>parent chưa gọi <code>wait()</code></strong>, kernel vẫn giữ PCB của child
+            (chỉ giữ exit code, đã giải phóng memory) đợi parent collect.
+          </p>
+          <p>
+            Process trong trạng thái này gọi là <strong>zombie</strong>. Nó "chết" nhưng "chưa được chôn".
+            Nếu parent là buggy không bao giờ wait, zombie tích tụ → cạn PID.
+          </p>
+
+          <pre data-lang="c"><code>// Code tạo zombie
+pid_t pid = fork();
+if (pid == 0) {
+    exit(0);  // child exit
+} else {
+    // parent KHÔNG gọi wait!
+    sleep(60);  // child là zombie suốt 60s
+}</code></pre>
+
+          <pre data-lang="bash"><code># Quan sát zombie:
+ps -ax -o pid,state,comm | grep Z
+# 1234 Z   defunct  ← zombie!</code></pre>
+
+          <h3>Orphan Process</h3>
+          <p>
+            Ngược lại: parent kết thúc trước child. Child thành "mồ côi". Linux: kernel <strong>tự động re-parent</strong> orphan về PID 1 (init/systemd).
+            init làm việc <code>wait()</code> giúp, nên orphan không thành zombie.
+          </p>
+
+          <pre data-lang="c"><code>pid_t pid = fork();
+if (pid == 0) {
+    sleep(10);
+    printf("My new parent: %d\n", getppid());  // PPID = 1 (init)
+} else {
+    exit(0);  // parent chết ngay
+}</code></pre>
+
+          <h3>Cách xử lý zombie trong code thật</h3>
+          <pre data-lang="c"><code>// Cách 1: Bắt SIGCHLD và auto-reap
+#include &lt;signal.h&gt;
+signal(SIGCHLD, SIG_IGN);  // ignore SIGCHLD → kernel auto-reap
+
+// Cách 2: Bắt SIGCHLD handler
+void handler(int sig) {
+    while (waitpid(-1, NULL, WNOHANG) &gt; 0) {}
+}
+signal(SIGCHLD, handler);</code></pre>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Trong Docker container</div>
+            Nếu bạn chạy <code>node app.js</code> làm PID 1 trong container, app trở thành init.
+            Nó phải biết reap orphan. Nếu không, zombie có thể tích tụ. Cách giải quyết: dùng <code>tini</code> làm PID 1 hoặc <code>--init</code> flag của Docker.
+          </div>
+        </section>
+
+        <!-- 2.9 -->
+        <section id="observe">
+          <h2>2.9 Quan sát Process trên Linux/macOS</h2>
+
+          <h3>ps — snapshot</h3>
+          <pre data-lang="bash"><code>ps                    # process của shell hiện tại
+ps aux                # tất cả process, format BSD
+ps -ef                # format System V
+ps -ax -o pid,ppid,state,comm,%cpu,%mem    # custom columns
+
+# Tree view
+ps auxf                # Linux
+pstree -p              # tree với PID</code></pre>
+
+          <h3>top / htop — real-time</h3>
+          <pre data-lang="bash"><code>top                   # built-in
+htop                  # đẹp hơn, interactive (cần install)
+btop                  # modern alternative</code></pre>
+
+          <h3>/proc filesystem (Linux only) — kho báu</h3>
+          <pre data-lang="bash"><code>ls /proc/             # mỗi PID là 1 directory
+ls /proc/1/           # info của init
+cat /proc/1/status    # state, memory
+cat /proc/1/cmdline   # command line khi start
+cat /proc/1/maps      # memory regions
+ls /proc/1/fd/        # file descriptors</code></pre>
+
+          <h3>kill / killall</h3>
+          <pre data-lang="bash"><code>kill 1234              # gửi SIGTERM (15) — process tự cleanup
+kill -9 1234           # SIGKILL — force, không clean
+kill -STOP 1234        # tạm dừng
+kill -CONT 1234        # tiếp tục
+killall node           # kill tất cả process tên "node"
+pkill -f myapp.py      # kill bằng pattern command line</code></pre>
+        </section>
+
+        <!-- 2.10 -->
+        <section id="node">
+          <h2>2.10 Node.js child_process — tạo process trong JS</h2>
+
+          <pre data-lang="javascript"><code>const { spawn, exec, fork, execSync } = require('child_process');
+
+// 1. spawn — chạy command, stream stdout/stderr
+const ls = spawn('ls', ['-lh', '/tmp']);
+ls.stdout.on('data', (data) =&gt; {
+  console.log(data.toString());
+});
+ls.on('close', (code) =&gt; {
+  console.log(`exit code: ${code}`);
+});
+
+// 2. exec — chạy + buffer toàn bộ output (cẩn thận memory!)
+exec('ls /tmp', (err, stdout, stderr) =&gt; {
+  if (err) console.error(err);
+  console.log(stdout);
+});
+
+// 3. execSync — đồng bộ (block event loop, hạn chế dùng!)
+const result = execSync('date').toString();
+
+// 4. fork — chỉ cho Node child, có IPC channel
+const child = fork('./worker.js');
+child.send({ task: 'process_data' });
+child.on('message', (msg) =&gt; {
+  console.log('from child:', msg);
+});</code></pre>
+
+          <p>Trong worker.js:</p>
+          <pre data-lang="javascript"><code>process.on('message', (msg) =&gt; {
+  if (msg.task === 'process_data') {
+    // ... heavy work
+    process.send({ result: 'done' });
+  }
+});</code></pre>
+
+          <p>
+            <strong>fork</strong> của Node.js KHÔNG phải <code>fork()</code> syscall. Nó tạo Node process mới
+            (qua <code>execve</code>) và setup IPC channel để 2 process nói chuyện.
+          </p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Hello fork</div>
+            <p>Viết C program dùng <code>fork()</code> in "I am parent" / "I am child". Compile + chạy. Quan sát output.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Tạo zombie</div>
+            <p>Viết C program tạo zombie (parent fork rồi sleep, child exit ngay). Mở terminal khác chạy <code>ps -ax | grep Z</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Orphan và init</div>
+            <p>Tương tự nhưng cho parent exit trước. Quan sát PPID của child sau đó (nên là 1).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Mini shell</div>
+            <p>Viết C program đơn giản: đọc command từ stdin, fork + exec để chạy command đó, parent wait. Đây là bare-bones của bash.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Memory layout</div>
+            <p>Trên Linux, viết C program in địa chỉ của: 1 biến global, 1 biến local, kết quả <code>malloc</code>, function pointer.
+            Sắp xếp theo địa chỉ. Mỗi địa chỉ thuộc vùng nào (text/data/heap/stack)?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — child_process trong Node</div>
+            <p>Viết Node script dùng <code>spawn</code> chạy <code>ping google.com -c 5</code>, in từng line từ stdout với prefix timestamp.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Đếm zombie trong system</div>
+            <p>Lệnh nào liệt kê tất cả zombie trên máy? <code>ps aux | awk '$8 ~ /Z/'</code> hay tương tự.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 1.</strong> Sau <code>fork()</code>, parent và child có chia sẻ heap không?</p>
+              <ul class="quiz-options">
+                <li>Có, hai process dùng chung heap</li>
+                <li>Không — mỗi process có heap riêng (ban đầu chia sẻ qua Copy-on-Write nhưng tách nhau khi ghi)</li>
+                <li>Chỉ chia sẻ trên Linux, không trên macOS</li>
+                <li>Phụ thuộc vào kernel version</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Không chia sẻ.</strong> Mỗi process có address space riêng. CoW giúp fork nhanh nhưng về logic process vẫn cô lập memory.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 2.</strong> Khi <code>fork()</code> trả về 0, đó là code đang chạy ở đâu?</p>
+              <ul class="quiz-options">
+                <li>Lỗi xảy ra</li>
+                <li>Trong parent process</li>
+                <li>Trong child process</li>
+                <li>Trong kernel</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Trong child.</strong> Parent nhận PID con; child nhận 0; lỗi nhận -1.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> Zombie process là gì?</p>
+              <ul class="quiz-options">
+                <li>Process đã exit nhưng parent chưa gọi wait() để collect exit code</li>
+                <li>Process bị virus tấn công</li>
+                <li>Process chạy quá lâu</li>
+                <li>Process tự copy nhiều lần</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: đã exit nhưng chưa được wait.</strong> Kernel giữ PCB cho đến khi parent wait. Nếu parent buggy, zombie tích tụ.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> Sau khi parent exit trước child, child trở thành?</p>
+              <ul class="quiz-options">
+                <li>Zombie</li>
+                <li>Orphan — được re-parent về PID 1 (init/systemd)</li>
+                <li>Tự kill mình</li>
+                <li>Chuyển sang chế độ kernel</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Orphan, re-parent về init.</strong> init định kỳ wait() để dọn orphan, không tích tụ zombie.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Vùng nào của process tăng/giảm khi <code>malloc()</code> và <code>free()</code>?</p>
+              <ul class="quiz-options">
+                <li>Stack</li>
+                <li>Text</li>
+                <li>Heap</li>
+                <li>Data</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Heap.</strong> Stack cho local var; Heap cho dynamic alloc.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Tại sao <code>fork()</code> trên Linux nhanh dù process có nhiều GB memory?</p>
+              <ul class="quiz-options">
+                <li>Vì kernel chỉ copy 1 page</li>
+                <li>Vì child không thật sự có memory</li>
+                <li>Vì Copy-on-Write — chia sẻ page đến khi 1 bên ghi</li>
+                <li>Vì dùng RAM disk</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Copy-on-Write.</strong> Linux đánh dấu page read-only, copy thật chỉ khi 1 bên ghi. Pattern fork+exec không bao giờ phải copy.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 7.</strong> <code>execve()</code> làm gì?</p>
+              <ul class="quiz-options">
+                <li>Thay thế memory image của process hiện tại bằng program mới — cùng PID</li>
+                <li>Tạo process mới như fork</li>
+                <li>Kết thúc process</li>
+                <li>Đợi child</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: thay thế image.</strong> PID không đổi, code hoàn toàn khác. Pattern fork+exec là cách shell chạy command.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> Process trong trạng thái <code>D</code> (uninterruptible sleep) trên Linux nghĩa là?</p>
+              <ul class="quiz-options">
+                <li>Đã chết</li>
+                <li>Đang dùng CPU</li>
+                <li>Đang đợi I/O kernel-level (vd disk) — không thể bị kill bằng signal</li>
+                <li>Bị deadlock</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: đợi I/O không thể interrupt.</strong> Vì thế <code>kill -9</code> cũng vô tác dụng cho đến khi I/O xong. Hay gặp khi NFS hang.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 2</h2>
+          <ul>
+            <li>✅ Program (file tĩnh) ≠ Process (đang chạy có PCB)</li>
+            <li>✅ Memory layout: text, data, BSS, heap (↑), stack (↓)</li>
+            <li>✅ <strong>PCB</strong> chứa PID, state, registers, page table, fd table — kernel quản lý mỗi process</li>
+            <li>✅ 5 trạng thái: NEW → READY → RUNNING → BLOCKED → TERMINATED</li>
+            <li>✅ <code>fork()</code> trả 2 lần (parent: PID con; child: 0); Copy-on-Write làm fork nhanh</li>
+            <li>✅ <code>exec()</code> thay thế image, cùng PID. Pattern <strong>fork + exec</strong> là cách shell chạy command</li>
+            <li>✅ <strong>Zombie</strong>: child exit, parent chưa wait. <strong>Orphan</strong>: parent chết trước, re-parent về init</li>
+            <li>✅ Quan sát process: <code>ps</code>, <code>top</code>, <code>htop</code>, <code>/proc</code>, <code>kill</code></li>
+            <li>✅ Node.js: <code>spawn</code> (stream), <code>exec</code> (buffer), <code>fork</code> (IPC channel)</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong1.html">
+        <span class="label">← Chương trước</span>
+        Chương 01: Kernel &amp; Syscalls
+      </a>
+      <a href="chuong3.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 03: Thread →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">●</span> OS Mastery · Chương 02 · Process &amp; PCB
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

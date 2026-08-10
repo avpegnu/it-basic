@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6 — Async JavaScript: Callbacks, Promise, async/await · JavaScript Sub-pillar</title>
+  <meta name="description" content="Event loop, call stack, microtask vs macrotask, callback hell, Promise 3 states, chaining, Promise.all/allSettled/race/any, async/await, AbortController, sequential vs parallel — chương khó nhất JS." />
+  <meta name="theme-color" content="#c8961a" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-js">JS</span>
+        JavaScript · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 6</span>
+      </div>
+      <div class="chapter-num">Chương 06 · Async JavaScript</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Bất đồng bộ: Callbacks, Promise, async/await
+      </h1>
+      <p class="lead">
+        JavaScript chỉ có <strong>một thread</strong> nhưng vẫn handle được hàng ngàn request đồng thời — nhờ
+        <strong>event loop</strong>. Hiểu sâu cơ chế Call Stack, Web API, Microtask Queue và Macrotask Queue là chìa khoá
+        để viết code async <em>không bug và không block UI</em>. Đây là chương <strong>khó nhất</strong> của JavaScript.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1100 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-5</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu nghịch lý <strong>single-threaded + non-blocking</strong> của JS.</li>
+            <li>Vẽ và trace được <strong>event loop</strong> với Call Stack, Web API, Macrotask Q, Microtask Q.</li>
+            <li>Hiểu callback pattern, callback hell và <strong>inversion of control</strong>.</li>
+            <li>Master Promise 3 trạng thái, chaining, error propagation.</li>
+            <li>Phân biệt <code>Promise.all</code>, <code>allSettled</code>, <code>race</code>, <code>any</code>.</li>
+            <li>Viết async/await đúng — phân biệt <strong>sequential vs parallel</strong>.</li>
+            <li>Xử lý lỗi async đúng cách: <code>try/catch</code>, <code>.catch</code>, <code>unhandledrejection</code>.</li>
+            <li>Dùng <code>AbortController</code> để cancel async operation.</li>
+            <li>Hiểu vì sao <strong>async ≠ parallel</strong> — CPU-bound vẫn block.</li>
+          </ul>
+        </div>
+
+        <h2 id="paradox">1. Nghịch lý: Single-threaded nhưng Non-blocking</h2>
+
+        <p>
+          JavaScript được thiết kế năm 1995 để chạy trong trình duyệt — nơi UI thread chỉ có một. Nếu một đoạn code chiếm
+          thread quá lâu, cả trang web "đứng hình": không click được, không scroll được. Vì vậy JS quyết định:
+          <strong>không bao giờ block</strong>.
+        </p>
+
+        <p>Nhưng JS chỉ có <strong>một thread</strong> để chạy code. Vậy làm sao một server Node.js có thể handle 10000 connection cùng lúc?</p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — JS là người pha chế</div>
+          <p>
+            Tưởng tượng một quán cà phê chỉ có <strong>một nhân viên</strong> (JS thread). Khách đặt cappuccino — nhân
+            viên không đứng chờ máy espresso 30 giây. Thay vào đó: bấm máy, để đó, quay sang phục vụ khách tiếp theo.
+            Khi máy kêu "ting", nhân viên quay lại lấy cốc.
+          </p>
+          <p style="margin-top: 10px;">
+            Nhân viên = JS thread (single). Máy espresso = <strong>Web API</strong> (network, timer, file I/O) chạy <em>ngoài</em>
+            JS thread, thường được implement bằng C++ trong V8/Node. Tiếng "ting" = callback được đẩy vào queue. Việc quay
+            lại lấy cốc = event loop.
+          </p>
+        </div>
+
+        <p>
+          Bí mật: JS engine (V8, SpiderMonkey...) thực ra <em>chỉ chạy JS code</em>. Mọi tác vụ chậm (HTTP request,
+          <code>setTimeout</code>, đọc file) được <strong>delegate</strong> ra môi trường host (browser hoặc Node):
+        </p>
+
+        <ul>
+          <li><strong>Trình duyệt:</strong> Web APIs — DOM, <code>fetch</code>, <code>setTimeout</code>, <code>XMLHttpRequest</code>, <code>IndexedDB</code>...</li>
+          <li><strong>Node.js:</strong> libuv (C library) cung cấp thread pool cho file I/O, DNS, crypto + non-blocking I/O cho network.</li>
+        </ul>
+
+        <p>
+          JS thread chỉ làm 2 việc: (1) chạy code đồng bộ, (2) khi rảnh thì kéo callback từ queue ra chạy. Suốt thời gian
+          tác vụ chậm đang diễn ra <em>ngoài JS thread</em>, JS vẫn rảnh để xử lý code khác.
+        </p>
+
+        <h2 id="event-loop">2. Event Loop — trái tim của async JS</h2>
+
+        <p>Event loop là vòng lặp vô hạn, mỗi tick gồm 4 thành phần:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Call Stack</th>
+                <th>Web/Node API</th>
+                <th>Macrotask Queue</th>
+                <th>Microtask Queue</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Stack LIFO. Function nào đang chạy nằm trên đỉnh.</td>
+                <td>Môi trường host (browser/Node). Chạy ngoài JS thread.</td>
+                <td>FIFO. Chứa callback từ <code>setTimeout</code>, <code>setInterval</code>, I/O, UI event.</td>
+                <td>FIFO. Chứa callback từ <code>Promise.then</code>, <code>queueMicrotask</code>, <code>MutationObserver</code>.</td>
+              </tr>
+              <tr>
+                <td>Mỗi function call push 1 frame; return pop frame.</td>
+                <td>Timer đếm, network fetch, file read...</td>
+                <td>Khi API xong, push callback vào đây.</td>
+                <td>Priority cao hơn macrotask.</td>
+              </tr>
+              <tr>
+                <td>Stack rỗng = JS rảnh.</td>
+                <td>Hoàn thành → đẩy callback vào queue tương ứng.</td>
+                <td><strong>1 macrotask/tick</strong>.</td>
+                <td><strong>Drain toàn bộ</strong> trước macrotask kế.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><strong>Thuật toán event loop (mỗi tick):</strong></p>
+
+        <ol>
+          <li>Chờ Call Stack rỗng.</li>
+          <li><strong>Drain microtask queue hoàn toàn</strong> — chạy tất cả microtask hiện có, kể cả microtask mới được push trong lúc drain.</li>
+          <li>Lấy <strong>đúng 1</strong> macrotask từ macrotask queue, push vào stack, chạy đến khi stack rỗng.</li>
+          <li>Render UI (browser) nếu cần.</li>
+          <li>Lặp lại từ bước 1.</li>
+        </ol>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Quy tắc vàng</div>
+          <p>
+            Sau mỗi macrotask, <strong>tất cả microtask</strong> được drain trước macrotask kế. Đó là lý do
+            <code>Promise.then</code> luôn chạy <em>trước</em> <code>setTimeout(..., 0)</code> khi cả hai được schedule
+            cùng lúc.
+          </p>
+        </div>
+
+        <h3 id="trace">2.1. Trace chi tiết — từng tick</h3>
+
+        <p>Code sau:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Trace target</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'A'</span>);
+
+<span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'B'</span>), <span class="tok-num">0</span>);
+
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'C'</span>));
+
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'D'</span>);</code></pre>
+        </div>
+
+        <p>Trace state qua từng bước:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tick</th>
+                <th>Call Stack</th>
+                <th>Web API</th>
+                <th>Macrotask Q</th>
+                <th>Microtask Q</th>
+                <th>Output</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td><code>main, console.log('A')</code></td><td>—</td><td>—</td><td>—</td><td><code>A</code></td></tr>
+              <tr><td>2</td><td><code>main, setTimeout(...)</code></td><td>Timer 0ms</td><td>—</td><td>—</td><td>—</td></tr>
+              <tr><td>3</td><td><code>main, Promise.then(...)</code></td><td>Timer 0ms</td><td>—</td><td><code>cb-C</code></td><td>—</td></tr>
+              <tr><td>4</td><td><code>main, console.log('D')</code></td><td>Timer 0ms expire → push</td><td><code>cb-B</code></td><td><code>cb-C</code></td><td><code>D</code></td></tr>
+              <tr><td>5</td><td><em>rỗng</em></td><td>—</td><td><code>cb-B</code></td><td><code>cb-C</code></td><td>—</td></tr>
+              <tr><td>6</td><td><code>cb-C</code> (drain micro)</td><td>—</td><td><code>cb-B</code></td><td><em>rỗng</em></td><td><code>C</code></td></tr>
+              <tr><td>7</td><td><em>rỗng</em></td><td>—</td><td><code>cb-B</code></td><td><em>rỗng</em></td><td>—</td></tr>
+              <tr><td>8</td><td><code>cb-B</code> (1 macro)</td><td>—</td><td><em>rỗng</em></td><td><em>rỗng</em></td><td><code>B</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Kết quả output: <code>A, D, C, B</code>.</p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mnemonic</div>
+          <p>
+            "<strong>Sync trước, Micro sau, Macro cuối</strong>". Khi đọc code, tách thành 3 nhóm theo thứ tự thực thi:
+            (1) statement đồng bộ, (2) callback Promise/queueMicrotask, (3) callback setTimeout/setInterval/I/O.
+          </p>
+        </div>
+
+        <h2 id="callback">3. Callback pattern — cách cũ làm async</h2>
+
+        <p>
+          Trước khi có Promise (ES6), JS làm async bằng <strong>callback</strong>: truyền function vào API, API gọi lại
+          khi xong.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Callback cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// setTimeout là API callback đơn giản nhất</span>
+<span class="tok-fn">setTimeout</span>(() =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'1 giây sau'</span>);
+}, <span class="tok-num">1000</span>);
+
+<span class="tok-com">// Node.js style: error-first callback</span>
+fs.<span class="tok-fn">readFile</span>(<span class="tok-str">'data.txt'</span>, <span class="tok-str">'utf8'</span>, (err, data) =&gt; {
+  <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(err);
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(data);
+});</code></pre>
+        </div>
+
+        <h3 id="callback-hell">3.1. Callback hell — kim tự tháp doom</h3>
+
+        <p>Khi cần nhiều async tuần tự, callback lồng nhau thành "pyramid of doom":</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Callback hell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-fn">getUser</span>(userId, (err, user) =&gt; {
+  <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">handleError</span>(err);
+  <span class="tok-fn">getPosts</span>(user.id, (err, posts) =&gt; {
+    <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">handleError</span>(err);
+    <span class="tok-fn">getComments</span>(posts[<span class="tok-num">0</span>].id, (err, comments) =&gt; {
+      <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">handleError</span>(err);
+      <span class="tok-fn">getAuthor</span>(comments[<span class="tok-num">0</span>].authorId, (err, author) =&gt; {
+        <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">handleError</span>(err);
+        <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(author);
+        <span class="tok-com">// thụt vào sâu, error xử lý lặp lại, khó debug</span>
+      });
+    });
+  });
+});</code></pre>
+        </div>
+
+        <h3 id="ioc">3.2. Inversion of Control — vấn đề tin cậy</h3>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Inversion of Control</div>
+          <p>
+            Khi bạn truyền callback cho thư viện bên thứ 3, bạn <strong>đảo ngược quyền điều khiển</strong> — thư viện
+            quyết định khi nào gọi, gọi bao nhiêu lần, gọi với tham số gì.
+          </p>
+          <p style="margin-top: 8px;">Câu hỏi không trả lời được khi nhìn API callback:</p>
+          <ul>
+            <li>Callback được gọi <strong>0 lần</strong>? (lib quên gọi)</li>
+            <li>Callback gọi <strong>nhiều hơn 1 lần</strong>? (lib bug)</li>
+            <li>Callback gọi <strong>đồng bộ</strong> hay <strong>bất đồng bộ</strong>? (Zalgo problem)</li>
+            <li>Lỗi được pass dưới dạng nào? (err đầu, throw, hay return value?)</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            Promise giải quyết bằng cách <strong>chuẩn hoá</strong>: luôn chỉ resolve/reject đúng 1 lần, luôn async,
+            error theo 1 channel rõ ràng.
+          </p>
+        </div>
+
+        <h2 id="promise">4. Promise — 3 trạng thái</h2>
+
+        <p>
+          Promise là <strong>đối tượng đại diện cho giá trị chưa có</strong> ở thời điểm hiện tại nhưng sẽ có trong
+          tương lai. Có đúng 3 trạng thái và <em>không thể đảo ngược</em>:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Trạng thái</th><th>Ý nghĩa</th><th>Có thể chuyển sang</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Pending</strong></td><td>Mới tạo, chưa xong</td><td>Fulfilled hoặc Rejected</td></tr>
+              <tr><td><strong>Fulfilled</strong></td><td>Hoàn thành thành công với value</td><td>Không thể chuyển</td></tr>
+              <tr><td><strong>Rejected</strong></td><td>Thất bại với reason</td><td>Không thể chuyển</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Một Promise <strong>settled</strong> (đã chốt) khi đã Fulfilled hoặc Rejected — không bao giờ quay lại Pending.</p>
+
+        <h3 id="create-promise">4.1. Tạo Promise</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>new Promise(...)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> p = <span class="tok-kw">new</span> <span class="tok-cls">Promise</span>((resolve, reject) =&gt; {
+  <span class="tok-com">// Đây là "executor" — chạy đồng bộ ngay lập tức</span>
+  <span class="tok-fn">setTimeout</span>(() =&gt; {
+    <span class="tok-kw">const</span> ok = <span class="tok-cls">Math</span>.<span class="tok-fn">random</span>() &gt; <span class="tok-num">0.5</span>;
+    <span class="tok-kw">if</span> (ok) <span class="tok-fn">resolve</span>(<span class="tok-num">42</span>);            <span class="tok-com">// → Fulfilled với value 42</span>
+    <span class="tok-kw">else</span>   <span class="tok-fn">reject</span>(<span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'Hỏng'</span>));  <span class="tok-com">// → Rejected với reason</span>
+  }, <span class="tok-num">1000</span>);
+});
+
+<span class="tok-com">// Helper tạo sẵn:</span>
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>(<span class="tok-num">42</span>);              <span class="tok-com">// Fulfilled ngay với 42</span>
+<span class="tok-cls">Promise</span>.<span class="tok-fn">reject</span>(<span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'x'</span>));  <span class="tok-com">// Rejected ngay</span></code></pre>
+        </div>
+
+        <h3 id="consume-promise">4.2. Consume bằng <code>.then</code> / <code>.catch</code> / <code>.finally</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Consume Promise</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>p.<span class="tok-fn">then</span>(
+  (value) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'OK:'</span>, value),  <span class="tok-com">// onFulfilled</span>
+  (reason) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Lỗi:'</span>, reason) <span class="tok-com">// onRejected</span>
+);
+
+<span class="tok-com">// Dạng phổ biến hơn: tách then/catch</span>
+p
+  .<span class="tok-fn">then</span>((value) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'OK:'</span>, value))
+  .<span class="tok-fn">catch</span>((reason) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Lỗi:'</span>, reason))
+  .<span class="tok-fn">finally</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Xong, dù OK hay lỗi'</span>));</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Callback của <code>.then</code> luôn async</div>
+          <p>
+            Kể cả khi gọi <code>.then</code> trên một Promise đã Fulfilled, callback <strong>không chạy đồng bộ ngay</strong> —
+            nó được đẩy vào <em>microtask queue</em> và chạy ở cuối tick. Đây là một bảo đảm của spec, tránh Zalgo problem.
+          </p>
+        </div>
+
+        <h2 id="chaining">5. Promise chaining — phá vỡ kim tự tháp</h2>
+
+        <p>
+          <code>.then()</code> luôn trả về <strong>một Promise mới</strong>. Giá trị return trong callback <em>then</em>
+          trở thành value của Promise tiếp theo. Nếu return Promise, chain sẽ <strong>auto-flatten</strong> — chờ Promise
+          đó settle trước khi tiếp tục.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Promise chain — phá callback hell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-fn">getUser</span>(userId)
+  .<span class="tok-fn">then</span>(user =&gt; <span class="tok-fn">getPosts</span>(user.id))          <span class="tok-com">// return Promise → flatten</span>
+  .<span class="tok-fn">then</span>(posts =&gt; <span class="tok-fn">getComments</span>(posts[<span class="tok-num">0</span>].id))
+  .<span class="tok-fn">then</span>(comments =&gt; <span class="tok-fn">getAuthor</span>(comments[<span class="tok-num">0</span>].authorId))
+  .<span class="tok-fn">then</span>(author =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(author))
+  .<span class="tok-fn">catch</span>(<span class="tok-fn">handleError</span>);  <span class="tok-com">// 1 catch bắt mọi lỗi trong chain</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — chain</div>
+          <p>
+            Mỗi <code>.then</code> là một "trạm chuyển tiếp". Value đi vào, xử lý, value mới đi ra. Nếu return một
+            Promise, trạm sẽ "đợi" Promise đó settle rồi mới pass value cho trạm kế. Lỗi ở bất kỳ trạm nào sẽ "skip" hết
+            các trạm <code>.then</code> và rớt vào <code>.catch</code> gần nhất.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Quy tắc return trong .then</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// 1. Return value thường → Promise.resolve(value)</span>
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>(<span class="tok-num">1</span>)
+  .<span class="tok-fn">then</span>(x =&gt; x + <span class="tok-num">1</span>)        <span class="tok-com">// → Promise&lt;2&gt;</span>
+  .<span class="tok-fn">then</span>(x =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x));  <span class="tok-com">// 2</span>
+
+<span class="tok-com">// 2. Return Promise → auto flatten</span>
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>(<span class="tok-num">1</span>)
+  .<span class="tok-fn">then</span>(x =&gt; <span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>(x + <span class="tok-num">10</span>))
+  .<span class="tok-fn">then</span>(x =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x));  <span class="tok-com">// 11</span>
+
+<span class="tok-com">// 3. Throw trong then → next .catch</span>
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>(<span class="tok-num">1</span>)
+  .<span class="tok-fn">then</span>(() =&gt; { <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'oops'</span>); })
+  .<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'skip'</span>))    <span class="tok-com">// bỏ qua</span>
+  .<span class="tok-fn">catch</span>(err =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(err.message));  <span class="tok-com">// 'oops'</span></code></pre>
+        </div>
+
+        <h2 id="combinators">6. Promise combinators — chạy nhiều Promise</h2>
+
+        <p>4 hàm tĩnh của <code>Promise</code> để kết hợp nhiều Promise:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hàm</th>
+                <th>Input</th>
+                <th>Output</th>
+                <th>Khi 1 cái reject</th>
+                <th>Khi tất cả reject</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Promise.all</code></td>
+                <td>Array Promise</td>
+                <td>Array value (cùng thứ tự)</td>
+                <td><strong>Short-circuit reject</strong> ngay</td>
+                <td>Reject lỗi đầu tiên</td>
+              </tr>
+              <tr>
+                <td><code>Promise.allSettled</code></td>
+                <td>Array Promise</td>
+                <td>Array <code>{status, value}</code> hoặc <code>{status, reason}</code></td>
+                <td>Chờ tất cả, vẫn settled</td>
+                <td>Chờ tất cả, vẫn settled</td>
+              </tr>
+              <tr>
+                <td><code>Promise.race</code></td>
+                <td>Array Promise</td>
+                <td>Value/reason của <strong>cái settle đầu tiên</strong></td>
+                <td>Reject nếu cái đó là reject</td>
+                <td>Reject (cái đầu)</td>
+              </tr>
+              <tr>
+                <td><code>Promise.any</code></td>
+                <td>Array Promise</td>
+                <td>Value của <strong>cái resolve đầu tiên</strong></td>
+                <td>Bỏ qua, chờ resolve</td>
+                <td>Reject <code>AggregateError</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="promise-all">6.1. <code>Promise.all</code> — "tất cả phải xong"</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Promise.all</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> [user, posts, settings] = <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">all</span>([
+  <span class="tok-fn">fetchUser</span>(id),
+  <span class="tok-fn">fetchPosts</span>(id),
+  <span class="tok-fn">fetchSettings</span>(id),
+]);
+<span class="tok-com">// 3 request chạy song song, kết quả theo đúng thứ tự</span>
+
+<span class="tok-com">// Cảnh báo: 1 lỗi → all reject, kết quả 2 cái kia bị mất</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">all</span>([<span class="tok-fn">ok1</span>(), <span class="tok-fn">fail</span>(), <span class="tok-fn">ok2</span>()]);
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(e);  <span class="tok-com">// chỉ thấy lỗi của fail(), không biết ok1/ok2</span>
+}</code></pre>
+        </div>
+
+        <h3 id="promise-allsettled">6.2. <code>Promise.allSettled</code> — "biết hết, dù tốt xấu"</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Promise.allSettled</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> results = <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">allSettled</span>([
+  <span class="tok-fn">fetchUser</span>(id),
+  <span class="tok-fn">fetchPosts</span>(id),
+  <span class="tok-fn">fetchSettings</span>(id),
+]);
+
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> r <span class="tok-kw">of</span> results) {
+  <span class="tok-kw">if</span> (r.status === <span class="tok-str">'fulfilled'</span>) <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'OK:'</span>, r.value);
+  <span class="tok-kw">else</span>                            <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Lỗi:'</span>, r.reason);
+}
+<span class="tok-com">// Hữu ích cho: dashboard có nhiều widget độc lập,</span>
+<span class="tok-com">// 1 widget lỗi không nên làm sập cả page.</span></code></pre>
+        </div>
+
+        <h3 id="promise-race-any">6.3. <code>Promise.race</code> và <code>Promise.any</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>race vs any</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// race: cái nào settle đầu (resolve hay reject) → kết quả đó</span>
+<span class="tok-kw">const</span> result = <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">race</span>([
+  <span class="tok-fn">fetchData</span>(),
+  <span class="tok-kw">new</span> <span class="tok-cls">Promise</span>((_, rej) =&gt; <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-fn">rej</span>(<span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'timeout'</span>)), <span class="tok-num">3000</span>)),
+]);
+<span class="tok-com">// Pattern timeout: cái nào nhanh hơn thắng</span>
+
+<span class="tok-com">// any: cái nào resolve đầu (bỏ qua reject)</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">const</span> winner = <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">any</span>([
+    <span class="tok-fn">fetch</span>(<span class="tok-str">'https://mirror1.example/data'</span>),
+    <span class="tok-fn">fetch</span>(<span class="tok-str">'https://mirror2.example/data'</span>),
+    <span class="tok-fn">fetch</span>(<span class="tok-str">'https://mirror3.example/data'</span>),
+  ]);
+  <span class="tok-com">// Lấy mirror nào trả lời thành công đầu tiên</span>
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-com">// AggregateError nếu TẤT CẢ đều reject</span>
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(e.errors);
+}</code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 Khi nào chọn cái nào</div>
+          <ul>
+            <li><strong>all</strong>: cần tất cả thành công (vd: load đủ data trước khi render).</li>
+            <li><strong>allSettled</strong>: muốn biết hết kết quả, không quan tâm fail (vd: dashboard nhiều widget).</li>
+            <li><strong>race</strong>: lấy cái nhanh nhất (timeout, fastest mirror).</li>
+            <li><strong>any</strong>: chỉ cần 1 cái resolve (failover, redundant request).</li>
+          </ul>
+        </div>
+
+        <h2 id="async-await">7. async/await — đường cú pháp ngọt</h2>
+
+        <p>
+          <code>async/await</code> (ES2017) là <strong>syntactic sugar</strong> trên Promise. Cho phép viết code async
+          trông giống code đồng bộ — đọc và debug dễ hơn rất nhiều.
+        </p>
+
+        <p>2 quy tắc cốt lõi:</p>
+
+        <ol>
+          <li><code>async function</code> <strong>luôn trả về một Promise</strong>. Return value bình thường → Promise resolve. Throw → Promise reject.</li>
+          <li><code>await</code> chỉ dùng <strong>trong <code>async function</code></strong> (hoặc top-level module). <code>await promise</code> tạm dừng function, đợi Promise settle, rồi tiếp tục.</li>
+        </ol>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>async/await cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">loadProfile</span>(userId) {
+  <span class="tok-kw">const</span> user = <span class="tok-kw">await</span> <span class="tok-fn">fetchUser</span>(userId);
+  <span class="tok-kw">const</span> posts = <span class="tok-kw">await</span> <span class="tok-fn">fetchPosts</span>(user.id);
+  <span class="tok-kw">const</span> author = <span class="tok-kw">await</span> <span class="tok-fn">fetchAuthor</span>(posts[<span class="tok-num">0</span>].authorId);
+  <span class="tok-kw">return</span> author;
+}
+
+<span class="tok-com">// Tương đương Promise chain:</span>
+<span class="tok-kw">function</span> <span class="tok-fn">loadProfile</span>(userId) {
+  <span class="tok-kw">return</span> <span class="tok-fn">fetchUser</span>(userId)
+    .<span class="tok-fn">then</span>(user =&gt; <span class="tok-fn">fetchPosts</span>(user.id))
+    .<span class="tok-fn">then</span>(posts =&gt; <span class="tok-fn">fetchAuthor</span>(posts[<span class="tok-num">0</span>].authorId));
+}
+
+<span class="tok-com">// Async function trả Promise:</span>
+<span class="tok-fn">loadProfile</span>(<span class="tok-num">1</span>).<span class="tok-fn">then</span>(<span class="tok-kw">console</span>.log);  <span class="tok-com">// vẫn dùng .then được</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 async function luôn trả Promise</div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">foo</span>() { <span class="tok-kw">return</span> <span class="tok-num">1</span>; }
+<span class="tok-fn">foo</span>();              <span class="tok-com">// Promise&lt;1&gt;, KHÔNG phải 1</span>
+<span class="tok-kw">await</span> <span class="tok-fn">foo</span>();        <span class="tok-com">// 1 (cần ở trong async hoặc top-level module)</span>
+
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">bar</span>() { <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'x'</span>); }
+<span class="tok-fn">bar</span>();              <span class="tok-com">// Promise rejected với Error('x')</span></code></pre>
+        </div>
+
+        <h2 id="sequential-parallel">8. Sequential vs Parallel — bẫy hiệu năng</h2>
+
+        <p>Đây là lỗi <strong>cực kỳ phổ biến</strong> của developer mới dùng <code>async/await</code>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Sequential — CHẬM</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Mỗi await dừng function. 3 request chạy NỐI TIẾP nhau.</span>
+<span class="tok-com">// Tổng thời gian = sum(t1, t2, t3) ≈ 3 giây nếu mỗi cái 1 giây.</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">loadAll</span>() {
+  <span class="tok-kw">const</span> a = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url1);
+  <span class="tok-kw">const</span> b = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url2);
+  <span class="tok-kw">const</span> c = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url3);
+  <span class="tok-kw">return</span> [a, b, c];
+}</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Parallel — NHANH</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Khởi tạo 3 Promise NGAY, rồi await Promise.all.</span>
+<span class="tok-com">// Tổng thời gian = max(t1, t2, t3) ≈ 1 giây.</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">loadAll</span>() {
+  <span class="tok-kw">const</span> [a, b, c] = <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">all</span>([
+    <span class="tok-fn">fetch</span>(url1),
+    <span class="tok-fn">fetch</span>(url2),
+    <span class="tok-fn">fetch</span>(url3),
+  ]);
+  <span class="tok-kw">return</span> [a, b, c];
+}
+
+<span class="tok-com">// Hoặc cách viết khác — cũng song song:</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">loadAll2</span>() {
+  <span class="tok-kw">const</span> pa = <span class="tok-fn">fetch</span>(url1);  <span class="tok-com">// kick off ngay</span>
+  <span class="tok-kw">const</span> pb = <span class="tok-fn">fetch</span>(url2);
+  <span class="tok-kw">const</span> pc = <span class="tok-fn">fetch</span>(url3);
+  <span class="tok-kw">return</span> [<span class="tok-kw">await</span> pa, <span class="tok-kw">await</span> pb, <span class="tok-kw">await</span> pc];
+}</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>for...of</code> + await là tuần tự</div>
+<pre><code><span class="tok-com">// CHẬM — chạy lần lượt từng URL</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> url <span class="tok-kw">of</span> urls) {
+  <span class="tok-kw">const</span> data = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url);
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(data);
+}
+
+<span class="tok-com">// NHANH — song song toàn bộ</span>
+<span class="tok-kw">const</span> all = <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">all</span>(urls.<span class="tok-fn">map</span>(<span class="tok-fn">fetch</span>));
+all.<span class="tok-fn">forEach</span>(d =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(d));</code></pre>
+            <p style="margin-top: 8px;">
+              Khi nào cần <em>sequential</em> thực sự? Khi mỗi bước phụ thuộc kết quả bước trước, hoặc khi cần rate-limit
+              để không spam server. Khi <em>không phụ thuộc</em> — dùng <code>Promise.all</code>.
+            </p>
+          </div>
+
+        <h2 id="error-handling">9. Error handling — bẫy phổ biến</h2>
+
+        <p>3 cách xử lý lỗi async:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>try/catch quanh await</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">main</span>() {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">const</span> data = <span class="tok-kw">await</span> <span class="tok-fn">fetchData</span>();
+    <span class="tok-kw">return</span> data;
+  } <span class="tok-kw">catch</span> (err) {
+    <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Lỗi:'</span>, err);
+    <span class="tok-kw">return</span> <span class="tok-kw">null</span>;
+  } <span class="tok-kw">finally</span> {
+    <span class="tok-fn">cleanup</span>();
+  }
+}</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>.catch trên Promise</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-fn">fetchData</span>()
+  .<span class="tok-fn">then</span>(data =&gt; <span class="tok-fn">render</span>(data))
+  .<span class="tok-fn">catch</span>(err =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(err));
+
+<span class="tok-com">// Tip: gắn .catch ở cuối mọi chain để bắt lỗi propagate</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>try/catch</code> KHÔNG bắt lỗi trong setTimeout</div>
+<pre><code><span class="tok-kw">try</span> {
+  <span class="tok-fn">setTimeout</span>(() =&gt; {
+    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'oops'</span>);
+  }, <span class="tok-num">0</span>);
+} <span class="tok-kw">catch</span> (e) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'KHÔNG chạy'</span>);  <span class="tok-com">// catch không bắt được</span>
+}</code></pre>
+            <p style="margin-top: 8px;">
+              Vì callback của <code>setTimeout</code> chạy ở <strong>tick khác</strong>, lúc đó stack đã không còn frame
+              <code>try</code> bao quanh. Cách xử lý: <code>try/catch</code> ngay <em>bên trong</em> callback, hoặc wrap
+              setTimeout thành Promise.
+            </p>
+<pre><code><span class="tok-com">// Đúng: try/catch bên trong callback</span>
+<span class="tok-fn">setTimeout</span>(() =&gt; {
+  <span class="tok-kw">try</span> { <span class="tok-fn">doRisky</span>(); }
+  <span class="tok-kw">catch</span> (e) { <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(e); }
+}, <span class="tok-num">0</span>);</code></pre>
+          </div>
+
+        <h3 id="unhandled-rejection">9.1. Unhandled rejection</h3>
+
+        <p>Promise reject mà không có <code>.catch</code> → unhandled rejection. Trong Node.js (v15+), mặc định <strong>crash process</strong>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Bắt unhandled rejection</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Browser</span>
+<span class="tok-kw">window</span>.<span class="tok-fn">addEventListener</span>(<span class="tok-str">'unhandledrejection'</span>, event =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Unhandled:'</span>, event.reason);
+  event.<span class="tok-fn">preventDefault</span>();  <span class="tok-com">// tránh log mặc định</span>
+});
+
+<span class="tok-com">// Node.js</span>
+process.<span class="tok-fn">on</span>(<span class="tok-str">'unhandledRejection'</span>, (reason, promise) =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(<span class="tok-str">'Unhandled:'</span>, reason);
+});</code></pre>
+        </div>
+
+        <h2 id="abort-controller">10. AbortController — cancel async</h2>
+
+        <p>
+          Promise không có cơ chế cancel built-in. <code>AbortController</code> (ES2017+, hỗ trợ rộng từ 2019) là
+          standard cho cancel: tạo controller, lấy <code>signal</code> truyền vào API, gọi <code>abort()</code> khi cần
+          dừng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>AbortController với fetch</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> controller = <span class="tok-kw">new</span> <span class="tok-cls">AbortController</span>();
+<span class="tok-kw">const</span> { signal } = controller;
+
+<span class="tok-fn">fetch</span>(<span class="tok-str">'https://example.com/big-file'</span>, { signal })
+  .<span class="tok-fn">then</span>(r =&gt; r.<span class="tok-fn">json</span>())
+  .<span class="tok-fn">then</span>(<span class="tok-kw">console</span>.log)
+  .<span class="tok-fn">catch</span>(err =&gt; {
+    <span class="tok-kw">if</span> (err.name === <span class="tok-str">'AbortError'</span>) {
+      <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Đã huỷ'</span>);
+    } <span class="tok-kw">else</span> {
+      <span class="tok-kw">console</span>.<span class="tok-fn">error</span>(err);
+    }
+  });
+
+<span class="tok-com">// 5 giây sau: huỷ</span>
+<span class="tok-fn">setTimeout</span>(() =&gt; controller.<span class="tok-fn">abort</span>(), <span class="tok-num">5000</span>);</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pattern timeout + abort</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">fetchWithTimeout</span>(url, ms) {
+  <span class="tok-kw">const</span> ctrl = <span class="tok-kw">new</span> <span class="tok-cls">AbortController</span>();
+  <span class="tok-kw">const</span> timer = <span class="tok-fn">setTimeout</span>(() =&gt; ctrl.<span class="tok-fn">abort</span>(), ms);
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">const</span> res = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url, { signal: ctrl.signal });
+    <span class="tok-kw">return</span> <span class="tok-kw">await</span> res.<span class="tok-fn">json</span>();
+  } <span class="tok-kw">finally</span> {
+    <span class="tok-fn">clearTimeout</span>(timer);
+  }
+}
+
+<span class="tok-com">// ES2022: AbortSignal.timeout(ms) làm gọn hơn nữa</span>
+<span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url, { signal: <span class="tok-cls">AbortSignal</span>.<span class="tok-fn">timeout</span>(<span class="tok-num">5000</span>) });</code></pre>
+        </div>
+
+        <h2 id="micro-vs-macro">11. Microtask vs Macrotask — trace cụ thể</h2>
+
+        <p>Quy tắc đã nêu: <strong>microtask drain hết</strong> trước khi pick 1 macrotask. Ví dụ minh hoạ:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Thứ tự interleave</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'1'</span>);
+
+<span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'2'</span>), <span class="tok-num">0</span>);
+
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'3'</span>);
+  <span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'4'</span>));
+});
+
+<span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'5'</span>), <span class="tok-num">0</span>);
+
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'6'</span>));
+
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'7'</span>);
+
+<span class="tok-com">// Output: 1, 7, 3, 6, 4, 2, 5</span></code></pre>
+        </div>
+
+        <p>Giải thích:</p>
+
+        <ol>
+          <li>Đồng bộ chạy hết: <code>1, 7</code>.</li>
+          <li>Drain micro queue. Queue có <code>[then-3, then-6]</code>. Chạy <code>3</code> — schedule thêm <code>then-4</code> vào queue. Tiếp tục drain: <code>6</code>, rồi <code>4</code>.</li>
+          <li>Pick 1 macrotask: <code>2</code>. Drain micro (rỗng). Pick tiếp: <code>5</code>.</li>
+        </ol>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Microtask "starvation"</div>
+          <p>
+            Nếu một microtask schedule thêm microtask, và microtask đó schedule thêm... → macrotask <strong>không bao
+            giờ được chạy</strong>. Trong browser, UI sẽ đóng băng vì render là sau macrotask. Tránh recurse vô tận trong
+            Promise.then.
+          </p>
+        </div>
+
+        <h2 id="async-not-parallel">12. async ≠ parallel — CPU-bound vẫn block</h2>
+
+        <p>
+          <strong>async chỉ "có thể await"</strong>. Nó không tự chạy song song. Khi function async không gặp
+          <code>await</code>, nó chạy đồng bộ y như function thường. Quan trọng nhất:
+          <strong>CPU-bound code vẫn block thread</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>CPU-bound trong async vẫn block</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">heavy</span>() {
+  <span class="tok-kw">let</span> sum = <span class="tok-num">0</span>;
+  <span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">1e10</span>; i++) sum += i;  <span class="tok-com">// block 10+ giây</span>
+  <span class="tok-kw">return</span> sum;
+}
+
+<span class="tok-com">// Gọi heavy() trong browser → UI freeze hoàn toàn.</span>
+<span class="tok-com">// async KHÔNG biến CPU-bound thành non-blocking.</span></code></pre>
+        </div>
+
+        <p>
+          Để chạy CPU-bound thật sự song song, cần <strong>Web Worker</strong> (browser) hoặc <strong>Worker Threads</strong>
+          (Node.js) — chạy code trên thread riêng, giao tiếp qua <code>postMessage</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Web Worker (browser)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// main.js</span>
+<span class="tok-kw">const</span> worker = <span class="tok-kw">new</span> <span class="tok-cls">Worker</span>(<span class="tok-str">'./heavy-worker.js'</span>);
+worker.<span class="tok-fn">postMessage</span>({ start: <span class="tok-num">0</span>, end: <span class="tok-num">1e10</span> });
+worker.<span class="tok-fn">onmessage</span> = (e) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'kết quả'</span>, e.data);
+
+<span class="tok-com">// heavy-worker.js — chạy trên thread riêng</span>
+<span class="tok-fn">onmessage</span> = (e) =&gt; {
+  <span class="tok-kw">let</span> sum = <span class="tok-num">0</span>;
+  <span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = e.data.start; i &lt; e.data.end; i++) sum += i;
+  <span class="tok-fn">postMessage</span>(sum);
+};</code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 async vs threading</div>
+          <ul>
+            <li><strong>async</strong>: I/O không block (network, file). 1 thread đủ vì I/O chạy ở host.</li>
+            <li><strong>Web Worker / Worker Threads</strong>: thread thật, song song CPU-bound.</li>
+            <li><strong>Cluster (Node)</strong>: nhiều process, mỗi process là 1 V8 instance, share port qua master.</li>
+          </ul>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — <code>delay(ms)</code></h4>
+            <div class="exercise-body">
+              <p>Viết function <code>delay(ms)</code> trả Promise resolve sau <code>ms</code> mili giây. Dùng để pause trong async function.</p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">demo</span>() {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'start'</span>);
+  <span class="tok-kw">await</span> <span class="tok-fn">delay</span>(<span class="tok-num">1000</span>);
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'1s later'</span>);
+}</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">delay</span>(ms) {
+  <span class="tok-kw">return</span> <span class="tok-kw">new</span> <span class="tok-cls">Promise</span>(resolve =&gt; <span class="tok-fn">setTimeout</span>(resolve, ms));
+}</code></pre>
+                  <p>Đây là một trong những helper được dùng <strong>nhiều nhất</strong>. Promise resolve không cần value cũng OK — caller chỉ quan tâm <em>khi nào</em>.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — <code>fetchWithTimeout(url, ms)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết hàm fetch nhưng có timeout: nếu sau <code>ms</code> mili giây mà chưa có response, reject với
+                <code>Error('timeout')</code>. Yêu cầu thực sự huỷ request (không chỉ "bỏ qua kết quả").
+              </p>
+              <details class="exercise-hint">
+                <summary>2 cách giải</summary>
+                <div class="hint-content">
+                  <p>Cách 1 — dùng <code>Promise.race</code> (không huỷ thật):</p>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">fetchWithTimeout</span>(url, ms) {
+  <span class="tok-kw">return</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">race</span>([
+    <span class="tok-fn">fetch</span>(url),
+    <span class="tok-kw">new</span> <span class="tok-cls">Promise</span>((_, rej) =&gt;
+      <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-fn">rej</span>(<span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'timeout'</span>)), ms)
+    ),
+  ]);
+}</code></pre>
+                  <p>Cách 2 — dùng <code>AbortController</code> (huỷ thật):</p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">fetchWithTimeout</span>(url, ms) {
+  <span class="tok-kw">const</span> ctrl = <span class="tok-kw">new</span> <span class="tok-cls">AbortController</span>();
+  <span class="tok-kw">const</span> t = <span class="tok-fn">setTimeout</span>(() =&gt; ctrl.<span class="tok-fn">abort</span>(), ms);
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">return</span> <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url, { signal: ctrl.signal });
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-kw">if</span> (e.name === <span class="tok-str">'AbortError'</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-cls">Error</span>(<span class="tok-str">'timeout'</span>);
+    <span class="tok-kw">throw</span> e;
+  } <span class="tok-kw">finally</span> {
+    <span class="tok-fn">clearTimeout</span>(t);
+  }
+}</code></pre>
+                  <p>Cách 2 tốt hơn vì <strong>giải phóng tài nguyên</strong> server-side ngay khi timeout.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — <code>parallelLimit(tasks, limit)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Cho mảng <code>tasks</code> các async function (mỗi cái không có tham số, return Promise). Chạy chúng
+                song song nhưng <strong>không quá <code>limit</code> cái cùng lúc</strong>. Trả về mảng kết quả đúng thứ tự.
+              </p>
+<pre><code><span class="tok-kw">const</span> tasks = urls.<span class="tok-fn">map</span>(u =&gt; () =&gt; <span class="tok-fn">fetch</span>(u));
+<span class="tok-kw">const</span> results = <span class="tok-kw">await</span> <span class="tok-fn">parallelLimit</span>(tasks, <span class="tok-num">5</span>);</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">parallelLimit</span>(tasks, limit) {
+  <span class="tok-kw">const</span> results = <span class="tok-kw">new</span> <span class="tok-cls">Array</span>(tasks.length);
+  <span class="tok-kw">let</span> next = <span class="tok-num">0</span>;
+  <span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">worker</span>() {
+    <span class="tok-kw">while</span> (next &lt; tasks.length) {
+      <span class="tok-kw">const</span> i = next++;
+      results[i] = <span class="tok-kw">await</span> <span class="tok-fn">tasks</span>[i]();
+    }
+  }
+  <span class="tok-kw">const</span> workers = <span class="tok-cls">Array</span>.<span class="tok-fn">from</span>({ length: <span class="tok-cls">Math</span>.<span class="tok-fn">min</span>(limit, tasks.length) }, worker);
+  <span class="tok-kw">await</span> <span class="tok-cls">Promise</span>.<span class="tok-fn">all</span>(workers.<span class="tok-fn">map</span>(w =&gt; <span class="tok-fn">w</span>()));
+  <span class="tok-kw">return</span> results;
+}</code></pre>
+                  <p>
+                    Pattern: tạo <code>limit</code> worker, mỗi worker tự pick task tiếp theo từ chỉ số chung <code>next</code>.
+                    Khi tasks rỗng, worker exit. <code>Promise.all</code> chờ tất cả worker kết thúc.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Refactor callback hell</h4>
+            <div class="exercise-body">
+              <p>Đoạn callback 4 tầng sau, refactor sang (a) Promise chain và (b) async/await:</p>
+<pre><code><span class="tok-fn">getUser</span>(<span class="tok-num">1</span>, (err, u) =&gt; {
+  <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">cb</span>(err);
+  <span class="tok-fn">getPosts</span>(u.id, (err, ps) =&gt; {
+    <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">cb</span>(err);
+    <span class="tok-fn">getComments</span>(ps[<span class="tok-num">0</span>].id, (err, cs) =&gt; {
+      <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">cb</span>(err);
+      <span class="tok-fn">getAuthor</span>(cs[<span class="tok-num">0</span>].authorId, (err, a) =&gt; {
+        <span class="tok-kw">if</span> (err) <span class="tok-kw">return</span> <span class="tok-fn">cb</span>(err);
+        <span class="tok-fn">cb</span>(<span class="tok-kw">null</span>, a);
+      });
+    });
+  });
+});</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+                  <p>Bước 1: promisify các function callback (Node.js có <code>util.promisify</code>):</p>
+<pre><code><span class="tok-kw">const</span> { promisify } = <span class="tok-fn">require</span>(<span class="tok-str">'util'</span>);
+<span class="tok-kw">const</span> pGetUser     = <span class="tok-fn">promisify</span>(getUser);
+<span class="tok-kw">const</span> pGetPosts    = <span class="tok-fn">promisify</span>(getPosts);
+<span class="tok-kw">const</span> pGetComments = <span class="tok-fn">promisify</span>(getComments);
+<span class="tok-kw">const</span> pGetAuthor   = <span class="tok-fn">promisify</span>(getAuthor);</code></pre>
+                  <p>(a) Promise chain:</p>
+<pre><code><span class="tok-fn">pGetUser</span>(<span class="tok-num">1</span>)
+  .<span class="tok-fn">then</span>(u =&gt; <span class="tok-fn">pGetPosts</span>(u.id))
+  .<span class="tok-fn">then</span>(ps =&gt; <span class="tok-fn">pGetComments</span>(ps[<span class="tok-num">0</span>].id))
+  .<span class="tok-fn">then</span>(cs =&gt; <span class="tok-fn">pGetAuthor</span>(cs[<span class="tok-num">0</span>].authorId))
+  .<span class="tok-fn">then</span>(a =&gt; <span class="tok-fn">cb</span>(<span class="tok-kw">null</span>, a))
+  .<span class="tok-fn">catch</span>(cb);</code></pre>
+                  <p>(b) async/await:</p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">run</span>() {
+  <span class="tok-kw">const</span> u  = <span class="tok-kw">await</span> <span class="tok-fn">pGetUser</span>(<span class="tok-num">1</span>);
+  <span class="tok-kw">const</span> ps = <span class="tok-kw">await</span> <span class="tok-fn">pGetPosts</span>(u.id);
+  <span class="tok-kw">const</span> cs = <span class="tok-kw">await</span> <span class="tok-fn">pGetComments</span>(ps[<span class="tok-num">0</span>].id);
+  <span class="tok-kw">const</span> a  = <span class="tok-kw">await</span> <span class="tok-fn">pGetAuthor</span>(cs[<span class="tok-num">0</span>].authorId);
+  <span class="tok-kw">return</span> a;
+}</code></pre>
+                  <p>So sánh: callback 14 dòng nested, Promise 6 dòng phẳng, async/await 5 dòng tự nhiên như đồng bộ. Error handling: 4 lần lặp <code>if (err)</code> giảm còn 1 <code>catch</code>.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Trace thứ tự log</h4>
+            <div class="exercise-body">
+              <p>Không chạy, đoán output:</p>
+<pre><code><span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'A'</span>);
+
+<span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'B'</span>), <span class="tok-num">0</span>);
+
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'C'</span>);
+  <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'D'</span>), <span class="tok-num">0</span>);
+});
+
+<span class="tok-fn">setTimeout</span>(() =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'E'</span>);
+  <span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'F'</span>));
+}, <span class="tok-num">0</span>);
+
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'G'</span>));
+
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'H'</span>);</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án + giải thích</summary>
+                <div class="hint-content">
+                  <p>Output: <code>A, H, C, G, B, E, F, D</code>.</p>
+                  <ul>
+                    <li>Sync: <code>A, H</code>.</li>
+                    <li>Drain micro: <code>C</code> (schedule macro D), <code>G</code>.</li>
+                    <li>1 macro: <code>B</code>. Drain micro (rỗng).</li>
+                    <li>1 macro: <code>E</code> (schedule micro F). Drain micro: <code>F</code>.</li>
+                    <li>1 macro: <code>D</code>.</li>
+                  </ul>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text">
+              <p>Output của:</p>
+<pre><code><span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-num">1</span>);
+<span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-num">2</span>), <span class="tok-num">0</span>);
+<span class="tok-cls">Promise</span>.<span class="tok-fn">resolve</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-num">3</span>));
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-num">4</span>);</code></pre>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>1, 4, 3, 2</code>. Sync chạy trước (1, 4). Microtask (<code>then</code>) drain trước macrotask (<code>setTimeout</code>) → 3 rồi 2.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text">
+              <p><code>async function foo() { return 1; }</code> — gọi <code>foo()</code> trả gì?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>Promise&lt;1&gt;</code>, KHÔNG phải <code>1</code>. Async function <em>luôn</em> trả Promise. Muốn lấy giá trị: <code>await foo()</code> hoặc <code>foo().then(...)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text">
+              <p><code>try { setTimeout(() =&gt; { throw new Error('x'); }, 0) } catch (e) { ... }</code> — <code>catch</code> bắt được lỗi không?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. Callback của <code>setTimeout</code> chạy ở tick khác, lúc đó stack đã không còn frame
+                <code>try</code> bao quanh. Lỗi trở thành "uncaught exception" và bị bắt bởi <code>window.onerror</code> /
+                <code>process.on('uncaughtException')</code>. Đặt <code>try/catch</code> bên trong callback mới bắt được.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p><code>await Promise.all([])</code> trả gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>[]</code> — array rỗng. <code>Promise.all([])</code> resolve <em>ngay lập tức</em> (đã ở microtask kế) với mảng rỗng. Edge case hữu ích khi map array có thể rỗng.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>await Promise.race([])</code> trả gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Pending mãi mãi</strong> — function bị treo. Vì <code>race</code> chờ "cái đầu tiên settle" mà không có cái
+                nào để chờ. Đây là gotcha: luôn check array trước khi truyền vào <code>race</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p><code>for await (const x of asyncIterable)</code> có hoạt động không? Khi nào dùng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Có</strong>. <code>for await...of</code> (ES2018) lặp qua <code>asyncIterable</code> — object có
+                <code>[Symbol.asyncIterator]()</code>. Dùng cho stream (Node.js ReadableStream), paginated API, generator
+                async. Mỗi lượt lặp <code>await</code> giá trị kế trước khi tiếp tục.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Gọi <code>async function</code> có tự động chạy song song nhau không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. <code>async</code> chỉ là "có thể chứa <code>await</code>". Vẫn chạy trên cùng một
+                thread JS. Concurrency của async đến từ việc <strong>I/O delegate ra Web/Node API</strong>, không phải từ
+                thread thật. CPU-bound trong async vẫn block thread — cần Worker để chạy song song thật sự.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p><code>Promise.allSettled</code> giải quyết hạn chế gì của <code>Promise.all</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>Promise.all</code> <strong>short-circuit reject</strong> ngay khi có 1 cái fail — kết quả của các Promise
+                khác bị mất (mặc dù chúng vẫn chạy trong background). <code>Promise.allSettled</code> chờ <em>tất cả</em>
+                settle và trả mảng <code>{status, value/reason}</code>, không bao giờ reject. Phù hợp khi muốn biết kết quả
+                của <em>mọi</em> Promise dù có cái nào fail.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 6, bạn nên đã master:</p>
+        <ul>
+          <li><strong>Event loop</strong>: Call Stack + Web/Node API + Macrotask Q + Microtask Q. Rule "stack rỗng → drain micro → 1 macro → loop".</li>
+          <li><strong>Callback hell + IoC</strong>: lý do Promise sinh ra.</li>
+          <li><strong>Promise 3 trạng thái</strong>: Pending → Fulfilled/Rejected (không đảo ngược).</li>
+          <li><strong>Chaining</strong>: <code>.then</code> trả Promise mới, return value/Promise đều OK, error propagate đến <code>.catch</code> gần nhất.</li>
+          <li><strong>4 combinators</strong>: <code>all</code> (tất cả), <code>allSettled</code> (biết hết), <code>race</code> (cái nhanh nhất), <code>any</code> (cái resolve đầu).</li>
+          <li><strong>async/await</strong>: sugar trên Promise. async function luôn trả Promise. <code>await</code> tạm dừng function, không block thread.</li>
+          <li><strong>Sequential vs parallel</strong>: dùng <code>Promise.all(arr.map(fn))</code> khi không phụ thuộc nhau.</li>
+          <li><strong>Error handling</strong>: <code>try/catch</code> quanh <code>await</code>, <code>.catch</code> cho chain. Lỗi trong <code>setTimeout</code> KHÔNG bị bắt bởi outer try/catch.</li>
+          <li><strong>AbortController</strong>: standard cancel cho fetch và các API async.</li>
+          <li><strong>async ≠ parallel</strong>: CPU-bound vẫn block, cần Web Worker / Worker Threads.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 5 (Arrays, Iterables)</strong> — async iterable, <code>for await...of</code>, stream xử lý qua iterator protocol.</li>
+          <li><strong>Chương 7 (Error Handling)</strong> — Result type pattern, custom Error class, error boundary cho async chain.</li>
+          <li><strong>Dart Chương 7 (Async)</strong> — đối chiếu <code>Future</code>/<code>async</code>/<code>await</code> Dart với JS Promise. Dart có cùng mental model nhưng <code>Future</code> có thể được "completed" nhiều lần qua <code>Completer</code>.</li>
+          <li><strong>Flutter Chương 10 (Network)</strong> — áp dụng async để gọi REST API, xử lý loading/error state, cancellation với <code>http.Client</code> tương tự AbortController.</li>
+          <li><strong>Networking (Pillar 4)</strong> — TCP/HTTP là I/O delegated ra Node/browser, hiểu protocol giúp debug fetch chính xác.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong5.html" class="prev">
+            <div class="dir">← Chương 5</div>
+            <div class="label">Arrays, Iterables &amp; Iteration Protocols</div>
+          </a>
+          <a href="chuong7.html" class="next">
+            <div class="dir">Chương 7 →</div>
+            <div class="label">Error Handling &amp; Defensive Programming</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#paradox">1. Single-threaded + non-blocking</a></li>
+          <li><a href="#event-loop">2. Event Loop</a></li>
+          <li class="level-3"><a href="#trace">2.1. Trace từng tick</a></li>
+          <li><a href="#callback">3. Callback pattern</a></li>
+          <li class="level-3"><a href="#callback-hell">3.1. Callback hell</a></li>
+          <li class="level-3"><a href="#ioc">3.2. Inversion of Control</a></li>
+          <li><a href="#promise">4. Promise 3 trạng thái</a></li>
+          <li class="level-3"><a href="#create-promise">4.1. Tạo Promise</a></li>
+          <li class="level-3"><a href="#consume-promise">4.2. then/catch/finally</a></li>
+          <li><a href="#chaining">5. Promise chaining</a></li>
+          <li><a href="#combinators">6. Promise combinators</a></li>
+          <li class="level-3"><a href="#promise-all">6.1. Promise.all</a></li>
+          <li class="level-3"><a href="#promise-allsettled">6.2. allSettled</a></li>
+          <li class="level-3"><a href="#promise-race-any">6.3. race / any</a></li>
+          <li><a href="#async-await">7. async/await</a></li>
+          <li><a href="#sequential-parallel">8. Sequential vs Parallel</a></li>
+          <li><a href="#error-handling">9. Error handling</a></li>
+          <li class="level-3"><a href="#unhandled-rejection">9.1. Unhandled rejection</a></li>
+          <li><a href="#abort-controller">10. AbortController</a></li>
+          <li><a href="#micro-vs-macro">11. Microtask vs Macrotask</a></li>
+          <li><a href="#async-not-parallel">12. async ≠ parallel</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 6 — Async JavaScript · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong5.html">← Chương 5</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong7.html">Chương 7 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

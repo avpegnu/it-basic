@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6 — Kubernetes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 06 · Containers</div>
+      <h1>Kubernetes — Container Orchestration</h1>
+      <p class="subtitle">K8s đã trở thành standard cloud-native infrastructure. Học từ architecture (control plane + nodes), core resources (Pod/Deployment/Service/Ingress), networking, storage, ConfigMap/Secret, Helm, autoscaling, troubleshooting kubectl. Đầy đủ cho mức "tự deploy app production".</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao Kubernetes?</a></li>
+        <li><a href="#arch">2. Architecture</a></li>
+        <li><a href="#kubectl">3. kubectl basics</a></li>
+        <li><a href="#pod">4. Pod — đơn vị nhỏ nhất</a></li>
+        <li><a href="#workload">5. Deployment, ReplicaSet, StatefulSet, DaemonSet, Job</a></li>
+        <li><a href="#service">6. Service & Networking</a></li>
+        <li><a href="#ingress">7. Ingress & Gateway API</a></li>
+        <li><a href="#config">8. ConfigMap & Secret</a></li>
+        <li><a href="#storage">9. Volumes & PVC</a></li>
+        <li><a href="#namespace">10. Namespace, RBAC</a></li>
+        <li><a href="#scale">11. Autoscaling (HPA/VPA/CA)</a></li>
+        <li><a href="#helm">12. Helm</a></li>
+        <li><a href="#troubleshoot">13. Troubleshooting</a></li>
+        <li><a href="#exercises">14. Bài tập</a></li>
+        <li><a href="#quiz">15. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao Kubernetes?</h2>
+
+        <p>Container chạy 1 process tốt rồi. Chạy 100 container trên 10 server, có vấn đề:</p>
+        <ul>
+          <li>Container nào chạy trên server nào? Cân bằng tải thế nào?</li>
+          <li>Server fail thì container đó chuyển đi đâu?</li>
+          <li>Update version không downtime thế nào?</li>
+          <li>Lưu state (DB) ở đâu?</li>
+          <li>Service A gọi service B — IP gì? Service B move thì sao?</li>
+          <li>Khi traffic tăng, tự thêm container? Bao nhiêu?</li>
+        </ul>
+
+        <p><strong>Kubernetes (K8s)</strong> là <em>orchestrator</em> giải quyết tất cả. Định nghĩa state mong muốn (declarative), K8s liên tục đảm bảo thực tế khớp.</p>
+
+        <h3>1.1. Lịch sử ngắn</h3>
+        <ul>
+          <li>2003-2014: Google develop <strong>Borg</strong> nội bộ — chạy mọi service Google trên cluster.</li>
+          <li>2014: Google open source Kubernetes (Greek "helmsman") — re-design Borg cho công chúng.</li>
+          <li>2015: CNCF nhận K8s làm project flagship.</li>
+          <li>2018+: K8s thắng container war (vs Docker Swarm, Mesos). Mọi cloud provider managed K8s.</li>
+        </ul>
+
+        <h3>1.2. K8s mang lại gì?</h3>
+
+        <div class="metric-grid">
+          <div class="metric-tile cyan">
+            <div class="metric-label">Self-healing</div>
+            <div class="metric-value">Auto</div>
+            <div class="metric-meta">Container fail → restart; node die → reschedule</div>
+          </div>
+          <div class="metric-tile cyan">
+            <div class="metric-label">Auto-scaling</div>
+            <div class="metric-value">HPA/VPA/CA</div>
+            <div class="metric-meta">Theo CPU/RAM/custom metric</div>
+          </div>
+          <div class="metric-tile cyan">
+            <div class="metric-label">Service Discovery</div>
+            <div class="metric-value">DNS</div>
+            <div class="metric-meta">my-svc.namespace.svc.cluster.local</div>
+          </div>
+          <div class="metric-tile cyan">
+            <div class="metric-label">Rolling Update</div>
+            <div class="metric-value">Zero downtime</div>
+            <div class="metric-meta">Built-in deployment strategy</div>
+          </div>
+        </div>
+
+        <h3>1.3. Khi nào KHÔNG cần K8s?</h3>
+        <ul>
+          <li>1-3 service nhỏ → Docker Compose / 1 VM đủ.</li>
+          <li>Stateless web đơn giản → Vercel / Cloud Run / App Engine.</li>
+          <li>Team chưa có kỹ năng vận hành K8s → managed alternative.</li>
+        </ul>
+
+        <p>K8s rất mạnh nhưng <em>complexity tax</em> cao. "K8s pour les vrais besoins" — chỉ dùng khi thực sự cần.</p>
+      </section>
+
+      <section id="arch">
+        <h2>2. Kubernetes Architecture</h2>
+
+        <div class="ascii">┌─────────────────────────────── Control Plane (Master) ─────────────────────────────┐
+│                                                                                    │
+│  ┌────────────────┐   ┌────────────────┐   ┌────────────────┐   ┌────────────────┐│
+│  │   API Server   │←──│  Scheduler     │   │  Controller    │   │      etcd      ││
+│  │   (kube-apiserver) │   │  Manager       │   │  (key-value DB)││
+│  │                │   │                │   │                │   │                ││
+│  └────────┬───────┘   └────────────────┘   └────────────────┘   └────────────────┘│
+│           ↑                                                                        │
+└───────────┼────────────────────────────────────────────────────────────────────────┘
+            │ kubectl, REST API
+            │
+┌───────────┴────────────── Worker Node 1 ──────────────────┐  ┌── Worker Node 2 ──┐
+│                                                           │  │                   │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────────────┐  │  │   (similar)       │
+│  │  kubelet   │  │ kube-proxy │  │   Container Runtime │  │  │                   │
+│  │            │  │            │  │     (containerd)    │  │  │                   │
+│  └─────┬──────┘  └────────────┘  └──────────┬──────────┘  │  │                   │
+│        │                                    │             │  │                   │
+│        ↓                                    ↓             │  │                   │
+│  ┌──────────────────────────────────────────────────────┐ │  │                   │
+│  │  Pods                                                │ │  │                   │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐                   │ │  │                   │
+│  │  │  Pod   │ │  Pod   │ │  Pod   │ ...               │ │  │                   │
+│  │  │ Cont   │ │ Cont   │ │ Cont   │                   │ │  │                   │
+│  │  └────────┘ └────────┘ └────────┘                   │ │  │                   │
+│  └──────────────────────────────────────────────────────┘ │  │                   │
+└───────────────────────────────────────────────────────────┘  └───────────────────┘</div>
+
+        <h3>2.1. Control Plane components</h3>
+
+        <table>
+          <thead><tr><th>Component</th><th>Vai trò</th></tr></thead>
+          <tbody>
+            <tr><td><strong>kube-apiserver</strong></td><td>REST API entry point — mọi tương tác qua đây</td></tr>
+            <tr><td><strong>etcd</strong></td><td>Key-value DB lưu toàn bộ cluster state (single source of truth)</td></tr>
+            <tr><td><strong>kube-scheduler</strong></td><td>Quyết định Pod chạy trên Node nào (filter + score)</td></tr>
+            <tr><td><strong>kube-controller-manager</strong></td><td>Chạy controller: ReplicaSet, Deployment, Node, Endpoint, ...</td></tr>
+            <tr><td><strong>cloud-controller-manager</strong></td><td>Tích hợp cloud (LoadBalancer, Volume, Route)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.2. Worker Node components</h3>
+
+        <table>
+          <thead><tr><th>Component</th><th>Vai trò</th></tr></thead>
+          <tbody>
+            <tr><td><strong>kubelet</strong></td><td>Agent trên mỗi node, nhận lệnh từ API server, quản lý Pod local</td></tr>
+            <tr><td><strong>kube-proxy</strong></td><td>Network proxy — implement Service abstraction (iptables/IPVS rules)</td></tr>
+            <tr><td><strong>Container Runtime</strong></td><td>containerd / CRI-O — chạy container thật</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.3. Reconciliation loop</h3>
+
+        <p>Tâm điểm K8s: <strong>desired state vs actual state</strong>.</p>
+
+        <ol class="steps">
+          <li>User: <code>kubectl apply -f deployment.yaml</code> với replicas: 3.</li>
+          <li>API server lưu desired state vào etcd.</li>
+          <li>Deployment controller thấy desired = 3, actual = 0 → tạo ReplicaSet.</li>
+          <li>ReplicaSet controller thấy desired = 3 Pod, actual = 0 → tạo 3 Pod.</li>
+          <li>Scheduler thấy 3 Pod chưa có node → assign nodes.</li>
+          <li>Kubelet trên node thấy Pod assigned → start container qua containerd.</li>
+          <li>Liên tục: nếu Pod fail → controller tạo Pod mới.</li>
+        </ol>
+
+        <p>Đây là <em>declarative</em>: bạn nói "tôi muốn 3 Pod chạy", không nói "start Pod 1, start Pod 2...". K8s tự duy trì.</p>
+
+        <h3>2.4. Local cluster cho lab</h3>
+
+        <ul>
+          <li><strong>minikube</strong> — single-node K8s trong VM/container.</li>
+          <li><strong>kind</strong> (Kubernetes IN Docker) — multi-node K8s trong Docker container.</li>
+          <li><strong>k3d</strong> — k3s (lightweight K8s) trong Docker.</li>
+          <li><strong>Docker Desktop</strong> — built-in K8s tab.</li>
+        </ul>
+
+<pre><code class="language-bash"># Setup kind
+kind create cluster --name dev
+kubectl cluster-info
+kubectl get nodes
+
+# Setup minikube
+minikube start --cpus=4 --memory=8g
+minikube dashboard
+</code></pre>
+      </section>
+
+      <section id="kubectl">
+        <h2>3. kubectl — CLI duy nhất bạn cần biết</h2>
+
+<pre><code class="language-bash"># Cluster info
+kubectl cluster-info
+kubectl get nodes
+kubectl version
+
+# Get resources
+kubectl get pods                        # default namespace
+kubectl get pods -A                     # all namespaces
+kubectl get pods -n kube-system
+kubectl get pods -o wide                # show node, IP
+kubectl get pods -o yaml                # full YAML
+kubectl get pods -l app=web             # filter label
+
+# Apply / Create / Delete
+kubectl apply -f deployment.yaml
+kubectl apply -f .                      # all yaml in dir
+kubectl delete -f deployment.yaml
+kubectl delete pod my-pod
+
+# Describe — full detail + events
+kubectl describe pod my-pod
+
+# Logs
+kubectl logs my-pod                     # log container
+kubectl logs my-pod -c sidecar          # specific container
+kubectl logs -f my-pod                  # follow
+kubectl logs --tail=100 my-pod
+kubectl logs --previous my-pod          # log của Pod trước (sau crash)
+
+# Exec
+kubectl exec -it my-pod -- sh
+kubectl exec my-pod -- env              # 1 lệnh
+
+# Port-forward
+kubectl port-forward pod/my-pod 8080:80
+kubectl port-forward svc/my-svc 8080:80
+
+# Edit
+kubectl edit deployment myapp           # mở editor, save → apply
+
+# Rollout
+kubectl rollout status deployment/myapp
+kubectl rollout history deployment/myapp
+kubectl rollout undo deployment/myapp
+kubectl rollout restart deployment/myapp
+
+# Context (multi-cluster)
+kubectl config get-contexts
+kubectl config use-context prod
+kubectl config set-context --current --namespace=staging
+
+# Aliases (dev productivity)
+alias k=kubectl
+alias kgp='kubectl get pods'
+alias kdp='kubectl describe pod'
+alias kaf='kubectl apply -f'
+</code></pre>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Phải cài</span>
+          (1) <code>kubectx</code> + <code>kubens</code> — switch context/namespace nhanh. (2) <code>k9s</code> — TUI quản lý cluster. (3) <code>stern</code> — multi-pod log streaming.
+        </div>
+      </section>
+
+      <section id="pod">
+        <h2>4. Pod — đơn vị nhỏ nhất</h2>
+
+        <p>Pod = nhóm 1 hoặc nhiều container chia sẻ network (cùng IP), storage. Đơn vị nhỏ nhất K8s deploy/scale.</p>
+
+        <h3>4.1. Pod đơn giản</h3>
+
+<pre><code class="language-yaml"># pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: web
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25-alpine
+      ports:
+        - containerPort: 80
+      resources:
+        requests:               # đảm bảo có
+          cpu: 100m              # 100 millicore = 0.1 CPU
+          memory: 128Mi
+        limits:                  # max
+          cpu: 500m
+          memory: 256Mi
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 80
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      livenessProbe:
+        httpGet:
+          path: /alive
+          port: 80
+        initialDelaySeconds: 30
+        periodSeconds: 30
+</code></pre>
+
+<pre><code class="language-bash">kubectl apply -f pod.yaml
+kubectl get pod nginx-pod
+kubectl describe pod nginx-pod
+kubectl port-forward pod/nginx-pod 8080:80
+</code></pre>
+
+        <h3>4.2. Lifecycle phase</h3>
+
+        <table>
+          <thead><tr><th>Phase</th><th>Nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td>Pending</td><td>Pod accepted, container chưa chạy (image pulling, scheduling)</td></tr>
+            <tr><td>Running</td><td>Pod bound to node, ít nhất 1 container running</td></tr>
+            <tr><td>Succeeded</td><td>Tất cả container exit 0 (Job/CronJob)</td></tr>
+            <tr><td>Failed</td><td>Ít nhất 1 container exit khác 0</td></tr>
+            <tr><td>Unknown</td><td>Mất liên lạc với kubelet</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.3. Probes</h3>
+
+        <table>
+          <thead><tr><th>Probe</th><th>Vai trò</th><th>Fail action</th></tr></thead>
+          <tbody>
+            <tr><td><strong>readinessProbe</strong></td><td>Container có sẵn sàng nhận traffic?</td><td>Remove khỏi Service endpoint</td></tr>
+            <tr><td><strong>livenessProbe</strong></td><td>Container có còn sống?</td><td>Restart container</td></tr>
+            <tr><td><strong>startupProbe</strong></td><td>Container đã startup?</td><td>Hoãn liveness/readiness, kill nếu timeout</td></tr>
+          </tbody>
+        </table>
+
+        <p>Probe types: <code>httpGet</code>, <code>tcpSocket</code>, <code>exec</code>, <code>grpc</code>.</p>
+
+        <h3>4.4. Multi-container patterns</h3>
+
+        <ul>
+          <li><strong>Sidecar</strong> — container phụ (log shipper, mesh proxy).</li>
+          <li><strong>Init container</strong> — chạy trước main, setup môi trường.</li>
+          <li><strong>Ambassador</strong> — proxy outbound traffic.</li>
+          <li><strong>Adapter</strong> — chuẩn hóa output cho monitoring.</li>
+        </ul>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: with-init-and-sidecar
+spec:
+  initContainers:                # chạy tuần tự trước main
+    - name: wait-for-db
+      image: busybox
+      command: ['sh', '-c', 'until nc -z db 5432; do sleep 2; done']
+  containers:
+    - name: app
+      image: myapp:1.0
+    - name: log-shipper            # sidecar
+      image: fluentbit:2.0
+      volumeMounts:
+        - name: logs
+          mountPath: /logs
+  volumes:
+    - name: logs
+      emptyDir: {}
+</code></pre>
+
+        <h3>4.5. Pod KHÔNG phải đơn vị bạn nên tạo trực tiếp</h3>
+
+        <p>Pod không có self-healing — nếu Pod chết, không tự tạo lại. Dùng <strong>Deployment</strong> (mục 5) để được self-healing + scaling + rolling update.</p>
+      </section>
+
+      <section id="workload">
+        <h2>5. Workload Resources</h2>
+
+        <h3>5.1. Deployment — cho stateless app</h3>
+
+<pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                  # tối đa 1 Pod thêm tạm
+      maxUnavailable: 0             # tối thiểu 3 Pod available
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/me/myapp:1.5.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: db-url
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          readinessProbe:
+            httpGet: { path: /health, port: 3000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /alive, port: 3000 }
+            periodSeconds: 30
+</code></pre>
+
+        <p>Quan hệ: Deployment → ReplicaSet → Pod.</p>
+        <ul>
+          <li>Deployment quản lý ReplicaSet (định nghĩa template).</li>
+          <li>ReplicaSet đảm bảo N Pod chạy.</li>
+          <li>Update template → Deployment tạo ReplicaSet mới, scale up từ từ, scale down ReplicaSet cũ (rolling).</li>
+        </ul>
+
+        <h3>5.2. StatefulSet — cho stateful (DB, queue)</h3>
+
+<pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:           # mỗi Pod có PVC riêng
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 10Gi
+</code></pre>
+
+        <p>Khác Deployment:</p>
+        <ul>
+          <li>Pod có tên cố định: postgres-0, postgres-1, postgres-2.</li>
+          <li>Mỗi Pod có PVC riêng, persistent qua restart.</li>
+          <li>Start tuần tự (postgres-0 → postgres-1 → postgres-2).</li>
+          <li>Stable network identity (DNS).</li>
+        </ul>
+
+        <p>Use case: Postgres replica, Kafka, ElasticSearch, Cassandra.</p>
+
+        <h3>5.3. DaemonSet — 1 Pod mỗi node</h3>
+
+<pre><code class="language-yaml">apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-collector
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:2.0
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+</code></pre>
+
+        <p>Use case: log shipper, monitoring agent, network proxy (Calico, Cilium).</p>
+
+        <h3>5.4. Job & CronJob</h3>
+
+<pre><code class="language-yaml">apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: myapp:1.5.0
+          command: ["npm", "run", "db:migrate"]
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-backup
+spec:
+  schedule: "0 2 * * *"           # 2 AM daily
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: backup-tool:1.0
+              command: ["./backup.sh"]
+</code></pre>
+      </section>
+
+      <section id="service">
+        <h2>6. Service & Networking</h2>
+
+        <p>Pod IP ephemeral (đổi khi restart). Cần abstraction stable → <strong>Service</strong>.</p>
+
+        <h3>6.1. Service types</h3>
+
+        <table>
+          <thead><tr><th>Type</th><th>Expose</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td><strong>ClusterIP</strong> (default)</td><td>Internal cluster only</td><td>Service-to-service</td></tr>
+            <tr><td><strong>NodePort</strong></td><td>Mở port (30000-32767) trên mỗi node</td><td>Dev, on-prem</td></tr>
+            <tr><td><strong>LoadBalancer</strong></td><td>Cloud LB (ELB, GLB) → external IP</td><td>Public app</td></tr>
+            <tr><td><strong>ExternalName</strong></td><td>DNS CNAME</td><td>External service alias</td></tr>
+          </tbody>
+        </table>
+
+        <h3>6.2. Service example</h3>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  type: ClusterIP
+  selector:
+    app: web                          # match Pod label
+  ports:
+    - port: 80                        # service port
+      targetPort: 3000                # container port
+      protocol: TCP
+</code></pre>
+
+        <p>DNS resolution: <code>web.default.svc.cluster.local</code> — hay ngắn gọn <code>web</code> nếu cùng namespace.</p>
+
+        <h3>6.3. Endpoint & Endpoints Slice</h3>
+
+<pre><code class="language-bash">kubectl get endpoints web
+# NAME   ENDPOINTS                              AGE
+# web    10.244.0.5:3000,10.244.1.6:3000,10.244.2.7:3000   5m
+</code></pre>
+
+        <p>Endpoints = list IP của Pods match Service selector và pass readiness probe. Service load balance round-robin (kube-proxy implementation).</p>
+
+        <h3>6.4. Headless Service (clusterIP: None)</h3>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+spec:
+  clusterIP: None                       # headless
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+</code></pre>
+
+        <p>Headless: không có cluster IP, DNS query trả về <em>tất cả Pod IP</em>. StatefulSet dùng để truy cập trực tiếp postgres-0, postgres-1.</p>
+
+        <h3>6.5. Network Policy</h3>
+
+<pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-allow-only-app
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: web              # chỉ web pods
+      ports:
+        - protocol: TCP
+          port: 5432
+</code></pre>
+
+        <p>Mặc định K8s allow all. NetworkPolicy phải có CNI plugin support (Calico, Cilium). Cần thiết cho zero-trust networking.</p>
+      </section>
+
+      <section id="ingress">
+        <h2>7. Ingress & Gateway API</h2>
+
+        <p>Service expose 1 LB cho mỗi service → tốn IP, đắt. <strong>Ingress</strong> = single LB route nhiều service theo host/path (L7).</p>
+
+        <h3>7.1. Ingress example</h3>
+
+<pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.example.com
+      secretName: app-tls
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-service
+                port:
+                  number: 80
+</code></pre>
+
+        <p>Cần <strong>Ingress Controller</strong> implement spec. Phổ biến: nginx-ingress, Traefik, HAProxy, AWS ALB Controller, GCE Ingress.</p>
+
+        <h3>7.2. Gateway API — successor</h3>
+
+        <p>Gateway API (GA 2023) là successor của Ingress với role-oriented design:</p>
+        <ul>
+          <li><strong>GatewayClass</strong> — admin define type LB.</li>
+          <li><strong>Gateway</strong> — admin tạo LB instance.</li>
+          <li><strong>HTTPRoute, TCPRoute, GRPCRoute</strong> — app team route traffic.</li>
+        </ul>
+
+<pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-route
+spec:
+  parentRefs:
+    - name: prod-gateway
+  hostnames:
+    - app.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: api-service
+          port: 80
+</code></pre>
+
+        <p>Gateway API support traffic split (canary), header-based routing, mTLS — mạnh hơn Ingress.</p>
+      </section>
+
+      <section id="config">
+        <h2>8. ConfigMap & Secret</h2>
+
+        <h3>8.1. ConfigMap — config phi-secret</h3>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  LOG_LEVEL: info
+  FEATURE_NEW_UI: "true"
+  database.yml: |
+    host: db.production.svc.cluster.local
+    pool_size: 10
+</code></pre>
+
+<pre><code class="language-yaml"># Sử dụng trong Deployment
+spec:
+  containers:
+    - name: app
+      image: myapp:1.0
+      envFrom:
+        - configMapRef:
+            name: app-config
+      # Hoặc mount as files:
+      volumeMounts:
+        - name: config
+          mountPath: /etc/app
+  volumes:
+    - name: config
+      configMap:
+        name: app-config
+</code></pre>
+
+        <h3>8.2. Secret — sensitive data</h3>
+
+<pre><code class="language-yaml">apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  db-password: c2VjcmV0MTIz          # base64 encoded
+  api-key: YWJjZGVmMTIzNDU2
+</code></pre>
+
+<pre><code class="language-bash"># Tạo từ CLI
+kubectl create secret generic app-secrets \
+  --from-literal=db-password=secret123 \
+  --from-literal=api-key=abcdef123456
+
+# Tạo từ file
+kubectl create secret generic tls-cert \
+  --from-file=tls.crt=cert.pem \
+  --from-file=tls.key=key.pem
+</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Secret không secure mặc định!</span>
+          K8s Secret chỉ <em>base64-encoded</em>, không encrypted. Anyone có RBAC read namespace có thể decode. Để secure thật:
+          <ul>
+            <li>Enable etcd encryption-at-rest (KMS).</li>
+            <li>RBAC chặt: chỉ ServiceAccount của app đọc được Secret.</li>
+            <li>External Secret Operator (sync từ Vault/AWS Secrets Manager).</li>
+            <li>Sealed Secrets (Bitnami) — encrypt secret trong git.</li>
+          </ul>
+        </div>
+
+        <h3>8.3. External Secrets Operator</h3>
+
+<pre><code class="language-yaml">apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: app-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: app-secrets                  # K8s Secret tạo ra
+  data:
+    - secretKey: db-password
+      remoteRef:
+        key: prod/db
+        property: password
+</code></pre>
+
+        <p>Source of truth là AWS Secrets Manager / Vault / GCP Secret Manager. Operator sync vào K8s Secret.</p>
+      </section>
+
+      <section id="storage">
+        <h2>9. Volumes & Persistent Storage</h2>
+
+        <h3>9.1. Volume types</h3>
+
+        <ul>
+          <li><strong>emptyDir</strong> — temp, sống cùng Pod.</li>
+          <li><strong>hostPath</strong> — mount path từ node (avoid trừ DaemonSet).</li>
+          <li><strong>configMap / secret</strong> — mount config files.</li>
+          <li><strong>PersistentVolumeClaim (PVC)</strong> — chuẩn cho persistent.</li>
+          <li>Cloud-specific: <strong>awsElasticBlockStore, gcePersistentDisk, azureDisk</strong> (legacy, dùng PVC qua CSI thay).</li>
+        </ul>
+
+        <h3>9.2. PV / PVC / StorageClass</h3>
+
+        <div class="ascii">PVC (Pod request)  ─→  StorageClass  ─→  Provisioner  ─→  PV (real disk)
+"tôi muốn 10GiB SSD"   "gp3, ext4"        "EBS CSI driver"   "vol-abc123"</div>
+
+<pre><code class="language-yaml"># StorageClass (admin tạo, thường có sẵn từ cloud)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: ebs.csi.aws.com         # AWS EBS CSI
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# PVC (app request)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 10Gi
+</code></pre>
+
+        <h3>9.3. Access modes</h3>
+
+        <table>
+          <thead><tr><th>Mode</th><th>Nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td>ReadWriteOnce (RWO)</td><td>Mount read-write 1 node</td></tr>
+            <tr><td>ReadOnlyMany (ROX)</td><td>Read-only nhiều node</td></tr>
+            <tr><td>ReadWriteMany (RWX)</td><td>Read-write nhiều node (cần NFS, EFS, FSx)</td></tr>
+            <tr><td>ReadWriteOncePod (RWOP)</td><td>Chỉ 1 Pod (K8s 1.27+)</td></tr>
+          </tbody>
+        </table>
+
+        <p>Block storage (EBS) chỉ RWO. File storage (EFS, NFS) hỗ trợ RWX.</p>
+      </section>
+
+      <section id="namespace">
+        <h2>10. Namespace & RBAC</h2>
+
+        <h3>10.1. Namespace — virtual cluster</h3>
+
+<pre><code class="language-bash">kubectl create namespace production
+kubectl create namespace staging
+
+kubectl get pods -n production
+kubectl config set-context --current --namespace=production
+
+# Default namespaces:
+# default, kube-system, kube-public, kube-node-lease
+</code></pre>
+
+        <p>Tách team, env, app. Resource cùng tên có thể tồn tại ở nhiều namespace.</p>
+
+        <h3>10.2. ResourceQuota & LimitRange</h3>
+
+<pre><code class="language-yaml"># Giới hạn tổng resource trong namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: 40Gi
+    limits.cpu: "40"
+    limits.memory: 80Gi
+    persistentvolumeclaims: "10"
+    pods: "50"
+
+---
+# Default request/limit cho Pod thiếu khai báo
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: production
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+</code></pre>
+
+        <h3>10.3. RBAC — Role-Based Access Control</h3>
+
+        <p>4 components:</p>
+        <ul>
+          <li><strong>Role / ClusterRole</strong> — set quyền (verb + resource).</li>
+          <li><strong>RoleBinding / ClusterRoleBinding</strong> — gán Role cho subject.</li>
+          <li><strong>ServiceAccount</strong> — identity cho Pod (dùng RBAC).</li>
+          <li><strong>User / Group</strong> — identity người (qua OIDC, cert).</li>
+        </ul>
+
+<pre><code class="language-yaml"># Role chỉ trong namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: production
+  name: pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: production
+subjects:
+  - kind: User
+    name: alice@example.com
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+</code></pre>
+
+        <p>ClusterRole/ClusterRoleBinding hoạt động cluster-wide. Dùng khi cần grant cho cluster-level resource (Node, PV).</p>
+
+        <p>Built-in ClusterRoles: <code>cluster-admin</code>, <code>admin</code>, <code>edit</code>, <code>view</code>.</p>
+      </section>
+
+      <section id="scale">
+        <h2>11. Autoscaling — HPA, VPA, Cluster Autoscaler</h2>
+
+        <h3>11.1. HPA — Horizontal Pod Autoscaler</h3>
+
+<pre><code class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70       # scale up khi avg CPU &gt; 70%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30            # tối đa double mỗi 30s
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 phút cool-down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+</code></pre>
+
+        <p>HPA cần <strong>metrics-server</strong> install trong cluster. Custom metric (RPS, queue length) cần Prometheus Adapter.</p>
+
+        <h3>11.2. VPA — Vertical Pod Autoscaler</h3>
+
+        <p>VPA điều chỉnh CPU/RAM <em>request</em> của Pod (không phải số replica). 3 mode:</p>
+        <ul>
+          <li><strong>Off</strong> — chỉ recommend, không apply.</li>
+          <li><strong>Initial</strong> — set khi tạo Pod.</li>
+          <li><strong>Auto</strong> — restart Pod với resource mới.</li>
+        </ul>
+
+        <p>VPA và HPA <em>không xài chung</em> trên cùng metric (CPU). Có thể HPA on CPU + VPA recommend mode.</p>
+
+        <h3>11.3. Cluster Autoscaler (CA)</h3>
+
+        <p>CA scale <em>node</em> (VM) — khi Pod không schedule được do thiếu node, thêm node. Khi node idle, remove.</p>
+
+        <ul>
+          <li>AWS: AWS Karpenter (modern, tốt hơn CA cũ).</li>
+          <li>GCP: GKE Autopilot (managed) hoặc node pool autoscaler.</li>
+          <li>Azure: AKS cluster autoscaler.</li>
+        </ul>
+
+        <h3>11.4. KEDA — Kubernetes Event-Driven Autoscaler</h3>
+
+        <p>KEDA scale dựa trên event source: Kafka lag, RabbitMQ queue, Cron, Prometheus metric, AWS SQS, ... Bao gồm scale-to-zero (HPA chỉ scale down min replica = 1).</p>
+      </section>
+
+      <section id="helm">
+        <h2>12. Helm — Package Manager cho K8s</h2>
+
+        <p>Vấn đề: deploy 1 app cần 5-10 YAML files (Deployment, Service, Ingress, ConfigMap, Secret, HPA, ...). Multiply by env (dev/staging/prod) → trùng lặp + drift.</p>
+
+        <p><strong>Helm</strong> = template engine + package manager. Output: "Chart" (template + values).</p>
+
+        <h3>12.1. Cài và dùng chart có sẵn</h3>
+
+<pre><code class="language-bash">brew install helm                    # macOS
+
+# Add repo
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+# Search
+helm search repo nginx
+
+# Install
+helm install my-nginx bitnami/nginx \
+  --namespace web --create-namespace \
+  --set service.type=LoadBalancer
+
+# List
+helm list -A
+
+# Upgrade
+helm upgrade my-nginx bitnami/nginx --reuse-values --set image.tag=1.26
+
+# Rollback
+helm history my-nginx
+helm rollback my-nginx 2
+
+# Uninstall
+helm uninstall my-nginx -n web
+</code></pre>
+
+        <h3>12.2. Tạo chart</h3>
+
+<pre><code class="language-bash">helm create myapp
+# myapp/
+# ├── Chart.yaml         ← metadata
+# ├── values.yaml        ← default values
+# ├── templates/         ← K8s YAML với Go template
+# │   ├── deployment.yaml
+# │   ├── service.yaml
+# │   ├── ingress.yaml
+# │   ├── _helpers.tpl
+# │   └── ...
+# └── charts/            ← sub-chart dependency
+</code></pre>
+
+<pre><code class="language-yaml"># templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myapp.fullname" . }}
+  labels:
+    {{- include "myapp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "myapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "myapp.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+# values.yaml
+replicaCount: 3
+image:
+  repository: ghcr.io/me/myapp
+  tag: "1.5.0"
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+</code></pre>
+
+<pre><code class="language-bash"># Test render
+helm template myapp ./myapp --values prod-values.yaml | kubectl apply --dry-run=client -f -
+
+# Lint
+helm lint ./myapp
+
+# Package
+helm package ./myapp                  # myapp-0.1.0.tgz
+
+# Install với values custom
+helm install web ./myapp -f prod-values.yaml
+</code></pre>
+
+        <h3>12.3. Helm vs Kustomize</h3>
+
+        <table>
+          <thead><tr><th>Tool</th><th>Approach</th><th>Pros</th><th>Cons</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Helm</td>
+              <td>Template (Go)</td>
+              <td>Package distribution, rollback, hooks</td>
+              <td>YAML có {{ }} khó đọc, complexity cao</td>
+            </tr>
+            <tr>
+              <td>Kustomize</td>
+              <td>Patch (overlay)</td>
+              <td>Pure YAML, built-in kubectl, đơn giản</td>
+              <td>Hạn chế logic, không packaging</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>Phổ biến: Helm cho external chart (ingress, monitoring stack); Kustomize cho own app.</p>
+      </section>
+
+      <section id="troubleshoot">
+        <h2>13. Troubleshooting — Workflow chuẩn</h2>
+
+        <h3>13.1. Pod không Run</h3>
+
+<pre><code class="language-bash"># Step 1: status
+kubectl get pod my-pod
+# CrashLoopBackOff / ImagePullBackOff / Pending / Error
+
+# Step 2: describe — events tell story
+kubectl describe pod my-pod
+# Events:
+#   Warning  Failed   Failed to pull image "myapp:99.0": not found
+#   Warning  Failed   Error: ImagePullBackOff
+
+# Step 3: logs
+kubectl logs my-pod
+kubectl logs my-pod --previous       # log Pod cũ trước crash
+
+# Step 4: shell vào (nếu Pod up)
+kubectl exec -it my-pod -- sh
+</code></pre>
+
+        <h3>13.2. Common errors</h3>
+
+        <table>
+          <thead><tr><th>Status</th><th>Nghĩa</th><th>Hành động</th></tr></thead>
+          <tbody>
+            <tr><td>Pending</td><td>Chưa schedule được Pod</td><td>describe → events: insufficient cpu/memory? PVC pending?</td></tr>
+            <tr><td>ImagePullBackOff</td><td>Pull image fail</td><td>Tag đúng? Registry credentials?</td></tr>
+            <tr><td>CrashLoopBackOff</td><td>Container crash, K8s exponential backoff restart</td><td>logs --previous, fix bug</td></tr>
+            <tr><td>OOMKilled</td><td>Vượt memory limit, kernel kill</td><td>Tăng memory limit, fix leak</td></tr>
+            <tr><td>Error</td><td>Container exit non-zero</td><td>logs</td></tr>
+            <tr><td>Evicted</td><td>Node OOM, K8s evict Pod</td><td>Tăng resource request, capacity</td></tr>
+          </tbody>
+        </table>
+
+        <h3>13.3. Service không route</h3>
+
+<pre><code class="language-bash"># Service tồn tại?
+kubectl get svc
+
+# Endpoints có Pod IP?
+kubectl get endpoints my-svc
+# Nếu trống → label mismatch
+
+# Pod có label đúng?
+kubectl get pods --show-labels
+
+# Pod ready?
+kubectl get pod my-pod
+# Nếu READY 0/1 → readinessProbe fail
+
+# Network từ Pod khác
+kubectl run -it --rm debug --image=nicolaka/netshoot -- bash
+# Trong netshoot:
+nslookup my-svc
+curl my-svc:80
+</code></pre>
+
+        <h3>13.4. Debugging tools</h3>
+
+        <ul>
+          <li><strong>k9s</strong> — TUI explore cluster.</li>
+          <li><strong>stern</strong> — multi-pod log streaming: <code>stern app=web</code>.</li>
+          <li><strong>kubectl-debug</strong> / <strong>ephemeral container</strong> — attach debug container vào Pod đang chạy.</li>
+          <li><strong>nicolaka/netshoot</strong> — image full network tools (dig, curl, tcpdump, ...).</li>
+          <li><strong>kubectl-trace</strong> — bpftrace trên node.</li>
+        </ul>
+      </section>
+
+      <section id="exercises">
+        <h2>14. Bài tập</h2>
+
+        <ol>
+          <li><strong>Setup local K8s</strong>: cài kind/minikube. Verify <code>kubectl get nodes</code>.</li>
+
+          <li><strong>First Pod</strong>: deploy nginx Pod với resource limit, readiness/liveness probe. Verify probe fail → Pod restart.</li>
+
+          <li><strong>Deployment + rolling update</strong>: deploy 3 replicas. Update image tag. Watch rolling update với <code>kubectl rollout status</code>. Rollback.</li>
+
+          <li><strong>Service + DNS</strong>: tạo Deployment + ClusterIP Service. Spawn debug Pod, verify DNS <code>my-svc.default.svc.cluster.local</code>, curl được.</li>
+
+          <li><strong>Ingress</strong>: cài nginx-ingress (helm). Tạo Ingress route 2 service (api + web) qua 1 host. Truy cập từ browser.</li>
+
+          <li><strong>ConfigMap + Secret</strong>: ConfigMap chứa app config; Secret chứa DB password. Mount vào Deployment qua envFrom + volumeMount.</li>
+
+          <li><strong>StatefulSet Postgres</strong>: deploy 3-replica Postgres với StatefulSet + PVC. Restart Pod, verify data persist.</li>
+
+          <li><strong>HPA</strong>: setup HPA cho web deployment, target CPU 70%. Stress test bằng <code>kubectl run -it --rm --image=busybox -- /bin/sh -c "while true; do wget -q -O- http://web; done"</code>. Watch replica scale up.</li>
+
+          <li><strong>Helm chart</strong>: tạo chart cho app của bạn. values.yaml có dev / staging / prod. <code>helm install</code> lên cluster với từng values.</li>
+
+          <li><strong>RBAC</strong>: tạo ServiceAccount "cicd" với Role chỉ deploy được trong namespace "production". Test bằng <code>kubectl auth can-i</code>.</li>
+
+          <li><strong>Network policy</strong>: enforce: pods app=db chỉ accept ingress từ pods app=api. Verify từ pods khác không kết nối được.</li>
+
+          <li><strong>Troubleshooting drill</strong>:
+            <ul>
+              <li>Tạo Pod với image "nginx:9.99" (không tồn tại). Diagnose ImagePullBackOff.</li>
+              <li>Tạo Pod với memory limit 50Mi, app dùng 200Mi. Verify OOMKilled.</li>
+              <li>Tạo Service với label selector sai. Tìm root cause "no endpoints".</li>
+            </ul>
+          </li>
+
+          <li><strong>Compare</strong>: cài cùng app bằng (a) raw YAML, (b) Helm, (c) Kustomize. Đánh giá ergonomics.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>15. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 6</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">K8s đơn vị nhỏ nhất bạn deploy là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Container</li>
+              <li class="quiz-option">Image</li>
+              <li class="quiz-option">Pod (1 hoặc nhiều container chia sẻ network/storage)</li>
+              <li class="quiz-option">Service</li>
+            </ul>
+            <div class="quiz-explain">Pod là smallest deployable unit. 1 Pod thường = 1 container chính (+ optional sidecar). Pod chia sẻ network namespace (cùng IP, localhost), volumes. K8s không deploy container đơn lẻ — luôn đóng gói vào Pod.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Ngôn ngữ K8s là declarative, có nghĩa:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Bạn khai báo "tôi muốn 3 Pod chạy", controller tự duy trì (reconciliation loop)</li>
+              <li class="quiz-option">Phải viết bằng Go</li>
+              <li class="quiz-option">Mọi command imperative</li>
+              <li class="quiz-option">Chỉ dùng được YAML</li>
+            </ul>
+            <div class="quiz-explain">Declarative: define desired state, K8s đảm bảo actual state khớp. Controller liên tục reconcile (compare desired vs actual, take action). Nếu Pod chết, controller tạo mới. Nếu node fail, scheduler chuyển Pod sang node khác. Đối lập với imperative: bạn chạy command từng bước.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">readinessProbe vs livenessProbe khác nhau:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cả 2 đều restart container</li>
+              <li class="quiz-option">readiness fail → remove khỏi Service endpoint (no traffic); liveness fail → restart container</li>
+              <li class="quiz-option">readiness check ngoại tuyến</li>
+              <li class="quiz-option">Giống nhau</li>
+            </ul>
+            <div class="quiz-explain">readiness: "sẵn sàng nhận traffic chưa?" — fail thì kube-proxy remove Pod IP khỏi Service endpoint, traffic không đi tới. Liveness: "có sống không?" — fail thì kubelet kill container và restart. Use case: app warmup chậm dùng readiness; app deadlock dùng liveness; app khởi động lâu dùng startupProbe.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Service type ClusterIP nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Mở port public</li>
+              <li class="quiz-option">External LoadBalancer</li>
+              <li class="quiz-option">Virtual IP chỉ trong cluster, dùng cho service-to-service</li>
+              <li class="quiz-option">DNS alias</li>
+            </ul>
+            <div class="quiz-explain">ClusterIP (default): IP chỉ reachable từ trong cluster, dùng cho microservice nội bộ. NodePort: mở port trên mỗi node (dev/on-prem). LoadBalancer: cloud LB tạo external IP. ExternalName: DNS CNAME alias service ngoài cluster.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Deployment vs StatefulSet khác:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">StatefulSet nhanh hơn</li>
+              <li class="quiz-option">Deployment chỉ cho dev</li>
+              <li class="quiz-option">StatefulSet không scale được</li>
+              <li class="quiz-option">StatefulSet có Pod tên cố định (postgres-0, postgres-1), PVC riêng mỗi Pod, start/stop tuần tự — cho stateful workload (DB, queue)</li>
+            </ul>
+            <div class="quiz-explain">Deployment: Pod có hash random tên (web-7dc-abc1, web-7dc-def2), interchangeable. StatefulSet: stable identity, persistent storage, ordered deployment. Use cases StatefulSet: Postgres, Cassandra, ElasticSearch, Kafka. Modern alternative: vẫn ưu tiên Deployment + cloud-managed DB nếu có thể.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">K8s Secret KHÔNG secure mặc định vì:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Chỉ base64-encode (không encrypt). Anyone có RBAC read namespace decode được. Cần enable etcd encryption-at-rest + RBAC chặt + dùng external secret manager</li>
+              <li class="quiz-option">Bị plaintext trong YAML</li>
+              <li class="quiz-option">Không có security</li>
+              <li class="quiz-option">Mặc định public</li>
+            </ul>
+            <div class="quiz-explain">Base64 không phải encryption. <code>kubectl get secret -o yaml</code> + base64 decode = plaintext. Defense: (1) etcd encryption-at-rest với KMS key; (2) RBAC: chỉ ServiceAccount của Pod đọc được; (3) External Secrets Operator sync từ Vault/AWS SM (source of truth không ở K8s); (4) Sealed Secrets cho commit secret encrypted vào Git (GitOps).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">HPA scale dựa trên metric mặc định nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Disk usage</li>
+              <li class="quiz-option">CPU + memory utilization từ metrics-server (cần install)</li>
+              <li class="quiz-option">Số request</li>
+              <li class="quiz-option">Network traffic</li>
+            </ul>
+            <div class="quiz-explain">HPA mặc định scale theo CPU/memory utilization (target Utilization avg). Cần <code>metrics-server</code> trong cluster để collect metric. Custom metric (RPS, queue length, p99 latency) cần Prometheus Adapter hoặc external metrics. KEDA mở rộng cho event-driven scale (Kafka lag, SQS, ...).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Helm chart phù hợp với:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Replace Kubernetes</li>
+              <li class="quiz-option">Chỉ deploy 1 Pod</li>
+              <li class="quiz-option">Package manager — distribute, version, install/upgrade/rollback application với template + values</li>
+              <li class="quiz-option">Service mesh</li>
+            </ul>
+            <div class="quiz-explain">Helm: template + values → render YAML → apply. Lợi: package distribution (helm repo), version + history (helm history), rollback (helm rollback). Use cases: install third-party (nginx-ingress, prometheus-stack); package own app cho multi-env. Alternative: Kustomize (pure YAML overlay) — đơn giản nhưng ít features.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Pod ở status "CrashLoopBackOff" có nghĩa:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Image pull failed</li>
+              <li class="quiz-option">Pending schedule</li>
+              <li class="quiz-option">Healthy</li>
+              <li class="quiz-option">Container start xong rồi crash; K8s restart, lặp đi lặp lại với exponential backoff (10s, 20s, 40s, ... max 5 phút)</li>
+            </ul>
+            <div class="quiz-explain">CrashLoopBackOff = restart loop. Cause: app exit non-zero (bug, missing config, can't connect DB). Debug: <code>kubectl logs --previous</code> xem log Pod crash trước đó. Common: missing env var (DB_URL không có); permission denied (file user khác); OOM (limit thấp).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Khi nào KHÔNG nên dùng Kubernetes?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Big enterprise</li>
+              <li class="quiz-option">App nhỏ 1-3 service, team chưa quen K8s — Docker Compose / 1 VM / serverless (Cloud Run) đủ; K8s complexity tax không xứng</li>
+              <li class="quiz-option">Microservice</li>
+              <li class="quiz-option">Multi-cloud</li>
+            </ul>
+            <div class="quiz-explain">K8s mạnh nhưng đắt: setup, vận hành, learning curve. Ngưỡng "đáng đầu tư": ~10+ services hoặc cần features (autoscale, self-heal, rolling). Dưới ngưỡng: managed PaaS (Cloud Run, App Runner, Fly.io) hoặc Compose. Câu nói: "K8s là Linux của data center" — powerful nhưng không phải lúc nào cũng cần.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 6. Tiếp theo: <a href="chuong7.html"><strong>Chương 7 — Infrastructure as Code →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 6 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

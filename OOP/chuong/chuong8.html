@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 8 — Anti-patterns + Refactoring + DDD-lite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 08 · Refactoring & Architecture</div>
+      <h1>Anti-patterns + Refactoring + DDD-lite</h1>
+      <p class="subtitle">Code smell catalog, refactoring techniques (Fowler), kiến trúc layered/hexagonal, và 5 building block của Domain-Driven Design.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#smells">1. Code Smells catalog</a></li>
+        <li><a href="#refactor">2. Refactoring catalog</a></li>
+        <li><a href="#antipatterns">3. Anti-patterns nổi tiếng</a></li>
+        <li><a href="#case">4. Case study refactor</a></li>
+        <li><a href="#layered">5. Kiến trúc layered</a></li>
+        <li><a href="#hexagonal">6. Hexagonal / Clean</a></li>
+        <li><a href="#ddd">7. DDD-lite — 5 building blocks</a></li>
+        <li><a href="#bounded">8. Bounded Context</a></li>
+        <li><a href="#when-ddd">9. Khi nào dùng DDD?</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="smells">
+        <h2>1. Code Smells — dấu hiệu code có vấn đề</h2>
+        <p>Martin Fowler (sách <em>Refactoring</em>, 1999) liệt kê &gt; 20 code smell. Đây là những cái phổ biến nhất:</p>
+
+        <h3>1.1. Bloaters — code phình</h3>
+        <ul>
+          <li><strong>Long Method</strong> — function &gt; 30-50 dòng. Khó đọc, khó test.</li>
+          <li><strong>Large Class</strong> — &gt; 500 dòng, &gt; 20 method. Vi phạm SRP.</li>
+          <li><strong>Long Parameter List</strong> — &gt; 4 tham số. Khó nhớ thứ tự, dễ swap.</li>
+          <li><strong>Data Clumps</strong> — 2-3 field luôn đi cùng nhau ở nhiều chỗ → tạo class chứa cả nhóm.</li>
+          <li><strong>Primitive Obsession</strong> — dùng <code>string</code>/<code>number</code> raw cho concept (email, money) → tạo Value Object.</li>
+        </ul>
+
+        <h3>1.2. OO abusers — dùng OOP sai cách</h3>
+        <ul>
+          <li><strong>Switch Statements</strong> — switch theo type → thường dấu hiệu thiếu polymorphism. Refactor sang Strategy/State/Visitor.</li>
+          <li><strong>Temporary Field</strong> — field chỉ dùng trong vài method, lúc khác là null/0.</li>
+          <li><strong>Refused Bequest</strong> — subclass không dùng phần lớn parent → có thể không nên kế thừa.</li>
+          <li><strong>Alternative Classes with Different Interfaces</strong> — 2 class làm việc tương tự nhưng API khác.</li>
+        </ul>
+
+        <h3>1.3. Change preventers — khó thay đổi</h3>
+        <ul>
+          <li><strong>Divergent Change</strong> — 1 class phải sửa vì nhiều lý do khác nhau (vi phạm SRP).</li>
+          <li><strong>Shotgun Surgery</strong> — 1 thay đổi business → phải sửa nhiều class.</li>
+          <li><strong>Parallel Inheritance Hierarchies</strong> — thêm class ở hierarchy A → phải thêm tương ứng ở B.</li>
+        </ul>
+
+        <h3>1.4. Dispensables — thừa thãi</h3>
+        <ul>
+          <li><strong>Comments</strong> — comment giải thích "what" thay vì code rõ. Đa số comment có thể loại bằng đặt tên tốt.</li>
+          <li><strong>Duplicated Code</strong> — copy-paste 3 chỗ trở lên → DRY.</li>
+          <li><strong>Lazy Class</strong> — class quá nhỏ, không justify tồn tại.</li>
+          <li><strong>Data Class</strong> — class chỉ field + getter/setter (anemic).</li>
+          <li><strong>Speculative Generality</strong> — abstraction "phòng xa" mà không có biến thể thực.</li>
+          <li><strong>Dead Code</strong> — code không bao giờ chạy.</li>
+        </ul>
+
+        <h3>1.5. Couplers — coupling chặt</h3>
+        <ul>
+          <li><strong>Feature Envy</strong> — method 1 class dùng nhiều thứ của class khác hơn của chính nó. Có thể nên move method.</li>
+          <li><strong>Inappropriate Intimacy</strong> — 2 class biết quá nhiều về nội bộ nhau.</li>
+          <li><strong>Message Chains</strong> — <code>a.b().c().d()</code> — vi phạm Demeter.</li>
+          <li><strong>Middle Man</strong> — class chỉ delegate gần như mọi thứ sang class khác.</li>
+        </ul>
+      </section>
+
+      <section id="refactor">
+        <h2>2. Refactoring catalog — kỹ thuật sửa</h2>
+        <p>Fowler liệt kê &gt; 70 refactoring. Top 10 thực dụng nhất:</p>
+
+        <h3>2.1. Extract Method</h3>
+<pre><code class="language-typescript">// ❌ Long method
+function printOrder(order: Order) {
+  console.log('=== Order ===');
+  console.log('ID:', order.id);
+  console.log('Customer:', order.customer.name);
+
+  let total = 0;
+  for (const item of order.items) {
+    total += item.price * item.qty;
+  }
+  console.log('Total:', total);
+}
+
+// ✓ Extract:
+function printOrder(order: Order) {
+  printHeader(order);
+  console.log('Total:', calculateTotal(order));
+}
+function printHeader(o: Order) {
+  console.log('=== Order ===');
+  console.log('ID:', o.id);
+  console.log('Customer:', o.customer.name);
+}
+function calculateTotal(o: Order): number {
+  return o.items.reduce((s, i) =&gt; s + i.price * i.qty, 0);
+}</code></pre>
+
+        <h3>2.2. Extract Variable</h3>
+<pre><code class="language-typescript">// ❌
+if (order.customer.country === 'VN' &amp;&amp; order.total &gt; 1_000_000 &amp;&amp; order.items.length &gt; 5) { ... }
+
+// ✓
+const isVnCustomer = order.customer.country === 'VN';
+const isLargeOrder = order.total &gt; 1_000_000;
+const hasManyItems = order.items.length &gt; 5;
+if (isVnCustomer &amp;&amp; isLargeOrder &amp;&amp; hasManyItems) { ... }</code></pre>
+
+        <h3>2.3. Inline Method/Variable</h3>
+        <p>Ngược của extract — nếu helper không add value (chỉ rename), inline lại.</p>
+
+        <h3>2.4. Extract Class</h3>
+        <p>Class quá lớn → tách field/method liên quan ra class riêng (đã thấy ở SRP refactor Ch2).</p>
+
+        <h3>2.5. Move Method/Field</h3>
+        <p>Feature Envy → move method sang class mà nó "đang ghen".</p>
+
+<pre><code class="language-typescript">// ❌ Feature Envy
+class Order {
+  customer: Customer;
+  isVipDiscount(): boolean {
+    return this.customer.totalSpent() &gt; 10_000_000 &amp;&amp; this.customer.yearsActive() &gt; 3;
+  }
+}
+
+// ✓ Method thuộc về Customer
+class Customer {
+  totalSpent(): number { /* ... */ }
+  yearsActive(): number { /* ... */ }
+  isVip(): boolean {
+    return this.totalSpent() &gt; 10_000_000 &amp;&amp; this.yearsActive() &gt; 3;
+  }
+}
+class Order {
+  isVipDiscount() { return this.customer.isVip(); }
+}</code></pre>
+
+        <h3>2.6. Replace Conditional with Polymorphism</h3>
+        <p>Switch theo type → polymorphism (Strategy/State/inheritance).</p>
+
+<pre><code class="language-typescript">// ❌
+function pay(method: string, amount: number) {
+  switch (method) {
+    case 'card':   chargeCard(amount);
+    case 'paypal': chargePaypal(amount);
+    case 'crypto': chargeCrypto(amount);
+  }
+}
+
+// ✓ Strategy
+interface PaymentMethod { pay(amount: number): void; }
+class CardPayment implements PaymentMethod { pay(amount: number) {} }
+class PaypalPayment implements PaymentMethod { pay(amount: number) {} }
+class CryptoPayment implements PaymentMethod { pay(amount: number) {} }
+
+function pay(method: PaymentMethod, amount: number) {
+  method.pay(amount);
+}</code></pre>
+
+        <h3>2.7. Replace Magic Number with Named Constant</h3>
+<pre><code class="language-typescript">// ❌
+if (employee.workedYears &gt; 5) salary *= 1.15;
+
+// ✓
+const SENIORITY_THRESHOLD_YEARS = 5;
+const SENIORITY_BONUS = 1.15;
+if (employee.workedYears &gt; SENIORITY_THRESHOLD_YEARS) salary *= SENIORITY_BONUS;</code></pre>
+
+        <h3>2.8. Introduce Parameter Object</h3>
+        <p>Long parameter list → gom thành object.</p>
+<pre><code class="language-typescript">// ❌
+search(query, page, size, sortBy, order, filters, language, region) { }
+
+// ✓
+type SearchOptions = { query: string; page: number; size: number; sortBy: string; order: 'asc'|'desc'; filters: Filter[]; language: string; region: string; };
+search(options: SearchOptions) { }</code></pre>
+
+        <h3>2.9. Replace Type Code with Subclasses (or Strategy)</h3>
+<pre><code class="language-typescript">// ❌
+class Employee {
+  type: 'engineer' | 'manager' | 'salesperson';
+  payAmount(): number {
+    if (this.type === 'engineer') return baseSalary;
+    if (this.type === 'manager') return baseSalary + bonus;
+    if (this.type === 'salesperson') return baseSalary + commission;
+  }
+}
+
+// ✓ Subclass:
+abstract class Employee { abstract payAmount(): number; }
+class Engineer extends Employee { payAmount() { return baseSalary; } }
+class Manager extends Employee { payAmount() { return baseSalary + bonus; } }</code></pre>
+
+        <h3>2.10. Encapsulate Field</h3>
+        <p>Public field → private + getter/setter (hoặc method ý nghĩa hơn).</p>
+
+        <h3>2.11. Extract Interface</h3>
+        <p>Khi cần multiple implementation hoặc mock cho test.</p>
+      </section>
+
+      <section id="antipatterns">
+        <h2>3. Anti-patterns nổi tiếng</h2>
+
+        <h3>3.1. God Object / God Class</h3>
+        <p>1 class biết và làm tất cả: 5000 dòng, 100 method, 50 field. Vi phạm SRP nặng. Sửa: tách theo concern.</p>
+
+        <h3>3.2. Spaghetti Code</h3>
+        <p>Logic nhảy linh tinh, GOTO, callback chained, không có cấu trúc. Sửa: refactor thành module + function thuần.</p>
+
+        <h3>3.3. Lava Flow</h3>
+        <p>Code chết / code "không ai biết để làm gì" tích lũy theo thời gian. Không ai dám xóa vì sợ break. Sửa: có test → mạnh dạn xóa.</p>
+
+        <h3>3.4. Golden Hammer</h3>
+        <p>"Khi bạn có búa, mọi vấn đề là cái đinh." Áp dụng 1 pattern/tool cho mọi thứ. Vd: dùng Singleton khắp nơi, dùng MongoDB cho mọi thứ.</p>
+
+        <h3>3.5. Magic Numbers / Strings</h3>
+        <p><code>if (status === 5)</code>, <code>if (role === 'a')</code>. Đặt tên const hoặc enum.</p>
+
+        <h3>3.6. Yo-yo Problem</h3>
+        <p>Hierarchy quá sâu, đọc 1 method phải nhảy lên xuống 5 cấp parent. Hậu quả của over-inheritance.</p>
+
+        <h3>3.7. Boat Anchor</h3>
+        <p>Code/feature thêm "vì có thể cần" nhưng không bao giờ dùng. YAGNI nói: xóa.</p>
+
+        <h3>3.8. Premature Optimization</h3>
+        <p>Tối ưu code chưa profile chỉ rõ là chậm. Donald Knuth: <em>"Premature optimization is the root of all evil."</em></p>
+
+        <h3>3.9. Copy-Paste Programming</h3>
+        <p>3 chỗ giống nhau trở lên → DRY. Nhưng cẩn thận: không phải mọi giống nhau đều cùng 1 lý do thay đổi.</p>
+
+        <h3>3.10. Cargo Cult Programming</h3>
+        <p>Áp dụng pattern/practice mà không hiểu vì sao. "Vì big tech làm vậy". Mỗi quyết định phải có lý do cụ thể với context của bạn.</p>
+      </section>
+
+      <section id="case">
+        <h2>4. Case study refactor — Order Total Calculation</h2>
+
+        <h3>4.1. Code "trước"</h3>
+
+<pre><code class="language-typescript">function calculateOrderTotal(order: any) {
+  let total = 0;
+  for (let i = 0; i &lt; order.items.length; i++) {
+    let item = order.items[i];
+    let lineTotal = item.price * item.qty;
+
+    // Discount theo category
+    if (item.category === 'electronics' &amp;&amp; item.qty &gt;= 3) {
+      lineTotal = lineTotal * 0.95;
+    }
+    if (item.category === 'food' &amp;&amp; item.expiry &lt; new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) {
+      lineTotal = lineTotal * 0.7;
+    }
+    total += lineTotal;
+  }
+
+  // VIP discount
+  if (order.customer.totalSpent &gt; 10000000 &amp;&amp; order.customer.yearsActive &gt; 3) {
+    total = total * 0.9;
+  }
+
+  // Holiday
+  let now = new Date();
+  if (now.getMonth() === 11 &amp;&amp; now.getDate() &gt;= 20) {
+    total = total - 50000;
+  }
+
+  // Shipping
+  if (order.customer.country === 'VN') {
+    if (total &gt; 500000) total += 0;
+    else total += 30000;
+  } else {
+    total += 200000;
+  }
+
+  if (total &lt; 0) total = 0;
+  return total;
+}</code></pre>
+
+        <p>Vấn đề:</p>
+        <ul>
+          <li>Long method, dày đặc magic numbers/dates.</li>
+          <li>Mọi rule mới phải sửa hàm này (vi phạm OCP).</li>
+          <li>Khó test từng rule riêng.</li>
+          <li>Logic VIP, holiday, shipping trộn lẫn.</li>
+          <li>Không có Value Object — Money là number.</li>
+        </ul>
+
+        <h3>4.2. Refactor</h3>
+
+<pre><code class="language-typescript">// Step 1: Value Object
+class Money {
+  constructor(public readonly amount: number, public readonly currency: string = 'VND') {}
+  add(other: Money) { return new Money(this.amount + other.amount, this.currency); }
+  subtract(other: Money) { return new Money(Math.max(0, this.amount - other.amount), this.currency); }
+  multiply(factor: number) { return new Money(this.amount * factor, this.currency); }
+  static zero() { return new Money(0); }
+}
+
+// Step 2: Strategy cho rule
+interface PricingRule {
+  apply(order: Order, current: Money): Money;
+}
+
+class CategoryDiscountRule implements PricingRule {
+  apply(order: Order, current: Money): Money {
+    let total = Money.zero();
+    for (const item of order.items) {
+      let line = new Money(item.price).multiply(item.qty);
+      if (item.category === 'electronics' &amp;&amp; item.qty &gt;= 3) {
+        line = line.multiply(0.95);
+      }
+      if (item.category === 'food' &amp;&amp; item.willExpireWithin(7)) {
+        line = line.multiply(0.70);
+      }
+      total = total.add(line);
+    }
+    return total;
+  }
+}
+
+class VipDiscountRule implements PricingRule {
+  static readonly MIN_SPENT = 10_000_000;
+  static readonly MIN_YEARS = 3;
+  static readonly DISCOUNT = 0.9;
+
+  apply(order: Order, current: Money): Money {
+    if (order.customer.totalSpent &gt; VipDiscountRule.MIN_SPENT &amp;&amp;
+        order.customer.yearsActive &gt; VipDiscountRule.MIN_YEARS) {
+      return current.multiply(VipDiscountRule.DISCOUNT);
+    }
+    return current;
+  }
+}
+
+class HolidayPromoRule implements PricingRule {
+  static readonly PROMO_AMOUNT = new Money(50_000);
+
+  apply(order: Order, current: Money): Money {
+    return this.isHoliday() ? current.subtract(HolidayPromoRule.PROMO_AMOUNT) : current;
+  }
+  private isHoliday(): boolean {
+    const now = new Date();
+    return now.getMonth() === 11 &amp;&amp; now.getDate() &gt;= 20;
+  }
+}
+
+class ShippingRule implements PricingRule {
+  static readonly DOMESTIC = new Money(30_000);
+  static readonly INTERNATIONAL = new Money(200_000);
+  static readonly FREE_THRESHOLD = new Money(500_000);
+
+  apply(order: Order, current: Money): Money {
+    if (order.customer.country !== 'VN') {
+      return current.add(ShippingRule.INTERNATIONAL);
+    }
+    if (current.amount &gt; ShippingRule.FREE_THRESHOLD.amount) return current;
+    return current.add(ShippingRule.DOMESTIC);
+  }
+}
+
+// Step 3: Pricing engine
+class PricingEngine {
+  constructor(private rules: PricingRule[]) {}
+
+  calculate(order: Order): Money {
+    return this.rules.reduce((current, rule) =&gt; rule.apply(order, current), Money.zero());
+  }
+}
+
+// Wire:
+const engine = new PricingEngine([
+  new CategoryDiscountRule(),
+  new VipDiscountRule(),
+  new HolidayPromoRule(),
+  new ShippingRule(),
+]);
+const total = engine.calculate(order);</code></pre>
+
+        <h3>4.3. So sánh</h3>
+        <ul>
+          <li>Mỗi rule test riêng được.</li>
+          <li>Thêm rule mới — chỉ implement <code>PricingRule</code>, inject vào engine. OCP.</li>
+          <li>Magic numbers thành named constant trong class.</li>
+          <li>Money là Value Object — không thể có total âm.</li>
+          <li>Tổng dòng tăng (~80 dòng vs 30) nhưng <em>maintainability</em> tốt hơn nhiều.</li>
+        </ul>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Lưu ý: KHÔNG luôn refactor</span>
+          Code 30 dòng chỉ chạy 1 lần và không thay đổi nữa — không cần refactor. Refactor cho code có nhiều người đọc/sửa, lifetime dài, và rule thay đổi thường xuyên.
+        </div>
+      </section>
+
+      <section id="layered">
+        <h2>5. Kiến trúc Layered (3-tier / N-tier)</h2>
+
+        <p>Pattern kiến trúc cổ điển. Tách app thành các layer chồng nhau, mỗi layer chỉ phụ thuộc layer dưới.</p>
+
+        <div class="ascii">  ┌────────────────────────────────────┐
+  │ Presentation Layer                  │  Controllers, UI, View
+  │ - HTTP routes                       │
+  │ - Request/response DTOs             │
+  ├────────────────────────────────────┤
+  │ Application Layer (Service)         │  Use cases, orchestration
+  │ - OrderService.checkout()           │
+  │ - Coordinator giữa các domain object│
+  ├────────────────────────────────────┤
+  │ Domain Layer                        │  Business logic, entity
+  │ - Order, Customer, Money            │
+  │ - PricingEngine, validators          │
+  ├────────────────────────────────────┤
+  │ Infrastructure Layer                │  DB, HTTP client, file
+  │ - PostgresOrderRepository           │
+  │ - SendgridSender                    │
+  └────────────────────────────────────┘</div>
+
+        <p>Quy tắc: <strong>phụ thuộc đi xuống</strong>. Domain không import Infrastructure. Application không import Presentation.</p>
+
+        <h3>5.1. Vấn đề với layered cổ điển</h3>
+        <p>Domain phụ thuộc Infrastructure (qua import implementation cụ thể). Khi DB đổi, Domain phải sửa. Vi phạm DIP.</p>
+
+        <p>Hexagonal/Clean architecture giải quyết vấn đề này.</p>
+      </section>
+
+      <section id="hexagonal">
+        <h2>6. Hexagonal Architecture (Ports &amp; Adapters)</h2>
+        <p>Alistair Cockburn (2005): Domain ở giữa, mọi thứ khác (UI, DB, external service) ở ngoài, kết nối qua "port" (interface) + "adapter" (implementation).</p>
+
+        <div class="ascii">                  ┌──────── HTTP Adapter ──────┐
+                  │                             │
+                  ▼                             │
+            ┌───────────┐                        │
+            │           │                        │
+   UI ────► │  DOMAIN   │ ◄── port: NotifSender ─┤
+            │  (core)   │     (interface)         │
+            │           │                        │
+            └─────┬─────┘                        │
+                  │                              │
+        port: OrderRepo                          │
+        (interface)                              │
+                  │                              │
+                  ▼                              │
+            ┌───────────┐                        │
+            │ Postgres  │     ┌── Sendgrid ─────┘
+            │ Adapter   │     │   Adapter
+            └───────────┘     └──────────</div>
+
+        <p>Domain chỉ định nghĩa <strong>port</strong> (interface) theo nhu cầu. Adapter là implementation cụ thể (DB driver, HTTP client). Domain không biết Postgres hay Sendgrid.</p>
+
+        <h3>6.1. Lợi ích</h3>
+        <ul>
+          <li>Test domain với in-memory adapter (không cần DB thật).</li>
+          <li>Đổi DB từ Postgres sang MongoDB — chỉ thay adapter.</li>
+          <li>Domain logic <em>thuần khiết</em>, không bị "ô nhiễm" bởi tech detail.</li>
+        </ul>
+
+        <h3>6.2. Clean Architecture (Bob Martin, 2012)</h3>
+        <p>Mở rộng Hexagonal với 4 layer concentric:</p>
+        <ol>
+          <li><strong>Entities</strong> (innermost) — domain objects, business rules.</li>
+          <li><strong>Use Cases</strong> — application-specific logic.</li>
+          <li><strong>Interface Adapters</strong> — controllers, gateways, presenters.</li>
+          <li><strong>Frameworks &amp; Drivers</strong> (outermost) — DB, web framework, devices.</li>
+        </ol>
+        <p><strong>Dependency rule</strong>: phụ thuộc chỉ đi vào trong (outer phụ thuộc inner, không ngược).</p>
+      </section>
+
+      <section id="ddd">
+        <h2>7. DDD-lite — 5 Building Blocks</h2>
+
+        <p>Eric Evans (2003) đặt nền cho Domain-Driven Design. 5 building block là vốn tối thiểu để áp dụng:</p>
+
+        <h3>7.1. Entity</h3>
+        <p>Object có <strong>identity ổn định qua thời gian</strong> (ID không đổi, attribute có thể đổi). Hai entity khác nhau dù mọi field giống nhau, nếu khác ID.</p>
+
+<pre><code class="language-typescript">class Customer {
+  constructor(
+    public readonly id: CustomerId,    // identity
+    private name: string,
+    private email: Email,
+  ) {}
+
+  changeEmail(newEmail: Email) { this.email = newEmail; }   // attribute thay đổi
+  changeName(newName: string) { this.name = newName; }
+  // id KHÔNG đổi
+}</code></pre>
+
+        <h3>7.2. Value Object</h3>
+        <p>Object định danh qua <strong>giá trị thuộc tính</strong>, không có ID, immutable. (Đã đào sâu Ch3.)</p>
+<pre><code class="language-typescript">class Money { /* immutable, equals theo amount + currency */ }
+class Address { /* equals theo street+city+country */ }
+class DateRange { /* equals theo start+end */ }</code></pre>
+
+        <h3>7.3. Aggregate</h3>
+        <p>Cụm Entity + Value Object được protect bằng <strong>boundary transaction</strong>. Có 1 "Aggregate Root" — gateway duy nhất để truy cập.</p>
+
+<pre><code class="language-typescript">// Aggregate root
+class Order {
+  private _items: OrderItem[] = [];
+
+  constructor(
+    public readonly id: OrderId,
+    public readonly customerId: CustomerId,
+  ) {}
+
+  addItem(productId: ProductId, qty: number, price: Money) {
+    if (this._items.length &gt;= 100) throw new Error('max 100 items');
+    this._items.push(new OrderItem(productId, qty, price));
+  }
+
+  removeItem(productId: ProductId) { /* ... */ }
+
+  total(): Money {
+    return this._items.reduce((s, i) =&gt; s.add(i.subtotal()), Money.zero());
+  }
+
+  // External code KHÔNG được tham chiếu OrderItem trực tiếp
+  get items(): ReadonlyArray&lt;OrderItem&gt; { return this._items; }
+}
+
+// OrderItem là entity nội bộ aggregate, không tự đứng riêng
+class OrderItem {
+  constructor(public readonly productId: ProductId, public qty: number, public price: Money) {}
+  subtotal() { return this.price.multiply(this.qty); }
+}</code></pre>
+
+        <p>Quy tắc:</p>
+        <ul>
+          <li>1 transaction sửa duy nhất 1 aggregate (consistency boundary).</li>
+          <li>Aggregate khác chỉ tham chiếu qua ID, không tham chiếu trực tiếp.</li>
+          <li>Aggregate giữ invariant nội bộ.</li>
+        </ul>
+
+        <h3>7.4. Repository</h3>
+        <p>Tập trừu tượng để load/save aggregate. Ẩn database.</p>
+
+<pre><code class="language-typescript">// Domain interface
+interface OrderRepository {
+  findById(id: OrderId): Promise&lt;Order | null&gt;;
+  save(order: Order): Promise&lt;void&gt;;
+  findByCustomer(customerId: CustomerId): Promise&lt;Order[]&gt;;
+}
+
+// Infrastructure implementation
+class PostgresOrderRepository implements OrderRepository {
+  constructor(private db: PgClient) {}
+
+  async findById(id: OrderId) {
+    const row = await this.db.query('SELECT * FROM orders WHERE id = $1', [id.value]);
+    return row ? this.toDomain(row) : null;
+  }
+
+  async save(order: Order) { /* ... */ }
+  async findByCustomer(customerId: CustomerId) { /* ... */ return []; }
+
+  private toDomain(row: any): Order { /* mapping */ return new Order(...); }
+}</code></pre>
+
+        <p>Repository <strong>không phải</strong> DAO. DAO trả flat data; Repository trả full aggregate (với behavior).</p>
+
+        <h3>7.5. Domain Service</h3>
+        <p>Logic domain mà không thuộc về 1 Entity hoặc VO cụ thể. Ví dụ: chuyển tiền giữa 2 account.</p>
+
+<pre><code class="language-typescript">class TransferService {
+  async transfer(from: AccountId, to: AccountId, amount: Money) {
+    const sourceAcc = await this.repo.findById(from);
+    const destAcc = await this.repo.findById(to);
+    if (!sourceAcc || !destAcc) throw new Error('not found');
+
+    sourceAcc.withdraw(amount);   // entity behavior
+    destAcc.deposit(amount);
+
+    await this.repo.save(sourceAcc);
+    await this.repo.save(destAcc);
+    // Lưu ý: 2 aggregate trong 1 transaction → cần xử lý nhất quán
+  }
+}</code></pre>
+
+        <p>Domain Service ≠ Application Service. Domain Service vẫn ở domain layer, dùng entity/VO. Application Service orchestrate use case (gọi repository, gửi email).</p>
+      </section>
+
+      <section id="bounded">
+        <h2>8. Bounded Context</h2>
+        <p>
+          Khái niệm cốt lõi nhất của DDD chiến lược (strategic). Một <strong>Bounded Context</strong> là phạm vi mà 1 model có nghĩa nhất quán.
+          Cùng 1 từ "Customer" có thể có 2 model khác nhau ở 2 context:
+        </p>
+
+        <ul>
+          <li><strong>Sales context</strong>: Customer = (id, name, email, totalSpent, vipStatus, leadScore).</li>
+          <li><strong>Shipping context</strong>: Customer = (id, addresses, deliveryPreferences, signatureRequired).</li>
+        </ul>
+
+        <p>2 context KHÔNG share 1 class Customer khổng lồ. Mỗi context có model riêng. Ánh xạ giữa context qua "Context Map" (bằng ID + ACL — anti-corruption layer).</p>
+
+        <h3>8.1. Microservice = Bounded Context?</h3>
+        <p>Thường đúng. Mỗi microservice nên 1 BC. Nhưng KHÔNG nhất thiết — 1 monolith có thể có nhiều BC tách bằng module/package.</p>
+
+        <h3>8.2. Ubiquitous Language</h3>
+        <p>Trong 1 BC, dev và domain expert dùng <em>cùng 1 ngôn ngữ</em>. Code dùng đúng từ business: <code>order.cancel()</code>, không <code>order.update(2)</code>.</p>
+      </section>
+
+      <section id="when-ddd">
+        <h2>9. Khi nào dùng DDD?</h2>
+
+        <p>DDD KHÔNG phải cho mọi project.</p>
+
+        <h3>9.1. Phù hợp khi</h3>
+        <ul>
+          <li>Domain phức tạp, business rule nhiều.</li>
+          <li>Project lifetime dài (3+ năm).</li>
+          <li>Có domain expert làm việc cùng dev.</li>
+          <li>Team đủ kinh nghiệm.</li>
+        </ul>
+
+        <h3>9.2. KHÔNG phù hợp</h3>
+        <ul>
+          <li>CRUD đơn giản (TODO list, blog).</li>
+          <li>Prototype, MVP, hackathon.</li>
+          <li>Domain chủ yếu là technical (compiler, search engine).</li>
+          <li>Team chưa quen với pattern OOP cơ bản.</li>
+        </ul>
+
+        <p>Bắt đầu nhỏ: dùng Value Object + Rich Domain Model. Khi phức tạp đủ, thêm Aggregate boundaries. Khi team scale, tách Bounded Context.</p>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Lời khuyên cuối</span>
+          Pattern, refactoring, DDD đều là <em>công cụ</em>. Khi nào dùng phụ thuộc problem, team, deadline. Học để có vốn từ vựng + nhận ra vấn đề. Đừng cố ép giải pháp lên problem — hãy hiểu problem trước.
+        </div>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <ol>
+          <li>Tìm 5 code smell trong 1 file mã nguồn của project bạn từng làm. Đề xuất refactoring cụ thể cho từng cái.</li>
+
+          <li>Refactor đoạn code dưới — áp dụng Replace Conditional with Polymorphism + Extract Class:
+<pre><code class="language-typescript">function calculatePay(employee: any) {
+  if (employee.type === 'hourly') return employee.hours * employee.rate;
+  if (employee.type === 'salary') return employee.salary;
+  if (employee.type === 'commission') return employee.salary + employee.salesAmount * 0.1;
+}</code></pre>
+          </li>
+
+          <li>Thiết kế DDD cho domain "Online Library":
+            <ul>
+              <li>Identify Entity vs Value Object.</li>
+              <li>Identify Aggregate boundaries.</li>
+              <li>Define Repository interface.</li>
+              <li>Identify possible Bounded Context.</li>
+            </ul>
+          </li>
+
+          <li>Convert 1 anemic domain model trong project bạn sang Rich Domain Model. Đo: cùng tính năng tốn bao nhiêu dòng code service trước/sau?</li>
+
+          <li>So sánh: Hexagonal Architecture vs Layered Architecture cổ điển. Khi nào dùng cái nào?</li>
+
+          <li>Liệt kê 5 anti-pattern bạn đã gặp trong code thực tế (của bản thân hoặc đồng nghiệp). Mỗi cái nói cách bạn fix/sẽ fix.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 8 (chương cuối)</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">"Feature Envy" code smell:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Class có quá nhiều feature</li>
+              <li class="quiz-option">Method 1 class dùng nhiều thứ của class khác hơn của chính nó → có thể nên move method</li>
+              <li class="quiz-option">Class thiếu feature</li>
+              <li class="quiz-option">Constructor dài</li>
+            </ul>
+            <div class="quiz-explain">Nếu method <code>Order.isVipDiscount()</code> chủ yếu gọi <code>customer.totalSpent()</code> + <code>customer.yearsActive()</code>, method này "envy" Customer — di chuyển method sang Customer (<code>customer.isVip()</code>) là hợp lý.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Replace Conditional with Polymorphism áp dụng khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Có quá nhiều generic</li>
+              <li class="quiz-option">Class abstract</li>
+              <li class="quiz-option">Cần Singleton</li>
+              <li class="quiz-option">Có switch/if-else theo type — refactor sang Strategy/State/inheritance để OCP</li>
+            </ul>
+            <div class="quiz-explain">switch theo type là dấu hiệu thiếu polymorphism. Thay <code>if(type==='card') chargeCard()...</code> bằng <code>method.pay(amount)</code> với strategy. Thêm payment method mới = thêm class, không sửa code cũ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">"God Object" anti-pattern:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">1 class biết và làm tất cả — vi phạm SRP nặng</li>
+              <li class="quiz-option">Tốt vì tập trung logic</li>
+              <li class="quiz-option">Chỉ tồn tại trong Java</li>
+              <li class="quiz-option">Bắt buộc cho Singleton</li>
+            </ul>
+            <div class="quiz-explain">Class 5000 dòng, 100 method, biết về mọi thứ. Vi phạm SRP, khó test, khó maintain. Sửa: tách theo concern (Extract Class). Phổ biến trong code legacy / monolith cũ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Hexagonal Architecture (Ports &amp; Adapters):</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Layered cổ điển</li>
+              <li class="quiz-option">DB ở giữa, app ở ngoài</li>
+              <li class="quiz-option">Domain ở giữa, port (interface) định bởi domain, adapter (impl) ở ngoài cho UI/DB/external</li>
+              <li class="quiz-option">Microservice mesh</li>
+            </ul>
+            <div class="quiz-explain">Domain logic thuần khiết, không phụ thuộc tech. Port = interface domain định nghĩa theo nhu cầu. Adapter = implementation (Postgres, HTTP, Stripe). Test domain dễ — in-memory adapter. Đổi DB chỉ thay adapter.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Trong DDD, Aggregate Root là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Class root của hierarchy</li>
+              <li class="quiz-option">Entity duy nhất là gateway truy cập aggregate; client không tham chiếu entity bên trong trực tiếp</li>
+              <li class="quiz-option">DB primary key</li>
+              <li class="quiz-option">Singleton</li>
+            </ul>
+            <div class="quiz-explain">Aggregate = cụm entity + VO bảo vệ invariant cùng nhau. Root là entity "gateway" — code ngoài chỉ tham chiếu root, không OrderItem riêng lẻ. 1 transaction sửa 1 aggregate. Aggregate khác tham chiếu qua ID.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Bounded Context giải quyết:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Performance</li>
+              <li class="quiz-option">Memory</li>
+              <li class="quiz-option">Database scaling</li>
+              <li class="quiz-option">"Customer" có nhiều nghĩa khác nhau ở Sales vs Shipping — mỗi BC có model riêng, không share class khổng lồ</li>
+            </ul>
+            <div class="quiz-explain">Cùng từ "Customer" có ngữ nghĩa khác ở Sales (totalSpent, vipStatus) vs Shipping (addresses, deliveryPref). 1 class Customer 50 field cho mọi BC = anti-pattern. BC tách model riêng, ánh xạ qua ID + Anti-Corruption Layer.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Donald Knuth: "Premature optimization is the root of all evil" có nghĩa:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Đừng tối ưu code chưa profile chỉ rõ là chậm</li>
+              <li class="quiz-option">Không bao giờ tối ưu</li>
+              <li class="quiz-option">Tối ưu cuối project</li>
+              <li class="quiz-option">Microbenchmark mọi function</li>
+            </ul>
+            <div class="quiz-explain">Tối ưu sớm thường: tăng phức tạp code, hi sinh readability cho gain không đáng kể, tối ưu sai chỗ. Code rõ trước, đo bằng profiler nếu chậm thật, mới optimize đúng chỗ. Thường 5% code chiếm 95% time.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Khi nào KHÔNG nên áp dụng DDD?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">App với 1 user</li>
+              <li class="quiz-option">Domain phức tạp</li>
+              <li class="quiz-option">CRUD đơn giản, prototype/MVP, domain technical (compiler), team chưa quen OOP cơ bản</li>
+              <li class="quiz-option">App enterprise</li>
+            </ul>
+            <div class="quiz-explain">DDD cho domain phức tạp + lifetime dài + có domain expert. CRUD app, hackathon, technical core (search, compiler) — DDD overkill. Bắt đầu nhỏ với Value Object + Rich Domain, scale dần khi cần.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text);">
+        🎉 <strong>Hoàn thành toàn bộ 8 chương OOP & Design Patterns!</strong>
+      </p>
+      <p style="margin-top:1rem; color: var(--text-soft); font-style: italic; font-family: var(--font-display); font-size: 1.1rem;">
+        Bạn đã đi qua: 4 trụ cột OOP → 5 nguyên lý SOLID → Class design mastery → 23 GoF patterns → Anti-patterns + Refactoring + DDD-lite.
+        Đây là vốn từ vựng <em>thiết yếu</em> để bạn nói chuyện thiết kế phần mềm với đồng nghiệp senior. Pattern không phải đích đến —
+        chúng là công cụ để bạn nhận ra vấn đề và lựa chọn giải pháp đúng.
+      </p>
+      <p style="margin-top:1rem; color: var(--text-muted);">
+        ← <a href="../index.html">Về lộ trình</a> · <a href="../docs.html">Đọc lại giáo trình tổng quan</a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 8 — chương cuối · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

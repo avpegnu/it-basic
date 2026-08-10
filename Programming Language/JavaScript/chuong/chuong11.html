@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 11 — TypeScript Advanced Types · JavaScript Sub-pillar</title>
+  <meta name="description" content="Conditional types, infer, mapped types, template literal types, key remapping, recursive types — cấp độ TS wizard. Học cách đọc type Awaited, DeepPartial, PathParams." />
+  <meta name="theme-color" content="#3178c6" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-ts">TS</span>
+        TS · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 11</span>
+      </div>
+      <div class="chapter-num ts">Chương 11 · TypeScript Advanced Types</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        TypeScript ở cấp độ wizard — type-level programming
+      </h1>
+      <p class="lead">
+        Bây giờ bạn biết generics. Chương này là "lập trình ở tầng type" — viết được type tự suy luận như
+        <code>ReturnType</code>, <code>Awaited</code>, <code>DeepPartial</code>. Hiểu rồi sẽ đọc được source của
+        <strong>Prisma</strong>, <strong>Zod</strong>, <strong>tRPC</strong> — những thư viện modern dùng TS như
+        ngôn ngữ lập trình thật sự. Cẩn thận anti-pattern: type quá phức tạp làm tsc chậm và IDE lag.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 9-10</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose ts-section">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Viết được <strong>conditional types</strong> dạng <code>T extends U ? X : Y</code> và hiểu phân phối qua union.</li>
+            <li>Master keyword <code>infer</code> — trích xuất type ẩn bên trong generic.</li>
+            <li>Tạo <strong>mapped types</strong> với key remapping (<code>as</code>) và modifier (<code>+readonly</code>, <code>-?</code>).</li>
+            <li>Dùng <strong>template literal types</strong> để xây dựng kiểu string từ literal + biến.</li>
+            <li>Viết <strong>recursive types</strong> như <code>DeepReadonly</code>, <code>DeepPartial</code> — và biết giới hạn ~50 tầng.</li>
+            <li>Đọc được type definition của thư viện thật (Awaited, Prisma's <code>Args</code>).</li>
+            <li>Nhận biết khi type "quá phức tạp" — dừng đúng lúc, đừng over-engineer.</li>
+          </ul>
+        </div>
+
+        <h2 id="conditional">1. Conditional types — "ternary" ở tầng type</h2>
+
+        <p>
+          Bạn đã biết <code>condition ? a : b</code> ở runtime. TypeScript có dạng tương tự ở tầng type:
+          <code>T extends U ? X : Y</code>. Đọc là: "nếu type <code>T</code> assignable to <code>U</code> thì chọn <code>X</code>,
+          không thì chọn <code>Y</code>".
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Conditional type cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">IsString</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">string</span> ? <span class="tok-kw">true</span> : <span class="tok-kw">false</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">IsString</span>&lt;<span class="tok-str">'hello'</span>&gt;;   <span class="tok-com">// true</span>
+<span class="tok-kw">type</span> <span class="tok-cls">B</span> = <span class="tok-cls">IsString</span>&lt;<span class="tok-num">42</span>&gt;;        <span class="tok-com">// false</span>
+<span class="tok-kw">type</span> <span class="tok-cls">C</span> = <span class="tok-cls">IsString</span>&lt;<span class="tok-cls">string</span>&gt;;    <span class="tok-com">// true</span>
+
+<span class="tok-com">// Ví dụ thực tế — chọn loại response</span>
+<span class="tok-kw">type</span> <span class="tok-cls">ApiResponse</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">Error</span>
+  ? { ok: <span class="tok-kw">false</span>; error: <span class="tok-cls">T</span>[<span class="tok-str">'message'</span>] }
+  : { ok: <span class="tok-kw">true</span>; data: <span class="tok-cls">T</span> };
+
+<span class="tok-kw">type</span> <span class="tok-cls">Good</span> = <span class="tok-cls">ApiResponse</span>&lt;{ id: <span class="tok-cls">number</span> }&gt;;
+<span class="tok-com">// { ok: true; data: { id: number } }</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">Bad</span> = <span class="tok-cls">ApiResponse</span>&lt;<span class="tok-cls">Error</span>&gt;;
+<span class="tok-com">// { ok: false; error: string }</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — đọc conditional</div>
+          <p>
+            Đừng đọc <code>T extends U</code> là "kế thừa". Ở tầng type, <code>extends</code> nghĩa là <strong>compatible
+            with</strong> — "<code>T</code> có thể gán cho <code>U</code> không?". Ví dụ <code>'hello' extends string</code>
+            đúng (literal là sub-type của string), nhưng <code>string extends 'hello'</code> sai.
+          </p>
+        </div>
+
+        <h3 id="distributive">1.1. Distributive conditional — phân phối qua union</h3>
+
+        <p>
+          Đây là tính chất quan trọng: khi <code>T</code> là union và xuất hiện <strong>"bare" (trần)</strong> ở vế trái
+          <code>extends</code>, TS sẽ <strong>phân phối</strong> — áp dụng conditional cho từng thành phần rồi gộp lại.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Distributive — quan trọng</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">ToArray</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-kw">any</span> ? <span class="tok-cls">T</span>[] : <span class="tok-kw">never</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">ToArray</span>&lt;<span class="tok-cls">string</span>&gt;;
+<span class="tok-com">// string[]</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">B</span> = <span class="tok-cls">ToArray</span>&lt;<span class="tok-cls">string</span> | <span class="tok-cls">number</span>&gt;;
+<span class="tok-com">// TS phân phối:</span>
+<span class="tok-com">//   ToArray&lt;string&gt; | ToArray&lt;number&gt;</span>
+<span class="tok-com">//   = string[] | number[]</span>
+<span class="tok-com">// CHỨ KHÔNG PHẢI (string | number)[]</span></code></pre>
+        </div>
+
+        <p>Muốn <strong>tắt</strong> phân phối: bọc cả 2 vế bằng tuple <code>[T]</code>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Disable distributive</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">ToArrayBundled</span>&lt;<span class="tok-cls">T</span>&gt; = [<span class="tok-cls">T</span>] <span class="tok-kw">extends</span> [<span class="tok-kw">any</span>] ? <span class="tok-cls">T</span>[] : <span class="tok-kw">never</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">C</span> = <span class="tok-cls">ToArrayBundled</span>&lt;<span class="tok-cls">string</span> | <span class="tok-cls">number</span>&gt;;
+<span class="tok-com">// (string | number)[]   ← gộp lại, không phân phối</span>
+
+<span class="tok-com">// Use case thực tế: check chính xác type, không bị "rớt qua kẽ":</span>
+<span class="tok-kw">type</span> <span class="tok-cls">IsExactlyString</span>&lt;<span class="tok-cls">T</span>&gt; = [<span class="tok-cls">T</span>] <span class="tok-kw">extends</span> [<span class="tok-cls">string</span>] ? <span class="tok-kw">true</span> : <span class="tok-kw">false</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">X</span> = <span class="tok-cls">IsExactlyString</span>&lt;<span class="tok-cls">string</span> | <span class="tok-cls">number</span>&gt;;  <span class="tok-com">// false (vì có number)</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Y</span> = <span class="tok-cls">IsExactlyString</span>&lt;<span class="tok-cls">string</span>&gt;;           <span class="tok-com">// true</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — chỉ "bare" type mới phân phối</div>
+          <p>
+            Phân phối chỉ xảy ra khi type tham số <strong>đứng trần</strong> ở vế trái: <code>T extends U</code>.
+            Nếu bạn viết <code>T &amp; {} extends U</code> hay <code>[T] extends [U]</code> thì <strong>không phân phối</strong>.
+            Đây là kỹ thuật để "bật / tắt" theo ý.
+          </p>
+        </div>
+
+        <h2 id="infer">2. Keyword <code>infer</code> — bắt type ẩn</h2>
+
+        <p>
+          <code>infer</code> như "biến trống" ở tầng type — bạn nói TS: "ở chỗ này có một type, hãy gán nó cho biến tên
+          <code>R</code> để tôi dùng". <code>infer</code> chỉ hợp lệ ở vế phải <code>extends</code> trong conditional type.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>infer — ReturnType</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Trích kiểu trả về của function</span>
+<span class="tok-kw">type</span> <span class="tok-cls">MyReturnType</span>&lt;<span class="tok-cls">F</span>&gt; = <span class="tok-cls">F</span> <span class="tok-kw">extends</span> (...args: <span class="tok-kw">any</span>[]) =&gt; <span class="tok-kw">infer</span> <span class="tok-cls">R</span>
+  ? <span class="tok-cls">R</span>
+  : <span class="tok-kw">never</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">MyReturnType</span>&lt;() =&gt; <span class="tok-cls">number</span>&gt;;          <span class="tok-com">// number</span>
+<span class="tok-kw">type</span> <span class="tok-cls">B</span> = <span class="tok-cls">MyReturnType</span>&lt;(s: <span class="tok-cls">string</span>) =&gt; <span class="tok-cls">boolean</span>&gt;;  <span class="tok-com">// boolean</span>
+<span class="tok-kw">type</span> <span class="tok-cls">C</span> = <span class="tok-cls">MyReturnType</span>&lt;<span class="tok-cls">string</span>&gt;;               <span class="tok-com">// never (không match)</span></code></pre>
+        </div>
+
+        <p>Bạn có thể đặt <code>infer</code> ở rất nhiều vị trí. Vài ví dụ:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>infer ở nhiều vị trí</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Lấy type đầu tiên của tuple</span>
+<span class="tok-kw">type</span> <span class="tok-cls">First</span>&lt;<span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-kw">any</span>[]&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> [<span class="tok-kw">infer</span> <span class="tok-cls">F</span>, ...<span class="tok-kw">any</span>[]] ? <span class="tok-cls">F</span> : <span class="tok-kw">never</span>;
+<span class="tok-kw">type</span> <span class="tok-cls">F</span> = <span class="tok-cls">First</span>&lt;[<span class="tok-cls">string</span>, <span class="tok-cls">number</span>, <span class="tok-cls">boolean</span>]&gt;;  <span class="tok-com">// string</span>
+
+<span class="tok-com">// Lấy phần còn lại (tail)</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Tail</span>&lt;<span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-kw">any</span>[]&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> [<span class="tok-kw">any</span>, ...<span class="tok-kw">infer</span> <span class="tok-cls">R</span>] ? <span class="tok-cls">R</span> : [];
+<span class="tok-kw">type</span> <span class="tok-cls">T1</span> = <span class="tok-cls">Tail</span>&lt;[<span class="tok-cls">string</span>, <span class="tok-cls">number</span>, <span class="tok-cls">boolean</span>]&gt;;  <span class="tok-com">// [number, boolean]</span>
+
+<span class="tok-com">// Unwrap Promise</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UnwrapPromise</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">Promise</span>&lt;<span class="tok-kw">infer</span> <span class="tok-cls">U</span>&gt; ? <span class="tok-cls">U</span> : <span class="tok-cls">T</span>;
+<span class="tok-kw">type</span> <span class="tok-cls">U</span> = <span class="tok-cls">UnwrapPromise</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">number</span>&gt;&gt;;  <span class="tok-com">// number</span>
+<span class="tok-kw">type</span> <span class="tok-cls">V</span> = <span class="tok-cls">UnwrapPromise</span>&lt;<span class="tok-cls">string</span>&gt;;            <span class="tok-com">// string (không phải Promise → trả nguyên)</span>
+
+<span class="tok-com">// Lấy type element của array</span>
+<span class="tok-kw">type</span> <span class="tok-cls">ElementOf</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> (<span class="tok-kw">infer</span> <span class="tok-cls">E</span>)[] ? <span class="tok-cls">E</span> : <span class="tok-kw">never</span>;
+<span class="tok-kw">type</span> <span class="tok-cls">E</span> = <span class="tok-cls">ElementOf</span>&lt;<span class="tok-cls">number</span>[]&gt;;  <span class="tok-com">// number</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — infer là pattern matching</div>
+          <p>
+            Nếu đã học ngôn ngữ functional (Haskell, OCaml), <code>infer</code> chính là pattern matching trên type.
+            Bạn viết "khuôn" và TS điền vào chỗ trống. Tương tự destructuring nhưng ở compile-time.
+          </p>
+        </div>
+
+        <h3 id="trace-infer">2.1. Trace ví dụ — TS đánh giá conditional thế nào</h3>
+
+        <p>Hãy theo dõi <code>UnwrapPromise&lt;Promise&lt;Promise&lt;number&gt;&gt;&gt;</code> bước-bước:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Trace step-by-step</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Định nghĩa:</span>
+<span class="tok-kw">type</span> <span class="tok-cls">UnwrapPromise</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">Promise</span>&lt;<span class="tok-kw">infer</span> <span class="tok-cls">U</span>&gt; ? <span class="tok-cls">U</span> : <span class="tok-cls">T</span>;
+
+<span class="tok-com">// Bước 1: thay T = Promise&lt;Promise&lt;number&gt;&gt;</span>
+<span class="tok-com">//   Promise&lt;Promise&lt;number&gt;&gt; extends Promise&lt;infer U&gt; ?</span>
+<span class="tok-com">// Bước 2: match — TS gán U = Promise&lt;number&gt;</span>
+<span class="tok-com">// Bước 3: return U = Promise&lt;number&gt;</span>
+
+<span class="tok-com">// Vậy UnwrapPromise một lần CHỈ unwrap 1 tầng.</span>
+<span class="tok-com">// Muốn unwrap nhiều tầng → đệ quy (recursive type, xem mục 9).</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">Awaited2</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">Promise</span>&lt;<span class="tok-kw">infer</span> <span class="tok-cls">U</span>&gt; ? <span class="tok-cls">Awaited2</span>&lt;<span class="tok-cls">U</span>&gt; : <span class="tok-cls">T</span>;
+<span class="tok-com">//                                                  ↑ tự gọi lại</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">R</span> = <span class="tok-cls">Awaited2</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">number</span>&gt;&gt;&gt;;  <span class="tok-com">// number</span>
+<span class="tok-com">// Bước 1: match → U = Promise&lt;number&gt;, gọi Awaited2&lt;Promise&lt;number&gt;&gt;</span>
+<span class="tok-com">// Bước 2: match → U = number, gọi Awaited2&lt;number&gt;</span>
+<span class="tok-com">// Bước 3: không match Promise → trả T = number. DONE.</span></code></pre>
+        </div>
+
+        <p>Đây chính xác là cách <code>Awaited&lt;T&gt;</code> built-in của TS hoạt động (có thêm xử lý <code>.then</code>).</p>
+
+        <h2 id="mapped">3. Mapped types — duyệt key, biến hình value</h2>
+
+        <p>
+          Mapped type là cách "loop" qua keys của một type và sinh ra type mới. Cú pháp:
+          <code>{ [K in keyof T]: ... }</code>. Bạn đã thấy ở chương 10 (<code>Partial</code>, <code>Readonly</code>). Giờ ta đào sâu.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Mapped type cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Đánh dấu tất cả property là readonly</span>
+<span class="tok-kw">type</span> <span class="tok-cls">MyReadonly</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  <span class="tok-kw">readonly</span> [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">interface</span> <span class="tok-cls">User</span> { id: <span class="tok-cls">number</span>; name: <span class="tok-cls">string</span>; }
+<span class="tok-kw">type</span> <span class="tok-cls">ReadonlyUser</span> = <span class="tok-cls">MyReadonly</span>&lt;<span class="tok-cls">User</span>&gt;;
+<span class="tok-com">// {</span>
+<span class="tok-com">//   readonly id: number;</span>
+<span class="tok-com">//   readonly name: string;</span>
+<span class="tok-com">// }</span>
+
+<span class="tok-com">// Biến value thành Promise của value</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Asyncify</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]: <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">T</span>[<span class="tok-cls">K</span>]&gt;;
+};
+
+<span class="tok-kw">type</span> <span class="tok-cls">AsyncUser</span> = <span class="tok-cls">Asyncify</span>&lt;<span class="tok-cls">User</span>&gt;;
+<span class="tok-com">// { id: Promise&lt;number&gt;; name: Promise&lt;string&gt;; }</span></code></pre>
+        </div>
+
+        <h3 id="modifiers">3.1. Modifier <code>+</code> và <code>-</code></h3>
+
+        <p>
+          Mặc định mapped type là <strong>homomorphic</strong> — giữ nguyên modifier <code>readonly</code> và <code>?</code>
+          của source. Bạn có thể thêm (<code>+</code>) hoặc bỏ (<code>-</code>) modifier tường minh:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Add / remove modifier</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Bỏ readonly khỏi mọi property</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Mutable</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  -<span class="tok-kw">readonly</span> [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">type</span> <span class="tok-cls">Locked</span> = { <span class="tok-kw">readonly</span> a: <span class="tok-cls">number</span>; <span class="tok-kw">readonly</span> b: <span class="tok-cls">string</span> };
+<span class="tok-kw">type</span> <span class="tok-cls">Unlocked</span> = <span class="tok-cls">Mutable</span>&lt;<span class="tok-cls">Locked</span>&gt;;
+<span class="tok-com">// { a: number; b: string }   ← bỏ readonly</span>
+
+<span class="tok-com">// Bỏ optional khỏi mọi property → bắt buộc</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Required2</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]-?: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">type</span> <span class="tok-cls">Loose</span> = { a?: <span class="tok-cls">number</span>; b?: <span class="tok-cls">string</span> };
+<span class="tok-kw">type</span> <span class="tok-cls">Strict</span> = <span class="tok-cls">Required2</span>&lt;<span class="tok-cls">Loose</span>&gt;;
+<span class="tok-com">// { a: number; b: string }   ← bỏ ?</span>
+
+<span class="tok-com">// Thêm optional cho mọi property</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Partial2</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]+?: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];   <span class="tok-com">// +? cũng chỉ là ?</span>
+};</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Quy ước viết</div>
+          <p>
+            <code>+readonly</code> và <code>+?</code> hiếm khi viết tường minh vì là default. Bạn sẽ thấy chủ yếu là
+            <code>-readonly</code> và <code>-?</code> — chúng là 2 modifier "bóc lớp" hữu ích nhất.
+          </p>
+        </div>
+
+        <h3 id="remap">3.2. Key remapping với <code>as</code></h3>
+
+        <p>
+          Từ TS 4.1, bạn có thể <strong>đổi tên key</strong> bằng <code>as</code>. Đây là tính năng mở khoá rất nhiều
+          pattern mới — đặc biệt khi kết hợp với template literal.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Key remap with `as`</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Sinh getter từ field — name → getName</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Getters</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span> <span class="tok-kw">as</span> <span class="tok-str">`get</span><span class="tok-op">${</span><span class="tok-cls">Capitalize</span>&lt;<span class="tok-cls">K</span> &amp; <span class="tok-cls">string</span>&gt;<span class="tok-op">}</span><span class="tok-str">`</span>]: () =&gt; <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">interface</span> <span class="tok-cls">User</span> { id: <span class="tok-cls">number</span>; name: <span class="tok-cls">string</span>; email: <span class="tok-cls">string</span>; }
+
+<span class="tok-kw">type</span> <span class="tok-cls">UserGetters</span> = <span class="tok-cls">Getters</span>&lt;<span class="tok-cls">User</span>&gt;;
+<span class="tok-com">// {</span>
+<span class="tok-com">//   getId: () =&gt; number;</span>
+<span class="tok-com">//   getName: () =&gt; string;</span>
+<span class="tok-com">//   getEmail: () =&gt; string;</span>
+<span class="tok-com">// }</span></code></pre>
+        </div>
+
+        <p>Một use case rất phổ biến: <strong>lọc</strong> key bằng <code>never</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Filter keys với never</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Giữ key của field "string", bỏ field khác</span>
+<span class="tok-kw">type</span> <span class="tok-cls">StringKeys</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span> <span class="tok-kw">as</span> <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-cls">string</span> ? <span class="tok-cls">K</span> : <span class="tok-kw">never</span>]: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+<span class="tok-com">//                  ↑ remap về never = loại bỏ key đó</span>
+
+<span class="tok-kw">interface</span> <span class="tok-cls">Mixed</span> {
+  name: <span class="tok-cls">string</span>;
+  age: <span class="tok-cls">number</span>;
+  email: <span class="tok-cls">string</span>;
+  active: <span class="tok-cls">boolean</span>;
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">OnlyStrings</span> = <span class="tok-cls">StringKeys</span>&lt;<span class="tok-cls">Mixed</span>&gt;;
+<span class="tok-com">// { name: string; email: string }</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — never xoá key</div>
+          <p>
+            Trong mapped type với <code>as</code>, nếu key remap về <code>never</code>, TS hiểu là "bỏ key này".
+            Đây là "trick" chuẩn của TypeScript để filter / pick có điều kiện.
+          </p>
+        </div>
+
+        <h2 id="template-literal">4. Template literal types — string ở tầng type</h2>
+
+        <p>
+          Template literal type cho phép <strong>xây dựng kiểu string</strong> từ literal + type variable. Cú pháp giống
+          template literal runtime, nhưng ở tầng type.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Template literal cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">Greeting</span> = <span class="tok-str">`Hello, </span><span class="tok-op">${</span><span class="tok-cls">string</span><span class="tok-op">}</span><span class="tok-str">!`</span>;
+<span class="tok-kw">const</span> g1: <span class="tok-cls">Greeting</span> = <span class="tok-str">'Hello, world!'</span>;  <span class="tok-com">// ✅</span>
+<span class="tok-kw">const</span> g2: <span class="tok-cls">Greeting</span> = <span class="tok-str">'Hi'</span>;             <span class="tok-com">// ❌ Lỗi</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">Route</span> = <span class="tok-str">`/users/</span><span class="tok-op">${</span><span class="tok-cls">string</span><span class="tok-op">}</span><span class="tok-str">`</span>;
+<span class="tok-kw">const</span> r1: <span class="tok-cls">Route</span> = <span class="tok-str">'/users/42'</span>;   <span class="tok-com">// ✅</span>
+<span class="tok-kw">const</span> r2: <span class="tok-cls">Route</span> = <span class="tok-str">'/posts/42'</span>;   <span class="tok-com">// ❌</span>
+
+<span class="tok-com">// Kết hợp với union → tổ hợp string</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Color</span> = <span class="tok-str">'red'</span> | <span class="tok-str">'green'</span> | <span class="tok-str">'blue'</span>;
+<span class="tok-kw">type</span> <span class="tok-cls">Variant</span> = <span class="tok-str">'light'</span> | <span class="tok-str">'dark'</span>;
+<span class="tok-kw">type</span> <span class="tok-cls">Token</span> = <span class="tok-str">`</span><span class="tok-op">${</span><span class="tok-cls">Variant</span><span class="tok-op">}</span><span class="tok-str">-</span><span class="tok-op">${</span><span class="tok-cls">Color</span><span class="tok-op">}</span><span class="tok-str">`</span>;
+<span class="tok-com">// 'light-red' | 'light-green' | 'light-blue' |</span>
+<span class="tok-com">// 'dark-red'  | 'dark-green'  | 'dark-blue'</span></code></pre>
+        </div>
+
+        <h3 id="template-helpers">4.1. Built-in template helpers</h3>
+
+        <p>TS có sẵn 4 helper biến đổi string type:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Helper</th><th>Input</th><th>Output</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Uppercase&lt;T&gt;</code></td><td><code>'hello'</code></td><td><code>'HELLO'</code></td></tr>
+              <tr><td><code>Lowercase&lt;T&gt;</code></td><td><code>'HELLO'</code></td><td><code>'hello'</code></td></tr>
+              <tr><td><code>Capitalize&lt;T&gt;</code></td><td><code>'hello'</code></td><td><code>'Hello'</code></td></tr>
+              <tr><td><code>Uncapitalize&lt;T&gt;</code></td><td><code>'Hello'</code></td><td><code>'hello'</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Template helpers + key remap</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Convert keys snake_case → camelCase</span>
+<span class="tok-kw">type</span> <span class="tok-cls">CamelCase</span>&lt;<span class="tok-cls">S</span> <span class="tok-kw">extends</span> <span class="tok-cls">string</span>&gt; =
+  <span class="tok-cls">S</span> <span class="tok-kw">extends</span> <span class="tok-str">`</span><span class="tok-op">${</span><span class="tok-kw">infer</span> <span class="tok-cls">Head</span><span class="tok-op">}</span><span class="tok-str">_</span><span class="tok-op">${</span><span class="tok-kw">infer</span> <span class="tok-cls">Tail</span><span class="tok-op">}</span><span class="tok-str">`</span>
+    ? <span class="tok-str">`</span><span class="tok-op">${</span><span class="tok-cls">Head</span><span class="tok-op">}</span><span class="tok-op">${</span><span class="tok-cls">Capitalize</span>&lt;<span class="tok-cls">CamelCase</span>&lt;<span class="tok-cls">Tail</span>&gt;&gt;<span class="tok-op">}</span><span class="tok-str">`</span>
+    : <span class="tok-cls">S</span>;
+
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">CamelCase</span>&lt;<span class="tok-str">'first_name'</span>&gt;;       <span class="tok-com">// 'firstName'</span>
+<span class="tok-kw">type</span> <span class="tok-cls">B</span> = <span class="tok-cls">CamelCase</span>&lt;<span class="tok-str">'created_at_utc'</span>&gt;;   <span class="tok-com">// 'createdAtUtc'</span>
+
+<span class="tok-com">// Áp dụng cho object</span>
+<span class="tok-kw">type</span> <span class="tok-cls">CamelCaseKeys</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span> <span class="tok-kw">as</span> <span class="tok-cls">CamelCase</span>&lt;<span class="tok-cls">K</span> &amp; <span class="tok-cls">string</span>&gt;]: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">type</span> <span class="tok-cls">DBRow</span> = { first_name: <span class="tok-cls">string</span>; created_at: <span class="tok-cls">Date</span> };
+<span class="tok-kw">type</span> <span class="tok-cls">JsRow</span> = <span class="tok-cls">CamelCaseKeys</span>&lt;<span class="tok-cls">DBRow</span>&gt;;
+<span class="tok-com">// { firstName: string; createdAt: Date }</span></code></pre>
+        </div>
+
+        <h2 id="keyof-index">5. <code>keyof</code> và indexed access — nền tảng</h2>
+
+        <p>Hai operator bạn đã thấy nhiều lần. Tóm tắt lại đầy đủ:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>keyof và T[K]</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">User</span> { id: <span class="tok-cls">number</span>; name: <span class="tok-cls">string</span>; email: <span class="tok-cls">string</span> }
+
+<span class="tok-com">// keyof T = union các key</span>
+<span class="tok-kw">type</span> <span class="tok-cls">K</span> = <span class="tok-kw">keyof</span> <span class="tok-cls">User</span>;  <span class="tok-com">// 'id' | 'name' | 'email'</span>
+
+<span class="tok-com">// T[K] = lookup type của value tại key K</span>
+<span class="tok-kw">type</span> <span class="tok-cls">IdType</span> = <span class="tok-cls">User</span>[<span class="tok-str">'id'</span>];  <span class="tok-com">// number</span>
+
+<span class="tok-com">// T[keyof T] = union tất cả value type</span>
+<span class="tok-kw">type</span> <span class="tok-cls">AllValues</span> = <span class="tok-cls">User</span>[<span class="tok-kw">keyof</span> <span class="tok-cls">User</span>];  <span class="tok-com">// number | string</span>
+
+<span class="tok-com">// Trên array</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Arr</span> = [<span class="tok-cls">number</span>, <span class="tok-cls">string</span>, <span class="tok-cls">boolean</span>];
+<span class="tok-kw">type</span> <span class="tok-cls">First</span> = <span class="tok-cls">Arr</span>[<span class="tok-num">0</span>];   <span class="tok-com">// number</span>
+<span class="tok-kw">type</span> <span class="tok-cls">All</span> = <span class="tok-cls">Arr</span>[<span class="tok-cls">number</span>];   <span class="tok-com">// number | string | boolean</span>
+
+<span class="tok-com">// Trên union</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Action</span> = { kind: <span class="tok-str">'add'</span>; n: <span class="tok-cls">number</span> } | { kind: <span class="tok-str">'reset'</span> };
+<span class="tok-kw">type</span> <span class="tok-cls">Kinds</span> = <span class="tok-cls">Action</span>[<span class="tok-str">'kind'</span>];  <span class="tok-com">// 'add' | 'reset'</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Pattern: indexed access tránh duplicate</div>
+          <p>
+            Thay vì khai báo lại type, dùng indexed access để "lấy ra" từ source:
+          </p>
+<pre><code><span class="tok-com">// ❌ duplicate</span>
+<span class="tok-kw">function</span> <span class="tok-fn">getName</span>(u: <span class="tok-cls">User</span>): <span class="tok-cls">string</span> { ... }
+
+<span class="tok-com">// ✅ lấy từ source — đổi User là auto đổi</span>
+<span class="tok-kw">function</span> <span class="tok-fn">getName</span>(u: <span class="tok-cls">User</span>): <span class="tok-cls">User</span>[<span class="tok-str">'name'</span>] { ... }</code></pre>
+        </div>
+
+        <h2 id="recursive">6. Recursive types — đệ quy ở tầng type</h2>
+
+        <p>
+          Type có thể tự gọi lại chính nó. Đây là cách viết được type đi sâu vào object lồng nhau (deep) như
+          <code>DeepReadonly</code>, <code>DeepPartial</code>, hoặc parse string phức tạp.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>DeepReadonly recursive</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">DeepReadonly</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  <span class="tok-kw">readonly</span> [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]:
+    <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-kw">object</span>
+      ? <span class="tok-cls">DeepReadonly</span>&lt;<span class="tok-cls">T</span>[<span class="tok-cls">K</span>]&gt;   <span class="tok-com">// đệ quy nếu là object</span>
+      : <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];                 <span class="tok-com">// primitive — giữ nguyên</span>
+};
+
+<span class="tok-kw">interface</span> <span class="tok-cls">Config</span> {
+  api: {
+    url: <span class="tok-cls">string</span>;
+    auth: { token: <span class="tok-cls">string</span>; refreshIn: <span class="tok-cls">number</span> };
+  };
+  debug: <span class="tok-cls">boolean</span>;
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">FrozenConfig</span> = <span class="tok-cls">DeepReadonly</span>&lt;<span class="tok-cls">Config</span>&gt;;
+<span class="tok-com">// {</span>
+<span class="tok-com">//   readonly api: {</span>
+<span class="tok-com">//     readonly url: string;</span>
+<span class="tok-com">//     readonly auth: {</span>
+<span class="tok-com">//       readonly token: string;</span>
+<span class="tok-com">//       readonly refreshIn: number;</span>
+<span class="tok-com">//     };</span>
+<span class="tok-com">//   };</span>
+<span class="tok-com">//   readonly debug: boolean;</span>
+<span class="tok-com">// }</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Giới hạn đệ quy — ~50 tầng</div>
+          <p>
+            TS chống vòng lặp vô hạn bằng "recursion depth limit". Hard limit khoảng <strong>50 tầng</strong> (tuỳ phiên bản).
+            Vượt qua sẽ báo <em>"Type instantiation is excessively deep and possibly infinite"</em>.
+          </p>
+          <p style="margin-top: 8px;">
+            Với object thực tế (config, nested form), hiếm khi chạm 50 tầng. Nhưng parser string đệ quy
+            (vd: parse JSON ở tầng type) dễ chạm. Khi đó: thiết kế lại bằng <strong>tail recursion accumulator</strong>
+            hoặc giảm độ sâu.
+          </p>
+        </div>
+
+        <h2 id="utility-from-lib">7. Đọc một utility type từ thư viện</h2>
+
+        <p>
+          Bạn cần kỹ năng <strong>đọc</strong> type — không chỉ viết. Hãy phân tích <code>Awaited</code> built-in của TS
+          (rút gọn từ <code>lib.es5.d.ts</code>):
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Awaited&lt;T&gt; built-in (rút gọn)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">Awaited</span>&lt;<span class="tok-cls">T</span>&gt; =
+  <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-kw">null</span> | <span class="tok-kw">undefined</span>
+    ? <span class="tok-cls">T</span>                                                      <span class="tok-com">// ① giữ nguyên null/undefined</span>
+    : <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-kw">object</span> &amp; { then(<span class="tok-cls">onfulfilled</span>: <span class="tok-kw">infer</span> <span class="tok-cls">F</span>, ...): <span class="tok-kw">any</span> }
+      ? <span class="tok-cls">F</span> <span class="tok-kw">extends</span> ((<span class="tok-cls">value</span>: <span class="tok-kw">infer</span> <span class="tok-cls">V</span>, ...) =&gt; <span class="tok-kw">any</span>)
+        ? <span class="tok-cls">Awaited</span>&lt;<span class="tok-cls">V</span>&gt;                                          <span class="tok-com">// ② nếu thenable, lấy value V và đệ quy</span>
+        : <span class="tok-kw">never</span>                                                <span class="tok-com">// ③ thenable nhưng then không là function</span>
+      : <span class="tok-cls">T</span>;                                                     <span class="tok-com">// ④ không phải Promise / thenable → giữ nguyên</span></code></pre>
+        </div>
+
+        <p>Đọc step-by-step (đây chính là kỹ năng cần luyện):</p>
+
+        <ol>
+          <li><strong>Dòng ①</strong>: Edge case. Nếu <code>T</code> là <code>null</code> hay <code>undefined</code>, trả nguyên (không await được).</li>
+          <li><strong>Dòng ②</strong>: Pattern match thenable — object có method <code>.then(onfulfilled, ...)</code>. Nếu <code>onfulfilled</code> là function nhận <code>value: V</code>, thì lấy <code>V</code> và đệ quy. Đây là lý do <code>await</code> "phẳng hoá" Promise lồng nhau.</li>
+          <li><strong>Dòng ③</strong>: Trường hợp lạ — có <code>.then</code> nhưng không phải function. Trả <code>never</code>.</li>
+          <li><strong>Dòng ④</strong>: Default — không phải Promise → <code>await</code> trả luôn giá trị đó.</li>
+        </ol>
+
+        <p>
+          Việc đọc được code này = bạn đã sẵn sàng đọc <code>Prisma.UserGetPayload</code>, <code>zod.infer</code>,
+          <code>tRPC.RouterOutput</code>.
+        </p>
+
+        <h2 id="anti-pattern">8. Anti-pattern — khi nào dừng lại</h2>
+
+        <p>
+          Type-level programming rất "addictive" — viết được type cực hay khiến bạn muốn xây cả compiler ở tầng type.
+          Đừng. Đây là vài dấu hiệu type của bạn đã <strong>over-engineered</strong>:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Dấu hiệu</th><th>Tác hại</th><th>Khắc phục</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Conditional lồng nhau &gt;5 tầng</td><td>Người đọc bỏ cuộc sau 2 phút</td><td>Tách thành nhiều type alias, đặt tên rõ</td></tr>
+              <tr><td>Chain <code>infer</code> dài</td><td>Khó debug, hover không hiện</td><td>Refactor sang helper type ngắn hơn</td></tr>
+              <tr><td><code>tsc</code> mỗi check &gt;100ms</td><td>IDE lag, autocomplete chậm</td><td>Dùng <code>--extendedDiagnostics</code> để tìm thủ phạm</td></tr>
+              <tr><td>Hover hiển thị type quá dài</td><td>Developer không hiểu type gợi ý là gì</td><td>Wrap bằng named type để IDE hiển thị tên</td></tr>
+              <tr><td>Sửa nhỏ → cả file đỏ</td><td>Coupling giữa các type quá chặt</td><td>Tách module, dùng interface thay vì type khi có thể</td></tr>
+              <tr><td>JSDoc giải thích còn dễ hơn type</td><td>Type không còn đóng vai trò "tài liệu"</td><td>Đổi sang JSDoc + type đơn giản</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — "phép màu nhỏ" hay "phép thuật đen"</div>
+          <p>
+            Type chỉ nên giúp bạn <strong>tránh bug</strong> và <strong>tự document</strong>. Khi nó trở thành thử thách
+            trí tuệ riêng → bạn đang viết "type-level Sudoku", không phải code production. Quy tắc của tác giả ts-toolbelt
+            (Pierre Antoine): "<em>Nếu cần &gt;30 phút để giải thích type cho đồng nghiệp, viết lại.</em>"
+          </p>
+        </div>
+
+        <h3 id="performance">8.1. Đo tốc độ compile</h3>
+
+        <p>Khi nghi ngờ type chậm:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Đo performance tsc</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Hiện chi tiết thời gian</span>
+$ tsc --extendedDiagnostics
+
+<span class="tok-com"># Hiện file nào chậm nhất</span>
+$ tsc --generateTrace ./trace
+
+<span class="tok-com"># Mở Chrome DevTools → Performance → load trace.json</span>
+<span class="tok-com"># Tìm "checkTypeRelatedTo" — top vài entry là thủ phạm</span>
+
+<span class="tok-com"># Ngưỡng tham khảo (project medium):</span>
+<span class="tok-com"># - Total: &lt;5s OK, 5-20s acceptable, &gt;20s cần optimize</span>
+<span class="tok-com"># - Single file check: &lt;100ms OK, &gt;500ms suspicious</span></code></pre>
+        </div>
+
+        <h2 id="trace-full">9. Ví dụ trace — viết <code>DeepPartial</code> step-by-step</h2>
+
+        <p>Hãy viết <code>DeepPartial</code> rồi trace cách TS suy luận.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>DeepPartial — viết &amp; trace</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]?: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-kw">object</span>
+    ? <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>[<span class="tok-cls">K</span>]&gt;
+    : <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">interface</span> <span class="tok-cls">Form</span> {
+  user: {
+    name: <span class="tok-cls">string</span>;
+    address: { city: <span class="tok-cls">string</span>; zip: <span class="tok-cls">string</span> };
+  };
+  active: <span class="tok-cls">boolean</span>;
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">PartialForm</span> = <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">Form</span>&gt;;
+
+<span class="tok-com">// Trace cách TS suy ra:</span>
+<span class="tok-com">// Bước 1: K duyệt 'user' | 'active'</span>
+<span class="tok-com"></span>
+<span class="tok-com">// Bước 2: K='user' → T[K] = { name, address }</span>
+<span class="tok-com">//   { name, address } extends object? YES</span>
+<span class="tok-com">//   → DeepPartial&lt;{ name, address }&gt;</span>
+<span class="tok-com">//     - K duyệt 'name' | 'address'</span>
+<span class="tok-com">//     - K='name' → T[K]=string. string extends object? NO → giữ string</span>
+<span class="tok-com">//     - K='address' → T[K]={ city, zip }. YES object → DeepPartial&lt;...&gt;</span>
+<span class="tok-com">//       - K='city' → string → giữ</span>
+<span class="tok-com">//       - K='zip'  → string → giữ</span>
+<span class="tok-com">//       Kết quả: { city?: string; zip?: string }</span>
+<span class="tok-com">//     Kết quả: { name?: string; address?: { city?: string; zip?: string } }</span>
+<span class="tok-com"></span>
+<span class="tok-com">// Bước 3: K='active' → T[K]=boolean. boolean extends object? NO → giữ</span>
+<span class="tok-com"></span>
+<span class="tok-com">// Final:</span>
+<span class="tok-com">// {</span>
+<span class="tok-com">//   user?: {</span>
+<span class="tok-com">//     name?: string;</span>
+<span class="tok-com">//     address?: { city?: string; zip?: string };</span>
+<span class="tok-com">//   };</span>
+<span class="tok-com">//   active?: boolean;</span>
+<span class="tok-com">// }</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Trick — hover trong VS Code</div>
+          <p>
+            Wrap kết quả bằng <code>Prettify&lt;T&gt; = { [K in keyof T]: T[K] } &amp; {}</code> để IDE expand
+            "phẳng" thay vì hiển thị <code>DeepPartial&lt;...&gt;</code> trừu tượng. Pattern này dùng đầy ở
+            Prisma, zod.
+          </p>
+        </div>
+
+        <h2 id="ket-noi-noi-bo">10. Kết nối với phần khác</h2>
+
+        <p>
+          <strong>Utility built-in</strong> ở chương 10 (<code>Partial</code>, <code>Pick</code>, <code>Omit</code>...)
+          chính là <em>ứng dụng cụ thể</em> của các kỹ thuật chương này:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Built-in = mapped + conditional</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Partial = mapped + modifier ?</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Partial</span>&lt;<span class="tok-cls">T</span>&gt; = { [<span class="tok-cls">P</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]?: <span class="tok-cls">T</span>[<span class="tok-cls">P</span>] };
+
+<span class="tok-com">// Required = mapped + remove ?</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Required</span>&lt;<span class="tok-cls">T</span>&gt; = { [<span class="tok-cls">P</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]-?: <span class="tok-cls">T</span>[<span class="tok-cls">P</span>] };
+
+<span class="tok-com">// Pick = mapped + giới hạn K</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Pick</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">K</span> <span class="tok-kw">extends</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>&gt; = { [<span class="tok-cls">P</span> <span class="tok-kw">in</span> <span class="tok-cls">K</span>]: <span class="tok-cls">T</span>[<span class="tok-cls">P</span>] };
+
+<span class="tok-com">// Exclude = distributive conditional</span>
+<span class="tok-kw">type</span> <span class="tok-cls">Exclude</span>&lt;<span class="tok-cls">T</span>, <span class="tok-cls">U</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">U</span> ? <span class="tok-kw">never</span> : <span class="tok-cls">T</span>;
+
+<span class="tok-com">// ReturnType = infer trong conditional</span>
+<span class="tok-kw">type</span> <span class="tok-cls">ReturnType</span>&lt;<span class="tok-cls">F</span> <span class="tok-kw">extends</span> (...args: <span class="tok-kw">any</span>) =&gt; <span class="tok-kw">any</span>&gt; =
+  <span class="tok-cls">F</span> <span class="tok-kw">extends</span> (...args: <span class="tok-kw">any</span>) =&gt; <span class="tok-kw">infer</span> <span class="tok-cls">R</span> ? <span class="tok-cls">R</span> : <span class="tok-kw">never</span>;</code></pre>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — Tự viết <code>Awaited&lt;T&gt;</code></h4>
+            <div class="exercise-body">
+              <p>Viết type <code>MyAwaited&lt;T&gt;</code> "phẳng hoá" Promise lồng nhau. Test:</p>
+              <ul>
+                <li><code>MyAwaited&lt;Promise&lt;number&gt;&gt;</code> → <code>number</code></li>
+                <li><code>MyAwaited&lt;Promise&lt;Promise&lt;string&gt;&gt;&gt;</code> → <code>string</code></li>
+                <li><code>MyAwaited&lt;Promise&lt;Promise&lt;Promise&lt;boolean&gt;&gt;&gt;&gt;</code> → <code>boolean</code></li>
+                <li><code>MyAwaited&lt;number&gt;</code> → <code>number</code> (không phải Promise → trả nguyên)</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án + giải thích</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">MyAwaited</span>&lt;<span class="tok-cls">T</span>&gt; = <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">Promise</span>&lt;<span class="tok-kw">infer</span> <span class="tok-cls">U</span>&gt;
+  ? <span class="tok-cls">MyAwaited</span>&lt;<span class="tok-cls">U</span>&gt;
+  : <span class="tok-cls">T</span>;
+
+<span class="tok-com">// Test</span>
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">MyAwaited</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">number</span>&gt;&gt;;
+<span class="tok-com">// Bước 1: match Promise&lt;infer U&gt;, U=number → gọi MyAwaited&lt;number&gt;</span>
+<span class="tok-com">// Bước 2: number không match Promise → trả number. OK.</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">B</span> = <span class="tok-cls">MyAwaited</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">Promise</span>&lt;<span class="tok-cls">string</span>&gt;&gt;&gt;;
+<span class="tok-com">// Bước 1: U=Promise&lt;string&gt; → gọi MyAwaited&lt;Promise&lt;string&gt;&gt;</span>
+<span class="tok-com">// Bước 2: U=string → gọi MyAwaited&lt;string&gt;</span>
+<span class="tok-com">// Bước 3: string không match → trả string. OK.</span></code></pre>
+                  <p>So với <code>Awaited</code> built-in: built-in phức tạp hơn vì còn xử lý <code>thenable</code>
+                    (object có method <code>.then</code> nhưng không phải instance của Promise) và <code>null/undefined</code>.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — <code>DeepPartial&lt;T&gt;</code> với 3 tầng</h4>
+            <div class="exercise-body">
+              <p>Viết <code>DeepPartial</code> và test với 3 tầng lồng:</p>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">Settings</span> {
+  ui: {
+    theme: { primary: <span class="tok-cls">string</span>; secondary: <span class="tok-cls">string</span> };
+    layout: <span class="tok-cls">string</span>;
+  };
+  api: { url: <span class="tok-cls">string</span>; timeout: <span class="tok-cls">number</span> };
+}</code></pre>
+              <p>Output mong đợi: <strong>mọi</strong> field đều optional, kể cả nested.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]?: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-kw">object</span>
+    ? <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>[<span class="tok-cls">K</span>]&gt;
+    : <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">type</span> <span class="tok-cls">PartialSettings</span> = <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">Settings</span>&gt;;
+
+<span class="tok-com">// Sử dụng</span>
+<span class="tok-kw">const</span> override: <span class="tok-cls">PartialSettings</span> = {
+  ui: {
+    theme: { primary: <span class="tok-str">'#fff'</span> }   <span class="tok-com">// chỉ override primary, không cần secondary</span>
+  }
+};</code></pre>
+                  <p><strong>Lưu ý gotcha</strong>: <code>function</code> cũng là <code>object</code> trong TS, nên
+                    <code>(...) =&gt; void</code> sẽ bị DeepPartial áp dụng — thường không mong muốn. Fix bằng cách thêm điều kiện:</p>
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span>]?: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-cls">Function</span> ? <span class="tok-cls">T</span>[<span class="tok-cls">K</span>]
+    : <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> <span class="tok-kw">object</span> ? <span class="tok-cls">DeepPartial</span>&lt;<span class="tok-cls">T</span>[<span class="tok-cls">K</span>]&gt;
+    : <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — <code>PathParams&lt;T&gt;</code> parse route Express-style</h4>
+            <div class="exercise-body">
+              <p>Viết type <code>PathParams&lt;T&gt;</code> nhận route string dạng Express, trả object với key là tên param.</p>
+              <ul>
+                <li><code>PathParams&lt;'/users/:id'&gt;</code> → <code>{ id: string }</code></li>
+                <li><code>PathParams&lt;'/users/:id/posts/:postId'&gt;</code> → <code>{ id: string; postId: string }</code></li>
+                <li><code>PathParams&lt;'/health'&gt;</code> → <code>{}</code></li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án + giải thích</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">PathParams</span>&lt;<span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">string</span>&gt; =
+  <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-str">`</span><span class="tok-op">${</span><span class="tok-cls">string</span><span class="tok-op">}</span><span class="tok-str">:</span><span class="tok-op">${</span><span class="tok-kw">infer</span> <span class="tok-cls">Param</span><span class="tok-op">}</span><span class="tok-str">/</span><span class="tok-op">${</span><span class="tok-kw">infer</span> <span class="tok-cls">Rest</span><span class="tok-op">}</span><span class="tok-str">`</span>
+    ? { [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-cls">Param</span> | <span class="tok-kw">keyof</span> <span class="tok-cls">PathParams</span>&lt;<span class="tok-str">`/</span><span class="tok-op">${</span><span class="tok-cls">Rest</span><span class="tok-op">}</span><span class="tok-str">`</span>&gt;]: <span class="tok-cls">string</span> }
+    : <span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-str">`</span><span class="tok-op">${</span><span class="tok-cls">string</span><span class="tok-op">}</span><span class="tok-str">:</span><span class="tok-op">${</span><span class="tok-kw">infer</span> <span class="tok-cls">Param</span><span class="tok-op">}</span><span class="tok-str">`</span>
+      ? { [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-cls">Param</span>]: <span class="tok-cls">string</span> }
+      : {};
+
+<span class="tok-com">// Test</span>
+<span class="tok-kw">type</span> <span class="tok-cls">A</span> = <span class="tok-cls">PathParams</span>&lt;<span class="tok-str">'/users/:id'</span>&gt;;
+<span class="tok-com">// { id: string }</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">B</span> = <span class="tok-cls">PathParams</span>&lt;<span class="tok-str">'/users/:id/posts/:postId'</span>&gt;;
+<span class="tok-com">// { id: string; postId: string }</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">C</span> = <span class="tok-cls">PathParams</span>&lt;<span class="tok-str">'/health'</span>&gt;;
+<span class="tok-com">// {}</span></code></pre>
+                  <p><strong>Cách hoạt động</strong>: chia route làm 2 trường hợp:</p>
+                  <ul>
+                    <li>Có ít nhất 1 dấu <code>/</code> sau param: bắt <code>Param</code> rồi đệ quy phần <code>Rest</code>.</li>
+                    <li>Param ở cuối (không có <code>/</code> sau): chỉ bắt <code>Param</code>.</li>
+                    <li>Không có <code>:</code>: trả <code>{}</code>.</li>
+                  </ul>
+                  <p>Đây là pattern dùng trong <strong>tRPC</strong> và <strong>Next.js typed routes</strong>.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — <code>Functions&lt;T&gt;</code> chỉ giữ field là function</h4>
+            <div class="exercise-body">
+              <p>Viết type <code>Functions&lt;T&gt;</code> trả object chỉ có các property <strong>function-typed</strong>.</p>
+              <p><em>Hint</em>: kết hợp mapped + conditional + key remap với <code>never</code>.</p>
+              <ul>
+                <li>Input <code>{ name: string; greet: () =&gt; void; age: number; bye: (s: string) =&gt; void }</code></li>
+                <li>Output <code>{ greet: () =&gt; void; bye: (s: string) =&gt; void }</code></li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">type</span> <span class="tok-cls">Functions</span>&lt;<span class="tok-cls">T</span>&gt; = {
+  [<span class="tok-cls">K</span> <span class="tok-kw">in</span> <span class="tok-kw">keyof</span> <span class="tok-cls">T</span> <span class="tok-kw">as</span> <span class="tok-cls">T</span>[<span class="tok-cls">K</span>] <span class="tok-kw">extends</span> (...args: <span class="tok-kw">any</span>[]) =&gt; <span class="tok-kw">any</span>
+    ? <span class="tok-cls">K</span>
+    : <span class="tok-kw">never</span>
+  ]: <span class="tok-cls">T</span>[<span class="tok-cls">K</span>];
+};
+
+<span class="tok-kw">interface</span> <span class="tok-cls">Mixed</span> {
+  name: <span class="tok-cls">string</span>;
+  greet: () =&gt; <span class="tok-cls">void</span>;
+  age: <span class="tok-cls">number</span>;
+  bye: (s: <span class="tok-cls">string</span>) =&gt; <span class="tok-cls">void</span>;
+}
+
+<span class="tok-kw">type</span> <span class="tok-cls">OnlyFns</span> = <span class="tok-cls">Functions</span>&lt;<span class="tok-cls">Mixed</span>&gt;;
+<span class="tok-com">// { greet: () =&gt; void; bye: (s: string) =&gt; void }</span></code></pre>
+                  <p>Use case: trích "method" của một class hoặc generate "RPC interface" từ object.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Đọc utility từ thư viện (Prisma / Zod)</h4>
+            <div class="exercise-body">
+              <p>
+                Mở <code>node_modules/zod/lib/types.d.ts</code> hoặc
+                <code>node_modules/@prisma/client/runtime/library.d.ts</code>. Tìm một utility type (đề xuất:
+                <code>z.infer</code>, <code>Prisma.GetResult</code>, <code>Prisma.Args</code>).
+              </p>
+              <p>Copy code, dán vào file riêng và <strong>comment từng dòng</strong> giải thích. Mục tiêu là <em>không học thuộc</em> — chỉ rèn kỹ năng đọc.</p>
+              <details class="exercise-hint">
+                <summary>Ví dụ — phân tích <code>z.infer</code></summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com">// zod/lib/types.d.ts (rút gọn)</span>
+<span class="tok-kw">type</span> <span class="tok-cls">infer</span>&lt;<span class="tok-cls">T</span> <span class="tok-kw">extends</span> <span class="tok-cls">ZodType</span>&lt;<span class="tok-kw">any</span>, <span class="tok-kw">any</span>, <span class="tok-kw">any</span>&gt;&gt; = <span class="tok-cls">T</span>[<span class="tok-str">'_output'</span>];
+<span class="tok-com">//   ↑                                                  ↑</span>
+<span class="tok-com">//   - generic T phải là một ZodType (schema validator).</span>
+<span class="tok-com">//   - lookup property internal '_output' (TS phantom field).</span>
+<span class="tok-com">// Kết quả: lấy type "output sau parse" của schema.</span>
+
+<span class="tok-com">// Ví dụ:</span>
+<span class="tok-kw">const</span> <span class="tok-cls">UserSchema</span> = z.<span class="tok-fn">object</span>({ id: z.<span class="tok-fn">number</span>(), name: z.<span class="tok-fn">string</span>() });
+<span class="tok-com">// UserSchema._output = { id: number; name: string }</span>
+
+<span class="tok-kw">type</span> <span class="tok-cls">User</span> = z.<span class="tok-cls">infer</span>&lt;<span class="tok-kw">typeof</span> <span class="tok-cls">UserSchema</span>&gt;;
+<span class="tok-com">// = UserSchema['_output']</span>
+<span class="tok-com">// = { id: number; name: string }</span></code></pre>
+                  <p>Pattern "phantom field" (<code>_output</code>) là cách giữ type tham số mà không tạo runtime overhead.
+                    Cũng dùng nhiều trong tRPC, GraphQL codegen.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Cho <code>type X = T extends string ? 1 : 0</code>. Khi <code>T = 'a' | 42</code>, X là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>1 | 0</code>. Distributive conditional: T đứng "trần" ở vế trái nên TS phân phối — áp dụng cho từng phần tử union. <code>'a' extends string</code> → 1, <code>42 extends string</code> → 0. Gộp lại: <code>1 | 0</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Làm sao <strong>tắt</strong> distributive conditional?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Bọc cả 2 vế bằng tuple: <code>[T] extends [U]</code>. Khi đó T không còn "trần" → không phân phối. Đây là cách so sánh "toàn bộ union một cục" thay vì từng phần tử.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>infer</code> dùng được ở đâu? Có dùng được ngoài conditional không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Không. <code>infer</code> chỉ hợp lệ ở <strong>vế phải của <code>extends</code> trong conditional type</strong>. Dùng ngoài: lỗi <em>"'infer' declarations are only permitted in the 'extends' clause of a conditional type"</em>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Mapped type mặc định có giữ <code>readonly</code> và <code>?</code> của source không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Có (homomorphic). Mặc định mapped type <strong>giữ nguyên</strong> modifier <code>readonly</code> và <code>?</code> của type gốc. Muốn thêm tường minh: <code>+readonly</code>, <code>+?</code>. Muốn bỏ: <code>-readonly</code>, <code>-?</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Cho <code>T = { a: 1; b: 2 }</code>. <code>keyof T</code> là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>'a' | 'b'</code> — union của các key (string literal). Còn <code>T[keyof T]</code> sẽ là <code>1 | 2</code> — union của các value type.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Template literal <code>`/api/${string}`</code> match string nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Bất kỳ string nào <strong>bắt đầu bằng <code>'/api/'</code></strong> theo sau là chuỗi ký tự bất kỳ (kể cả rỗng). Ví dụ <code>'/api/'</code>, <code>'/api/users'</code>, <code>'/api/users/42?q=1'</code> đều match. <code>'/api'</code> (thiếu <code>/</code>) thì không.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Recursive type của TS có giới hạn không? Bao nhiêu tầng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Có. Hard limit khoảng <strong>~50 tầng</strong> (tuỳ phiên bản TS). Vượt qua → lỗi <em>"Type instantiation is excessively deep and possibly infinite"</em>. Khi đụng: tái thiết kế bằng tail-recursion + accumulator, hoặc chấp nhận parse partial.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 11, bạn nên đã master:</p>
+        <ul>
+          <li><strong>Conditional type</strong> <code>T extends U ? X : Y</code> — "if/else" ở tầng type, có tính chất phân phối qua union.</li>
+          <li><strong>Disable distributive</strong> bằng cách bọc tuple <code>[T] extends [U]</code>.</li>
+          <li><strong><code>infer</code></strong> — bắt type ẩn, chỉ dùng trong conditional. Là "destructure ở tầng type".</li>
+          <li><strong>Mapped type</strong> với modifier <code>+/-readonly</code>, <code>+/-?</code> và <strong>key remap</strong> bằng <code>as</code>.</li>
+          <li><strong>Template literal type</strong> — xây dựng string type động, kết hợp <code>Uppercase</code>/<code>Capitalize</code>...</li>
+          <li><strong>Recursive type</strong> để đi sâu vào structure (<code>DeepReadonly</code>, <code>DeepPartial</code>) — nhớ limit ~50.</li>
+          <li>Đọc được type của thư viện thật (Awaited, Zod's <code>infer</code>, Prisma).</li>
+          <li>Nhận biết khi type quá phức tạp — biết khi nào nên dừng lại.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 12 (TS Compiler &amp; Tooling)</strong> — chương cuối TS: cấu hình tsconfig, build với esbuild/swc, type-only import, declaration files, project references.</li>
+          <li><strong>Chương 10 (TS Generics &amp; Utility)</strong> — utility built-in như <code>Partial</code>, <code>Pick</code> chính là ví dụ của mapped + conditional ở chương này.</li>
+          <li><strong>Chương 4 (Objects &amp; Class hierarchy)</strong> — <code>keyof</code> và indexed access trên class instance, cách TS suy ra type từ <code>this</code>.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong10.html" class="prev">
+            <div class="dir">← Chương 10</div>
+            <div class="label">TS Generics &amp; Utility Types</div>
+          </a>
+          <a href="chuong12.html" class="next">
+            <div class="dir">Chương 12 →</div>
+            <div class="label">TS Compiler &amp; Tooling</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#conditional">1. Conditional types</a></li>
+          <li class="level-3"><a href="#distributive">1.1. Distributive</a></li>
+          <li><a href="#infer">2. infer keyword</a></li>
+          <li class="level-3"><a href="#trace-infer">2.1. Trace infer</a></li>
+          <li><a href="#mapped">3. Mapped types</a></li>
+          <li class="level-3"><a href="#modifiers">3.1. Modifier +/-</a></li>
+          <li class="level-3"><a href="#remap">3.2. Key remap as</a></li>
+          <li><a href="#template-literal">4. Template literal types</a></li>
+          <li class="level-3"><a href="#template-helpers">4.1. Template helpers</a></li>
+          <li><a href="#keyof-index">5. keyof &amp; T[K]</a></li>
+          <li><a href="#recursive">6. Recursive types</a></li>
+          <li><a href="#utility-from-lib">7. Đọc utility thư viện</a></li>
+          <li><a href="#anti-pattern">8. Anti-pattern</a></li>
+          <li class="level-3"><a href="#performance">8.1. Đo performance</a></li>
+          <li><a href="#trace-full">9. Trace DeepPartial</a></li>
+          <li><a href="#ket-noi-noi-bo">10. Kết nối nội bộ</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 11 — TypeScript Advanced Types · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong10.html">← Chương 10</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong12.html">Chương 12 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

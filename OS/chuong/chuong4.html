@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 04 — CPU Scheduling · OS Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">os-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong3.html">← Ch.03</a></li>
+        <li><a href="chuong4.html" class="active">Ch.04</a></li>
+        <li><a href="chuong5.html">Ch.05 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 04 · PROCESS · ~110 phút</div>
+      <h1>CPU<br/><span class="text-accent">Scheduling</span></h1>
+      <p class="lead">
+        Khi nhiều process cùng cần CPU, OS phải <strong>chọn ai chạy tiếp theo</strong>.
+        Đây là chương về thuật toán scheduling — từ FCFS đơn giản đến CFS của Linux hiện đại.
+        Hiểu chương này, bạn trả lời được: tại sao terminal vẫn responsive khi build dự án lớn?
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#problem">4.1 Bài toán scheduling</a></li>
+          <li><a href="#metrics">4.2 Tiêu chí đánh giá</a></li>
+          <li><a href="#preempt">4.3 Preemptive vs Not</a></li>
+          <li><a href="#fcfs">4.4 FCFS</a></li>
+          <li><a href="#sjf">4.5 SJF / SRTF</a></li>
+          <li><a href="#priority">4.6 Priority + Aging</a></li>
+          <li><a href="#rr">4.7 Round Robin</a></li>
+          <li><a href="#mlfq">4.8 MLFQ</a></li>
+          <li><a href="#cfs">4.9 Linux CFS</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 4.1 -->
+        <section id="problem">
+          <h2>4.1 Bài toán scheduling</h2>
+
+          <p>
+            Máy bạn có 4 CPU core nhưng đang chạy <em>hàng trăm</em> process (Chrome, VS Code, system services...).
+            Tại mọi thời điểm, mỗi core chỉ chạy 1 thread. Vậy ai chạy, ai chờ?
+          </p>
+          <p>
+            <strong>Scheduler</strong> là phần của kernel quyết định: tại mỗi thời điểm, thread/process nào sẽ được CPU.
+            Nó chạy <strong>hàng nghìn lần mỗi giây</strong>, mỗi lần đưa ra quyết định trong micro giây.
+          </p>
+
+          <h3>Phân loại theo loại workload</h3>
+          <ul>
+            <li><strong>CPU-bound (compute):</strong> dành phần lớn thời gian tính toán, ít I/O. Vd: render video, train ML.</li>
+            <li><strong>I/O-bound:</strong> dành nhiều thời gian đợi I/O (disk, network, user input). Vd: database, web server, text editor.</li>
+          </ul>
+
+          <p>Scheduler hiện đại phải <strong>cân bằng</strong>: ưu tiên I/O-bound (để app responsive) nhưng không bỏ đói CPU-bound.</p>
+        </section>
+
+        <!-- 4.2 -->
+        <section id="metrics">
+          <h2>4.2 Tiêu chí đánh giá scheduler</h2>
+
+          <table>
+            <thead>
+              <tr><th>Metric</th><th>Định nghĩa</th><th>Mục tiêu</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>CPU Utilization</strong></td><td>% thời gian CPU bận</td><td>Càng cao càng tốt (tới ~85%)</td></tr>
+              <tr><td><strong>Throughput</strong></td><td>Số process xong mỗi đơn vị thời gian</td><td>Càng cao càng tốt</td></tr>
+              <tr><td><strong>Turnaround time</strong></td><td>Tổng thời gian từ submit đến xong = wait + run</td><td>Càng thấp càng tốt</td></tr>
+              <tr><td><strong>Waiting time</strong></td><td>Thời gian process đợi trong ready queue</td><td>Càng thấp càng tốt</td></tr>
+              <tr><td><strong>Response time</strong></td><td>Thời gian từ submit đến lần đầu được CPU</td><td>Càng thấp càng tốt (cho UI)</td></tr>
+              <tr><td><strong>Fairness</strong></td><td>Mọi process được phục vụ công bằng</td><td>Quan trọng — tránh starvation</td></tr>
+            </tbody>
+          </table>
+
+          <p>Các metric này thường <strong>mâu thuẫn nhau</strong>: tối ưu throughput có thể hi sinh response time. Chọn scheduler là chọn trade-off.</p>
+        </section>
+
+        <!-- 4.3 -->
+        <section id="preempt">
+          <h2>4.3 Preemptive vs Non-preemptive</h2>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-green">Non-preemptive</h4>
+              <ul>
+                <li>Process giữ CPU đến khi <em>tự nguyện</em> nhường (block I/O hoặc terminate)</li>
+                <li>Đơn giản, không cần đồng bộ phức tạp</li>
+                <li>Vấn đề: 1 process nặng có thể "hog" CPU, làm cả hệ thống lag</li>
+                <li>Vd: cooperative multitasking (Mac OS Classic)</li>
+              </ul>
+            </div>
+            <div class="good">
+              <h4 class="text-green">Preemptive</h4>
+              <ul>
+                <li>OS có thể "cướp" CPU bất cứ lúc nào (timer interrupt)</li>
+                <li>Tốt cho responsiveness, fairness</li>
+                <li>Cần thiết cho mọi OS hiện đại</li>
+                <li>Vd: Linux, macOS, Windows</li>
+              </ul>
+            </div>
+          </div>
+
+          <p>Cơ chế preemption: hardware timer phát interrupt mỗi vài ms. Kernel handle interrupt → chạy scheduler → có thể đổi process.</p>
+        </section>
+
+        <!-- 4.4 -->
+        <section id="fcfs">
+          <h2>4.4 FCFS — First-Come, First-Served</h2>
+
+          <p>Đơn giản nhất: process đến trước được phục vụ trước. Dùng FIFO queue.</p>
+
+          <h3>Ví dụ minh hoạ</h3>
+
+          <pre data-lang="text"><code>Process  Burst time
+  P1        24
+  P2         3
+  P3         3
+
+Order: P1 → P2 → P3
+Gantt: |---------- P1 ----------|P2|P3|
+       0                       24  27 30
+
+Waiting time:
+  P1: 0
+  P2: 24
+  P3: 27
+Avg waiting: (0+24+27)/3 = 17</code></pre>
+
+          <h3>Vấn đề: Convoy Effect</h3>
+          <p>
+            Nếu P1 chạy lâu (24), P2 và P3 phải đợi rất lâu — dù chúng nhanh. Toàn bộ "đoàn xe" mắc kẹt sau 1 xe chậm.
+            Nếu thay đổi thứ tự: P2 → P3 → P1 → avg waiting = (0+3+6)/3 = 3 (giảm 5.7×).
+          </p>
+
+          <ul>
+            <li><strong>Ưu:</strong> đơn giản, fair theo thứ tự đến</li>
+            <li><strong>Nhược:</strong> convoy effect, response time tệ</li>
+            <li><strong>Preemptive?</strong> Không</li>
+          </ul>
+        </section>
+
+        <!-- 4.5 -->
+        <section id="sjf">
+          <h2>4.5 SJF — Shortest Job First (và SRTF)</h2>
+
+          <p>Chọn process có burst time ngắn nhất chạy trước.</p>
+
+          <pre data-lang="text"><code>Process  Burst time
+  P1        24
+  P2         3
+  P3         3
+
+Order: P2 → P3 → P1
+Gantt: |P2|P3|--------- P1 ---------|
+       0  3  6                      30
+
+Waiting time:
+  P2: 0, P3: 3, P1: 6
+Avg waiting: (0+3+6)/3 = 3</code></pre>
+
+          <p>
+            <strong>SJF tối ưu lý thuyết</strong> — cho average waiting time thấp nhất.
+            Nhưng có 2 vấn đề thực tế:
+          </p>
+          <ol>
+            <li><strong>Không biết burst time tương lai!</strong> Phải dự đoán dựa trên lịch sử (exponential averaging).</li>
+            <li><strong>Starvation:</strong> nếu liên tục có process ngắn đến, process dài có thể không bao giờ chạy.</li>
+          </ol>
+
+          <h3>SRTF — Shortest Remaining Time First (preemptive SJF)</h3>
+          <p>Preemptive version: process mới đến có remaining time ngắn hơn process hiện tại → preempt ngay.</p>
+        </section>
+
+        <!-- 4.6 -->
+        <section id="priority">
+          <h2>4.6 Priority Scheduling + Aging</h2>
+
+          <p>Mỗi process gắn 1 số priority. Scheduler chọn process có priority cao nhất.</p>
+
+          <pre data-lang="text"><code>Process  Burst  Priority (smaller = higher)
+  P1       10      3
+  P2        1      1   ← highest
+  P3        2      4
+  P4        1      5
+  P5        5      2
+
+Order: P2 → P5 → P1 → P3 → P4
+Gantt: |P2|----- P5 -----|------ P1 ------|--P3--|P4|</code></pre>
+
+          <h3>Starvation và Aging</h3>
+          <p>
+            Process priority thấp có thể không bao giờ chạy nếu liên tục có process priority cao. <strong>Starvation</strong>.
+          </p>
+          <p>
+            <strong>Aging:</strong> tăng priority dần theo thời gian process đợi. Sau đủ lâu, dù priority ban đầu thấp, nó sẽ leo lên cao và được chạy.
+          </p>
+
+          <h3>Linux nice value</h3>
+          <pre data-lang="bash"><code># Tạo process với priority thấp (nice +10, "tử tế hơn")
+nice -n 10 ./long_running_task
+
+# Đổi priority của process đang chạy
+renice -n 5 -p 1234
+
+# Xem nice value
+ps -eo pid,ni,comm | head</code></pre>
+
+          <p>Linux nice: -20 (cao nhất) đến +19 (thấp nhất). User thường: 0 đến +19. Cần root để đặt nice âm.</p>
+        </section>
+
+        <!-- 4.7 -->
+        <section id="rr">
+          <h2>4.7 Round Robin (RR) — fair time slicing</h2>
+
+          <p>
+            Mỗi process được CPU 1 khoảng <strong>time quantum</strong> (vd 10ms). Hết quantum, OS preempt và chuyển sang process tiếp theo trong queue (FIFO).
+            Process bị preempt được đẩy về cuối queue.
+          </p>
+
+          <pre data-lang="text"><code>Process  Burst time      Quantum = 4ms
+  P1        24
+  P2         3
+  P3         3
+
+Gantt:
+|P1|P2|P3|P1|P1|P1|P1|P1|
+0  4  7 10 14 18 22 26 30
+
+Waiting time:
+  P1: (10-4) = 6  (chỉ tính lần đầu đợi)
+  P2: 4
+  P3: 7
+Avg: (6+4+7)/3 = 5.67</code></pre>
+
+          <h3>Time quantum — chọn thế nào?</h3>
+          <ul>
+            <li><strong>Quá nhỏ</strong> (vd 1ms): nhiều context switch → overhead cao, throughput thấp</li>
+            <li><strong>Quá lớn</strong> (vd 1s): RR thoái hoá thành FCFS, response time tệ</li>
+            <li><strong>Vừa phải</strong> (10-100ms): cân bằng — Linux mặc định ~6ms với CFS</li>
+          </ul>
+
+          <ul>
+            <li><strong>Ưu:</strong> fair, response time tốt</li>
+            <li><strong>Nhược:</strong> không tối ưu turnaround/waiting; mọi process được đối xử như nhau (không xét priority hay loại workload)</li>
+          </ul>
+        </section>
+
+        <!-- 4.8 -->
+        <section id="mlfq">
+          <h2>4.8 MLFQ — Multi-Level Feedback Queue</h2>
+
+          <p>
+            Thuật toán "tự học" — kết hợp nhiều RR queue với priority khác nhau, và <em>tự điều chỉnh</em> priority dựa trên hành vi process.
+          </p>
+
+          <div class="ascii-art">
+   Q0 (highest, quantum 4ms):    [P1] [P2]
+   Q1 (mid, quantum 8ms):        [P3]
+   Q2 (lowest, quantum 16ms):    [P4] [P5]
+          </div>
+
+          <h3>Quy tắc MLFQ</h3>
+          <ol>
+            <li>Process mới → vào queue cao nhất (Q0)</li>
+            <li>Scheduler chọn process từ queue cao nhất không rỗng</li>
+            <li>Process dùng hết quantum mà chưa xong → đẩy xuống queue thấp hơn (CPU-bound)</li>
+            <li>Process tự nguyện block I/O trước khi hết quantum → giữ priority (I/O-bound)</li>
+            <li>Định kỳ "boost" mọi process lên Q0 (tránh starvation)</li>
+          </ol>
+
+          <p>
+            <strong>Hiệu ứng:</strong> I/O-bound process (text editor, terminal) ở Q cao → response nhanh.
+            CPU-bound process (build, render) "rơi" xuống Q thấp → vẫn chạy nhưng không chiếm hết CPU.
+          </p>
+
+          <p>MLFQ là tổ tiên của các scheduler hiện đại. Windows NT, BSD đều dùng biến thể MLFQ.</p>
+        </section>
+
+        <!-- 4.9 -->
+        <section id="cfs">
+          <h2>4.9 Linux CFS — Completely Fair Scheduler</h2>
+
+          <p>
+            Linux từ 2.6.23 (2007) dùng <strong>CFS</strong>. Ý tưởng: mô phỏng "ideal multitasking" — nếu có N process,
+            mỗi process đáng lẽ phải nhận 1/N CPU time. CFS theo dõi <code>vruntime</code> (virtual runtime) của mỗi process,
+            chọn process có vruntime <em>nhỏ nhất</em> để chạy.
+          </p>
+
+          <h3>Cấu trúc dữ liệu</h3>
+          <p>CFS dùng <strong>Red-Black Tree</strong> sắp xếp process theo vruntime. Lấy min = O(log n).</p>
+
+          <h3>Cách vruntime tăng</h3>
+          <p>
+            Process chạy 10ms thực tế → vruntime tăng 10ms × hệ số (phụ thuộc nice value).
+            Nice cao (priority thấp) → vruntime tăng nhanh hơn → ít được chạy.
+          </p>
+
+          <h3>Các tunable</h3>
+          <pre data-lang="bash"><code># Xem các CFS parameter
+cat /proc/sys/kernel/sched_min_granularity_ns       # min slice ~1.5ms
+cat /proc/sys/kernel/sched_latency_ns               # target latency ~6ms
+cat /proc/sys/kernel/sched_wakeup_granularity_ns
+
+# Xem scheduling stats của 1 process
+cat /proc/$$/sched | head</code></pre>
+
+          <div class="callout note">
+            <div class="callout-title">📐 CFS không phải MLFQ</div>
+            <p>
+              CFS không có "queue" theo priority. Tất cả process trong 1 cây cân bằng theo vruntime.
+              Priority chỉ ảnh hưởng tốc độ vruntime tăng. Đơn giản nhưng cực hiệu quả.
+            </p>
+          </div>
+
+          <h3>Real-time scheduler (SCHED_FIFO, SCHED_RR)</h3>
+          <p>
+            Cho process cần độ trễ thấp (audio, robot control), Linux có scheduling class riêng:
+            <code>SCHED_FIFO</code> (FCFS, không preempt cho đến khi block) và <code>SCHED_RR</code> (RR với time quantum).
+            Cần root: <code>chrt -f 99 ./realtime_app</code>.
+          </p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Tính avg waiting time</div>
+            <p>4 process: P1=8, P2=4, P3=9, P4=5 (burst time, đến cùng lúc t=0). Tính avg waiting cho FCFS, SJF, RR (quantum=4).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Convoy effect</div>
+            <p>Trong FCFS, "convoy effect" là gì? Cho ví dụ cụ thể (2 process). Cách khắc phục?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Quan sát Linux scheduler</div>
+            <p>Chạy <code>top -d 0.5</code>, để 1 minute. Quan sát process nào chạy nhiều CPU. Với <code>nice -n 19 yes &gt; /dev/null &amp;</code>,
+            so sánh CPU% với <code>yes &gt; /dev/null &amp;</code> (nice 0).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — RR quantum tradeoff</div>
+            <p>Quantum 1ms vs 100ms vs 1s — lợi/hại từng cái? Đa số OS chọn quantum bao nhiêu?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Tại sao cần aging?</div>
+            <p>Cho ví dụ pure priority scheduling gây starvation. Aging giải quyết thế nào?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — CFS và nice</div>
+            <p>Trong CFS, process A có nice -5 và process B có nice 5. Nếu cả 2 cùng CPU-bound, CPU time tỉ lệ như nào?
+            Hint: nice diff 1 = ~10% CPU diff theo Linux source.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 1.</strong> Convoy effect xảy ra ở scheduler nào?</p>
+              <ul class="quiz-options">
+                <li>SJF</li>
+                <li>FCFS — process dài chặn các process ngắn phía sau</li>
+                <li>Round Robin</li>
+                <li>CFS</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: FCFS.</strong> Trong FCFS, mọi process sau bị đợi process dài chạy xong, dù chính chúng rất ngắn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> SJF tối ưu cho metric nào?</p>
+              <ul class="quiz-options">
+                <li>Average waiting time (lý thuyết tối ưu)</li>
+                <li>Fairness</li>
+                <li>Response time</li>
+                <li>Throughput</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: avg waiting time.</strong> SJF chứng minh được tối ưu lý thuyết. Nhược: không biết burst trước, có starvation.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Aging được dùng để giải quyết vấn đề nào?</p>
+              <ul class="quiz-options">
+                <li>Memory leak</li>
+                <li>Deadlock</li>
+                <li>Starvation — process priority thấp không bao giờ được chạy</li>
+                <li>Race condition</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Starvation.</strong> Tăng priority dần theo thời gian đợi → cuối cùng cũng được chạy.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Round Robin với quantum quá NHỎ thì sao?</p>
+              <ul class="quiz-options">
+                <li>Nhanh hơn</li>
+                <li>Fair hơn</li>
+                <li>Quá nhiều context switch — overhead cao, throughput giảm</li>
+                <li>Process dài chạy nhanh hơn</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: nhiều context switch.</strong> Mỗi switch tốn ~vài microsecond. Quantum 0.1ms → 90% thời gian là switch.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Linux dùng scheduler chính nào?</p>
+              <ul class="quiz-options">
+                <li>MLFQ</li>
+                <li>CFS (Completely Fair Scheduler) — Red-Black Tree theo vruntime</li>
+                <li>Round Robin pure</li>
+                <li>FCFS</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: CFS.</strong> Linux từ 2.6.23 (2007). Cấu trúc Red-Black tree, lấy min vruntime.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 6.</strong> Trong CFS, process có nice value cao (vd +19) sẽ?</p>
+              <ul class="quiz-options">
+                <li>Nhận ít CPU hơn — vruntime tăng nhanh hơn → bị "đẩy" trong cây</li>
+                <li>Nhận nhiều CPU hơn</li>
+                <li>Bị kill</li>
+                <li>Không có ảnh hưởng</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ít CPU hơn.</strong> Nice cao = priority thấp = "tử tế" với process khác.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Preemptive scheduling cần phần cứng gì?</p>
+              <ul class="quiz-options">
+                <li>RAM lớn</li>
+                <li>CPU đa nhân</li>
+                <li>Hardware timer phát interrupt định kỳ</li>
+                <li>SSD</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: timer interrupt.</strong> Không có timer, process tự nguyện trả CPU mới được chạy → cooperative.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> MLFQ "tự học" gì?</p>
+              <ul class="quiz-options">
+                <li>Burst time tương lai của process</li>
+                <li>Process là CPU-bound hay I/O-bound, từ đó adjust priority</li>
+                <li>Số core CPU</li>
+                <li>Nice value tối ưu</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: CPU-bound vs I/O-bound.</strong> Process dùng hết quantum → CPU-bound → tụt priority.
+                Process tự block I/O sớm → I/O-bound → giữ priority cao.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 4</h2>
+          <ul>
+            <li>✅ Scheduler = bộ não chọn process nào dùng CPU; chạy hàng nghìn lần/giây</li>
+            <li>✅ 6 metric đánh giá: utilization, throughput, turnaround, waiting, response, fairness — thường mâu thuẫn</li>
+            <li>✅ Preemptive (cần timer interrupt) là chuẩn của OS hiện đại</li>
+            <li>✅ <strong>FCFS</strong>: convoy effect; <strong>SJF</strong>: optimal lý thuyết, có starvation</li>
+            <li>✅ <strong>Priority + Aging</strong>: tránh starvation</li>
+            <li>✅ <strong>Round Robin</strong>: fair với time quantum, response tốt</li>
+            <li>✅ <strong>MLFQ</strong>: tự học CPU-bound vs I/O-bound</li>
+            <li>✅ <strong>Linux CFS</strong>: vruntime + Red-Black tree, không có "queue", priority qua nice</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong3.html">
+        <span class="label">← Chương trước</span>
+        Chương 03: Thread
+      </a>
+      <a href="chuong5.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 05: IPC →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">●</span> OS Mastery · Chương 04 · CPU Scheduling
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

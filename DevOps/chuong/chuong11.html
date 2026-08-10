@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 11 — Site Reliability Engineering</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 11 · Operate</div>
+      <h1>Site Reliability Engineering</h1>
+      <p class="subtitle">SRE = engineering discipline cho reliability. Nguồn gốc Google 2003. Error budget, toil reduction (target &lt; 50%), blameless postmortem, chaos engineering, on-call best practice, capacity planning, incident command. Đây là cách "DevOps được implement nghiêm túc nhất".</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#what-sre">1. SRE là gì?</a></li>
+        <li><a href="#vs-devops">2. SRE vs DevOps</a></li>
+        <li><a href="#slo-deep">3. SLO Deep Dive</a></li>
+        <li><a href="#error-budget">4. Error Budget</a></li>
+        <li><a href="#toil">5. Toil Reduction</a></li>
+        <li><a href="#oncall">6. On-call</a></li>
+        <li><a href="#incident">7. Incident Management</a></li>
+        <li><a href="#postmortem">8. Postmortem</a></li>
+        <li><a href="#runbook">9. Runbook</a></li>
+        <li><a href="#chaos">10. Chaos Engineering</a></li>
+        <li><a href="#capacity">11. Capacity Planning</a></li>
+        <li><a href="#exercises">12. Bài tập</a></li>
+        <li><a href="#quiz">13. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="what-sre">
+        <h2>1. SRE là gì?</h2>
+
+        <p>2003, Ben Treynor Sloss được Google thuê để chạy <em>production team</em>. Câu hỏi: "làm sao reliable hệ thống khổng lồ với engineering rigor"? Câu trả lời: <strong>thuê software engineer làm operations</strong>.</p>
+
+        <p>Treynor's definition:</p>
+        <blockquote>
+          "SRE is what happens when you ask a software engineer to design an operations team."
+        </blockquote>
+
+        <h3>1.1. Khác biệt với "sysadmin truyền thống"</h3>
+
+        <ul>
+          <li>Sysadmin: manual fix, ticket-driven, kỹ năng OS/network.</li>
+          <li>SRE: tự động hóa, software-driven, kỹ năng coding + system design.</li>
+          <li>SRE viết code: monitoring tool, automation script, control plane.</li>
+        </ul>
+
+        <h3>1.2. SRE principles (từ Google SRE book)</h3>
+
+        <ol class="steps">
+          <li><strong>Embrace risk</strong> — 100% reliability vô lý + đắt; chấp nhận failure budget.</li>
+          <li><strong>Service Level Objectives</strong> — define rõ "đủ reliable".</li>
+          <li><strong>Eliminate toil</strong> — manual work là enemy.</li>
+          <li><strong>Monitor everything</strong> — observability first.</li>
+          <li><strong>Automation</strong> — code thay vì repeat manual.</li>
+          <li><strong>Release engineering</strong> — deploy là engineering discipline.</li>
+          <li><strong>Simplicity</strong> — complex system = unreliable; reduce complexity.</li>
+        </ol>
+
+        <h3>1.3. Books tham khảo</h3>
+
+        <p>3 cuốn miễn phí online (<a href="https://sre.google/books">sre.google/books</a>):</p>
+        <ul>
+          <li><strong>Site Reliability Engineering</strong> (2016) — foundation.</li>
+          <li><strong>The Site Reliability Workbook</strong> (2018) — practical.</li>
+          <li><strong>Building Secure & Reliable Systems</strong> (2020) — security focus.</li>
+        </ul>
+      </section>
+
+      <section id="vs-devops">
+        <h2>2. SRE vs DevOps — Phân biệt</h2>
+
+        <p>Liz Fong-Jones: <em>"Class SRE implements interface DevOps"</em>.</p>
+
+        <p>DevOps = philosophy/culture; SRE = specific implementation (Google's recipe).</p>
+
+        <table>
+          <thead><tr><th>Aspect</th><th>DevOps</th><th>SRE</th></tr></thead>
+          <tbody>
+            <tr><td>Origin</td><td>Community 2009</td><td>Google 2003 (public 2016)</td></tr>
+            <tr><td>Scope</td><td>Văn hóa Dev+Ops collaboration</td><td>Reliability bằng software engineering</td></tr>
+            <tr><td>Focus metric</td><td>DORA 4 metrics</td><td>SLO compliance, error budget, MTTR</td></tr>
+            <tr><td>Org</td><td>Cross-functional team</td><td>SRE team + Product team partnership</td></tr>
+            <tr><td>Coding requirement</td><td>Variable</td><td>Software engineer required</td></tr>
+            <tr><td>Toil cap</td><td>Not specified</td><td>&lt; 50% of work</td></tr>
+            <tr><td>Error budget</td><td>Optional</td><td>Core practice</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.1. Org models</h3>
+
+        <ul>
+          <li><strong>Embedded SRE</strong> — 1 SRE trong mỗi product team.</li>
+          <li><strong>Centralized SRE</strong> — team riêng, partner với product team theo SLA.</li>
+          <li><strong>Tools team</strong> — SRE build platform (xem chương 14).</li>
+          <li><strong>Hybrid</strong> — combine.</li>
+        </ul>
+
+        <h3>2.2. Khi nào cần SRE?</h3>
+        <ul>
+          <li>Engineering org &gt; 50 engineers.</li>
+          <li>Production critical (downtime = lost revenue).</li>
+          <li>Có 24/7 on-call.</li>
+          <li>SLO formally defined.</li>
+        </ul>
+
+        <p>Startup nhỏ: SRE-style practices (error budget, postmortem) hữu ích nhưng không cần team riêng.</p>
+      </section>
+
+      <section id="slo-deep">
+        <h2>3. SLO Deep Dive</h2>
+
+        <h3>3.1. Choose right SLI</h3>
+
+        <p>SLI tốt:</p>
+        <ul>
+          <li><strong>Đo user experience</strong>, không proxy metric (CPU usage không direct).</li>
+          <li><strong>Có thể tin cậy được</strong> — không phụ thuộc service đang đo.</li>
+          <li><strong>Aggregate-able</strong> — tính được %.</li>
+        </ul>
+
+        <p>Common SLI patterns:</p>
+
+        <table>
+          <thead><tr><th>Service type</th><th>SLI examples</th></tr></thead>
+          <tbody>
+            <tr><td>Request-driven (API)</td><td>Availability (% 2xx/3xx), Latency P95, Error rate</td></tr>
+            <tr><td>Pipeline (data)</td><td>Freshness (data lag), Coverage (% records processed), Correctness</td></tr>
+            <tr><td>Storage</td><td>Availability, Durability, Latency</td></tr>
+            <tr><td>UI</td><td>Time to first byte, Largest Contentful Paint, Crash rate</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3.2. Set SLO target</h3>
+
+        <p>Quy tắc: target dựa trên user expectation, không capability.</p>
+
+        <ul>
+          <li>Quá cao (99.999%) → đắt vận hành, dev cant ship feature.</li>
+          <li>Quá thấp (99%) → user frustrated.</li>
+          <li>Most B2B SaaS: 99.9% (43 phút downtime/tháng).</li>
+          <li>Banking/healthcare: 99.99%.</li>
+          <li>Ad serving (lossy): 99% có thể đủ.</li>
+        </ul>
+
+        <h3>3.3. Multi-window SLO</h3>
+
+        <p>SLO không phải instant — tính rolling window (vd 28 ngày):</p>
+
+<pre><code class="language-promql"># Availability (28 day rolling)
+sum(rate(http_requests_total{status=~"2..|3.."}[28d]))
+  /
+sum(rate(http_requests_total[28d]))
+</code></pre>
+
+        <p>Window 28 ngày phổ biến vì tránh weekend skew (4 weekend = 28 ngày).</p>
+
+        <h3>3.4. Composite SLO</h3>
+
+        <p>Service nhiều endpoint → SLO chia theo importance:</p>
+        <ul>
+          <li>"Critical" endpoints (login, checkout): 99.99%.</li>
+          <li>"Important" (browse): 99.9%.</li>
+          <li>"Best effort" (recommendations): 99%.</li>
+        </ul>
+
+        <h3>3.5. SLO không phải SLA</h3>
+
+        <p>SLA: cam kết external có legal consequence. SLO: nội bộ, target hơn cam kết.</p>
+
+        <p>SLO &lt; SLA — buffer. Nếu SLA = 99.9%, SLO = 99.95%. Khi vi phạm SLO → engineering response. Khi vi phạm SLA → financial response (refund, credit).</p>
+      </section>
+
+      <section id="error-budget">
+        <h2>4. Error Budget — Kỷ luật của SRE</h2>
+
+        <h3>4.1. Concept</h3>
+
+        <p>SLO 99.9% = 0.1% downtime cho phép = "error budget".</p>
+
+        <table>
+          <thead><tr><th>SLO</th><th>Budget/30-day</th></tr></thead>
+          <tbody>
+            <tr><td>99%</td><td>7.2 giờ</td></tr>
+            <tr><td>99.5%</td><td>3.6 giờ</td></tr>
+            <tr><td>99.9%</td><td>43.2 phút</td></tr>
+            <tr><td>99.95%</td><td>21.6 phút</td></tr>
+            <tr><td>99.99%</td><td>4.32 phút</td></tr>
+            <tr><td>99.999%</td><td>26 giây</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.2. Error Budget Policy</h3>
+
+        <p>Document chính thức về cách team handle budget:</p>
+
+<pre><code># Error Budget Policy — Service X
+
+## SLO
+99.9% availability over 28-day rolling window.
+
+## Budget
+0.1% × 28 days = 40.3 minutes downtime allowed.
+
+## When budget &gt; 50% remaining
+- Normal velocity: deploy daily, experiment freely.
+- Chaos engineering allowed.
+
+## When budget 10-50% remaining
+- Slow down deploys (max 1/day).
+- Prioritize reliability work over features.
+- Required postmortem for any prod issue.
+
+## When budget &lt; 10% remaining
+- HARD FREEZE on feature deploy.
+- Only fixes that improve reliability.
+- All hands-on-deck for stabilization.
+
+## When SLO breached
+- Public incident review.
+- Roadmap commitment for reliability fixes.
+- Optional: SLO re-evaluation (was target right?).
+</code></pre>
+
+        <h3>4.3. Burn rate alert</h3>
+
+<pre><code class="language-yaml"># Multi-window multi-burn rate (Google SRE book)
+groups:
+  - name: slo-burn-rate
+    rules:
+      # Fast burn: 2% budget in 1h = 14.4× rate → page on-call
+      - alert: ErrorBudgetFastBurn
+        expr: |
+          (
+            (1 - sum(rate(http_requests_total{status=~"2..|3.."}[1h])) / sum(rate(http_requests_total[1h])))
+            &gt; (14.4 * 0.001)
+          )
+          and
+          (
+            (1 - sum(rate(http_requests_total{status=~"2..|3.."}[5m])) / sum(rate(http_requests_total[5m])))
+            &gt; (14.4 * 0.001)
+          )
+        labels:
+          severity: critical
+
+      # Slow burn: 5% budget in 6h = 6× rate → ticket
+      - alert: ErrorBudgetSlowBurn
+        expr: |
+          ((1 - ...rate[6h]) &gt; (6 * 0.001))
+          and
+          ((1 - ...rate[30m]) &gt; (6 * 0.001))
+        labels:
+          severity: warning
+</code></pre>
+
+        <p>Multi-burn rate: alert chỉ fire khi sustained over 2 windows (long + short) → reduce false positive.</p>
+      </section>
+
+      <section id="toil">
+        <h2>5. Toil Reduction</h2>
+
+        <h3>5.1. Định nghĩa toil</h3>
+
+        <p>Toil = việc <em>manual</em>, <em>repetitive</em>, <em>tactical</em> (no enduring value), <em>scale linearly with service growth</em>.</p>
+
+        <p>Examples:</p>
+        <ul>
+          <li>Manually restart Pod khi crash.</li>
+          <li>Click console add user mới.</li>
+          <li>SSH vào server clean log.</li>
+          <li>Edit nhiều ticket request "deploy giùm".</li>
+        </ul>
+
+        <p>Non-toil examples:</p>
+        <ul>
+          <li>Code review (engineering work).</li>
+          <li>Postmortem analysis (creates value).</li>
+          <li>Architecture design.</li>
+        </ul>
+
+        <h3>5.2. Tại sao reduce toil?</h3>
+
+        <ul>
+          <li>Toil tăng tuyến tính với service growth → SRE team không scale.</li>
+          <li>Toil = career stagnation cho SRE (no learning).</li>
+          <li>Toil khiến SRE không có thời gian cho engineering work.</li>
+          <li>Burnout → attrition.</li>
+        </ul>
+
+        <p>Google target: <strong>SRE work &lt; 50% toil</strong>. Thực tế nhiều team 70-80% toil → unsustainable.</p>
+
+        <h3>5.3. Eliminating toil</h3>
+
+        <ol class="steps">
+          <li><strong>Identify</strong> — track toil hours/sprint. Survey team monthly.</li>
+          <li><strong>Categorize</strong> — what task? frequency?</li>
+          <li><strong>Automate or eliminate</strong>:
+            <ul>
+              <li>Script repetitive task.</li>
+              <li>Self-service portal cho user request (ticket → button).</li>
+              <li>Auto-remediation (auto-restart, auto-scale).</li>
+              <li>Remove root cause (improve service quality).</li>
+            </ul>
+          </li>
+          <li><strong>Track reduction</strong> — % toil over time.</li>
+        </ol>
+
+        <h3>5.4. Auto-remediation patterns</h3>
+
+<pre><code class="language-yaml"># Pod auto-restart (K8s built-in)
+restartPolicy: Always
+
+# Liveness probe → restart unhealthy
+livenessProbe:
+  httpGet: { path: /alive, port: 3000 }
+
+# HPA → scale on traffic
+HorizontalPodAutoscaler ...
+
+# Karpenter → spawn nodes when pod pending
+# CronJob → daily backup
+
+# Self-healing alerts (Alertmanager + webhook)
+- If "DiskFull" alert → trigger Lambda to clean log
+- If "Pod OOMKilled" → notify owner team (no on-call wake)
+</code></pre>
+      </section>
+
+      <section id="oncall">
+        <h2>6. On-call Best Practices</h2>
+
+        <h3>6.1. Schedule</h3>
+
+        <ul>
+          <li><strong>Primary + Secondary</strong> rotation (Secondary backup nếu Primary miss).</li>
+          <li><strong>Weekly rotation</strong> phổ biến (không quá ngắn để kéo context, không quá dài để burnout).</li>
+          <li><strong>Follow-the-sun</strong> nếu có team multi-region (no 3 AM page).</li>
+          <li>Mỗi shift &le; 25% thời gian SRE (fairness).</li>
+        </ul>
+
+        <h3>6.2. Pager hygiene</h3>
+
+        <ul>
+          <li><strong>SLO-based alert</strong> — chỉ alert khi user impact, không alert preventive.</li>
+          <li><strong>Page budget</strong> — &le; 2 page/shift (Google guideline). Nhiều hơn = alert spam → fix root cause.</li>
+          <li><strong>Postmortem</strong> mọi page (review weekly, eliminate noise).</li>
+          <li><strong>Compensation</strong> — pay/PTO cho on-call (tránh free labor).</li>
+        </ul>
+
+        <h3>6.3. On-call playbook</h3>
+
+        <p>Khi nhận page:</p>
+        <ol class="steps">
+          <li><strong>Acknowledge</strong> trong 5 phút.</li>
+          <li><strong>Open runbook</strong> — alert có link runbook? Follow.</li>
+          <li><strong>Assess severity</strong> — user impact? scope?</li>
+          <li><strong>Open incident channel</strong> (Slack #inc-2024-01-15-payment-down).</li>
+          <li><strong>Mitigate first, fix later</strong> — rollback / scale up / drain traffic, không debug 30 phút khi user đang impact.</li>
+          <li><strong>Communicate</strong> — status page, customer support team.</li>
+          <li><strong>Resolve</strong> — verify metric trở lại bình thường.</li>
+          <li><strong>Postmortem</strong> trong 48h.</li>
+        </ol>
+
+        <h3>6.4. On-call burnout — phòng ngừa</h3>
+        <ul>
+          <li>Compensation rõ (extra pay, comp time).</li>
+          <li>Page budget: nếu 2+ page/shift trong 4 tuần → reliability work priority.</li>
+          <li>Rotate roles (không cùng 1 người mãi).</li>
+          <li>Backup plan khi sick.</li>
+          <li>"Operational excellence reviews" — quarterly review on-call burden.</li>
+        </ul>
+      </section>
+
+      <section id="incident">
+        <h2>7. Incident Management</h2>
+
+        <h3>7.1. Severity levels</h3>
+
+        <table>
+          <thead><tr><th>Sev</th><th>Definition</th><th>Response</th></tr></thead>
+          <tbody>
+            <tr><td>SEV-1</td><td>Total outage, all customers affected</td><td>Page CEO, war room, all hands</td></tr>
+            <tr><td>SEV-2</td><td>Major degradation, &gt; 25% customers</td><td>Page on-call, IC assigned</td></tr>
+            <tr><td>SEV-3</td><td>Partial outage, single feature affected</td><td>Slack alert, fix giờ làm việc</td></tr>
+            <tr><td>SEV-4</td><td>Minor, no/few customer impact</td><td>Ticket, fix khi có thời gian</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.2. ICS — Incident Command System</h3>
+
+        <p>Mượn từ FEMA wildfire response. Roles:</p>
+
+        <ul>
+          <li><strong>Incident Commander (IC)</strong> — quyết định toàn cục, không touch code; coordinator.</li>
+          <li><strong>Operations Lead (OL)</strong> — actual hands-on technical work.</li>
+          <li><strong>Communications Lead (CL)</strong> — update status page, customer comm, exec.</li>
+          <li><strong>Subject Matter Expert (SME)</strong> — domain expert pulled in.</li>
+          <li><strong>Scribe</strong> — log timeline cho postmortem.</li>
+        </ul>
+
+        <p>1 person có thể đảm nhiều roles ở incident nhỏ. SEV-1: separate roles.</p>
+
+        <h3>7.3. War room</h3>
+
+        <p>Communication channel:</p>
+        <ul>
+          <li>Dedicated Slack channel <code>#inc-YYYY-MM-DD-summary</code>.</li>
+          <li>Voice: Zoom / Google Meet open suốt incident.</li>
+          <li>Status page: external customer comm.</li>
+          <li>Incident dashboard: Grafana focused on key SLI.</li>
+        </ul>
+
+        <h3>7.4. Mitigate first, fix later</h3>
+
+        <p>Trong incident, ưu tiên: <em>stop bleeding</em>, không <em>understand why</em>.</p>
+
+        <p>Mitigations:</p>
+        <ul>
+          <li>Rollback last deploy.</li>
+          <li>Disable feature flag.</li>
+          <li>Scale up replicas.</li>
+          <li>Drain bad node.</li>
+          <li>Failover to DR region.</li>
+          <li>Throttle/rate limit traffic source gây overload.</li>
+        </ul>
+
+        <p>Sau khi mitigate, có thời gian debug root cause → fix proper.</p>
+      </section>
+
+      <section id="postmortem">
+        <h2>8. Postmortem — Blameless Learning</h2>
+
+        <h3>8.1. Mục đích</h3>
+
+        <p>Postmortem KHÔNG để punish. Để <em>learn</em>:</p>
+        <ul>
+          <li>Điều gì xảy ra?</li>
+          <li>Vì sao? (root cause + contributing factors).</li>
+          <li>Làm sao prevent next time?</li>
+          <li>Action items với owner + deadline.</li>
+        </ul>
+
+        <h3>8.2. Blameless culture</h3>
+
+        <p>Giả định: mọi người đã làm tốt nhất với thông tin/tool có lúc đó. Câu hỏi đúng:</p>
+        <ul>
+          <li>✓ "Hệ thống/quy trình thiếu gì khiến bug này có thể xảy ra?"</li>
+          <li>❌ "Ai đã làm sai?"</li>
+        </ul>
+
+        <p>Blame culture → người che giấu bug → repeat.</p>
+
+        <h3>8.3. Template</h3>
+
+<pre><code># Postmortem: 2024-01-15 Payment Service Outage
+
+**Severity**: SEV-2
+**Duration**: 14:23 - 15:47 UTC (84 minutes)
+**Author**: Alice Lead
+**Status**: Final
+
+## Summary
+Payment processing failed for 100% of users due to expired TLS certificate
+on payment-gateway service. ~$120k revenue lost.
+
+## Timeline (UTC)
+- **14:23** — Alert "PaymentErrorRate &gt; 50%" fires.
+- **14:25** — On-call (Bob) acknowledges.
+- **14:30** — Bob identifies certificate expiry in logs.
+- **14:35** — IC declared (Carol).
+- **14:42** — Cert renewal initiated. Failed: ACME challenge issue.
+- **14:55** — Manual cert deploy attempted. Failed: ConfigMap permissions.
+- **15:30** — Cert deployed via Vault.
+- **15:35** — Service restored.
+- **15:47** — Verified all metrics normal. Incident closed.
+
+## Impact
+- 100% payment requests failed for 84 minutes.
+- ~$120k transaction revenue lost.
+- 25k customer support tickets opened.
+- Brand impact: trending #PaymentFail on Twitter.
+
+## Root Cause
+Cert auto-renewal cron failed silently 14 days ago because:
+1. cert-manager's challenge solver lost permission to write
+   to namespace "kube-system" after RBAC tighten 2024-01-01.
+2. cert-manager log → ERROR but no alert configured for cert-manager.
+3. Cert expired 14:23.
+
+## What Went Well
+- Alert fired in &lt; 1 min of impact.
+- IC role assigned quickly.
+- Customer support communicated proactively.
+
+## What Went Poorly
+- No alert for cert expiry approaching (could've prevented).
+- cert-manager errors not in main observability.
+- Manual cert deploy procedure undocumented.
+
+## Action Items
+| # | Action                                              | Owner   | Due       | Status |
+|---|-----------------------------------------------------|---------|-----------|--------|
+| 1 | Add alert "CertExpiryWithin30Days"                  | Bob     | 2024-01-22| Open   |
+| 2 | Include cert-manager logs in main alert pipeline    | Carol   | 2024-01-29| Open   |
+| 3 | Document manual cert renewal runbook                | Alice   | 2024-01-22| Open   |
+| 4 | Audit RBAC changes process — require cert-manager test | Dave | 2024-02-15| Open   |
+| 5 | Review all cron jobs for silent failures            | SRE team| 2024-02-29| Open   |
+
+## Lessons Learned
+- Auto-renewal != monitored renewal. Must alert on expiry approaching, not on expiry itself.
+- RBAC changes need integration test for downstream services.
+- cert-manager errors went unnoticed for 14 days — observability gap.
+</code></pre>
+
+        <h3>8.4. Action items</h3>
+
+        <p>Critical: action items không phải wishlist:</p>
+        <ul>
+          <li>Specific owner.</li>
+          <li>Deadline (vài tuần, không "sometime").</li>
+          <li>Tracked → completed.</li>
+          <li>Public review (quarterly: action items resolved %?).</li>
+        </ul>
+
+        <p>Anti-pattern: postmortem viết hay, action items nằm rotting trong backlog. Engineering manager track completion.</p>
+
+        <h3>8.5. Postmortem culture</h3>
+
+        <ul>
+          <li>Mọi SEV-1, SEV-2 phải có postmortem (default).</li>
+          <li>SEV-3, SEV-4 optional (nhưng good practice).</li>
+          <li>Public — share toàn engineering org để learn.</li>
+          <li>Read past postmortem hằng tuần (10 phút standup).</li>
+          <li>Tooling: Jeli (acquired by Atlassian), Incident.io, BlamelessOps.</li>
+        </ul>
+      </section>
+
+      <section id="runbook">
+        <h2>9. Runbook</h2>
+
+        <h3>9.1. Định nghĩa</h3>
+
+        <p>Runbook = step-by-step guide để xử lý 1 alert/scenario. Goal: bất kỳ on-call nào (kể cả mới onboarding) handle được.</p>
+
+        <h3>9.2. Format</h3>
+
+<pre><code># Runbook: HighErrorRate
+
+## Alert
+Error rate &gt; 5% for 5 minutes on service `payment`.
+
+## Severity
+SEV-2 if duration &lt; 15min; SEV-1 if longer.
+
+## Impact
+Users see "Payment failed" in checkout flow.
+
+## Diagnosis Steps
+
+### 1. Check Grafana
+- Open: https://grafana.example.com/d/payment-overview
+- Look at: Error breakdown panel (5xx by route, 4xx by route)
+- Note: Are errors concentrated to 1 route, 1 instance, or distributed?
+
+### 2. Check recent changes
+- Open: https://github.com/myorg/payment/commits/main
+- Any deploy in last 30 min? → likely cause, jump to "Mitigation: Rollback"
+
+### 3. Check downstream
+- DB latency: https://grafana.example.com/d/postgres-overview
+- Stripe API status: https://status.stripe.com
+- Internal auth service: https://grafana.example.com/d/auth-overview
+
+### 4. Check pod status
+```bash
+kubectl get pods -n payment
+kubectl logs -n payment -l app=payment --tail=200 | grep ERROR
+```
+
+## Mitigation Options
+
+### A. Rollback (recent deploy = root cause)
+```bash
+kubectl rollout undo deployment/payment -n payment
+kubectl rollout status deployment/payment -n payment
+```
+Verify: error rate drop within 2 min.
+
+### B. Scale up (CPU/memory bound)
+```bash
+kubectl scale deployment/payment -n payment --replicas=20
+```
+
+### C. Disable feature flag (specific feature broken)
+```bash
+launchdarkly set-flag new-checkout-flow off
+```
+
+### D. Failover to DR region
+See: [Multi-region Failover Runbook](./failover.md)
+
+## After Mitigation
+1. Open incident channel `#inc-YYYY-MM-DD-payment-error-rate`
+2. Notify customer support team (#cs-leads)
+3. Update status page: status.example.com
+4. Schedule postmortem within 48h.
+
+## Common Causes (Past)
+- Stripe API rate limit: 2024-01-15 (see PM-2024-001)
+- DB connection pool exhausted: 2023-11-22 (see PM-2023-019)
+- Bad deploy with timeout regression: 2023-09-04 (see PM-2023-014)
+
+## Escalation
+- IC: page Carol (Engineering Manager)
+- DBA: page Dave (DB on-call)
+- Stripe: support@stripe.com, account #abc-123
+</code></pre>
+
+        <h3>9.3. Best practices</h3>
+
+        <ul>
+          <li><strong>Linked from alert</strong> — alert annotation có URL runbook.</li>
+          <li><strong>Versioned trong Git</strong> — không Wiki page rot.</li>
+          <li><strong>Test runbook</strong> — game day exercise (xem chaos).</li>
+          <li><strong>Update sau postmortem</strong> — incident mới → enrich runbook.</li>
+          <li><strong>Less is more</strong> — runbook 100 trang không ai đọc; focus action items.</li>
+        </ul>
+      </section>
+
+      <section id="chaos">
+        <h2>10. Chaos Engineering</h2>
+
+        <h3>10.1. Concept</h3>
+
+        <p>Chaos Engineering (Netflix 2010+): chủ động inject failure vào production để verify hệ thống resilient. Better hơn đợi failure thật.</p>
+
+        <p>Principles (principlesofchaos.org):</p>
+        <ol>
+          <li>Define "steady state" (normal metric).</li>
+          <li>Hypothesize: steady state sẽ persist khi inject failure.</li>
+          <li>Run experiment với real-world failures (terminate instance, network latency).</li>
+          <li>Run in production (with safeguards).</li>
+          <li>Minimize blast radius.</li>
+        </ol>
+
+        <h3>10.2. Chaos Monkey (Netflix)</h3>
+
+        <p>Tool đầu tiên (2011): random terminate EC2 instance trong production. Forced developers viết app handle failure gracefully.</p>
+
+        <p>Suite "Simian Army":</p>
+        <ul>
+          <li>Chaos Monkey — kill instance.</li>
+          <li>Chaos Kong — kill entire region.</li>
+          <li>Latency Monkey — inject latency.</li>
+          <li>Conformity Monkey — enforce best practice.</li>
+        </ul>
+
+        <h3>10.3. Modern tools</h3>
+
+        <ul>
+          <li><strong>Chaos Mesh</strong> (CNCF) — K8s-native chaos.</li>
+          <li><strong>LitmusChaos</strong> (CNCF) — K8s chaos workflows.</li>
+          <li><strong>Gremlin</strong> — SaaS, GUI.</li>
+          <li><strong>AWS Fault Injection Simulator (FIS)</strong>.</li>
+          <li><strong>Pumba</strong> — Docker chaos.</li>
+        </ul>
+
+        <h3>10.4. Chaos Mesh example</h3>
+
+<pre><code class="language-yaml">apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure-test
+  namespace: chaos-testing
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - production
+    labelSelectors:
+      app: payment
+  scheduler:
+    cron: "@every 1h"
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: [production]
+    labelSelectors:
+      app: payment
+  delay:
+    latency: "100ms"
+    correlation: "100"
+    jitter: "10ms"
+  duration: "5m"
+</code></pre>
+
+        <h3>10.5. Game days</h3>
+
+        <p>Practice exercise: team simulate incident, follow runbook. Ví dụ:</p>
+        <ul>
+          <li>Nick (random IC) "It's 3am Saturday. PagerDuty wakes you up — payment is down."</li>
+          <li>On-call follow runbook real-time, team observe.</li>
+          <li>After: review what worked, what didn't.</li>
+        </ul>
+
+        <p>Phương pháp Google "DiRT" (Disaster Recovery Testing) — yearly large-scale game day.</p>
+
+        <h3>10.6. Practice safely</h3>
+
+        <ul>
+          <li>Start in staging, not prod.</li>
+          <li>Have abort button.</li>
+          <li>Schedule (not random) for major experiment.</li>
+          <li>Monitor blast radius.</li>
+          <li>Communicate to teams (no surprise outage).</li>
+          <li>Steady state = clear metric (revenue/min, RPS).</li>
+        </ul>
+      </section>
+
+      <section id="capacity">
+        <h2>11. Capacity Planning</h2>
+
+        <h3>11.1. Why?</h3>
+
+        <p>Cloud scale tự động OK, nhưng:</p>
+        <ul>
+          <li>Reserved instance discount cần cam kết → cần dự đoán.</li>
+          <li>Database không scale instant.</li>
+          <li>Cost — overprovisioning = waste, underprovisioning = outage.</li>
+          <li>Region/AZ capacity (cloud có rate limit launch instance).</li>
+        </ul>
+
+        <h3>11.2. Process</h3>
+
+        <ol class="steps">
+          <li><strong>Forecast demand</strong> — historical growth, business plan, marketing campaign.</li>
+          <li><strong>Identify resource needs</strong> — CPU/RAM/disk/network per unit demand.</li>
+          <li><strong>Plan headroom</strong> — không vận hành &gt; 70% (buffer cho burst, GC).</li>
+          <li><strong>Reserved/Spot mix</strong> — baseline reserved, peak spot/on-demand.</li>
+          <li><strong>Quarterly review</strong> — actual vs forecast, adjust.</li>
+        </ol>
+
+        <h3>11.3. Tools</h3>
+
+        <ul>
+          <li><strong>k6 / Locust</strong> — load test.</li>
+          <li><strong>AWS Compute Optimizer</strong> — recommend instance size.</li>
+          <li><strong>GCP Recommender</strong>.</li>
+          <li><strong>Vertical Pod Autoscaler recommend mode</strong> — K8s recommend resource.</li>
+          <li><strong>Spreadsheet</strong> — surprisingly, simple growth model often enough.</li>
+        </ul>
+
+        <h3>11.4. Example forecast</h3>
+
+<pre><code>Service: payment-api
+Current: 5,000 RPS peak, 20 pods @ 0.5 CPU avg
+Growth: 30%/year (historical)
+
+Projected (12 months):
+  RPS = 5,000 × 1.30 = 6,500 peak
+  Pods = 6,500/5,000 × 20 × 1.4 (headroom) = 36 pods
+  CPU = 36 × 0.5 = 18 cores
+  Memory @ 256MB/pod = 9 GB
+
+Sale event spike: 3× normal = ~108 pods burst.
+  → Need cluster capacity 150 pods (with safety).
+  → Karpenter spot for burst, reserved for baseline 36 pods.
+
+DB:
+  Currently: db.r5.xlarge (16 GB RAM, 4 vCPU, 60% utilization).
+  Projected: 78% → upgrade to db.r5.2xlarge by Q3.
+</code></pre>
+      </section>
+
+      <section id="exercises">
+        <h2>12. Bài tập</h2>
+
+        <ol>
+          <li><strong>Define SLO</strong>: cho 1 service bạn maintain. Define SLI (availability + latency). Set SLO target. Tính error budget 28 ngày.</li>
+
+          <li><strong>Burn rate alert</strong>: implement multi-window multi-burn rate alert. Test bằng chaos — kill pods, watch fast burn fire.</li>
+
+          <li><strong>Toil audit</strong>: trong 1 tuần, log mọi task đã làm. Phân loại engineering vs toil. Tính %. Đề xuất 3 automation cao priority.</li>
+
+          <li><strong>Auto-remediation</strong>: implement 1 auto-remediation: alert "DiskFullOnNode" → trigger Lambda clean log /tmp + /var/log/old.</li>
+
+          <li><strong>Runbook</strong>: viết runbook cho alert "DatabaseConnectionPoolExhausted". Include diagnosis + 3 mitigation options.</li>
+
+          <li><strong>Mock incident</strong>: với 1 đồng đội, simulate incident. Bạn IC; họ inject failure (kill pod, fill disk). Theo runbook handle. Time it.</li>
+
+          <li><strong>Postmortem</strong>: viết postmortem cho 1 incident gần đây (nếu chưa có). Use template above. Action items có owner + deadline.</li>
+
+          <li><strong>Chaos Mesh</strong>: cài Chaos Mesh trên cluster. Schedule pod-kill mỗi giờ. Monitor service vẫn meet SLO.</li>
+
+          <li><strong>Game day</strong>: tổ chức 1h game day với team. Scenario: "DB primary down". On-call follow runbook. Document gaps.</li>
+
+          <li><strong>Capacity planning</strong>: cho service hiện tại, dự báo capacity 12 tháng. Reserved vs Spot ratio. Submit cho manager.</li>
+
+          <li><strong>On-call experience</strong>: nếu chưa, volunteer 1 week on-call. Record số page, time-to-mitigate. Identify alert noise.</li>
+
+          <li><strong>SLO review</strong>: tính SLO compliance 28 ngày qua. Vi phạm? Action items?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>13. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 11</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">SRE và DevOps có quan hệ như thế nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">DevOps thay thế SRE</li>
+              <li class="quiz-option">"Class SRE implements interface DevOps" — DevOps là philosophy, SRE là implementation cụ thể (Google's recipe) với practices nghiêm ngặt</li>
+              <li class="quiz-option">Hai khái niệm đối nghịch</li>
+              <li class="quiz-option">SRE là cũ hơn DevOps 10 năm</li>
+            </ul>
+            <div class="quiz-explain">DevOps (cộng đồng 2009): philosophy, văn hóa Dev+Ops collaboration. SRE (Google 2003, public 2016): cụ thể implementation với practices: SLO, error budget, &lt; 50% toil, blameless postmortem, blameless culture, software engineering for ops. SRE đòi hỏi ngặt hơn — coding skill required. Liz Fong-Jones quote.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Error Budget concept:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Số tiền cho bug</li>
+              <li class="quiz-option">Limit số deploy</li>
+              <li class="quiz-option">Ngân sách an toàn</li>
+              <li class="quiz-option">(1 - SLO) × period — quota downtime cho phép trước khi vi phạm SLO; còn budget thì dev được risk-taking, hết budget thì freeze deploy + reliability work</li>
+            </ul>
+            <div class="quiz-explain">SLO 99.9% = 0.1% downtime cho phép = 43 min/30 ngày. Đó là "error budget". Còn budget &gt; 50% → normal velocity (deploy, experiment). 10-50% → slow down, focus reliability. &lt; 10% → freeze deploy. Mục đích: manage tension dev (fast) vs ops (stable). Cả 2 đồng KPI.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">"Toil" trong SRE là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Việc manual, repetitive, không tạo enduring value, scale linearly với service growth — Google target SRE work &lt; 50% toil; over toil = burnout + no engineering progress</li>
+              <li class="quiz-option">Mọi việc của SRE</li>
+              <li class="quiz-option">Coding</li>
+              <li class="quiz-option">Postmortem</li>
+            </ul>
+            <div class="quiz-explain">Toil examples: manual restart, click console, ticket "deploy giùm". Non-toil: code review, design, postmortem (creates value). Reduce toil bằng automation: script, self-service portal, auto-remediation. Track toil hours, eliminate top contributors. Senior SRE spend &gt; 50% engineering time để break loop.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">"Blameless postmortem" có nghĩa:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không ai chịu trách nhiệm</li>
+              <li class="quiz-option">Không cần viết</li>
+              <li class="quiz-option">Tập trung vào hệ thống/quy trình ("hệ thống thiếu gì khiến lỗi xảy ra"), KHÔNG đổ lỗi cá nhân — encourage báo cáo bug, no fear</li>
+              <li class="quiz-option">Chỉ Ops chịu</li>
+            </ul>
+            <div class="quiz-explain">Blame culture = engineer che giấu bug → repeat. Blameless: assume mọi người làm tốt nhất với info có lúc đó. Câu hỏi đúng: "Quy trình thiếu gì? Tool nào không cảnh báo? Documentation thiếu sót?" Action items cải tiến hệ thống. Khác "no accountability": ownership cho action items vẫn rõ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Trong incident, ưu tiên:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Debug root cause trước</li>
+              <li class="quiz-option">Mitigate first, fix later — stop bleeding (rollback / scale / failover) ưu tiên hơn understand why; fix root cause sau</li>
+              <li class="quiz-option">Notify exec</li>
+              <li class="quiz-option">Write postmortem</li>
+            </ul>
+            <div class="quiz-explain">Common mistake: on-call deep-debug khi user đang impact. SLA bleeding mỗi phút. Mitigate: rollback last deploy, scale up, drain bad node, disable feature flag, failover region. Sau khi user OK, debug root cause với pace. Trade-off: mitigate có thể mask root cause (rollback) — postmortem là nơi capture full info.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Incident Command System (ICS) roles:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">CEO, CTO, Manager</li>
+              <li class="quiz-option">Developer, QA, Ops</li>
+              <li class="quiz-option">Incident Commander (coordinate, no hands-on), Operations Lead (technical work), Communications Lead (status page, exec), SME (domain expert), Scribe (timeline)</li>
+              <li class="quiz-option">Pro, Junior, Intern</li>
+            </ul>
+            <div class="quiz-explain">ICS mượn từ FEMA (wildfire). Tách trách nhiệm: IC quản lý, OL hands-on, CL communicate. Người trẻ cũng có thể IC (chỉ cần coordination skill, không cần senior). 1 người có thể đảm nhiều role ở incident nhỏ. SEV-1: separate roles để avoid bottleneck. Critical: <em>quyết định</em> ai IC từ đầu, không "who's free to handle this?".</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Multi-burn rate alert tại sao tốt hơn single threshold?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Alert chỉ fire khi sustained over short + long window → reduce false positive (transient spike); fast burn (1h burn 2% budget = 14× rate) page critical, slow burn (24h burn 10%) ticket</li>
+              <li class="quiz-option">Faster query</li>
+              <li class="quiz-option">Cheaper</li>
+              <li class="quiz-option">Cùng kết quả</li>
+            </ul>
+            <div class="quiz-explain">Single threshold "error rate &gt; 5%": brief spike → false alert. Multi-window: alert khi 5min AND 1h đều breach → genuine sustained issue. Multi-burn: fire severity khác nhau theo speed of burn. Critical (page) chỉ cho fast/severe; slow (ticket) cho gradual. Google SRE Workbook chương 5 detail.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Chaos Engineering principle quan trọng nhất:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Random kill mọi thứ</li>
+              <li class="quiz-option">Test trên prod liền</li>
+              <li class="quiz-option">Disable monitoring</li>
+              <li class="quiz-option">Define "steady state" (normal metric) rõ + minimize blast radius + có abort button + run với hypothesis cụ thể; experiment chỉ valid khi compare với baseline</li>
+            </ul>
+            <div class="quiz-explain">Chaos không phải "phá đại". Hypothesis: "service vẫn meet SLO khi 1 pod chết". Define steady state (RPS, error rate). Inject failure. Compare. Validation: hypothesis đúng/sai. Start staging. Có abort. Communicate. Netflix Chaos Monkey, Chaos Mesh (K8s), Gremlin (SaaS) là tools. Antipattern: "chaos for fun".</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Pages budget của Google SRE:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">10 pages/shift</li>
+              <li class="quiz-option">≤ 2 page/12h shift — nhiều hơn = alert noise; sustained over 4 weeks = trigger reliability work; on-call burnout là issue thật</li>
+              <li class="quiz-option">Unlimited</li>
+              <li class="quiz-option">No pages allowed</li>
+            </ul>
+            <div class="quiz-explain">Google SRE book guideline: &le; 2 page per shift (12h). Lý do: page wake disrupt sleep/focus, more = burnout, attrition. Track page metric weekly. &gt; 2 sustained → priority engineering work giảm noise (fix root cause, tune alert, add auto-remediation). Compensation cho on-call (extra pay, comp time) là culture issue.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Action items trong postmortem nên:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Wishlist không deadline</li>
+              <li class="quiz-option">Chỉ assign cho on-call</li>
+              <li class="quiz-option">Specific owner + deadline (vài tuần) + tracked đến completion + reviewed quarterly (% completed?) — không tracked = postmortem chỉ là theater</li>
+              <li class="quiz-option">Skip — đã learn rồi</li>
+            </ul>
+            <div class="quiz-explain">Common antipattern: postmortem viết hay, action items rotting trong backlog 6 tháng. Same incident lại xảy ra. Engineering manager track: % action items completed within deadline. Quarterly review: identify systemic issues (cùng action item nhiều lần). Tooling Jeli, Incident.io, BlamelessOps help track.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 11. Tiếp theo: <a href="chuong12.html"><strong>Chương 12 — DevSecOps →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 11 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 1 — Flutter Setup · Flutter Sub-pillar</title>
+  <meta name="description" content="Cài Flutter SDK qua FVM, setup iOS/Android toolchain, flutter doctor, IDE setup, tạo project đầu tiên, hot reload vs hot restart." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 1</span>
+      </div>
+      <div class="chapter-num">Chương 01 · Flutter Setup</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Flutter Setup — lên xe
+      </h1>
+      <p class="lead">
+        Chương "lên xe" cho cả phần Flutter. Setup sai chỗ này thì 14 chương sau toàn debug môi trường thay vì học framework.
+        Đặc biệt iOS Simulator / Xcode rất hay vướng — chương này dành nhiều section cho troubleshooting thực tế.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~870 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Đã học xong 8 chương Dart</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Cài Flutter SDK qua <strong>FVM</strong> (recommended) trên macOS.</li>
+            <li>Setup Android Studio + Xcode + iOS Simulator + Android Emulator.</li>
+            <li>Chạy <code>flutter doctor</code> và fix mọi warning.</li>
+            <li>Tạo project Flutter mới, hiểu cấu trúc folder sinh ra.</li>
+            <li>Chạy app trên 4 device: iOS Simulator, Android Emulator, Chrome (Web), macOS desktop.</li>
+            <li>Hiểu hot reload vs hot restart vs full rebuild.</li>
+            <li>Setup VS Code / Android Studio extension.</li>
+            <li>Phân biệt <code>pubspec.yaml</code> Flutter vs Dart console.</li>
+          </ul>
+        </div>
+
+        <h2 id="flutter-la-gi">1. Flutter là gì?</h2>
+        <p>
+          <strong>Flutter</strong> là framework UI cross-platform do Google phát triển, ra mắt tháng 5/2017.
+          Mục tiêu: <strong>"viết 1 lần, chạy mọi nơi"</strong> với native-quality UI.
+        </p>
+
+        <p>Đặc điểm thiết kế:</p>
+        <ul>
+          <li><strong>Render engine riêng</strong> (Skia, gần đây là Impeller) — Flutter <em>không</em> dùng native widget của OS, mà tự vẽ pixel-perfect mỗi frame.</li>
+          <li><strong>Multi-platform</strong>: iOS, Android, Web, macOS, Windows, Linux, embedded — cùng codebase.</li>
+          <li><strong>Hot reload</strong> — sửa code thấy ngay không cần restart (development mode).</li>
+          <li><strong>Declarative UI</strong> — UI là function của state, không phải manipulate DOM/UIKit.</li>
+        </ul>
+
+        <h3 id="flutter-architecture">Kiến trúc 3 layer</h3>
+        <figure>
+          <svg viewBox="0 0 540 280" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .ft { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+              .ft-acc { font-family: var(--font-mono); font-size: 13px; fill: var(--accent); font-weight: 700; }
+              .ft-soft { font-family: var(--font-mono); font-size: 11px; fill: var(--text-muted); }
+              .bx { fill: var(--bg-alt); stroke: var(--border); rx: 6; ry: 6; }
+              .bx-acc { fill: var(--cyan-soft); stroke: var(--accent); rx: 6; ry: 6; }
+            </style>
+            <text class="ft-acc" x="270" y="22" text-anchor="middle">Flutter Architecture — 3 layer</text>
+
+            <rect class="bx-acc" x="80" y="50" width="380" height="50" />
+            <text class="ft-acc" x="270" y="75" text-anchor="middle">Framework (Dart)</text>
+            <text class="ft-soft" x="270" y="92" text-anchor="middle">Widgets, Material, Cupertino, Rendering, Painting, Animation</text>
+
+            <rect class="bx" x="80" y="120" width="380" height="50" />
+            <text class="ft-acc" x="270" y="145" text-anchor="middle">Engine (C++)</text>
+            <text class="ft-soft" x="270" y="162" text-anchor="middle">Skia / Impeller, Dart runtime, text layout, accessibility</text>
+
+            <rect class="bx" x="80" y="190" width="380" height="50" />
+            <text class="ft-acc" x="270" y="215" text-anchor="middle">Embedder (platform-specific)</text>
+            <text class="ft-soft" x="270" y="232" text-anchor="middle">iOS Swift, Android Kotlin, Web JS, macOS/Windows/Linux</text>
+          </svg>
+          <figcaption>3 layer của Flutter: code Dart bạn viết ở layer Framework.</figcaption>
+        </figure>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So với React Native, Native iOS/Android</div>
+          <div class="table-wrap" style="margin-top: 8px;">
+            <table>
+              <thead><tr><th></th><th>Flutter</th><th>React Native</th><th>Native iOS/Android</th></tr></thead>
+              <tbody>
+                <tr><td>UI</td><td>Tự vẽ (Skia/Impeller)</td><td>Bridge → native widget</td><td>Native widget thật</td></tr>
+                <tr><td>Ngôn ngữ</td><td>Dart</td><td>JS/TS</td><td>Swift / Kotlin</td></tr>
+                <tr><td>Performance</td><td>Gần native (AOT)</td><td>JS bridge overhead</td><td>Native nhất</td></tr>
+                <tr><td>Hot reload</td><td>Có (rất nhanh)</td><td>Có (Fast Refresh)</td><td>Không (cần rebuild)</td></tr>
+                <tr><td>UI consistency</td><td>Pixel-perfect cross-platform</td><td>Look platform-native</td><td>Platform-native</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h2 id="cai-flutter-fvm">2. Cài Flutter qua FVM (recommended)</h2>
+        <p>
+          <strong>FVM</strong> (Flutter Version Manager) cho phép cài nhiều version Flutter, switch theo project.
+          Recommended vì:
+        </p>
+        <ul>
+          <li>Mỗi project có thể require version Flutter khác nhau (vd app cũ stuck Flutter 3.10, app mới dùng 3.22).</li>
+          <li>Team sync version qua file <code>.fvmrc</code> commit vào git.</li>
+          <li>Update version không break project khác.</li>
+        </ul>
+
+        <pre data-lang="bash"><code class="language-bash"># macOS — qua Homebrew
+brew tap leoafarias/fvm
+brew install fvm
+
+# Hoặc qua Dart pub
+dart pub global activate fvm
+
+# Verify
+fvm --version</code></pre>
+
+        <p>Cài version Flutter cụ thể:</p>
+
+        <pre data-lang="bash"><code class="language-bash"># Liệt kê version available
+fvm releases
+
+# Cài stable mới nhất
+fvm install stable
+
+# Hoặc version cụ thể
+fvm install 3.22.0
+
+# Set làm global default
+fvm global stable
+
+# Verify
+fvm flutter --version
+# Output: Flutter 3.22.0 • channel stable ...</code></pre>
+
+        <p>Setup PATH để gõ <code>flutter</code> trực tiếp (không cần <code>fvm flutter</code>):</p>
+
+        <pre data-lang="bash"><code class="language-bash"># Thêm vào ~/.zshrc hoặc ~/.bashrc
+export PATH="$PATH:$HOME/fvm/default/bin"
+# Hoặc
+export PATH="$PATH:$HOME/.fvm/versions/stable/bin"
+
+# Reload
+source ~/.zshrc
+
+# Verify
+flutter --version
+which flutter</code></pre>
+
+        <h3 id="cai-flutter-raw">2.1 Cài Flutter raw (không qua FVM)</h3>
+        <p>Nếu không muốn dùng FVM:</p>
+
+        <pre data-lang="bash"><code class="language-bash"># Tải SDK từ flutter.dev/docs/get-started/install
+# Giải nén vào ~/development/flutter
+
+# Thêm vào ~/.zshrc
+export PATH="$PATH:$HOME/development/flutter/bin"
+source ~/.zshrc
+
+flutter --version</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Tại sao FVM &gt; raw?</div>
+          <p>
+            Raw install: 1 version global cho toàn máy. Update Flutter có thể break project cũ.
+          </p>
+          <p style="margin-top: 8px;">
+            FVM: switch version per project dễ dàng. <code>cd project-a/ &amp;&amp; fvm use 3.10</code>, <code>cd project-b/ &amp;&amp; fvm use 3.22</code>.
+            File <code>.fvmrc</code> commit vào git — team mới clone tự dùng đúng version.
+          </p>
+        </div>
+
+        <h2 id="setup-ios">3. Setup iOS toolchain (macOS)</h2>
+        <p>Để build iOS app, cần:</p>
+
+        <ol>
+          <li><strong>Xcode</strong> — Mac App Store, ~10GB download. Cài bản mới nhất.</li>
+          <li><strong>Mở Xcode 1 lần</strong> — accept license + install additional components.</li>
+          <li><strong>Command Line Tools</strong>: <code>xcode-select --install</code> (nếu chưa có).</li>
+        </ol>
+
+        <pre data-lang="bash"><code class="language-bash"># Verify Xcode setup
+sudo xcodebuild -runFirstLaunch
+sudo xcodebuild -license accept
+
+# Verify command line tools
+xcode-select -p
+# Output: /Applications/Xcode.app/Contents/Developer</code></pre>
+
+        <p>CocoaPods — package manager cho iOS native code:</p>
+
+        <pre data-lang="bash"><code class="language-bash">sudo gem install cocoapods
+pod --version</code></pre>
+
+        <p>iOS Simulator — built-in với Xcode:</p>
+
+        <pre data-lang="bash"><code class="language-bash"># Mở Simulator
+open -a Simulator
+
+# Hoặc qua xcrun
+xcrun simctl list devices
+xcrun simctl boot "iPhone 15"</code></pre>
+
+        <h2 id="setup-android">4. Setup Android toolchain</h2>
+        <ol>
+          <li><strong>Android Studio</strong> — tải từ developer.android.com. Cài full với SDK Manager + Emulator.</li>
+          <li>Mở Android Studio → <em>More Actions</em> → <em>SDK Manager</em> → cài <strong>Android SDK Platform 34</strong> (hoặc mới nhất) + <strong>Android SDK Build-Tools</strong>.</li>
+          <li>Accept Android licenses:</li>
+        </ol>
+
+        <pre data-lang="bash"><code class="language-bash">flutter doctor --android-licenses
+# Spam y để accept tất cả</code></pre>
+
+        <p>Tạo AVD (Android Virtual Device):</p>
+        <ul>
+          <li>Android Studio → <em>More Actions</em> → <em>Virtual Device Manager</em>.</li>
+          <li>Create Device → Pixel 7 → Tiramisu (API 33) hoặc Upside Down Cake (API 34).</li>
+          <li>Download system image nếu chưa có (~1GB).</li>
+        </ul>
+
+        <h2 id="flutter-doctor">5. <code>flutter doctor</code> — phải sạch</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter doctor -v
+
+# Output mẫu (đã pass)
+Doctor summary (to see all details, run flutter doctor -v):
+[✓] Flutter (Channel stable, 3.22.0, on macOS 14.0 ...)
+[✓] Android toolchain - develop for Android devices (Android SDK version 34.0.0)
+[✓] Xcode - develop for iOS and macOS (Xcode 15.0)
+[✓] Chrome - develop for the web
+[✓] Android Studio (version 2023.1)
+[✓] VS Code (version 1.85.0)
+[✓] Connected device (3 available)</code></pre>
+
+        <h3 id="doctor-troubleshoot">Bảng troubleshoot 8 lỗi phổ biến</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Warning</th><th>Nguyên nhân</th><th>Fix</th></tr></thead>
+            <tbody>
+              <tr><td>[!] Xcode</td><td>License chưa accept</td><td><code>sudo xcodebuild -license accept</code></td></tr>
+              <tr><td>[!] Android licenses</td><td>Chưa accept</td><td><code>flutter doctor --android-licenses</code></td></tr>
+              <tr><td>[!] CocoaPods missing</td><td>Gem chưa cài</td><td><code>sudo gem install cocoapods</code></td></tr>
+              <tr><td>[!] Android SDK</td><td>SDK Manager chưa cài Platform</td><td>Android Studio → SDK Manager → cài API 33+</td></tr>
+              <tr><td>[!] Chrome</td><td>Không có Chrome browser</td><td>Cài Chrome (cho Web dev). Nếu không cần Web, ignore.</td></tr>
+              <tr><td>[!] Visual Studio</td><td>Build Windows desktop</td><td>Cài Visual Studio with C++ workload. Nếu không build Windows, ignore.</td></tr>
+              <tr><td>[!] HTTP Host Availability</td><td>Mạng/firewall block</td><td>Check pub.dev, fonts.gstatic.com — VPN nếu cần</td></tr>
+              <tr><td>[!] Connected device</td><td>Không có device</td><td>Mở Simulator / Emulator, hoặc cắm physical device</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Network issues ở VN</div>
+          <p>
+            <code>flutter doctor</code> đôi khi báo "HTTP Host Availability failed" với <code>storage.googleapis.com</code> — Google service block.
+            Fix: VPN hoặc <code>FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn</code> (mirror Trung Quốc, không khuyến nghị).
+          </p>
+        </div>
+
+        <h2 id="ide-setup">6. IDE setup</h2>
+
+        <h3 id="vscode-setup">VS Code (recommended cho beginner)</h3>
+        <ol>
+          <li>Cài <strong>Dart</strong> extension (Google official).</li>
+          <li>Cài <strong>Flutter</strong> extension (đi kèm Dart, auto cài).</li>
+          <li>Optional: <strong>Awesome Flutter Snippets</strong> — shortcut sinh widget nhanh.</li>
+          <li>Optional: <strong>Error Lens</strong> — hiển thị error inline.</li>
+        </ol>
+
+        <p>Settings recommend trong <code>.vscode/settings.json</code> hoặc User Settings:</p>
+
+        <pre data-lang="json"><code class="language-json">{
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.rulers": [80, 100],
+    "editor.tabSize": 2,
+    "editor.selectionHighlight": false,
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.suggestSelection": "first",
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off"
+  },
+  "dart.lineLength": 100,
+  "dart.previewFlutterUiGuides": true,
+  "dart.previewFlutterUiGuidesCustomTracking": true,
+  "dart.showTodos": false
+}</code></pre>
+
+        <h3 id="android-studio-setup">Android Studio / IntelliJ IDEA</h3>
+        <p>
+          Cả 2 đều platform JetBrains. Plugin <strong>Flutter</strong> + <strong>Dart</strong> từ Marketplace.
+          Ưu điểm: debugger Android mạnh hơn VS Code, refactoring tốt hơn. Nhược: nặng RAM.
+        </p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Recommend mix-and-match</div>
+          <ul>
+            <li><strong>VS Code</strong> cho dev hàng ngày (nhẹ, nhanh).</li>
+            <li><strong>Android Studio</strong> khi cần debug Android native code hoặc edit <code>android/</code> folder.</li>
+            <li><strong>Xcode</strong> khi cần edit <code>ios/</code> folder (signing, Info.plist, capability).</li>
+          </ul>
+        </div>
+
+        <h2 id="tao-project">7. Tạo project Flutter đầu tiên</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter create my_app
+cd my_app
+flutter run</code></pre>
+
+        <p>Customize hơn:</p>
+
+        <pre data-lang="bash"><code class="language-bash">flutter create \
+  --org com.example.itbasic \
+  --platforms=ios,android,macos,web \
+  --description "My Flutter demo" \
+  my_app</code></pre>
+
+        <p>Cấu trúc folder sinh ra:</p>
+
+        <pre data-lang="text"><code>my_app/
+├── lib/
+│   └── main.dart          # Entry point app — bắt đầu từ đây
+├── test/
+│   └── widget_test.dart   # Widget tests
+├── ios/                   # iOS native project (mở Xcode được)
+├── android/               # Android native project (mở Android Studio được)
+├── macos/                 # macOS native
+├── web/                   # Web (index.html, manifest)
+├── pubspec.yaml           # Manifest — deps, asset, font, version
+├── pubspec.lock           # Resolved deps (commit vào git)
+├── analysis_options.yaml  # Lint rules
+└── .gitignore</code></pre>
+
+        <h3 id="pubspec-flutter"><code>pubspec.yaml</code> Flutter — khác Dart console</h3>
+        <pre data-lang="yaml"><code class="language-yaml">name: my_app
+description: A new Flutter project.
+publish_to: 'none'
+version: 1.0.0+1   # 1.0.0 (versionName) + 1 (versionCode)
+
+environment:
+  sdk: ^3.3.0
+  flutter: "&gt;=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter        # Flutter framework (đặc biệt — không từ pub.dev)
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/data/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700</code></pre>
+
+        <p>Khác Dart console:</p>
+        <ul>
+          <li>Section <code>flutter:</code> ở dưới — declare asset, font, plugin config.</li>
+          <li><code>flutter: sdk: flutter</code> — special syntax, không phải package pub.dev.</li>
+          <li>Version <code>1.0.0+1</code> — Flutter convention: <em>name+code</em>.</li>
+        </ul>
+
+        <h2 id="run-app">8. Chạy app</h2>
+
+        <pre data-lang="bash"><code class="language-bash"># List device available
+flutter devices
+
+# Output:
+# 3 connected devices:
+# iPhone 15 (mobile) • <id> • ios          • iOS 17.0
+# sdk gphone64 arm64 (mobile) • <id> • android-arm64
+# Chrome (web) • chrome • web-javascript
+
+# Chạy default (chọn device đầu tiên)
+flutter run
+
+# Chạy device cụ thể
+flutter run -d chrome
+flutter run -d "iPhone 15"
+flutter run -d macos</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Multi-device cùng lúc</div>
+          <p>
+            Plugin Flutter cho VS Code có "Run on multiple devices" — chạy cùng app trên iOS + Android cùng lúc, hot reload cả 2.
+            Test UI consistency cross-platform cực nhanh.
+          </p>
+        </div>
+
+        <h2 id="hot-reload">9. Hot reload vs Hot restart vs Full rebuild</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Hot Reload</th><th>Hot Restart</th><th>Full Rebuild</th></tr></thead>
+            <tbody>
+              <tr><td>Trigger</td><td><kbd>r</kbd> trong terminal, save file (VS Code)</td><td><kbd>R</kbd> (Shift+R)</td><td><kbd>q</kbd> + <code>flutter run</code> lại</td></tr>
+              <tr><td>Thời gian</td><td>~200ms</td><td>~1s</td><td>~30s+</td></tr>
+              <tr><td>Giữ state?</td><td>Có</td><td>Không (reset)</td><td>Không</td></tr>
+              <tr><td>Apply gì?</td><td>Widget tree rebuild</td><td>Rerun main()</td><td>Recompile + rebuild native</td></tr>
+              <tr><td>Khi nào dùng</td><td>Sửa widget, color, padding</td><td>Đổi global state, enum, top-level var</td><td>Đổi native code, asset, font, pubspec</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Khi nào hot reload không work?</div>
+          <ul>
+            <li>Đổi <code>main()</code> function.</li>
+            <li>Đổi <code>initState()</code> body (state đã init xong, không re-run).</li>
+            <li>Thêm/xoá field của class (vì existing instance không có field mới).</li>
+            <li>Đổi enum, type definition.</li>
+            <li>Đổi global variable / static field.</li>
+          </ul>
+          <p style="margin-top: 8px;">Khi gặp issue → thử Hot Restart (<kbd>R</kbd>). Vẫn không work → Full Rebuild.</p>
+        </div>
+
+        <h2 id="build-mode">10. Build mode — Debug / Profile / Release</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Debug</th><th>Profile</th><th>Release</th></tr></thead>
+            <tbody>
+              <tr><td>Mode</td><td>JIT</td><td>AOT</td><td>AOT</td></tr>
+              <tr><td>Hot reload</td><td>Có</td><td>Không</td><td>Không</td></tr>
+              <tr><td>Assertion</td><td>Bật</td><td>Bật</td><td>Tắt</td></tr>
+              <tr><td>DevTools</td><td>Full</td><td>Performance only</td><td>Không</td></tr>
+              <tr><td>Performance</td><td>Chậm (debug overhead)</td><td>Gần production</td><td>Production</td></tr>
+              <tr><td>Khi dùng</td><td>Phát triển</td><td>Đo performance</td><td>Ship cho user</td></tr>
+              <tr><td>Lệnh</td><td><code>flutter run</code></td><td><code>flutter run --profile</code></td><td><code>flutter build apk --release</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Đo performance trên Debug = sai</div>
+          <p>
+            Debug mode chậm hơn release ~10-100x do JIT + debug overhead. <strong>Luôn đo trên Profile</strong> hoặc Release.
+            Đừng bao giờ optimize dựa trên Debug benchmark.
+          </p>
+        </div>
+
+        <h2 id="devtools">11. DevTools — sneak peek</h2>
+        <p>
+          Khi chạy <code>flutter run</code>, terminal in URL DevTools:
+        </p>
+
+        <pre data-lang="text"><code>The Flutter DevTools debugger and profiler on iPhone 15 is available at:
+http://127.0.0.1:9100?uri=http://127.0.0.1:60001/abc123</code></pre>
+
+        <p>Mở URL → DevTools UI với 6 tab chính:</p>
+        <ul>
+          <li><strong>Widget Inspector</strong> — explore widget tree.</li>
+          <li><strong>Performance</strong> — record CPU, flame chart.</li>
+          <li><strong>Memory</strong> — heap snapshot, leak detection.</li>
+          <li><strong>Network</strong> — log HTTP request.</li>
+          <li><strong>Logging</strong> — log filter.</li>
+          <li><strong>App Size</strong> — bundle analysis.</li>
+        </ul>
+
+        <p>Sẽ deep dive ở chương 15.</p>
+
+        <h2 id="bai-tap" class="exercises">12. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Cài Flutter qua FVM + screenshot doctor</h4>
+          <div class="exercise-body">
+            <p>
+              Cài Flutter qua FVM (theo section 2). Chạy <code>flutter doctor -v</code>.
+              Screenshot output. Verify mọi check <code>[✓]</code>, không có <code>[!]</code>.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>
+                Nếu có warning, áp dụng bảng troubleshoot section 5. Common fix:
+              </p>
+              <ul>
+                <li>iOS warning → cài Xcode, accept license, install CocoaPods.</li>
+                <li>Android warning → cài Android Studio + SDK Platform, accept licenses.</li>
+                <li>Chrome warning → cài Chrome browser.</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Chạy app trên 3 device</h4>
+          <div class="exercise-body">
+            <p>
+              Tạo project <code>flutter create it_basic_demo</code>. Chạy trên 3 device: iOS Simulator, Android Emulator, Chrome.
+              Screenshot mỗi device.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="bash"><code class="language-bash">cd it_basic_demo
+
+# Terminal 1: iOS
+open -a Simulator
+flutter run -d "iPhone 15"
+
+# Terminal 2: Android
+emulator -avd Pixel_7  # tên AVD
+flutter run -d emulator-5554
+
+# Terminal 3: Chrome
+flutter run -d chrome</code></pre>
+              <p>So sánh visual: cùng code, nhưng button có thể ripple effect khác nhau (Material vs Cupertino). Chương 4 sẽ học.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Đổi tên hiển thị app + hot reload</h4>
+          <div class="exercise-body">
+            <p>
+              Sửa <code>lib/main.dart</code>: đổi <code>'Flutter Demo Home Page'</code> thành tên bạn.
+              Hot reload (save file hoặc nhấn <kbd>r</kbd>). Screenshot.
+              Sau đó đổi <code>'You have pushed the button this many times'</code> thành tiếng Việt. Hot reload.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">// lib/main.dart
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+  final String title;
+  ...
+}
+
+// Trong MaterialApp:
+home: const MyHomePage(title: 'Việt Nguyễn'),  // thay vì 'Flutter Demo Home Page'
+
+// Counter:
+const Text('Bạn đã nhấn nút này nhiêu lần:'),</code></pre>
+              <p>Hot reload trigger trong VS Code: <kbd>Cmd</kbd>+<kbd>S</kbd> save file. Hoặc trong terminal: <kbd>r</kbd>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Add package + pub get</h4>
+          <div class="exercise-body">
+            <p>
+              Add 2 package: <code>flutter_svg</code> và <code>http</code>. Edit <code>pubspec.yaml</code> manually + chạy <code>flutter pub get</code>.
+              Check <code>pubspec.lock</code> — đếm số resolved package.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="yaml"><code class="language-yaml">dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.10
+  http: ^1.2.0</code></pre>
+              <pre data-lang="bash"><code class="language-bash">flutter pub get
+# Hoặc shorthand:
+# flutter pub add flutter_svg http
+
+cat pubspec.lock | grep -c '^\s*[a-z_]*:$'
+# Hoặc xem tree
+flutter pub deps</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Mở project trong Xcode + đổi Display Name</h4>
+          <div class="exercise-body">
+            <p>
+              Mở iOS project trong Xcode: <code>open ios/Runner.xcworkspace</code>. Trong <code>Runner</code> target →
+              <code>Info.plist</code>, đổi <strong>Bundle display name</strong> thành <code>"Hello VN"</code>. Rebuild app → home screen iOS hiển thị tên mới.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>
+                Trong Info.plist tìm key <code>CFBundleDisplayName</code>. Nếu không có, thêm:
+              </p>
+              <pre data-lang="xml"><code class="language-xml">&lt;key&gt;CFBundleDisplayName&lt;/key&gt;
+&lt;string&gt;Hello VN&lt;/string&gt;</code></pre>
+              <p>
+                Sau đó <code>flutter run -d "iPhone 15"</code> để rebuild. Hot reload <em>không</em> apply native config change.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">13. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>flutter doctor</code> báo <code>[!] Xcode - develop for iOS</code> — nguyên nhân phổ biến?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Xcode chưa accept license hoặc thiếu CocoaPods. Fix: <code>sudo xcodebuild -license accept</code> + <code>sudo gem install cocoapods</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>Hot reload không apply được change — chuyện gì thường xảy ra?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Đổi <code>main()</code>, <code>initState()</code>, enum, global state, hoặc thêm/xoá field class. Cần Hot Restart (<kbd>R</kbd>).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>flutter create</code> mặc định include platforms nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Tất cả nếu đã enable: iOS, Android, Web, macOS, Linux, Windows. Có thể giới hạn với <code>--platforms=ios,android</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>FVM khác cài Flutter raw ở điểm chính nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> FVM cho phép cài nhiều version cùng lúc + switch per project (qua <code>.fvmrc</code>). Raw chỉ 1 version global.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p>Mode <code>release</code> chạy được hot reload không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Hot reload chỉ Debug mode (JIT). Release là AOT compile, code đã native, không thể swap runtime.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p><code>pubspec.yaml</code> declare <code>assets: [assets/images/]</code> — Flutter biết file gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Folder kết thúc <code>/</code> → Flutter include tất cả file trong folder. File cụ thể (vd <code>assets/img/logo.png</code>) → chỉ file đó.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>iOS app có thể dùng <code>flutter pub get</code> thay <code>pod install</code> không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không hoàn toàn. <code>flutter pub get</code> resolve Dart deps. iOS native deps (CocoaPods) cần <code>cd ios &amp;&amp; pod install</code>. Flutter thường tự gọi sau pub get.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p><code>flutter run</code> không thấy device nào — đầu tiên check gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>flutter doctor</code> trước, sau đó <code>flutter devices</code>. Cần: Simulator/Emulator mở, hoặc USB device với debugging enable.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">14. Tổng kết</h2>
+        <ul>
+          <li>✅ Flutter = framework UI cross-platform, render engine riêng (Skia/Impeller).</li>
+          <li>✅ 3 layer: Framework (Dart) / Engine (C++) / Embedder (platform).</li>
+          <li>✅ Cài qua FVM — multi-version support.</li>
+          <li>✅ iOS toolchain: Xcode + CocoaPods. Android toolchain: Android Studio + SDK + AVD.</li>
+          <li>✅ <code>flutter doctor</code> phải sạch trước khi học tiếp.</li>
+          <li>✅ <code>flutter create</code> sinh project structure đa platform.</li>
+          <li>✅ <code>pubspec.yaml</code> Flutter có section <code>flutter:</code> riêng cho asset/font.</li>
+          <li>✅ Hot reload (200ms, giữ state) vs Hot restart (1s, reset) vs Full rebuild (30s+).</li>
+          <li>✅ 3 build mode: Debug (JIT) / Profile (AOT, đo perf) / Release (AOT, ship).</li>
+        </ul>
+
+        <h2 id="ket-noi">15. Tiếp theo</h2>
+        <ul>
+          <li><a href="chuong2.html"><strong>Chương 2 — Widget Tree &amp; First App:</strong></a> mental model "everything is a Widget", Stateless vs Stateful, setState.</li>
+          <li>Dart chương 1 — <code>dart</code> CLI tương đương <code>flutter</code> CLI.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="../index.html" class="prev">
+            <div class="dir">← Quay lại</div>
+            <div class="label">Flutter sub-pillar TOC</div>
+          </a>
+          <a href="chuong2.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">02 · Widget Tree &amp; First App</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#flutter-la-gi">1. Flutter là gì</a></li>
+          <li><a href="#cai-flutter-fvm">2. Cài Flutter qua FVM</a></li>
+          <li><a href="#setup-ios">3. Setup iOS</a></li>
+          <li><a href="#setup-android">4. Setup Android</a></li>
+          <li><a href="#flutter-doctor">5. flutter doctor</a></li>
+          <li><a href="#ide-setup">6. IDE setup</a></li>
+          <li><a href="#tao-project">7. Tạo project</a></li>
+          <li><a href="#run-app">8. Chạy app</a></li>
+          <li><a href="#hot-reload">9. Hot reload</a></li>
+          <li><a href="#build-mode">10. Build mode</a></li>
+          <li><a href="#devtools">11. DevTools</a></li>
+          <li><a href="#bai-tap">12. Bài tập</a></li>
+          <li><a href="#quiz">13. Quiz</a></li>
+          <li><a href="#tong-ket">14. Tổng kết</a></li>
+          <li><a href="#ket-noi">15. Tiếp theo</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 1 · Pillar 9 — IT Basic<br/>
+        <a href="../index.html">← Flutter sub-pillar</a> · <a href="chuong2.html">Chương 2 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

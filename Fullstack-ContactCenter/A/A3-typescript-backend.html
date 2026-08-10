@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A3 · TypeScript cho Backend</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-a">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">A3 · TypeScript cho Backend</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand">
+        <div class="logo">◉</div>
+        <div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div>
+      </div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần A · Nền tảng</div>
+      <nav class="nav">
+        <a href="A1-javascript-nang-cao.html">A1 · JavaScript chuyên sâu</a>
+        <a href="A2-bat-dong-bo-event-loop.html">A2 · Bất đồng bộ & Event Loop</a>
+        <a href="A3-typescript-backend.html" class="active">A3 · TypeScript cho Backend</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#why">① Vì sao dùng TypeScript</a>
+        <a href="#basics">② Kiểu cơ bản & đặc biệt</a>
+        <a href="#interface">③ Interface vs Type</a>
+        <a href="#func">④ Hàm & kiểu nâng cao</a>
+        <a href="#generic">⑤ Generics</a>
+        <a href="#utility">⑥ Utility Types</a>
+        <a href="#narrow">⑦ Type narrowing & guards</a>
+        <a href="#decorator">⑧ Decorators (nền NestJS)</a>
+        <a href="#config">⑨ tsconfig & strict</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần A · Nền tảng &nbsp;›&nbsp; <b>A3 · TypeScript cho Backend</b></div>
+      <div class="live-pill"><span class="blink"></span> type-safe</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần A · Chương 3</span>
+        <h1>TypeScript cho Backend</h1>
+        <p class="lead">
+          JD yêu cầu "thành thạo TypeScript". Backend của một Contact Center có hàng trăm kiểu dữ liệu
+          (Call, Agent, Ticket, Channel, Permission...) — TypeScript giúp bắt lỗi <b>lúc compile</b> thay vì
+          để khách hàng gặp lỗi <b>lúc runtime</b>. Đây cũng là nền tảng bắt buộc để dùng NestJS.
+        </p>
+      </div>
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Nắm hệ thống kiểu: union, intersection, <code>unknown</code> vs <code>any</code> vs <code>never</code>.</p>
+        <p>• Thành thạo <b>Generics</b> và <b>Utility Types</b> — công cụ tái sử dụng kiểu mạnh nhất.</p>
+        <p>• Viết <b>type guard</b>, <b>discriminated union</b> để mô hình hóa trạng thái (vd vòng đời cuộc gọi).</p>
+        <p>• Hiểu <b>Decorators</b> & metadata — cơ chế NestJS dùng cho <code>@Controller</code>, <code>@Injectable</code>...</p>
+        <p>• Cấu hình <code>tsconfig</code> ở chế độ <code>strict</code> đúng chuẩn production.</p>
+      </div>
+
+      <!-- 1 WHY -->
+      <h2 id="why"><span class="ico">①</span> Vì sao dùng TypeScript ở backend?</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🛡️</span> An toàn kiểu</div><p>Bắt lỗi sai kiểu, thiếu field, gọi sai hàm ngay lúc compile — trước khi deploy.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🧭</span> Tự tài liệu hóa</div><p>Kiểu chính là tài liệu sống. IDE gợi ý, autocomplete chính xác từng property.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔧</span> Refactor an toàn</div><p>Đổi tên/đổi cấu trúc, compiler chỉ ra mọi nơi bị ảnh hưởng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🏗️</span> Bắt buộc cho NestJS</div><p>NestJS dựa hoàn toàn vào TypeScript + decorators + DI.</p></div>
+      </div>
+      <p>TypeScript là <strong>superset của JavaScript</strong>: mọi code JS hợp lệ đều là TS hợp lệ. Nó <b>compile</b>
+      về JavaScript thuần (kiểu bị xóa — "type erasure"), không tồn tại lúc runtime.</p>
+
+      <!-- 2 BASICS -->
+      <h2 id="basics"><span class="ico">②</span> Kiểu cơ bản & các kiểu đặc biệt</h2>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">types-basic.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">let</span> name: <span class="tok-typ">string</span> = <span class="tok-str">'An'</span>;
+<span class="tok-key">let</span> activeCalls: <span class="tok-typ">number</span> = <span class="tok-num">3</span>;
+<span class="tok-key">let</span> isOnline: <span class="tok-typ">boolean</span> = <span class="tok-key">true</span>;
+<span class="tok-key">let</span> tags: <span class="tok-typ">string</span>[] = [<span class="tok-str">'vip'</span>, <span class="tok-str">'urgent'</span>];
+<span class="tok-key">let</span> coords: [<span class="tok-typ">number</span>, <span class="tok-typ">number</span>] = [<span class="tok-num">10</span>, <span class="tok-num">20</span>]; <span class="tok-com">// tuple</span>
+
+<span class="tok-com">// union — một trong nhiều kiểu</span>
+<span class="tok-key">let</span> status: <span class="tok-str">'available'</span> | <span class="tok-str">'busy'</span> | <span class="tok-str">'offline'</span> = <span class="tok-str">'available'</span>;
+
+<span class="tok-com">// intersection — gộp nhiều kiểu</span>
+<span class="tok-key">type</span> <span class="tok-typ">Timestamped</span> = { createdAt: <span class="tok-typ">Date</span> };
+<span class="tok-key">type</span> <span class="tok-typ">Call</span> = { id: <span class="tok-typ">string</span> } & <span class="tok-typ">Timestamped</span>;</code></pre>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Kiểu</th><th>Ý nghĩa</th><th>Khi dùng</th></tr></thead>
+          <tbody>
+            <tr><td><code>any</code></td><td>Tắt kiểm tra kiểu</td><td>❌ Tránh — mất hết lợi ích TS</td></tr>
+            <tr><td><code>unknown</code></td><td>Giá trị chưa biết kiểu, <b>buộc kiểm tra</b> trước khi dùng</td><td>✅ Dữ liệu từ API/JSON bên ngoài</td></tr>
+            <tr><td><code>never</code></td><td>Không bao giờ có giá trị (hàm luôn throw, nhánh không thể xảy ra)</td><td>Exhaustiveness check</td></tr>
+            <tr><td><code>void</code></td><td>Hàm không trả giá trị</td><td>Callback, hàm side-effect</td></tr>
+            <tr><td><code>null/undefined</code></td><td>Vắng giá trị</td><td>Với <code>strictNullChecks</code> phải xử lý rõ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ <code>any</code> vs <code>unknown</code></div>
+        <p>Cả hai nhận mọi giá trị, nhưng <code>any</code> cho bạn làm <b>bất cứ gì</b> (mất an toàn), còn <code>unknown</code>
+        <b>buộc bạn kiểm tra/ép kiểu</b> trước khi dùng. Khi nhận payload JSON từ client, dùng <code>unknown</code> rồi validate.</p>
+      </div>
+
+      <!-- 3 INTERFACE -->
+      <h2 id="interface"><span class="ico">③</span> Interface vs Type</h2>
+      <div class="two-col">
+        <div class="code">
+          <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">interface.ts</span></div>
+          <pre><code><span class="tok-key">interface</span> <span class="tok-typ">Agent</span> {
+  id: <span class="tok-typ">string</span>;
+  name: <span class="tok-typ">string</span>;
+  status: <span class="tok-typ">AgentStatus</span>;
+  skills?: <span class="tok-typ">string</span>[];   <span class="tok-com">// optional</span>
+  <span class="tok-key">readonly</span> createdAt: <span class="tok-typ">Date</span>;
+}
+<span class="tok-com">// có thể "extends" và merge khai báo</span>
+<span class="tok-key">interface</span> <span class="tok-typ">Supervisor</span> <span class="tok-key">extends</span> <span class="tok-typ">Agent</span> {
+  team: <span class="tok-typ">string</span>;
+}</code></pre>
+        </div>
+        <div class="code">
+          <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">type.ts</span></div>
+          <pre><code><span class="tok-key">type</span> <span class="tok-typ">AgentStatus</span> = <span class="tok-str">'available'</span> | <span class="tok-str">'busy'</span>;
+
+<span class="tok-key">type</span> <span class="tok-typ">Agent</span> = {
+  id: <span class="tok-typ">string</span>;
+  status: <span class="tok-typ">AgentStatus</span>;
+};
+<span class="tok-com">// type giỏi: union, tuple, mapped, conditional</span>
+<span class="tok-key">type</span> <span class="tok-typ">ID</span> = <span class="tok-typ">string</span> | <span class="tok-typ">number</span>;</code></pre>
+        </div>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Chọn cái nào?</div>
+        <p>Quy ước phổ biến: dùng <b><code>interface</code></b> cho hình dạng object & khi cần extends/implements (đặc biệt trong NestJS/OOP);
+        dùng <b><code>type</code></b> cho union, tuple, mapped type, conditional type. Khác biệt nhỏ: interface có thể "declaration merging", type thì không.</p>
+      </div>
+
+      <!-- 4 FUNC -->
+      <h2 id="func"><span class="ico">④</span> Hàm & kiểu nâng cao</h2>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">functions.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// tham số optional, default, rest</span>
+<span class="tok-key">function</span> <span class="tok-fn">routeCall</span>(
+  callId: <span class="tok-typ">string</span>,
+  priority: <span class="tok-typ">number</span> = <span class="tok-num">0</span>,
+  ...tags: <span class="tok-typ">string</span>[]
+): <span class="tok-typ">Promise</span>&lt;<span class="tok-typ">Agent</span>&gt; { <span class="tok-com">/* ... */</span> }
+
+<span class="tok-com">// function type & callback</span>
+<span class="tok-key">type</span> <span class="tok-typ">CallHandler</span> = (call: <span class="tok-typ">Call</span>) => <span class="tok-typ">void</span>;
+<span class="tok-key">const</span> onIncoming: <span class="tok-typ">CallHandler</span> = (call) => { <span class="tok-com">/* ... */</span> };
+
+<span class="tok-com">// function overload</span>
+<span class="tok-key">function</span> <span class="tok-fn">find</span>(id: <span class="tok-typ">string</span>): <span class="tok-typ">Agent</span>;
+<span class="tok-key">function</span> <span class="tok-fn">find</span>(ids: <span class="tok-typ">string</span>[]): <span class="tok-typ">Agent</span>[];
+<span class="tok-key">function</span> <span class="tok-fn">find</span>(arg: <span class="tok-typ">string</span> | <span class="tok-typ">string</span>[]) { <span class="tok-com">/* ... */</span> }</code></pre>
+      </div>
+
+      <!-- 5 GENERICS -->
+      <h2 id="generic"><span class="ico">⑤</span> Generics — tái sử dụng kiểu</h2>
+      <p><strong>Generics</strong> cho phép viết hàm/lớp/kiểu hoạt động với <em>nhiều kiểu khác nhau</em> mà vẫn giữ an toàn kiểu.
+      Đây là khái niệm nâng cao hay được hỏi để phân biệt ứng viên Junior vs Middle.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">generics.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Kiểu phản hồi API dùng chung cho mọi entity</span>
+<span class="tok-key">interface</span> <span class="tok-typ">ApiResponse</span>&lt;<span class="tok-typ">T</span>&gt; {
+  data: <span class="tok-typ">T</span>;
+  success: <span class="tok-typ">boolean</span>;
+  timestamp: <span class="tok-typ">number</span>;
+}
+<span class="tok-key">type</span> <span class="tok-typ">AgentResponse</span> = <span class="tok-typ">ApiResponse</span>&lt;<span class="tok-typ">Agent</span>&gt;;
+<span class="tok-key">type</span> <span class="tok-typ">CallList</span>     = <span class="tok-typ">ApiResponse</span>&lt;<span class="tok-typ">Call</span>[]&gt;;
+
+<span class="tok-com">// Hàm generic giữ quan hệ kiểu input → output</span>
+<span class="tok-key">function</span> <span class="tok-fn">first</span>&lt;<span class="tok-typ">T</span>&gt;(arr: <span class="tok-typ">T</span>[]): <span class="tok-typ">T</span> | <span class="tok-typ">undefined</span> {
+  <span class="tok-key">return</span> arr[<span class="tok-num">0</span>];
+}
+<span class="tok-key">const</span> a = <span class="tok-fn">first</span>(agents); <span class="tok-com">// a: Agent | undefined ✅ tự suy ra</span>
+
+<span class="tok-com">// Generic constraint: T phải có field 'id'</span>
+<span class="tok-key">function</span> <span class="tok-fn">byId</span>&lt;<span class="tok-typ">T</span> <span class="tok-key">extends</span> { id: <span class="tok-typ">string</span> }&gt;(items: <span class="tok-typ">T</span>[], id: <span class="tok-typ">string</span>): <span class="tok-typ">T</span> | <span class="tok-typ">undefined</span> {
+  <span class="tok-key">return</span> items.<span class="tok-fn">find</span>(x => x.id === id);
+}
+
+<span class="tok-com">// Generic repository — pattern hay gặp ở backend</span>
+<span class="tok-key">class</span> <span class="tok-typ">Repository</span>&lt;<span class="tok-typ">T</span> <span class="tok-key">extends</span> { id: <span class="tok-typ">string</span> }&gt; {
+  <span class="tok-key">private</span> store = <span class="tok-key">new</span> <span class="tok-typ">Map</span>&lt;<span class="tok-typ">string</span>, <span class="tok-typ">T</span>&gt;();
+  save(item: <span class="tok-typ">T</span>) { <span class="tok-key">this</span>.store.<span class="tok-fn">set</span>(item.id, item); }
+  get(id: <span class="tok-typ">string</span>): <span class="tok-typ">T</span> | <span class="tok-typ">undefined</span> { <span class="tok-key">return</span> <span class="tok-key">this</span>.store.<span class="tok-fn">get</span>(id); }
+}</code></pre>
+      </div>
+
+      <!-- 6 UTILITY -->
+      <h2 id="utility"><span class="ico">⑥</span> Utility Types — "phép thuật" tái dùng kiểu</h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Utility</th><th>Tác dụng</th><th>Ví dụ</th></tr></thead>
+          <tbody>
+            <tr><td><code>Partial&lt;T&gt;</code></td><td>Mọi field thành optional</td><td>Update DTO (chỉ sửa vài field)</td></tr>
+            <tr><td><code>Required&lt;T&gt;</code></td><td>Mọi field thành bắt buộc</td><td>Ép đầy đủ</td></tr>
+            <tr><td><code>Readonly&lt;T&gt;</code></td><td>Mọi field chỉ đọc</td><td>Immutable config</td></tr>
+            <tr><td><code>Pick&lt;T,K&gt;</code></td><td>Chọn một số field</td><td>Trả về DTO gọn</td></tr>
+            <tr><td><code>Omit&lt;T,K&gt;</code></td><td>Bỏ một số field</td><td>Ẩn <code>password</code> khi trả về</td></tr>
+            <tr><td><code>Record&lt;K,V&gt;</code></td><td>Object key→value đồng nhất</td><td>Map trạng thái</td></tr>
+            <tr><td><code>ReturnType&lt;F&gt;</code></td><td>Lấy kiểu trả về của hàm</td><td>Suy kiểu tự động</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">utility.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">interface</span> <span class="tok-typ">Agent</span> { id: <span class="tok-typ">string</span>; name: <span class="tok-typ">string</span>; password: <span class="tok-typ">string</span>; status: <span class="tok-typ">string</span>; }
+
+<span class="tok-com">// DTO cập nhật: chỉ cần một phần</span>
+<span class="tok-key">type</span> <span class="tok-typ">UpdateAgentDto</span> = <span class="tok-typ">Partial</span>&lt;<span class="tok-typ">Pick</span>&lt;<span class="tok-typ">Agent</span>, <span class="tok-str">'name'</span> | <span class="tok-str">'status'</span>&gt;&gt;;
+
+<span class="tok-com">// Trả về client — không lộ password</span>
+<span class="tok-key">type</span> <span class="tok-typ">PublicAgent</span> = <span class="tok-typ">Omit</span>&lt;<span class="tok-typ">Agent</span>, <span class="tok-str">'password'</span>&gt;;
+
+<span class="tok-com">// Map số cuộc gọi theo status</span>
+<span class="tok-key">type</span> <span class="tok-typ">CallCountByStatus</span> = <span class="tok-typ">Record</span>&lt;<span class="tok-typ">Agent</span>[<span class="tok-str">'status'</span>], <span class="tok-typ">number</span>&gt;;</code></pre>
+      </div>
+
+      <!-- 7 NARROW -->
+      <h2 id="narrow"><span class="ico">⑦</span> Type narrowing, Type Guard & Discriminated Union</h2>
+      <p><strong>Narrowing</strong> là việc TypeScript thu hẹp kiểu dựa vào điều kiện. <strong>Discriminated union</strong>
+      là cách mô hình hóa state máy (state machine) cực mạnh — lý tưởng cho <b>vòng đời cuộc gọi</b>.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">discriminated-union.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Mỗi trạng thái có field 'kind' phân biệt + dữ liệu riêng</span>
+<span class="tok-key">type</span> <span class="tok-typ">CallState</span> =
+  | { kind: <span class="tok-str">'ringing'</span>; from: <span class="tok-typ">string</span> }
+  | { kind: <span class="tok-str">'active'</span>;  agentId: <span class="tok-typ">string</span>; startedAt: <span class="tok-typ">Date</span> }
+  | { kind: <span class="tok-str">'ended'</span>;   duration: <span class="tok-typ">number</span>; reason: <span class="tok-typ">string</span> };
+
+<span class="tok-key">function</span> <span class="tok-fn">describe</span>(call: <span class="tok-typ">CallState</span>): <span class="tok-typ">string</span> {
+  <span class="tok-key">switch</span> (call.kind) {
+    <span class="tok-key">case</span> <span class="tok-str">'ringing'</span>: <span class="tok-key">return</span> <span class="tok-str">`Đang đổ chuông từ </span>${call.from}<span class="tok-str">`</span>;
+    <span class="tok-key">case</span> <span class="tok-str">'active'</span>:  <span class="tok-key">return</span> <span class="tok-str">`Đang nói chuyện với agent </span>${call.agentId}<span class="tok-str">`</span>;
+    <span class="tok-key">case</span> <span class="tok-str">'ended'</span>:   <span class="tok-key">return</span> <span class="tok-str">`Kết thúc sau </span>${call.duration}<span class="tok-str">s`</span>;
+    <span class="tok-key">default</span>:
+      <span class="tok-key">const</span> _exhaustive: <span class="tok-typ">never</span> = call; <span class="tok-com">// ✅ ép xử lý hết mọi case</span>
+      <span class="tok-key">return</span> _exhaustive;
+  }
+}
+
+<span class="tok-com">// Custom type guard</span>
+<span class="tok-key">function</span> <span class="tok-fn">isActive</span>(c: <span class="tok-typ">CallState</span>): c <span class="tok-key">is</span> { kind: <span class="tok-str">'active'</span>; agentId: <span class="tok-typ">string</span>; startedAt: <span class="tok-typ">Date</span> } {
+  <span class="tok-key">return</span> c.kind === <span class="tok-str">'active'</span>;
+}</code></pre>
+      </div>
+
+      <!-- 8 DECORATOR -->
+      <h2 id="decorator"><span class="ico">⑧</span> Decorators — nền tảng của NestJS</h2>
+      <p>Decorator là hàm "gắn nhãn" lên class/method/property để thêm metadata hoặc thay đổi hành vi.
+      NestJS dùng dày đặc: <code>@Controller</code>, <code>@Injectable</code>, <code>@Get</code>, <code>@Body</code>... Hiểu cơ chế giúp bạn không "dùng như phép thuật".</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">decorator.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Class decorator đơn giản (cần "experimentalDecorators": true)</span>
+<span class="tok-key">function</span> <span class="tok-fn">LogClass</span>(target: <span class="tok-typ">Function</span>) {
+  console.<span class="tok-fn">log</span>(<span class="tok-str">`Khởi tạo class </span>${target.name}<span class="tok-str">`</span>);
+}
+
+<span class="tok-com">// Method decorator — đo thời gian xử lý cuộc gọi</span>
+<span class="tok-key">function</span> <span class="tok-fn">Measure</span>(_t: <span class="tok-typ">any</span>, key: <span class="tok-typ">string</span>, desc: <span class="tok-typ">PropertyDescriptor</span>) {
+  <span class="tok-key">const</span> original = desc.value;
+  desc.value = <span class="tok-key">async function</span> (...args: <span class="tok-typ">any</span>[]) {
+    <span class="tok-key">const</span> t0 = <span class="tok-typ">Date</span>.<span class="tok-fn">now</span>();
+    <span class="tok-key">const</span> result = <span class="tok-key">await</span> original.<span class="tok-fn">apply</span>(<span class="tok-key">this</span>, args);
+    console.<span class="tok-fn">log</span>(<span class="tok-str">`</span>${key}<span class="tok-str"> mất </span>${<span class="tok-typ">Date</span>.<span class="tok-fn">now</span>() - t0}<span class="tok-str">ms`</span>);
+    <span class="tok-key">return</span> result;
+  };
+}
+
+<span class="tok-op">@</span><span class="tok-fn">LogClass</span>
+<span class="tok-key">class</span> <span class="tok-typ">CallService</span> {
+  <span class="tok-op">@</span><span class="tok-fn">Measure</span>
+  <span class="tok-key">async</span> <span class="tok-fn">route</span>(callId: <span class="tok-typ">string</span>) { <span class="tok-com">/* ... */</span> }
+}</code></pre>
+      </div>
+
+      <!-- 9 CONFIG -->
+      <h2 id="config"><span class="ico">⑨</span> tsconfig & chế độ strict</h2>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">tsconfig.json</span><span class="lang">JSON</span></div>
+        <pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"target"</span>: <span class="tok-str">"ES2021"</span>,
+    <span class="tok-str">"module"</span>: <span class="tok-str">"commonjs"</span>,
+    <span class="tok-str">"strict"</span>: <span class="tok-key">true</span>,                <span class="tok-com">// bật toàn bộ kiểm tra nghiêm ngặt</span>
+    <span class="tok-str">"strictNullChecks"</span>: <span class="tok-key">true</span>,      <span class="tok-com">// null/undefined phải xử lý rõ</span>
+    <span class="tok-str">"noImplicitAny"</span>: <span class="tok-key">true</span>,         <span class="tok-com">// cấm any ngầm</span>
+    <span class="tok-str">"experimentalDecorators"</span>: <span class="tok-key">true</span>, <span class="tok-com">// cần cho NestJS</span>
+    <span class="tok-str">"emitDecoratorMetadata"</span>: <span class="tok-key">true</span>,
+    <span class="tok-str">"esModuleInterop"</span>: <span class="tok-key">true</span>,
+    <span class="tok-str">"outDir"</span>: <span class="tok-str">"./dist"</span>
+  }
+}</code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Luôn bật <code>"strict": true</code></div>
+        <p>Chế độ strict bật một loạt cờ kiểm tra (<code>strictNullChecks</code>, <code>noImplicitAny</code>...). Đây là tiêu chuẩn
+        production và là điều phỏng vấn viên mong đợi bạn dùng. Code không strict thực chất chỉ là "JS có chú thích".</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lạm dụng <code>any</code></div><p>Dùng <code>unknown</code> + validate. <code>any</code> làm TS vô nghĩa.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Ép kiểu <code>as</code> bừa</div><p><code>as</code> nói dối compiler — chỉ dùng khi chắc chắn, ưu tiên type guard.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Tin kiểu lúc runtime</div><p>Kiểu bị xóa khi compile → vẫn phải validate dữ liệu ngoài (zod/class-validator).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên xử lý <code>null</code></div><p>Bật <code>strictNullChecks</code>, dùng optional chaining <code>?.</code> và <code>??</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> <code>enum</code> nặng nề</div><p>Cân nhắc union literal hoặc <code>as const</code> thay enum khi chỉ cần giá trị.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lặp định nghĩa kiểu</div><p>Tận dụng Utility Types & Generics thay vì copy interface.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise">
+        <div class="x-title">🧪 Bài 1 — Generic & constraint</div>
+        <p>Viết hàm generic <code>groupBy&lt;T&gt;(items: T[], key: keyof T)</code> trả về <code>Record&lt;string, T[]&gt;</code>. Áp dụng để nhóm agent theo <code>status</code>.</p>
+        <details><summary>Xem gợi ý</summary>
+          <div class="code" style="margin-top:10px"><pre><code><span class="tok-key">function</span> <span class="tok-fn">groupBy</span>&lt;<span class="tok-typ">T</span>&gt;(items: <span class="tok-typ">T</span>[], key: <span class="tok-key">keyof</span> <span class="tok-typ">T</span>): <span class="tok-typ">Record</span>&lt;<span class="tok-typ">string</span>, <span class="tok-typ">T</span>[]&gt; {
+  <span class="tok-key">return</span> items.<span class="tok-fn">reduce</span>((acc, item) => {
+    <span class="tok-key">const</span> k = <span class="tok-typ">String</span>(item[key]);
+    (acc[k] ??= []).<span class="tok-fn">push</span>(item);
+    <span class="tok-key">return</span> acc;
+  }, {} <span class="tok-key">as</span> <span class="tok-typ">Record</span>&lt;<span class="tok-typ">string</span>, <span class="tok-typ">T</span>[]&gt;);
+}</code></pre></div></details>
+      </div>
+      <div class="exercise">
+        <div class="x-title">🧪 Bài 2 — Discriminated union</div>
+        <p>Mô hình hóa <code>type ChannelMessage</code> cho 3 kênh: <code>email</code> (subject, body), <code>sms</code> (phone, text), <code>chat</code> (sessionId, text). Viết hàm <code>render(msg)</code> dùng exhaustiveness check.</p>
+        <details><summary>Xem gợi ý</summary>
+          <p style="margin-top:8px">Dùng field phân biệt <code>channel: 'email' | 'sms' | 'chat'</code>, <code>switch</code> trên nó, nhánh <code>default</code> gán vào biến <code>never</code> để compiler ép xử lý đủ.</p>
+        </details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q">
+          <div class="q-text"><span class="num">Q1.</span> Kiểu nào buộc kiểm tra trước khi dùng?</div>
+          <div class="opt">any</div>
+          <div class="opt" data-correct="true">unknown</div>
+          <div class="opt">void</div>
+          <div class="explain"><b>unknown.</b> Nhận mọi giá trị nhưng phải narrow/validate trước khi thao tác — an toàn hơn <code>any</code>.</div>
+        </div>
+        <div class="q">
+          <div class="q-text"><span class="num">Q2.</span> Để bỏ field <code>password</code> khỏi kiểu <code>Agent</code> khi trả về client, dùng?</div>
+          <div class="opt">Pick&lt;Agent,'password'&gt;</div>
+          <div class="opt" data-correct="true">Omit&lt;Agent,'password'&gt;</div>
+          <div class="opt">Partial&lt;Agent&gt;</div>
+          <div class="explain"><b>Omit.</b> <code>Omit&lt;T,K&gt;</code> loại bỏ field; <code>Pick</code> ngược lại (chọn giữ).</div>
+        </div>
+        <div class="q">
+          <div class="q-text"><span class="num">Q3.</span> TypeScript kiểm tra kiểu ở thời điểm nào?</div>
+          <div class="opt">Runtime</div>
+          <div class="opt" data-correct="true">Compile-time (kiểu bị xóa khi chạy)</div>
+          <div class="opt">Cả hai như nhau</div>
+          <div class="explain"><b>Compile-time.</b> Type erasure — kiểu không tồn tại lúc runtime, nên vẫn cần validate dữ liệu ngoài.</div>
+        </div>
+        <div class="q">
+          <div class="q-text"><span class="num">Q4.</span> Cờ <code>tsconfig</code> nào cần để dùng decorator của NestJS?</div>
+          <div class="opt">strictNullChecks</div>
+          <div class="opt" data-correct="true">experimentalDecorators (+ emitDecoratorMetadata)</div>
+          <div class="opt">esModuleInterop</div>
+          <div class="explain"><b>experimentalDecorators.</b> Kèm <code>emitDecoratorMetadata</code> để DI của NestJS đọc được metadata kiểu.</div>
+        </div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview">
+        <div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>TypeScript — phần được kiểm tra kỹ vì JD ghi rõ "thành thạo".</p></div>
+      </div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>TypeScript là gì? Lợi ích so với JavaScript?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> TS là superset của JS, thêm hệ thống kiểu tĩnh, compile về JS thuần. Lợi ích: bắt lỗi lúc compile, autocomplete/IDE tốt hơn, refactor an toàn, code tự tài liệu hóa, bắt buộc cho NestJS/Angular.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Phân biệt <code>interface</code> và <code>type</code>.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Cả hai mô tả hình dạng. <code>interface</code> hỗ trợ extends/implements & declaration merging, hợp cho object/OOP. <code>type</code> linh hoạt hơn: union, tuple, mapped, conditional type — nhưng không merge được. Thực tế dùng interface cho object, type cho union/biến đổi kiểu.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span><code>any</code>, <code>unknown</code>, <code>never</code> khác nhau thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>any</code> tắt kiểm tra kiểu (nguy hiểm). <code>unknown</code> nhận mọi giá trị nhưng buộc narrow trước khi dùng (an toàn). <code>never</code> là kiểu không có giá trị nào — dùng cho hàm luôn throw hoặc nhánh không thể xảy ra (exhaustiveness check).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Generics là gì? Vì sao cần? Cho ví dụ thực tế.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Generics cho phép viết code hoạt động với nhiều kiểu mà vẫn giữ an toàn kiểu, giữ quan hệ input→output. Ví dụ: <code>ApiResponse&lt;T&gt;</code> dùng chung cho mọi entity, <code>Repository&lt;T&gt;</code> generic, hàm <code>first&lt;T&gt;(arr): T</code>. Có thể giới hạn bằng <code>extends</code> (constraint).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Discriminated union là gì? Khi nào dùng?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là union các object có chung một field "phân biệt" (vd <code>kind</code>/<code>type</code>) với giá trị literal khác nhau. Khi <code>switch</code> trên field đó, TS tự narrow kiểu từng nhánh. Lý tưởng để mô hình state machine (vòng đời cuộc gọi: ringing/active/ended), kết hợp <code>never</code> để ép xử lý hết case.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Type guard là gì? Viết một custom type guard.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Type guard là biểu thức/hàm giúp TS narrow kiểu. Có sẵn (<code>typeof</code>, <code>instanceof</code>, <code>in</code>) và custom dùng cú pháp <code>arg is Type</code>: <code>function isAgent(x: unknown): x is Agent { return typeof x === 'object' &amp;&amp; x !== null &amp;&amp; 'id' in x; }</code>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Decorator hoạt động ra sao? NestJS dùng nó để làm gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Decorator là hàm nhận target (class/method/property) và có thể gắn metadata hoặc bọc hành vi. NestJS dùng decorator để khai báo cấu trúc (<code>@Module</code>, <code>@Controller</code>, <code>@Injectable</code>), định tuyến (<code>@Get</code>), trích xuất dữ liệu (<code>@Body</code>, <code>@Param</code>) và đọc metadata cho Dependency Injection. Cần bật <code>experimentalDecorators</code> + <code>emitDecoratorMetadata</code>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Vì sao vẫn cần validate dữ liệu runtime dù đã có TypeScript?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Vì kiểu TS bị <b>xóa</b> khi compile (type erasure) — không tồn tại lúc runtime. Dữ liệu từ client/API/DB có thể không khớp kiểu khai báo. Phải validate bằng zod, class-validator, hoặc kiểm tra thủ công ở ranh giới hệ thống (controller, message handler).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>So sánh <code>enum</code> với union literal / <code>as const</code>.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>enum</code> tạo object runtime (tốn code, có thể gây nhầm với numeric enum). Union literal (<code>'a' | 'b'</code>) chỉ tồn tại compile-time, nhẹ, dễ kết hợp. <code>as const</code> giúp suy ra literal type từ mảng/object hằng. Xu hướng hiện đại ưu tiên union literal trừ khi thật sự cần object enum lúc runtime.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span><code>strict</code> mode bật những gì? Vì sao nên dùng?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>strict: true</code> bật một nhóm cờ: <code>strictNullChecks</code>, <code>noImplicitAny</code>, <code>strictFunctionTypes</code>, <code>strictBindCallApply</code>... Giúp bắt lỗi null/undefined, cấm any ngầm, tăng độ an toàn. Đây là tiêu chuẩn production; không bật strict thì TS mất phần lớn giá trị.</p></div></details>
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương A3</button>
+      </div>
+
+      <div class="pager">
+        <a href="A2-bat-dong-bo-event-loop.html"><span class="dir">← Trước</span><span class="ttl">A2 · Bất đồng bộ & Event Loop</span></a>
+        <a href="../B/B1-kien-truc-nodejs.html" class="next"><span class="dir">Phần B →</span><span class="ttl">B1 · Kiến trúc Node.js</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{
+    const opts=q.querySelectorAll('.opt'), exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{
+      opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show');
+    }));
+  });
+  const CH='A3', KEY='fcc_done';
+  const btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH);
+    btn.textContent=on?'✓ Đã hoàn thành A3 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương A3'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH);
+    localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')], tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active', l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

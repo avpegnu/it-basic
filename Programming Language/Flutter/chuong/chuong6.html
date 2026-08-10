@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6 — State Management: setState &amp; InheritedWidget · Flutter Sub-pillar</title>
+  <meta name="description" content="State spectrum, lifting state up, InheritedWidget custom, InheritedNotifier, ChangeNotifier, ValueNotifier." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 6</span>
+      </div>
+      <div class="chapter-num">Chương 06 · State Management — Foundation</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        setState &amp; InheritedWidget
+      </h1>
+      <p class="lead">
+        90% beginner Flutter dùng <code>setState</code> cho mọi thứ — đến app vừa lớn là vỡ. Chương này build mental model:
+        state ở đâu, ai quản lý, ai consume. <strong>Nắm chương 6 thì chương 7-8 (Bloc/Provider/Riverpod) dễ hơn nhiều</strong> —
+        vì 3 package đó đều dựa trên <code>InheritedWidget</code>.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1020 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 2 + Dart Ch 7 (Stream)</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu spectrum state: ephemeral (widget) vs app state (across widget).</li>
+            <li>Pattern "lifting state up" — khi child cần share state với sibling.</li>
+            <li>Sử dụng <code>setState</code> đúng nơi đúng chỗ.</li>
+            <li>Hiểu <code>InheritedWidget</code> — primitive cho share state trong tree.</li>
+            <li>Tự viết InheritedWidget custom + helper static <code>of(context)</code>.</li>
+            <li><code>InheritedNotifier</code>, <code>ChangeNotifier</code>, <code>ValueNotifier</code>.</li>
+            <li>Hiểu khi nào setState không đủ + cần package.</li>
+          </ul>
+        </div>
+
+        <h2 id="state-spectrum">1. State spectrum</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Scope</th><th>Tool</th><th>Use case</th></tr></thead>
+            <tbody>
+              <tr><td>Ephemeral (1 widget)</td><td><code>setState</code></td><td>Counter, toggle, hover, input controller</td></tr>
+              <tr><td>Lifted (parent + siblings)</td><td>Pass via constructor + callback</td><td>Filter + list, form parent</td></tr>
+              <tr><td>Inherited (subtree)</td><td><code>InheritedWidget</code></td><td>Theme, locale, user — descendant nhiều</td></tr>
+              <tr><td>App-wide</td><td>Bloc / Provider / Riverpod / GetX</td><td>Auth, cart, theme, complex domain</td></tr>
+              <tr><td>Persistent</td><td>SharedPreferences / Hive / SQLite</td><td>Setting, cache, offline data (ch.11)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Đừng over-engineer</div>
+          <p>
+            Counter cần Bloc? Không. <code>setState</code> đủ. Toggle dark mode? <code>ValueNotifier</code> đủ — không cần Riverpod.
+            Lift state cao khi cần, không cao hơn.
+          </p>
+        </div>
+
+        <h2 id="local-setstate">2. Pattern 1 — Local <code>setState</code></h2>
+        <p>Khi state chỉ một widget care:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_ToggleState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">Toggle</span>&gt; {
+  <span class="tok-type">bool</span> _on = <span class="tok-kw">false</span>;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Switch</span>(
+      value: _on,
+      onChanged: (v) =&gt; <span class="tok-fn">setState</span>(() =&gt; _on = v),
+    );
+  }
+}</code></pre>
+
+        <p>Dùng cho: toggle, expand/collapse, input focus, animation playing.</p>
+
+        <h2 id="lifting-state-up">3. Pattern 2 — Lifting state up</h2>
+        <p>2 sibling widget cần share state → move state lên parent chung:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_FilterableListState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">FilterableList</span>&gt; {
+  <span class="tok-type">String</span> _query = <span class="tok-str">''</span>;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Column</span>(
+      children: [
+        <span class="tok-fn">FilterBar</span>(
+          query: _query,
+          onChanged: (q) =&gt; <span class="tok-fn">setState</span>(() =&gt; _query = q),
+        ),
+        <span class="tok-fn">Expanded</span>(
+          child: <span class="tok-fn">ItemList</span>(query: _query),
+        ),
+      ],
+    );
+  }
+}
+
+<span class="tok-com">// FilterBar và ItemList đều là StatelessWidget — không có state riêng.</span>
+<span class="tok-com">// State 'query' ở parent. FilterBar push update qua callback. ItemList nhận query qua constructor.</span></code></pre>
+
+        <h3 id="lifting-fail">Khi nào lifting fail?</h3>
+        <p>
+          Tree càng sâu → pass props qua 5-6 cấp widget chỉ vì leaf cần. Boilerplate khổng lồ. Đây là lúc cần <code>InheritedWidget</code> hoặc state management package.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ Pass through 5 levels — prop drilling</span>
+<span class="tok-cls">App</span>(user: u) → <span class="tok-cls">Page</span>(user: u) → <span class="tok-cls">Section</span>(user: u) → <span class="tok-cls">Card</span>(user: u) → <span class="tok-cls">Avatar</span>(user: u)</code></pre>
+
+        <h2 id="inherited-widget">4. <code>InheritedWidget</code> — cứu cánh</h2>
+        <p>
+          Primitive Flutter cho share state tới mọi descendant. Lookup qua <code>context.dependOnInheritedWidgetOfExactType&lt;T&gt;()</code>.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">UserInherited</span> <span class="tok-kw">extends</span> <span class="tok-cls">InheritedWidget</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">User</span> user;
+
+  <span class="tok-kw">const</span> <span class="tok-fn">UserInherited</span>({
+    <span class="tok-kw">super</span>.key,
+    <span class="tok-kw">required</span> <span class="tok-kw">this</span>.user,
+    <span class="tok-kw">required</span> <span class="tok-kw">super</span>.child,
+  });
+
+  <span class="tok-com">// Helper static — convenient access</span>
+  <span class="tok-kw">static</span> <span class="tok-cls">User</span>? <span class="tok-fn">maybeOf</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> context
+        .<span class="tok-fn">dependOnInheritedWidgetOfExactType</span>&lt;<span class="tok-cls">UserInherited</span>&gt;()
+        ?.user;
+  }
+
+  <span class="tok-kw">static</span> <span class="tok-cls">User</span> <span class="tok-fn">of</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">final</span> u = <span class="tok-fn">maybeOf</span>(context);
+    <span class="tok-fn">assert</span>(u != <span class="tok-kw">null</span>, <span class="tok-str">'No UserInherited found in context'</span>);
+    <span class="tok-kw">return</span> u!;
+  }
+
+  <span class="tok-com">// Khi data đổi, descendant đang dependOn có rebuild không?</span>
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">bool</span> <span class="tok-fn">updateShouldNotify</span>(<span class="tok-cls">UserInherited</span> old) =&gt; user != old.user;
+}
+
+<span class="tok-com">// Apply</span>
+<span class="tok-fn">UserInherited</span>(
+  user: <span class="tok-cls">User</span>(name: <span class="tok-str">'Việt'</span>, age: <span class="tok-num">25</span>),
+  child: <span class="tok-cls">MyApp</span>(),
+)
+
+<span class="tok-com">// Access từ bất kỳ descendant</span>
+<span class="tok-kw">class</span> <span class="tok-cls">UserBadge</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatelessWidget</span> {
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">final</span> user = <span class="tok-cls">UserInherited</span>.<span class="tok-fn">of</span>(context);
+    <span class="tok-kw">return</span> <span class="tok-fn">Text</span>(user.name);
+  }
+}</code></pre>
+
+        <h3 id="update-should-notify"><code>updateShouldNotify</code></h3>
+        <p>
+          Khi <code>UserInherited</code> instance mới thay cũ, framework gọi <code>updateShouldNotify(old)</code>:
+        </p>
+        <ul>
+          <li>Trả <code>true</code> → mọi descendant dùng <code>UserInherited.of</code> rebuild.</li>
+          <li>Trả <code>false</code> → skip rebuild (vì data không đổi thật sự).</li>
+        </ul>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 InheritedWidget immutable — phải re-create để update</div>
+          <p>
+            InheritedWidget không mutate field trực tiếp. Wrap với <strong>StatefulWidget bên ngoài</strong>:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">UserScope</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatefulWidget</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Widget</span> child;
+  <span class="tok-kw">const</span> <span class="tok-fn">UserScope</span>({<span class="tok-kw">super</span>.key, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.child});
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">State</span>&lt;<span class="tok-cls">UserScope</span>&gt; <span class="tok-fn">createState</span>() =&gt; <span class="tok-fn">_UserScopeState</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_UserScopeState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">UserScope</span>&gt; {
+  <span class="tok-cls">User</span> _user = <span class="tok-kw">const</span> <span class="tok-fn">User</span>(name: <span class="tok-str">'guest'</span>);
+
+  <span class="tok-kw">void</span> <span class="tok-fn">updateUser</span>(<span class="tok-cls">User</span> u) =&gt; <span class="tok-fn">setState</span>(() =&gt; _user = u);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) =&gt; <span class="tok-fn">UserInherited</span>(
+    user: _user,
+    child: widget.child,
+  );
+}</code></pre>
+          <p style="margin-top: 8px;">setState ngoài → tái tạo InheritedWidget → descendant rebuild.</p>
+        </div>
+
+        <h2 id="inherited-notifier">5. <code>InheritedNotifier&lt;T extends Listenable&gt;</code></h2>
+        <p>
+          Variant: InheritedWidget tự subscribe vào <code>Listenable</code>. Auto rebuild descendant khi notifier <code>notifyListeners()</code>.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">CounterScope</span> <span class="tok-kw">extends</span> <span class="tok-cls">InheritedNotifier</span>&lt;<span class="tok-cls">ValueNotifier</span>&lt;<span class="tok-type">int</span>&gt;&gt; {
+  <span class="tok-kw">const</span> <span class="tok-fn">CounterScope</span>({
+    <span class="tok-kw">super</span>.key,
+    <span class="tok-kw">required</span> <span class="tok-cls">ValueNotifier</span>&lt;<span class="tok-type">int</span>&gt; <span class="tok-kw">super</span>.notifier,
+    <span class="tok-kw">required</span> <span class="tok-kw">super</span>.child,
+  });
+
+  <span class="tok-kw">static</span> <span class="tok-cls">ValueNotifier</span>&lt;<span class="tok-type">int</span>&gt; <span class="tok-fn">of</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> context
+        .<span class="tok-fn">dependOnInheritedWidgetOfExactType</span>&lt;<span class="tok-cls">CounterScope</span>&gt;()!
+        .notifier!;
+  }
+}
+
+<span class="tok-com">// Apply</span>
+<span class="tok-kw">final</span> counter = <span class="tok-cls">ValueNotifier</span>(<span class="tok-num">0</span>);
+<span class="tok-fn">CounterScope</span>(
+  notifier: counter,
+  child: <span class="tok-cls">MyApp</span>(),
+)
+
+<span class="tok-com">// Increment từ bất kỳ widget — descendant rebuild</span>
+<span class="tok-cls">CounterScope</span>.<span class="tok-fn">of</span>(context).value++;</code></pre>
+
+        <h2 id="value-notifier">6. <code>ValueNotifier&lt;T&gt;</code> + <code>ValueListenableBuilder</code></h2>
+        <p>
+          Đơn giản nhất cho single value. Widget rebuild khi value change.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> _count = <span class="tok-cls">ValueNotifier</span>&lt;<span class="tok-type">int</span>&gt;(<span class="tok-num">0</span>);
+
+<span class="tok-cls">ValueListenableBuilder</span>&lt;<span class="tok-type">int</span>&gt;(
+  valueListenable: _count,
+  builder: (context, value, child) =&gt; <span class="tok-fn">Text</span>(<span class="tok-str">'Count: $value'</span>),
+)
+
+<span class="tok-com">// Update từ button</span>
+<span class="tok-fn">ElevatedButton</span>(
+  onPressed: () =&gt; _count.value++,
+  child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'+1'</span>),
+)</code></pre>
+
+        <h3 id="value-notifier-vs-setstate">ValueNotifier vs setState — khi nào dùng cái nào?</h3>
+        <ul>
+          <li><strong>setState</strong>: state ở chính State class. Local widget.</li>
+          <li><strong>ValueNotifier</strong>: state ngoài widget — share với widget khác, sống độc lập, không bị reset khi widget unmount (nếu dispose đúng).</li>
+        </ul>
+
+        <h2 id="change-notifier">7. <code>ChangeNotifier</code></h2>
+        <p>Multiple value, custom notify timing:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">CartModel</span> <span class="tok-kw">extends</span> <span class="tok-cls">ChangeNotifier</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">List</span>&lt;<span class="tok-cls">Item</span>&gt; _items = [];
+
+  <span class="tok-cls">List</span>&lt;<span class="tok-cls">Item</span>&gt; <span class="tok-kw">get</span> items =&gt; <span class="tok-cls">List</span>.<span class="tok-fn">unmodifiable</span>(_items);
+  <span class="tok-type">int</span> <span class="tok-kw">get</span> totalItems =&gt; _items.<span class="tok-fn">fold</span>(<span class="tok-num">0</span>, (a, i) =&gt; a + i.qty);
+  <span class="tok-type">int</span> <span class="tok-kw">get</span> totalPrice =&gt; _items.<span class="tok-fn">fold</span>(<span class="tok-num">0</span>, (a, i) =&gt; a + i.price * i.qty);
+
+  <span class="tok-kw">void</span> <span class="tok-fn">add</span>(<span class="tok-cls">Item</span> item) {
+    _items.<span class="tok-fn">add</span>(item);
+    <span class="tok-fn">notifyListeners</span>();        <span class="tok-com">// trigger rebuild của listener</span>
+  }
+
+  <span class="tok-kw">void</span> <span class="tok-fn">remove</span>(<span class="tok-cls">Item</span> item) {
+    _items.<span class="tok-fn">remove</span>(item);
+    <span class="tok-fn">notifyListeners</span>();
+  }
+
+  <span class="tok-kw">void</span> <span class="tok-fn">clear</span>() {
+    _items.<span class="tok-fn">clear</span>();
+    <span class="tok-fn">notifyListeners</span>();
+  }
+}
+
+<span class="tok-com">// Subscribe</span>
+<span class="tok-kw">final</span> cart = <span class="tok-fn">CartModel</span>();
+<span class="tok-cls">AnimatedBuilder</span>(
+  animation: cart,
+  builder: (context, child) =&gt; <span class="tok-fn">Text</span>(<span class="tok-str">'Total: $</span>{cart.totalItems}<span class="tok-str">'</span>),
+)</code></pre>
+
+        <h2 id="dispose">8. Dispose — tránh leak</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_MyWidgetState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">MyWidget</span>&gt; {
+  <span class="tok-kw">final</span> _counter = <span class="tok-fn">ValueNotifier</span>(<span class="tok-num">0</span>);
+  <span class="tok-kw">final</span> _cart = <span class="tok-fn">CartModel</span>();
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">dispose</span>() {
+    _counter.<span class="tok-fn">dispose</span>();
+    _cart.<span class="tok-fn">dispose</span>();
+    <span class="tok-kw">super</span>.<span class="tok-fn">dispose</span>();
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(...) =&gt; ...;
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Không dispose = memory leak</div>
+          <p>
+            <code>ChangeNotifier</code> / <code>ValueNotifier</code> giữ list listener. Nếu không dispose, listener cũ vẫn được call → setState sau dispose → crash hoặc leak.
+          </p>
+        </div>
+
+        <h2 id="setstate-pitfall">9. Pitfall: <code>setState</code> sau dispose</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_MyState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">MyWidget</span>&gt; {
+  <span class="tok-cls">String</span>? _data;
+
+  <span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">_load</span>() <span class="tok-kw">async</span> {
+    <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> <span class="tok-fn">fetchData</span>();
+    <span class="tok-com">// User có thể navigate away khi đang await — widget dispose</span>
+    <span class="tok-kw">if</span> (!mounted) <span class="tok-kw">return</span>;        <span class="tok-com">// ✅ check</span>
+    <span class="tok-fn">setState</span>(() =&gt; _data = r);
+  }
+}</code></pre>
+
+        <h2 id="theme-inherited">10. Pattern: ThemeInherited custom</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">ThemeScope</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatefulWidget</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Widget</span> child;
+  <span class="tok-kw">const</span> <span class="tok-fn">ThemeScope</span>({<span class="tok-kw">super</span>.key, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.child});
+
+  <span class="tok-kw">static</span> <span class="tok-cls">_ThemeScopeState</span> <span class="tok-fn">of</span>(<span class="tok-cls">BuildContext</span> context) =&gt;
+      context.<span class="tok-fn">findAncestorStateOfType</span>&lt;<span class="tok-cls">_ThemeScopeState</span>&gt;()!;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">State</span>&lt;<span class="tok-cls">ThemeScope</span>&gt; <span class="tok-fn">createState</span>() =&gt; <span class="tok-fn">_ThemeScopeState</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_ThemeScopeState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">ThemeScope</span>&gt; {
+  <span class="tok-cls">ThemeMode</span> _mode = <span class="tok-cls">ThemeMode</span>.system;
+  <span class="tok-cls">ThemeMode</span> <span class="tok-kw">get</span> mode =&gt; _mode;
+
+  <span class="tok-kw">void</span> <span class="tok-fn">toggle</span>() {
+    <span class="tok-fn">setState</span>(() {
+      _mode = _mode == <span class="tok-cls">ThemeMode</span>.dark ? <span class="tok-cls">ThemeMode</span>.light : <span class="tok-cls">ThemeMode</span>.dark;
+    });
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) =&gt; <span class="tok-fn">_ThemeInherited</span>(
+    mode: _mode,
+    state: <span class="tok-kw">this</span>,
+    child: widget.child,
+  );
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_ThemeInherited</span> <span class="tok-kw">extends</span> <span class="tok-cls">InheritedWidget</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">ThemeMode</span> mode;
+  <span class="tok-kw">final</span> <span class="tok-cls">_ThemeScopeState</span> state;
+  <span class="tok-kw">const</span> <span class="tok-fn">_ThemeInherited</span>({<span class="tok-kw">required</span> <span class="tok-kw">this</span>.mode, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.state, <span class="tok-kw">required</span> <span class="tok-kw">super</span>.child});
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">bool</span> <span class="tok-fn">updateShouldNotify</span>(<span class="tok-cls">_ThemeInherited</span> old) =&gt; mode != old.mode;
+}</code></pre>
+
+        <h2 id="when-not-enough">11. Khi nào setState không đủ?</h2>
+        <ul>
+          <li><strong>App state global</strong>: user, theme, locale, cart cross route.</li>
+          <li><strong>Cross route persistence</strong>: cart không reset khi pop, login info giữ qua nhiều page.</li>
+          <li><strong>State phức tạp transaction</strong>: multiple update atomic, async flow.</li>
+          <li><strong>Cần testability</strong>: tách logic ra khỏi widget để test pure Dart.</li>
+          <li><strong>Cần dependency injection</strong>: inject repository vào state.</li>
+        </ul>
+
+        <p>Lúc đó → Chương 7 (Bloc) hoặc Chương 8 (Provider/Riverpod/GetX).</p>
+
+        <h2 id="bai-tap" class="exercises">12. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Counter với lifting state up</h4>
+          <div class="exercise-body">
+            <p>
+              Counter app với 2 sibling button (+1, -1) và 1 sibling Text hiển thị value. State ở parent.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">class CounterScreen extends StatefulWidget {
+  @override
+  State createState() =&gt; _CounterScreenState();
+}
+
+class _CounterScreenState extends State&lt;CounterScreen&gt; {
+  int _count = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _CountDisplay(count: _count),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _Button(label: '-1', onTap: () =&gt; setState(() =&gt; _count--)),
+            _Button(label: '+1', onTap: () =&gt; setState(() =&gt; _count++)),
+          ],
+        ),
+      ],
+    );
+  }
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>ThemeScope custom</h4>
+          <div class="exercise-body">
+            <p>
+              Implement <code>ThemeManager</code> qua InheritedNotifier + ValueNotifier&lt;ThemeMode&gt;.
+              Toggle button ở 1 screen, theme đổi toàn app.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 10 (ThemeScope) hoặc section 5 (InheritedNotifier).</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>CartModel ChangeNotifier</h4>
+          <div class="exercise-body">
+            <p>
+              Build <code>CartModel</code> (extends ChangeNotifier) với add/remove/total. UI 2 screen: ProductList (add to cart),
+              Cart (show items + total). Cart đổi → UI cập nhật real-time.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 7. Subscribe qua <code>AnimatedBuilder(animation: cart, builder: ...)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Fix mounted check</h4>
+          <div class="exercise-body">
+            <p>
+              Refactor widget có async fetch + setState gây "setState after dispose" → fix bằng <code>mounted</code> check.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">Future&lt;void&gt; _load() async {
+  final data = await fetch();
+  if (!mounted) return;     // ← critical
+  setState(() =&gt; _data = data);
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>LocaleProvider InheritedWidget</h4>
+          <div class="exercise-body">
+            <p>
+              Tự viết InheritedWidget <code>LocaleProvider</code> cho i18n manual (không dùng package).
+              Đổi locale, mọi descendant Text rebuild.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tương tự ThemeScope. Hold <code>Locale</code> + map translation. Method <code>tr('key')</code> lookup.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">13. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>setState</code> gọi ngoài State class — chuyện gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Compile error — <code>setState</code> là method protected của <code>State&lt;T&gt;</code>, không gọi từ ngoài được.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>InheritedWidget descendant không gọi <code>.of(context)</code> — có rebuild khi data đổi?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. <code>.of(context)</code> = <code>dependOnInheritedWidgetOfExactType</code> register dependency. Không gọi = không subscribe.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>updateShouldNotify</code> trả <code>false</code> — chuyện gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Descendant không rebuild dù data có thể đã đổi (vì InheritedWidget bảo "không có gì mới"). Dùng khi data thực sự == nhau.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p><code>ChangeNotifier</code> cần dispose không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Có. Listener bị giữ đến khi dispose. Quên dispose → memory leak + setState sau dispose.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>ValueListenableBuilder</code> rebuild mấy lần khi value đổi?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> 1 lần. Frame builder. Multiple sequential <code>.value = ...</code> trong cùng frame chỉ rebuild 1 lần cuối.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>State bị reset khi navigate đi rồi back — vì sao?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> StatefulWidget bị remove khỏi tree → state dispose. Pop về → tree mount mới, state reset. Lift state lên parent giữ qua navigation, hoặc state mgmt global.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p><code>mounted</code> field trả gì sau dispose?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>false</code>. Dùng kiểm tra trước <code>setState</code> sau async.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>InheritedWidget mutate field thẳng được không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không, immutable. Phải re-create instance qua StatefulWidget wrapper. <code>updateShouldNotify</code> compare old vs new.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">14. Tổng kết</h2>
+        <ul>
+          <li>✅ State spectrum: ephemeral / lifted / inherited / app-wide / persistent.</li>
+          <li>✅ <code>setState</code> cho local widget state.</li>
+          <li>✅ Lifting state up — pass props + callback. Limit: prop drilling sâu.</li>
+          <li>✅ InheritedWidget — primitive cho share state subtree.</li>
+          <li>✅ <code>.of(context)</code> = register dependency, auto rebuild khi data đổi.</li>
+          <li>✅ <code>updateShouldNotify</code> control rebuild.</li>
+          <li>✅ InheritedNotifier wrap Listenable, ChangeNotifier multiple value, ValueNotifier single value.</li>
+          <li>✅ Dispose Notifier/Controller ở <code>dispose()</code>.</li>
+          <li>✅ <code>mounted</code> check sau async.</li>
+          <li>✅ Khi setState không đủ → chương 7-8 (Bloc / Provider / Riverpod).</li>
+        </ul>
+
+        <h2 id="ket-noi">15. Kết nối</h2>
+        <ul>
+          <li><a href="chuong7.html"><strong>Chương 7 — Bloc:</strong></a> BlocProvider build trên InheritedWidget.</li>
+          <li><a href="chuong8.html"><strong>Chương 8:</strong></a> Provider/Riverpod cũng dùng InheritedWidget primitive.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong5.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">05 · Navigation</div>
+          </a>
+          <a href="chuong7.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">07 · flutter_bloc Deep Dive</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#state-spectrum">1. State spectrum</a></li>
+          <li><a href="#local-setstate">2. Local setState</a></li>
+          <li><a href="#lifting-state-up">3. Lifting state up</a></li>
+          <li><a href="#inherited-widget">4. InheritedWidget</a></li>
+          <li><a href="#inherited-notifier">5. InheritedNotifier</a></li>
+          <li><a href="#value-notifier">6. ValueNotifier</a></li>
+          <li><a href="#change-notifier">7. ChangeNotifier</a></li>
+          <li><a href="#dispose">8. Dispose</a></li>
+          <li><a href="#setstate-pitfall">9. mounted check</a></li>
+          <li><a href="#theme-inherited">10. ThemeScope pattern</a></li>
+          <li><a href="#when-not-enough">11. Khi setState không đủ</a></li>
+          <li><a href="#bai-tap">12. Bài tập</a></li>
+          <li><a href="#quiz">13. Quiz</a></li>
+          <li><a href="#tong-ket">14. Tổng kết</a></li>
+          <li><a href="#ket-noi">15. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 6 · Pillar 9 — IT Basic<br/>
+        <a href="chuong5.html">← Chương 5</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong7.html">Chương 7 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

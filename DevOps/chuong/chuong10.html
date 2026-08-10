@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — Monitoring & Observability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 10 · Operate</div>
+      <h1>Monitoring & Observability</h1>
+      <p class="subtitle">Three Pillars: logs / metrics / traces. Prometheus + PromQL + Grafana cho metric. ELK / Loki cho log. OpenTelemetry + Jaeger cho distributed tracing. Alerting với Alertmanager + PagerDuty. SLI / SLO / SLA — đo độ tin cậy thực sự, đặt error budget. Đây là "mắt và tai" của production.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#monitoring-vs">1. Monitoring vs Observability</a></li>
+        <li><a href="#three-pillars">2. Three Pillars</a></li>
+        <li><a href="#metrics">3. Metrics & Prometheus</a></li>
+        <li><a href="#promql">4. PromQL</a></li>
+        <li><a href="#grafana">5. Grafana</a></li>
+        <li><a href="#logs">6. Logs (ELK / Loki)</a></li>
+        <li><a href="#tracing">7. Distributed Tracing</a></li>
+        <li><a href="#otel">8. OpenTelemetry</a></li>
+        <li><a href="#alert">9. Alerting</a></li>
+        <li><a href="#slo">10. SLI / SLO / SLA</a></li>
+        <li><a href="#dashboards">11. Dashboard design</a></li>
+        <li><a href="#exercises">12. Bài tập</a></li>
+        <li><a href="#quiz">13. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="monitoring-vs">
+        <h2>1. Monitoring vs Observability — khác biệt</h2>
+
+        <h3>1.1. Monitoring</h3>
+        <p>Theo dõi <em>known unknowns</em>: bạn biết câu hỏi cần trả lời (CPU usage, request rate, error count). Setup dashboard + alert dựa trên metric đã định trước.</p>
+
+        <h3>1.2. Observability</h3>
+        <p>Khả năng trả lời <em>unknown unknowns</em>: câu hỏi mới phát sinh từ dữ liệu chưa biết trước (vì sao request này chậm? bug này xảy ra với user nào?). Cần data đủ giàu (high cardinality, structured) để query ad-hoc.</p>
+
+        <p>Charity Majors (Honeycomb): <em>"Monitoring is for known failure modes. Observability is for figuring out what new thing went wrong."</em></p>
+
+        <h3>1.3. Tại sao cần Observability?</h3>
+
+        <p>Microservice + cloud-native → vấn đề trở nên emergent: 1 user request chạy qua 20 service, fail ở đâu đó. Monitoring kiểu cũ (each service has its own dashboard) không đủ. Cần:</p>
+        <ul>
+          <li><strong>Distributed tracing</strong> — follow request qua services.</li>
+          <li><strong>High-cardinality metrics</strong> — group by user_id, request_id, ...</li>
+          <li><strong>Structured logs</strong> — query as data.</li>
+          <li><strong>Correlation</strong> — link log + metric + trace.</li>
+        </ul>
+      </section>
+
+      <section id="three-pillars">
+        <h2>2. Three Pillars of Observability</h2>
+
+        <div class="metric-grid">
+          <div class="metric-tile cyan">
+            <div class="metric-label">METRICS</div>
+            <div class="metric-value">Numbers</div>
+            <div class="metric-meta">CPU, RPS, latency, count — aggregated theo time</div>
+          </div>
+          <div class="metric-tile amber">
+            <div class="metric-label">LOGS</div>
+            <div class="metric-value">Events</div>
+            <div class="metric-meta">Discrete events với context, structured ưu tiên</div>
+          </div>
+          <div class="metric-tile green">
+            <div class="metric-label">TRACES</div>
+            <div class="metric-value">Spans</div>
+            <div class="metric-meta">Request flow qua services, parent-child</div>
+          </div>
+        </div>
+
+        <h3>2.1. Khi nào dùng cái nào?</h3>
+
+        <table>
+          <thead><tr><th>Câu hỏi</th><th>Pillar</th></tr></thead>
+          <tbody>
+            <tr><td>"Service X có chậm không?"</td><td>Metric (P95 latency)</td></tr>
+            <tr><td>"Request user 12345 bị gì?"</td><td>Trace (specific request)</td></tr>
+            <tr><td>"Vì sao Pod abc bị crash?"</td><td>Log (kubectl logs --previous)</td></tr>
+            <tr><td>"Bao nhiêu user impact bởi incident?"</td><td>Metric (count) + Log (sample)</td></tr>
+            <tr><td>"Error spike từ đâu?"</td><td>Trace + Log</td></tr>
+          </tbody>
+        </table>
+
+        <p>Three pillars complement nhau. Tool modern (Datadog, New Relic, Honeycomb) integrate cả 3.</p>
+      </section>
+
+      <section id="metrics">
+        <h2>3. Metrics & Prometheus</h2>
+
+        <h3>3.1. Prometheus — de-facto standard</h3>
+
+        <p>Prometheus (SoundCloud 2012, CNCF graduated 2018):</p>
+        <ul>
+          <li><strong>Pull-based</strong> — Prometheus scrape /metrics endpoint của targets.</li>
+          <li><strong>Time series DB</strong> — store metric với labels.</li>
+          <li><strong>PromQL</strong> — query language mạnh.</li>
+          <li><strong>Service discovery</strong> — auto-discover targets (K8s, Consul).</li>
+          <li><strong>Alertmanager</strong> — route alerts.</li>
+        </ul>
+
+        <h3>3.2. Architecture</h3>
+
+        <div class="ascii">┌─────────────────┐
+│  App / exporter │ ──/metrics── ┐
+│  (port :9090)   │              │
+└─────────────────┘              ↓
+                          ┌───────────────┐
+                          │  Prometheus   │
+                          │  (scrape)     │
+                          └───────────────┘
+                                  │
+                ┌─────────────────┼─────────────────┐
+                ↓                                   ↓
+        ┌───────────────┐                ┌──────────────────┐
+        │  Grafana      │                │  Alertmanager    │
+        │  (dashboard)  │                │  → Slack/PagerD  │
+        └───────────────┘                └──────────────────┘</div>
+
+        <h3>3.3. Metric types</h3>
+
+        <table>
+          <thead><tr><th>Type</th><th>Mô tả</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Counter</strong></td><td>Monotonic, chỉ tăng (reset on restart)</td><td>http_requests_total, errors_total</td></tr>
+            <tr><td><strong>Gauge</strong></td><td>Value lên xuống</td><td>memory_usage_bytes, queue_size</td></tr>
+            <tr><td><strong>Histogram</strong></td><td>Sample observations vào bucket; tính p50/p99</td><td>http_request_duration_seconds</td></tr>
+            <tr><td><strong>Summary</strong></td><td>Tương tự histogram nhưng client-side calculate quantile</td><td>request_duration (legacy, prefer histogram)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3.4. Naming convention</h3>
+
+<pre><code>&lt;namespace&gt;_&lt;subsystem&gt;_&lt;name&gt;_&lt;unit&gt;_&lt;total/sum/count&gt;
+
+# Examples:
+http_requests_total                       # counter
+http_request_duration_seconds            # histogram
+process_cpu_seconds_total
+node_filesystem_free_bytes               # gauge
+mysql_global_status_uptime_seconds
+</code></pre>
+
+        <h3>3.5. Labels — high cardinality concern</h3>
+
+<pre><code>http_requests_total{method="GET", status="200", path="/api/users"} 1234
+http_requests_total{method="POST", status="201", path="/api/users"} 56
+http_requests_total{method="GET", status="500", path="/api/users"} 7
+</code></pre>
+
+        <p>Labels giúp filter/aggregate. NHƯNG: <strong>cardinality explosion</strong>. Mỗi unique combination = 1 time series. user_id label với 1M users = 1M series → Prometheus chết.</p>
+
+        <p>Quy tắc:</p>
+        <ul>
+          <li>Label cardinality &lt; 100 (low cardinality).</li>
+          <li>KHÔNG dùng user_id, request_id, email làm label.</li>
+          <li>Dùng label cho thuộc tính bounded: status_code (5-10 value), method (5), path (template, không dynamic).</li>
+        </ul>
+
+        <h3>3.6. Instrument app — Node.js example</h3>
+
+<pre><code class="language-typescript">// npm i prom-client
+import express from 'express';
+import { register, Counter, Histogram } from 'prom-client';
+
+const app = express();
+
+const httpRequests = new Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP requests',
+  labelNames: ['method', 'route', 'status'],
+});
+
+const httpDuration = new Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+
+app.use((req, res, next) =&gt; {
+  const start = Date.now();
+  res.on('finish', () =&gt; {
+    const labels = { method: req.method, route: req.route?.path ?? 'unknown', status: res.statusCode };
+    httpRequests.inc(labels);
+    httpDuration.observe(labels, (Date.now() - start) / 1000);
+  });
+  next();
+});
+
+// Expose metrics
+app.get('/metrics', async (_req, res) =&gt; {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+
+app.listen(3000);
+</code></pre>
+
+        <h3>3.7. Exporters — không sửa được app</h3>
+
+        <p>Cho legacy/third-party app, dùng exporter expose metric:</p>
+        <ul>
+          <li><strong>node_exporter</strong> — host metrics (CPU, RAM, disk, network).</li>
+          <li><strong>postgres_exporter</strong>, <strong>mysql_exporter</strong> — DB metric.</li>
+          <li><strong>redis_exporter</strong>.</li>
+          <li><strong>blackbox_exporter</strong> — probe HTTP/TCP/ICMP từ ngoài.</li>
+          <li><strong>kube-state-metrics</strong> — K8s object state.</li>
+          <li><strong>cAdvisor</strong> — container resource.</li>
+        </ul>
+
+        <h3>3.8. Prometheus config</h3>
+
+<pre><code class="language-yaml"># prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: prod-us-east
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node1:9100', 'node2:9100']
+
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+</code></pre>
+
+        <p>K8s pattern: pod annotation <code>prometheus.io/scrape: "true"</code> + <code>prometheus.io/port: "9090"</code> → Prometheus auto-discover.</p>
+      </section>
+
+      <section id="promql">
+        <h2>4. PromQL — Query Language</h2>
+
+        <h3>4.1. Basic queries</h3>
+
+<pre><code class="language-promql"># Instant value
+http_requests_total
+
+# Filter labels
+http_requests_total{status="500"}
+http_requests_total{status=~"5.."}              # regex match
+http_requests_total{status!="200"}
+
+# Range vector (last 5 min)
+http_requests_total[5m]
+</code></pre>
+
+        <h3>4.2. Rate() — quan trọng nhất với counter</h3>
+
+<pre><code class="language-promql"># Counter cumulative không hữu ích trực tiếp
+# rate() = derivative trong time window
+
+# Requests per second average over last 5 min
+rate(http_requests_total[5m])
+
+# Per status
+rate(http_requests_total{status="500"}[5m])
+
+# Total requests across all dimensions
+sum(rate(http_requests_total[5m]))
+
+# By status
+sum by (status) (rate(http_requests_total[5m]))
+</code></pre>
+
+        <h3>4.3. Aggregation operators</h3>
+
+<pre><code class="language-promql">sum(...)          # sum across labels
+avg(...)
+max(...), min(...)
+count(...)        # count time series
+topk(5, ...)      # top 5 series
+bottomk(5, ...)
+quantile(0.99, ...)
+stddev(...)
+
+# By / Without — group
+sum by (instance) (rate(http_requests_total[5m]))
+sum without (status) (rate(http_requests_total[5m]))
+</code></pre>
+
+        <h3>4.4. Histogram percentile</h3>
+
+<pre><code class="language-promql"># P95 latency (last 5 min) overall
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+# P99 by route
+histogram_quantile(0.99,
+  sum by (route, le) (rate(http_request_duration_seconds_bucket[5m]))
+)
+</code></pre>
+
+        <h3>4.5. Common queries</h3>
+
+<pre><code class="language-promql"># RPS
+sum(rate(http_requests_total[5m]))
+
+# Error rate (%)
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+  /
+sum(rate(http_requests_total[5m]))
+  * 100
+
+# CPU usage (% per node)
+100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+# Memory used (%)
+(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+  / node_memory_MemTotal_bytes
+  * 100
+
+# Disk used (%)
+(node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"})
+  / node_filesystem_size_bytes{mountpoint="/"}
+  * 100
+
+# Pod restart count (last 1h)
+increase(kube_pod_container_status_restarts_total[1h])
+
+# Slow queries (postgres)
+rate(pg_stat_database_slow_queries_total[5m])
+</code></pre>
+
+        <h3>4.6. Recording rules — pre-computed query</h3>
+
+<pre><code class="language-yaml"># rules.yml
+groups:
+  - name: app
+    interval: 30s
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+
+      - record: job:http_requests:error_rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_total[5m]))
+</code></pre>
+
+        <p>Recording rule chạy expression mỗi 30s, lưu kết quả thành metric mới. Dashboard dùng <code>job:http_requests:rate5m</code> nhanh hơn evaluate query phức tạp mỗi refresh.</p>
+      </section>
+
+      <section id="grafana">
+        <h2>5. Grafana — Dashboarding</h2>
+
+        <p>Grafana là frontend visualization phổ biến nhất. Support 30+ data source: Prometheus, InfluxDB, Loki, ElasticSearch, MySQL, BigQuery, ...</p>
+
+        <h3>5.1. Setup</h3>
+
+<pre><code class="language-bash">helm repo add grafana https://grafana.github.io/helm-charts
+helm install grafana grafana/grafana \
+  --set adminPassword=admin \
+  --set persistence.enabled=true
+
+# UI
+kubectl port-forward svc/grafana 3000:80
+</code></pre>
+
+        <p>Stack phổ biến: <strong>kube-prometheus-stack</strong> (helm chart) — Prometheus + Grafana + Alertmanager + node-exporter + kube-state-metrics + dashboards có sẵn cho K8s.</p>
+
+<pre><code class="language-bash">helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace
+</code></pre>
+
+        <h3>5.2. Dashboard panel types</h3>
+
+        <ul>
+          <li><strong>Time series</strong> — line/bar chart over time.</li>
+          <li><strong>Stat</strong> — single big number.</li>
+          <li><strong>Gauge</strong> — speedometer style.</li>
+          <li><strong>Bar gauge</strong> — multi-stat bar.</li>
+          <li><strong>Heatmap</strong> — distribution over time.</li>
+          <li><strong>Table</strong> — query result as table.</li>
+          <li><strong>Logs</strong> — Loki/ES log panel.</li>
+          <li><strong>Geomap</strong> — geographic visualization.</li>
+        </ul>
+
+        <h3>5.3. Variables (template)</h3>
+
+        <p>Dropdown chọn instance/env/namespace, query update theo:</p>
+
+<pre><code>$instance — query: label_values(node_cpu_seconds_total, instance)
+$namespace — query: label_values(kube_pod_info, namespace)
+
+# Sử dụng trong panel:
+sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="$namespace"}[5m]))
+</code></pre>
+
+        <h3>5.4. Dashboard as Code</h3>
+
+<pre><code class="language-yaml"># Provision dashboard từ ConfigMap (kube-prometheus-stack pattern)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  my-dashboard.json: |
+    {
+      "title": "My Dashboard",
+      "panels": [...]
+    }
+</code></pre>
+
+        <p>Tools:</p>
+        <ul>
+          <li><strong>Grafonnet</strong> — Jsonnet library cho dashboard.</li>
+          <li><strong>grafana-operator</strong> — K8s CRD.</li>
+          <li><strong>Terraform Grafana provider</strong>.</li>
+        </ul>
+
+        <h3>5.5. RED Method</h3>
+
+        <p>Tom Wilkie (Grafana) đề xuất: 3 metric quan trọng cho service:</p>
+        <ul>
+          <li><strong>R</strong>ate — RPS.</li>
+          <li><strong>E</strong>rrors — error rate.</li>
+          <li><strong>D</strong>uration — latency P50/P95/P99.</li>
+        </ul>
+
+        <h3>5.6. USE Method</h3>
+
+        <p>Brendan Gregg đề xuất cho resource:</p>
+        <ul>
+          <li><strong>U</strong>tilization — % busy.</li>
+          <li><strong>S</strong>aturation — work queued.</li>
+          <li><strong>E</strong>rrors.</li>
+        </ul>
+
+        <p>RED cho service (request-driven). USE cho resource (CPU, disk, network).</p>
+      </section>
+
+      <section id="logs">
+        <h2>6. Logs — ELK / Loki</h2>
+
+        <h3>6.1. Structured Logging</h3>
+
+        <p>Plain text log:</p>
+<pre><code>2024-01-15 10:30:21 INFO User 12345 logged in from 1.2.3.4</code></pre>
+
+        <p>Structured (JSON):</p>
+<pre><code class="language-json">{"timestamp":"2024-01-15T10:30:21Z","level":"info","msg":"login","userId":"12345","ip":"1.2.3.4","requestId":"abc-123"}</code></pre>
+
+        <p>Lợi: query as data (filter level, group by, aggregate). Modern logging library: pino (Node), structlog (Python), zap/zerolog (Go), Logrus (Go).</p>
+
+        <h3>6.2. ELK Stack</h3>
+
+        <ul>
+          <li><strong>Elasticsearch</strong> — search engine, store + index logs.</li>
+          <li><strong>Logstash / Fluentd / Fluent Bit / Vector</strong> — collect/parse/forward logs.</li>
+          <li><strong>Kibana</strong> — UI search/visualize.</li>
+        </ul>
+
+        <p>Log flow: app stdout → DaemonSet log collector (Fluent Bit) → ES → Kibana.</p>
+
+        <h3>6.3. Loki — Prometheus for logs</h3>
+
+        <p>Loki (Grafana Labs 2018):</p>
+        <ul>
+          <li><strong>Index labels only</strong> (không full-text index nội dung) → cheap.</li>
+          <li>Compatible Grafana, syntax giống PromQL (LogQL).</li>
+          <li>Tích hợp tốt với Prometheus + K8s labels.</li>
+        </ul>
+
+<pre><code class="language-bash"># LogQL examples
+{namespace="production", app="web"}                  # filter
+{app="web"} |= "error"                                # contains "error"
+{app="web"} |~ "ERROR|FATAL"                          # regex
+{app="web"} | json | level="error" | line_format "{{ .msg }}"
+
+# Aggregation
+sum by (status) (count_over_time({app="web"}[5m]))    # log count
+rate({app="web"} |= "error" [5m])                     # error rate
+</code></pre>
+
+        <h3>6.4. Log levels</h3>
+
+        <table>
+          <thead><tr><th>Level</th><th>When</th><th>Verbosity</th></tr></thead>
+          <tbody>
+            <tr><td>TRACE</td><td>Debug deep, every step</td><td>Very high</td></tr>
+            <tr><td>DEBUG</td><td>Dev troubleshooting</td><td>High</td></tr>
+            <tr><td>INFO</td><td>Normal events (login, transaction)</td><td>Medium</td></tr>
+            <tr><td>WARN</td><td>Anomaly nhưng không fail</td><td>Low</td></tr>
+            <tr><td>ERROR</td><td>Operation failed, recoverable</td><td>Low</td></tr>
+            <tr><td>FATAL</td><td>App crashing</td><td>Rare</td></tr>
+          </tbody>
+        </table>
+
+        <p>Production: INFO mặc định, có thể tăng DEBUG runtime cho specific service khi troubleshoot. Log volume cost ~$0.50/GB ingest (CloudWatch) → đắt nếu DEBUG mọi nơi.</p>
+
+        <h3>6.5. Log retention</h3>
+
+        <ul>
+          <li>Hot (7-30 ngày, queryable nhanh) — ES, Loki.</li>
+          <li>Warm (3-12 tháng) — S3 object storage.</li>
+          <li>Cold (> 12 tháng) — Glacier, archive.</li>
+        </ul>
+
+        <p>Compliance (HIPAA, SOC2, PCI-DSS) thường yêu cầu 12 tháng audit log retention.</p>
+      </section>
+
+      <section id="tracing">
+        <h2>7. Distributed Tracing</h2>
+
+        <h3>7.1. Vấn đề trong microservice</h3>
+
+        <p>Request user qua API Gateway → Auth → User Service → Order Service → DB → Payment Gateway. Latency tổng 2s. Bottleneck ở đâu?</p>
+
+        <p>Tracing follow request qua services, mỗi step = 1 <strong>span</strong>:</p>
+
+        <div class="ascii">[───────────────── Trace (request-id: abc) ─────────────────]
+[─ API GW: 50ms ─][─── Auth: 100ms ───][── User Svc: 200ms ──]
+                                       [── DB query: 150ms ─]
+                                       [── Cache: 5ms ──]</div>
+
+        <h3>7.2. Concepts</h3>
+
+        <ul>
+          <li><strong>Trace</strong> — root request (trace ID unique).</li>
+          <li><strong>Span</strong> — 1 unit work (span ID, parent span ID).</li>
+          <li><strong>Context propagation</strong> — pass trace ID giữa services qua HTTP header (W3C traceparent, B3).</li>
+          <li><strong>Tags / attributes</strong> — metadata trên span (user_id, http.method, db.statement).</li>
+        </ul>
+
+        <h3>7.3. Tools</h3>
+
+        <table>
+          <thead><tr><th>Tool</th><th>Type</th><th>Backed by</th></tr></thead>
+          <tbody>
+            <tr><td>Jaeger</td><td>Open source</td><td>Uber, CNCF</td></tr>
+            <tr><td>Zipkin</td><td>Open source (older)</td><td>Twitter</td></tr>
+            <tr><td>Tempo</td><td>Open source</td><td>Grafana Labs</td></tr>
+            <tr><td>AWS X-Ray</td><td>SaaS</td><td>AWS</td></tr>
+            <tr><td>Google Cloud Trace</td><td>SaaS</td><td>GCP</td></tr>
+            <tr><td>Datadog APM</td><td>SaaS</td><td>Datadog</td></tr>
+            <tr><td>Honeycomb</td><td>SaaS</td><td>Honeycomb</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.4. Sampling</h3>
+
+        <p>Trace mọi request = quá nhiều data, đắt. Sampling:</p>
+        <ul>
+          <li><strong>Head-based</strong> (probabilistic) — quyết định trace hay không ở root, vd 10%.</li>
+          <li><strong>Tail-based</strong> — buffer hết, quyết định sau (giữ trace có error/slow). Phức tạp hơn nhưng hữu ích hơn.</li>
+          <li>Practice: 100% trace error + slow (P99), 1-10% trace bình thường.</li>
+        </ul>
+      </section>
+
+      <section id="otel">
+        <h2>8. OpenTelemetry — Standard mới</h2>
+
+        <p>OpenTelemetry (CNCF, merge OpenTracing + OpenCensus 2019) — standard duy nhất cho metric + log + trace:</p>
+
+        <ul>
+          <li><strong>Vendor-neutral</strong> — instrument 1 lần, send tới Jaeger/Tempo/Datadog/...</li>
+          <li><strong>OTLP protocol</strong> — gRPC + HTTP standard.</li>
+          <li><strong>Auto-instrumentation</strong> — Java/Python/Node tự instrument framework phổ biến.</li>
+          <li><strong>OTel Collector</strong> — proxy receive + transform + send.</li>
+        </ul>
+
+        <h3>8.1. Architecture</h3>
+
+        <div class="ascii">App (instrumented)
+   ↓ OTLP
+OTel Collector
+   ├─→ Prometheus (metrics)
+   ├─→ Loki (logs)
+   ├─→ Jaeger (traces)
+   └─→ Datadog (everything)</div>
+
+        <h3>8.2. Instrument Node.js</h3>
+
+<pre><code class="language-typescript">// otel.ts
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { Resource } from '@opentelemetry/resources';
+import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+
+const sdk = new NodeSDK({
+  resource: new Resource({
+    [SemanticResourceAttributes.SERVICE_NAME]: 'my-api',
+    [SemanticResourceAttributes.SERVICE_VERSION]: '1.0.0',
+    [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: process.env.NODE_ENV,
+  }),
+  traceExporter: new OTLPTraceExporter({
+    url: 'http://otel-collector:4318/v1/traces',
+  }),
+  metricReader: new PeriodicExportingMetricReader({
+    exporter: new OTLPMetricExporter({
+      url: 'http://otel-collector:4318/v1/metrics',
+    }),
+  }),
+  instrumentations: [getNodeAutoInstrumentations()],
+});
+
+sdk.start();
+</code></pre>
+
+<pre><code class="language-bash"># Run với --import:
+node --import ./otel.ts server.ts
+</code></pre>
+
+        <p>Auto-instrument: HTTP client/server, Express, Fastify, MySQL, Postgres, Redis, ... — 0 code change for those.</p>
+
+        <h3>8.3. Manual span</h3>
+
+<pre><code class="language-typescript">import { trace, SpanStatusCode } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-api');
+
+async function processOrder(orderId: string) {
+  return tracer.startActiveSpan('processOrder', async (span) =&gt; {
+    span.setAttribute('order.id', orderId);
+
+    try {
+      const order = await fetchOrder(orderId);
+      span.setAttribute('order.value', order.total);
+
+      await chargeCard(order);
+
+      span.setStatus({ code: SpanStatusCode.OK });
+      return order;
+    } catch (err) {
+      span.recordException(err as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+}
+</code></pre>
+      </section>
+
+      <section id="alert">
+        <h2>9. Alerting</h2>
+
+        <h3>9.1. Alertmanager</h3>
+
+<pre><code class="language-yaml"># alerts.yml
+groups:
+  - name: app
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (service) (rate(http_requests_total[5m]))
+          &gt; 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "Error rate {{ $value | humanizePercentage }} for 5m"
+          runbook: "https://wiki.example.com/runbooks/high-error-rate"
+
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) &gt; 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} crash looping"
+</code></pre>
+
+<pre><code class="language-yaml"># alertmanager.yml
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - match:
+        severity: critical
+      receiver: 'pagerduty'
+      continue: true
+    - match:
+        severity: warning
+      receiver: 'slack'
+
+receivers:
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - service_key: '&lt;pagerduty-key&gt;'
+
+  - name: 'slack'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/...'
+        channel: '#alerts'
+        title: '{{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+</code></pre>
+
+        <h3>9.2. Alert design — không alert fatigue</h3>
+
+        <p>Quy tắc:</p>
+        <ul>
+          <li>Chỉ alert <strong>actionable</strong> — có việc làm, không phải info.</li>
+          <li>Alert dựa trên <strong>symptom</strong> (user impact), không cause.
+            <ul>
+              <li>❌ "CPU 90%" — có thể OK (batch job).</li>
+              <li>✓ "P99 latency &gt; 1s" — user impact.</li>
+            </ul>
+          </li>
+          <li><code>for: 5m</code> tránh flap — alert chỉ fire khi sustained.</li>
+          <li>Severity rõ ràng: P1 (page on-call ngay), P2 (Slack, fix giờ làm việc), P3 (ticket).</li>
+          <li>Mọi alert có <strong>runbook link</strong> — what to do.</li>
+          <li>Review alert quarterly — alert nào không actionable / không fire → xóa.</li>
+        </ul>
+
+        <h3>9.3. PagerDuty / Opsgenie</h3>
+
+        <p>Tools route alert tới on-call rotation, escalation, SLA tracking. Setup integration với Alertmanager.</p>
+      </section>
+
+      <section id="slo">
+        <h2>10. SLI / SLO / SLA — Đo độ tin cậy</h2>
+
+        <p>Chương 11 SRE đi sâu hơn. Tóm tắt ở đây:</p>
+
+        <h3>10.1. Definitions</h3>
+
+        <ul>
+          <li><strong>SLI (Service Level Indicator)</strong> — metric đo được. "P99 latency", "uptime %", "error rate".</li>
+          <li><strong>SLO (Service Level Objective)</strong> — target nội bộ. "P99 &lt; 500ms 99.9% thời gian".</li>
+          <li><strong>SLA (Service Level Agreement)</strong> — cam kết với khách (refund nếu vi phạm). "Uptime 99.9% hoặc 10% credit".</li>
+        </ul>
+
+        <p>SLO &lt; SLA — luôn để buffer. Nếu SLA = 99.9%, SLO nội bộ = 99.95%.</p>
+
+        <h3>10.2. SLI categories (Google SRE)</h3>
+
+        <table>
+          <thead><tr><th>Category</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Availability</strong></td><td>% successful request</td></tr>
+            <tr><td><strong>Latency</strong></td><td>P95 latency &lt; 200ms</td></tr>
+            <tr><td><strong>Throughput</strong></td><td>QPS sustained</td></tr>
+            <tr><td><strong>Quality</strong></td><td>Recommendation accuracy</td></tr>
+            <tr><td><strong>Correctness</strong></td><td>Data consistency, no corruption</td></tr>
+          </tbody>
+        </table>
+
+        <h3>10.3. Error Budget</h3>
+
+        <p>SLO 99.9% → 0.1% downtime cho phép = 43 phút/tháng → "error budget".</p>
+
+        <ul>
+          <li>Còn budget → dev có thể deploy, take risk.</li>
+          <li>Hết budget → freeze deploy, focus reliability.</li>
+        </ul>
+
+        <p>Đây là cách Google SRE manage tension giữa speed (dev) và stability (ops).</p>
+
+        <h3>10.4. Burn rate</h3>
+
+        <p>Alert dựa trên burn rate (tốc độ tiêu budget):</p>
+        <ul>
+          <li>Fast burn (1h burn 2% budget = 14× rate) → page ngay.</li>
+          <li>Slow burn (24h burn 10%) → ticket, fix ngày làm việc.</li>
+        </ul>
+      </section>
+
+      <section id="dashboards">
+        <h2>11. Dashboard Design</h2>
+
+        <h3>11.1. Hierarchy</h3>
+
+        <ol class="steps">
+          <li><strong>Service Dashboard</strong> (RED method) — RPS, error %, P50/P95/P99 latency.</li>
+          <li><strong>Resource Dashboard</strong> (USE method) — CPU/memory/disk/network util.</li>
+          <li><strong>Business Dashboard</strong> — orders/min, signups, revenue.</li>
+          <li><strong>Drill-down</strong> — click panel → detailed view.</li>
+        </ol>
+
+        <h3>11.2. Best practices</h3>
+
+        <ul>
+          <li>Time range default 1h, options 5m / 1h / 6h / 24h / 7d.</li>
+          <li>Auto-refresh 30s.</li>
+          <li>Annotation cho deploy event (link với CI).</li>
+          <li>Threshold lines (red = SLO breach).</li>
+          <li>Tooltip rõ ràng (chia sẻ scope giữa panels).</li>
+          <li>Color consistent: green=good, yellow=warn, red=bad.</li>
+          <li>Không quá 6-8 panel/dashboard — focus.</li>
+          <li>"On-call dashboard" 1 trang — at-a-glance health.</li>
+        </ul>
+
+        <h3>11.3. Anti-patterns</h3>
+
+        <ul>
+          <li><strong>"Wall of charts"</strong> — 50 panel, không ai nhìn.</li>
+          <li><strong>Vanity metric</strong> — chart đẹp nhưng không actionable.</li>
+          <li><strong>Mismatched time</strong> — 1 panel 5m, 1 panel 1h.</li>
+          <li><strong>Hard-coded label</strong> — không variable, dashboard cho 1 service không reuse được.</li>
+        </ul>
+      </section>
+
+      <section id="exercises">
+        <h2>12. Bài tập</h2>
+
+        <ol>
+          <li><strong>Setup Prometheus + Grafana</strong>: cài kube-prometheus-stack trên minikube. Verify built-in dashboards.</li>
+
+          <li><strong>Instrument Node.js</strong>: thêm prom-client vào app, expose /metrics. Custom counter cho login attempts. Verify Prometheus scrape.</li>
+
+          <li><strong>PromQL drill</strong>: viết query cho:
+            <ul>
+              <li>RPS theo service.</li>
+              <li>P95 latency theo route.</li>
+              <li>Error rate %.</li>
+              <li>Top 5 slowest endpoint.</li>
+              <li>Pod memory usage compared to limit.</li>
+            </ul>
+          </li>
+
+          <li><strong>Grafana dashboard</strong>: build dashboard với 4 panel cho service: RPS / Error rate / P50-P95-P99 latency / CPU. Add variables cho service + env.</li>
+
+          <li><strong>Loki log aggregation</strong>: cài Loki + Promtail/Fluent Bit. Ship K8s log vào Loki. Query trong Grafana.</li>
+
+          <li><strong>OpenTelemetry</strong>: instrument app với OTel auto-instrumentation. Send trace tới Jaeger. Verify trace UI.</li>
+
+          <li><strong>Manual span</strong>: thêm manual span cho business operation (process order, send email). Set attribute (order_id, user_id).</li>
+
+          <li><strong>Alertmanager</strong>: setup alert "HighErrorRate" + "PodCrashLooping". Slack webhook receiver. Trigger alert (kill app), verify Slack message.</li>
+
+          <li><strong>RED metrics</strong>: cho 1 microservice, identify R/E/D metrics. Build dashboard.</li>
+
+          <li><strong>SLO</strong>: define SLO cho 1 service (vd availability 99.9%, P95 latency &lt; 200ms). Tính error budget. Setup burn rate alert (fast + slow).</li>
+
+          <li><strong>Anti-pattern review</strong>: review dashboard hiện tại của team. Identify wall-of-charts, vanity metric. Đề xuất simplify.</li>
+
+          <li><strong>End-to-end debugging</strong>: tạo bug giả (slow query, high error). Use trace + log + metric để tìm root cause. Document.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>13. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 10</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Three Pillars of Observability là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Prometheus, Grafana, Jaeger</li>
+              <li class="quiz-option">Metrics (numbers aggregated), Logs (events with context), Traces (request flow across services)</li>
+              <li class="quiz-option">Dashboard, Alert, Query</li>
+              <li class="quiz-option">CPU, RAM, Disk</li>
+            </ul>
+            <div class="quiz-explain">3 pillars complement nhau: Metric trả lời "có vấn đề không?" (high level), Trace trả lời "ở đâu?" (specific request flow), Log trả lời "vì sao?" (event detail). Tools modern (Datadog, New Relic, Honeycomb) integrate cả 3. OpenTelemetry là standard duy nhất cho cả 3.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">"Cardinality explosion" trong Prometheus là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Disk usage tăng</li>
+              <li class="quiz-option">Network traffic</li>
+              <li class="quiz-option">Query slow</li>
+              <li class="quiz-option">Mỗi unique combination labels = 1 time series; user_id label với 1M users = 1M series → Prometheus chết. Quy tắc: cardinality &lt; 100, KHÔNG dùng user_id/email/request_id làm label</li>
+            </ul>
+            <div class="quiz-explain">Prometheus optimize cho low-cardinality labels (status, method, route template). High-cardinality (user_id, request_id) explode storage + memory. Đặc trị: dùng exemplar (link metric tới trace), hoặc chuyển sang log/trace cho high-card data. Honeycomb design specifically cho high-card observability.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">rate() trong PromQL áp dụng cho metric type nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Gauge</li>
+              <li class="quiz-option">Histogram</li>
+              <li class="quiz-option">Counter — vì counter monotonic increase, rate() compute derivative (per-second average) trong time window; áp dụng gauge sai</li>
+              <li class="quiz-option">Summary</li>
+            </ul>
+            <div class="quiz-explain">rate() = (last - first) / time_range. Counter chỉ tăng, rate() = events/sec. Gauge có thể giảm → rate() invalid (phải dùng deriv() hoặc delta()). Histogram bucket là counter → rate() OK. Summary client-side compute quantile, không cần rate.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">RED Method là viết tắt cho 3 metric quan trọng của service:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Rate (RPS), Errors (rate %), Duration (latency P50/P95/P99)</li>
+              <li class="quiz-option">RAM, Energy, Disk</li>
+              <li class="quiz-option">Read, Edit, Delete</li>
+              <li class="quiz-option">Recovery, Errors, Downtime</li>
+            </ul>
+            <div class="quiz-explain">RED (Tom Wilkie, Grafana) cho service request-driven. Triple này đủ cho health check service. USE (Brendan Gregg) bổ sung cho resource: Utilization, Saturation, Errors. Combine: RED dashboard cho mỗi service + USE dashboard cho host/container resource.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Loki khác ELK ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Loki nhanh hơn</li>
+              <li class="quiz-option">ELK chỉ cho enterprise</li>
+              <li class="quiz-option">Loki chỉ index labels (như Prometheus), không full-text — cheaper storage; ELK full-text index nội dung — expensive nhưng rich search</li>
+              <li class="quiz-option">Cùng architecture</li>
+            </ul>
+            <div class="quiz-explain">Loki tradeoff: cheap (S3 backend, label-only index), nhưng tìm "error message contains X" phải scan log content. ELK: full-text index → fast complex search, đắt storage. Choose Loki nếu chủ yếu filter theo label (namespace, app, level) + ad-hoc grep. ELK nếu cần search-as-data (analytics on log content).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Distributed tracing context propagation pass qua:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Database</li>
+              <li class="quiz-option">HTTP header — W3C traceparent (chuẩn) hoặc B3 (Zipkin); service downstream extract trace ID, tạo child span</li>
+              <li class="quiz-option">Cookie</li>
+              <li class="quiz-option">Network packet metadata</li>
+            </ul>
+            <div class="quiz-explain">W3C Trace Context: <code>traceparent: 00-{trace_id}-{parent_span_id}-{trace_flags}</code> + optional <code>tracestate</code>. Service A khi call B inject header. B extract → biết là continuation của trace, tạo span con. OpenTelemetry auto-handle trên HTTP/gRPC client/server. Cross-service async (queue): inject header vào message metadata.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">OpenTelemetry value proposition:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Free Datadog</li>
+              <li class="quiz-option">Replace Prometheus</li>
+              <li class="quiz-option">Chỉ cho Java</li>
+              <li class="quiz-option">Vendor-neutral standard cho metric+log+trace; instrument 1 lần (auto-instrument), export tới bất kỳ backend (Jaeger, Tempo, Datadog, ...) — không lock-in</li>
+            </ul>
+            <div class="quiz-explain">Trước OTel: instrument với Datadog agent → lock vào Datadog. Switch tới New Relic = re-instrument. OTel: standard SDK + OTLP protocol. Code dùng OTel API. Backend swappable (qua OTel Collector). Auto-instrumentation: HTTP, DB driver, queue tự động create spans. CNCF standard, support hầu hết major language.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Alert design "actionable" nghĩa:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Mỗi alert có việc cụ thể on-call phải làm + runbook link; không alert mang tính "FYI"</li>
+              <li class="quiz-option">Alert phải gửi SMS</li>
+              <li class="quiz-option">Alert mỗi metric</li>
+              <li class="quiz-option">Auto-fix</li>
+            </ul>
+            <div class="quiz-explain">Alert fatigue thật: on-call nhận 50 alert/đêm, ignore tất cả → real incident bị miss. Quy tắc: chỉ alert khi cần action. Test: nếu alert fire 3am, on-call có thể làm gì? Nếu "không, đợi giờ làm việc" → không nên page. Practice: severity P1 (page) cho user impact; P2 (Slack/ticket) cho non-urgent. Mỗi alert có runbook URL với step-by-step.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Error budget concept:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Số tiền cho bug</li>
+              <li class="quiz-option">Quota memory</li>
+              <li class="quiz-option">(1 - SLO) — quota downtime cho phép; còn budget thì dev có thể take risk (deploy, experiment); hết budget thì freeze deploy</li>
+              <li class="quiz-option">Insurance fee</li>
+            </ul>
+            <div class="quiz-explain">SLO 99.9% → 0.1% = 43 phút/tháng downtime acceptable. Đó là "error budget". Còn budget: deploy, A/B test, chaos engineering. Hết: freeze + post-mortem + reliability work cho đến hết tháng. Concept Google SRE — manage tension dev (move fast) vs ops (be stable). Cả 2 chia sẻ KPI.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Sampling trong distributed tracing:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Trace 100% mọi request</li>
+              <li class="quiz-option">Trace mọi request đắt → sampling: head-based (probabilistic, 1-10%) đơn giản; tail-based (giữ trace có error/slow) tốt hơn nhưng phức tạp; practice: 100% error+slow + 1-10% normal</li>
+              <li class="quiz-option">Random</li>
+              <li class="quiz-option">Disable</li>
+            </ul>
+            <div class="quiz-explain">Production 10k RPS = 10k trace/sec, mỗi trace ~100KB → 1GB/sec data. Storage + ingestion bottleneck. Sampling reduce. Head: decide ngay đầu request (probabilistic), simple nhưng có thể miss interesting trace. Tail: buffer toàn bộ trace, decide sau (giữ slow/error). Honeycomb dynamic sampling là best-of-breed.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 10. Tiếp theo: <a href="chuong11.html"><strong>Chương 11 — Site Reliability Engineering →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 10 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

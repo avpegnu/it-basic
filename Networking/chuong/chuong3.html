@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 03 — TCP · Networking Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">net-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong2.html">← Ch.02</a></li>
+        <li><a href="chuong3.html" class="active">Ch.03</a></li>
+        <li><a href="chuong4.html">Ch.04 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 03 · TRANSPORT · ~130 phút</div>
+      <h1>TCP<br/><span class="text-accent">Handshake &amp; Reliability</span></h1>
+      <p class="lead">
+        TCP là giao thức "đáng tin cậy" — đảm bảo data đến nguyên vẹn, đúng thứ tự, không trùng lặp.
+        Cơ sở của HTTP, SSH, SMTP, mọi connection-oriented protocol. Học chương này, bạn vẽ được 3-way handshake,
+        hiểu sliding window, congestion control, và biết tại sao server bận hay đầy <code>TIME_WAIT</code>.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#what">3.1 TCP là gì?</a></li>
+          <li><a href="#header">3.2 TCP header</a></li>
+          <li><a href="#handshake">3.3 3-way Handshake</a></li>
+          <li><a href="#termination">3.4 4-way Termination</a></li>
+          <li><a href="#seqack">3.5 Sequence &amp; ACK</a></li>
+          <li><a href="#window">3.6 Sliding Window</a></li>
+          <li><a href="#congestion">3.7 Congestion Control</a></li>
+          <li><a href="#states">3.8 TCP States</a></li>
+          <li><a href="#timewait">3.9 TIME_WAIT bug</a></li>
+          <li><a href="#nagle">3.10 Nagle &amp; Keep-alive</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 3.1 -->
+        <section id="what">
+          <h2>3.1 TCP là gì?</h2>
+
+          <p><strong>TCP</strong> (Transmission Control Protocol) cung cấp 4 đảm bảo:</p>
+          <ol>
+            <li><strong>Connection-oriented:</strong> 2 bên thiết lập connection trước, terminate sau</li>
+            <li><strong>Reliable:</strong> data đến đầy đủ — packet mất → retransmit</li>
+            <li><strong>In-order:</strong> data đến đúng thứ tự — packet đến lộn xộn → reorder</li>
+            <li><strong>Flow + Congestion control:</strong> không "ngập" receiver hay network</li>
+          </ol>
+
+          <p>Đánh đổi: TCP <em>chậm hơn</em> UDP do overhead. Nhưng đáng tin → dùng cho hầu hết app cần data toàn vẹn (HTTP, SSH, file transfer).</p>
+
+          <h3>Dùng port để phân biệt app</h3>
+          <p>TCP segment có <strong>source port</strong> và <strong>destination port</strong>. OS dùng port để biết giao data cho app nào.</p>
+          <ul>
+            <li>Port 0-1023: well-known (cần root): 80=HTTP, 443=HTTPS, 22=SSH, 25=SMTP</li>
+            <li>Port 1024-49151: registered</li>
+            <li>Port 49152-65535: ephemeral — client tự cấp khi connect ra</li>
+          </ul>
+        </section>
+
+        <!-- 3.2 -->
+        <section id="header">
+          <h2>3.2 TCP Header — 20 byte</h2>
+
+          <pre data-lang="text"><code>  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |          Source Port          |       Destination Port        |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                        Sequence Number                        |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                    Acknowledgment Number                      |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |  Data |           |U|A|P|R|S|F|                               |
+ | Offset| Reserved  |R|C|S|S|Y|I|            Window             |
+ |       |           |G|K|H|T|N|N|                               |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |           Checksum            |         Urgent Pointer        |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                    Options (variable)                         |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                              Data                             |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+</code></pre>
+
+          <h3>Các trường quan trọng</h3>
+          <ul>
+            <li><strong>Source/Dest Port</strong> (16-bit): xác định app</li>
+            <li><strong>Sequence Number</strong> (32-bit): số thứ tự byte đầu tiên trong segment</li>
+            <li><strong>ACK Number</strong> (32-bit): số byte tiếp theo mong nhận từ peer</li>
+            <li><strong>Flags</strong> (6 bit): SYN, ACK, FIN, RST, PSH, URG</li>
+            <li><strong>Window</strong> (16-bit): còn dung lượng nhận thêm bao nhiêu byte</li>
+            <li><strong>Checksum</strong>: phát hiện lỗi bit</li>
+          </ul>
+        </section>
+
+        <!-- 3.3 -->
+        <section id="handshake">
+          <h2>3.3 3-way Handshake — mở connection</h2>
+
+          <p>Trước khi gửi data, 2 bên phải "bắt tay". Dùng 3 packet:</p>
+
+          <div class="ascii-art">
+   Client                                  Server
+   ──────                                  ──────
+                                           [LISTEN]
+   [CLOSED]
+                  ──── 1. SYN ────▶
+                  seq=x (random)
+   [SYN_SENT]
+                                           [SYN_RCVD]
+                  ◀── 2. SYN+ACK ──
+                       seq=y (random)
+                       ack=x+1
+
+                  ──── 3. ACK ────▶
+                  ack=y+1
+   [ESTABLISHED]                           [ESTABLISHED]
+
+   ──────── Connection sẵn sàng, exchange data ────────
+          </div>
+
+          <h3>Tại sao phải 3 packet?</h3>
+          <ul>
+            <li>Packet 1 (Client→Server): "Tôi muốn connect, đây là seq tôi" — server biết client tồn tại + seq client</li>
+            <li>Packet 2 (Server→Client): ACK packet 1 + gửi seq của server — client biết server alive + seq server</li>
+            <li>Packet 3 (Client→Server): ACK packet 2 — server biết client nhận được seq server</li>
+          </ul>
+
+          <p>Sau 3 packet: cả 2 bên đều biết seq của nhau và confirm 2 chiều. Đây là yêu cầu tối thiểu cho reliable connection.</p>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Tại sao seq là random?</div>
+            Để chống "TCP hijacking" — nếu seq luôn 0, attacker đoán được. Random ISN (Initial Sequence Number) giúp khó đoán.
+            Modern OS dùng ISN từ random + hash(src, dst, port).
+          </div>
+
+          <h3>Hệ quả của 3-way handshake</h3>
+          <ul>
+            <li><strong>1.5 RTT</strong> để bắt tay xong → trước HTTP/3, mỗi HTTPS connection mất ~3 RTT (TCP + TLS)</li>
+            <li>SYN flood attack: gửi nhiều SYN, server giữ half-open, hết resource</li>
+            <li>Defense: SYN cookies, rate limit</li>
+          </ul>
+        </section>
+
+        <!-- 3.4 -->
+        <section id="termination">
+          <h2>3.4 4-way Termination — đóng connection</h2>
+
+          <p>Đóng connection cần 4 packet (vì TCP full-duplex, mỗi chiều đóng riêng):</p>
+
+          <div class="ascii-art">
+   Client                                  Server
+   ──────                                  ──────
+   [ESTABLISHED]                           [ESTABLISHED]
+
+                  ──── 1. FIN ────▶
+                  "Tôi xong gửi"
+   [FIN_WAIT_1]
+                                           [CLOSE_WAIT]
+                  ◀──── 2. ACK ────
+                  "Đã ghi nhận"
+   [FIN_WAIT_2]
+
+                                           Server gửi nốt data
+                                           ── ── data ── ──▶
+
+                  ◀──── 3. FIN ────
+                                           "Tôi cũng xong"
+                                           [LAST_ACK]
+   [TIME_WAIT]
+                  ──── 4. ACK ────▶
+                                           [CLOSED]
+
+   [Đợi 2*MSL ~ 60s]
+   [CLOSED]
+          </div>
+
+          <p>4 packet vì: mỗi bên có FIN + ACK. Nếu đồng thời cả 2 bên FIN, có thể "merge" → 3 packet (rare).</p>
+        </section>
+
+        <!-- 3.5 -->
+        <section id="seqack">
+          <h2>3.5 Sequence Number &amp; ACK</h2>
+
+          <p>TCP đánh số <strong>từng byte</strong> trong stream. Seq # của segment = số byte đầu trong segment.</p>
+
+          <pre data-lang="text"><code>Client gửi 100 byte với seq=1000:
+   Segment: seq=1000, data="A...Z..." (100 bytes)
+
+Server nhận, ACK = 1100 ("byte tiếp theo tôi muốn = 1100"):
+   Segment: ack=1100
+
+Client gửi tiếp 50 byte:
+   Segment: seq=1100, data="X...Y..." (50 bytes)
+
+Server: ack=1150
+   ...</code></pre>
+
+          <h3>Cumulative ACK</h3>
+          <p>ACK=N nghĩa là "đã nhận đủ đến byte N-1, mong byte N tiếp theo". 1 ACK xác nhận tất cả byte trước.</p>
+
+          <h3>Retransmission</h3>
+          <p>Nếu sender không nhận ACK trong RTO (Retransmission Timeout), gửi lại segment. RTO được tính dựa trên RTT measure.</p>
+
+          <h3>SACK (Selective Acknowledgment)</h3>
+          <p>Cumulative ACK có vấn đề: nếu mất segment 5 trong 10 segment, sender phải gửi lại 5-10. SACK cho phép báo "tôi nhận 1-4, 6-10, thiếu 5" → chỉ retransmit segment 5.</p>
+        </section>
+
+        <!-- 3.6 -->
+        <section id="window">
+          <h2>3.6 Sliding Window — Flow Control</h2>
+
+          <p>
+            <strong>Vấn đề:</strong> sender gửi quá nhanh, receiver không kịp xử lý → buffer đầy → drop. Phải có cơ chế "phanh".
+          </p>
+          <p>
+            <strong>Giải pháp:</strong> mỗi ACK packet, receiver thông báo <code>Window</code> = "tôi còn chỗ chứa thêm X byte". Sender không gửi quá X byte chưa được ACK.
+          </p>
+
+          <div class="ascii-art">
+   Sender's view of stream:
+   ┌────────────┬─────────────┬───────────────┐
+   │ ACKed      │ In flight   │ Can send      │ Can't send (over window)
+   │ (đã ACK)   │ (chưa ACK)  │ (window còn)  │
+   └────────────┴─────────────┴───────────────┘
+                ↑                              ↑
+              base                         base + window
+
+   Khi nhận ACK, "window" trượt phải.
+          </div>
+
+          <h3>Window scaling</h3>
+          <p>Field Window 16-bit → max 64KB. Trên link tốc độ cao (10 Gbps), 64KB là quá nhỏ. Option <strong>Window Scale</strong> (TCP option) nhân thêm 2^N → max ~1GB.</p>
+
+          <h3>Zero window probe</h3>
+          <p>Nếu receiver advertise window=0 (đầy), sender vẫn định kỳ gửi packet 1-byte để "thăm dò" — nếu không, có thể stuck mãi.</p>
+        </section>
+
+        <!-- 3.7 -->
+        <section id="congestion">
+          <h2>3.7 Congestion Control — đừng làm sập network</h2>
+
+          <p>
+            Flow control = không "ngập" receiver. <strong>Congestion control</strong> = không "ngập" <em>network</em> (router buffer, link capacity).
+          </p>
+
+          <p>TCP giả định: <strong>packet loss = network nghẽn</strong>. Khi loss, giảm tốc độ.</p>
+
+          <h3>Congestion Window (cwnd)</h3>
+          <p>Sender có 2 limit: <code>rwnd</code> (receive window từ receiver) và <code>cwnd</code> (do sender tự điều chỉnh). <strong>Số byte in-flight tối đa = min(rwnd, cwnd)</strong>.</p>
+
+          <h3>Slow Start</h3>
+          <p>
+            Khi mới connect, không biết network nhanh thế nào. Bắt đầu cwnd = 1 MSS (Maximum Segment Size, ~1460 byte). Mỗi RTT mà không loss, <strong>nhân đôi cwnd</strong>. "Slow start" — tên gọi sai vì thực ra tăng theo cấp số nhân, nhưng đó là so với "gửi tối đa ngay".
+          </p>
+
+          <h3>Congestion Avoidance — AIMD</h3>
+          <p>
+            Khi cwnd đạt ngưỡng <code>ssthresh</code>, chuyển sang <strong>AIMD</strong> (Additive Increase, Multiplicative Decrease):
+          </p>
+          <ul>
+            <li><strong>Mỗi RTT không loss:</strong> cwnd += 1 MSS (cộng dần)</li>
+            <li><strong>Khi loss:</strong> cwnd /= 2 (giảm một nửa) — "back off"</li>
+          </ul>
+
+          <div class="ascii-art">
+   cwnd (kích thước cửa sổ)
+    ▲
+    │           ╱╲
+    │          ╱  ╲ loss → giảm 1/2
+    │         ╱    ╲╱╲
+    │        ╱        ╲╱╲╲
+    │       ╱             ╲╲╲
+    │ slow╱
+    │start
+    └────────────────────────────▶ time
+          </div>
+
+          <h3>Các thuật toán congestion control</h3>
+          <ul>
+            <li><strong>Tahoe (1988)</strong>: loss → cwnd = 1 (slow start lại từ đầu)</li>
+            <li><strong>Reno (1990)</strong>: 3 dup ACK = "fast retransmit", cwnd /= 2 (fast recovery)</li>
+            <li><strong>NewReno, SACK</strong></li>
+            <li><strong>Cubic (default Linux)</strong>: tăng theo cubic function — ổn định trên link tốc độ cao</li>
+            <li><strong>BBR (Google)</strong>: model bandwidth + RTT thay vì dựa loss</li>
+          </ul>
+
+          <pre data-lang="bash"><code># Linux: xem congestion control hiện dùng
+sysctl net.ipv4.tcp_congestion_control
+# net.ipv4.tcp_congestion_control = cubic
+
+# Đổi sang BBR
+sudo sysctl -w net.ipv4.tcp_congestion_control=bbr</code></pre>
+        </section>
+
+        <!-- 3.8 -->
+        <section id="states">
+          <h2>3.8 TCP States — bảng trạng thái</h2>
+
+          <table>
+            <thead><tr><th>State</th><th>Ý nghĩa</th></tr></thead>
+            <tbody>
+              <tr><td><code>LISTEN</code></td><td>Server đang chờ connection</td></tr>
+              <tr><td><code>SYN_SENT</code></td><td>Client đã gửi SYN, đợi SYN-ACK</td></tr>
+              <tr><td><code>SYN_RCVD</code></td><td>Server đã nhận SYN, gửi SYN-ACK, đợi ACK cuối</td></tr>
+              <tr><td><code>ESTABLISHED</code></td><td>Đang truyền data</td></tr>
+              <tr><td><code>FIN_WAIT_1</code></td><td>Đã gửi FIN, đợi ACK của bên kia</td></tr>
+              <tr><td><code>FIN_WAIT_2</code></td><td>Đã nhận ACK, đợi FIN của bên kia</td></tr>
+              <tr><td><code>CLOSE_WAIT</code></td><td>Nhận FIN từ bên kia, app phải close</td></tr>
+              <tr><td><code>LAST_ACK</code></td><td>Đã gửi FIN, đợi ACK cuối</td></tr>
+              <tr><td><code>TIME_WAIT</code></td><td>Connection đã đóng từ phía mình, đợi 2*MSL trước khi cleanup</td></tr>
+              <tr><td><code>CLOSED</code></td><td>Connection đã giải phóng</td></tr>
+            </tbody>
+          </table>
+
+          <pre data-lang="bash"><code># Quan sát TCP states
+ss -tan
+# State      Recv-Q Send-Q Local Address:Port  Peer Address:Port
+# LISTEN     0      128    0.0.0.0:80          0.0.0.0:*
+# ESTABLISHED 0     0      192.168.1.5:54321   142.250.74.14:443
+# TIME_WAIT  0      0      192.168.1.5:54322   ...:443</code></pre>
+        </section>
+
+        <!-- 3.9 -->
+        <section id="timewait">
+          <h2>3.9 TIME_WAIT — bug nổi tiếng của server bận</h2>
+
+          <p>
+            Sau khi đóng connection, <em>bên active close</em> (gửi FIN trước) phải vào TIME_WAIT trong <strong>2*MSL</strong>
+            (Maximum Segment Lifetime, thường ~60s).
+          </p>
+
+          <h3>Tại sao cần TIME_WAIT?</h3>
+          <ul>
+            <li><strong>Đảm bảo ACK cuối cùng đến được peer</strong>: nếu mất, peer retransmit FIN → mình cần còn alive để re-ACK</li>
+            <li><strong>Tránh "ghost packet" của connection cũ</strong> đụng connection mới có cùng (src,dst,port,port)</li>
+          </ul>
+
+          <h3>Bug: server reverse proxy / API gateway</h3>
+          <p>
+            nginx/HAProxy là "client" với upstream backend. Mỗi request → tạo TCP connect đến backend. Nếu connect xong xuống → nginx active close → vào TIME_WAIT.
+          </p>
+          <p>
+            Server bận: 10K req/s × 60s TIME_WAIT = 600K connection trong TIME_WAIT. Mỗi connection chiếm 1 ephemeral port. Linux có ~28K ephemeral port → <strong>port exhaustion</strong> → kết nối mới fail!
+          </p>
+
+          <h3>Cách giảm TIME_WAIT</h3>
+          <pre data-lang="bash"><code># Reuse TIME_WAIT socket
+sysctl -w net.ipv4.tcp_tw_reuse=1
+
+# Tăng range ephemeral port
+sysctl -w net.ipv4.ip_local_port_range="10000 65535"
+
+# Tăng số connection backlog
+sysctl -w net.core.somaxconn=65535
+
+# Cách tốt nhất: dùng KEEP-ALIVE — tái sử dụng connection
+# nginx config:
+keepalive_requests 1000;
+keepalive_timeout 60s;</code></pre>
+
+          <p><strong>Bài học:</strong> dùng connection pooling / keep-alive thay vì mở/đóng connection liên tục.</p>
+        </section>
+
+        <!-- 3.10 -->
+        <section id="nagle">
+          <h2>3.10 Nagle's Algorithm &amp; Keep-alive</h2>
+
+          <h3>Nagle's Algorithm</h3>
+          <p>Vấn đề: gõ telnet 1 ký tự = 1 packet với 40 byte header + 1 byte data = 97% overhead. Nagle giải: <em>không gửi nếu còn data chưa được ACK</em>, gom nhiều ký tự thành 1 packet.</p>
+          <p>Tắt Nagle khi cần latency thấp (real-time game, RPC) bằng <code>TCP_NODELAY</code> socket option.</p>
+
+          <h3>Keep-alive</h3>
+          <p>Sau 1 thời gian không có data, OS gửi probe packet "Bạn còn alive không?". Nếu không reply → đóng connection (zombie cleanup).</p>
+          <pre data-lang="bash"><code># Linux
+sysctl net.ipv4.tcp_keepalive_time      # 7200s default (2 giờ!)
+sysctl net.ipv4.tcp_keepalive_intvl
+sysctl net.ipv4.tcp_keepalive_probes</code></pre>
+
+          <p>HTTP keep-alive (HTTP/1.1 default) khác: là tái sử dụng TCP connection cho nhiều request, tránh tốn 3-way handshake mỗi request.</p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Bắt 3-way handshake</div>
+            <p>Mở Wireshark, filter <code>tcp.flags.syn==1</code>. Browse 1 trang web. Quan sát SYN, SYN-ACK, ACK trên Wireshark.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — TCP states</div>
+            <p>Chạy server <code>nc -l 8080</code>. Trong terminal khác <code>nc localhost 8080</code>. Mở terminal 3 chạy <code>ss -tan | grep 8080</code>. Quan sát LISTEN, ESTABLISHED. Đóng client (Ctrl+C) → quan sát TIME_WAIT.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — TIME_WAIT count</div>
+            <p>Trên server bận: <code>ss -tan | grep TIME-WAIT | wc -l</code>. Bao nhiêu? Tại sao cao?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Vì sao 3-way thay vì 2-way?</div>
+            <p>Giải thích vì sao 2-way handshake không đủ. Kịch bản nào fail?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Congestion control demo</div>
+            <p>Trên Linux: <code>tcpdump -ttt -i any 'host google.com'</code> trong khi <code>curl https://google.com -o /dev/null</code>. Quan sát growth của window/cwnd qua các packet.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — TCP NODELAY</div>
+            <p>Khi nào nên TCP_NODELAY? Cho 3 use case cụ thể (vd realtime game, API call, telnet).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Keep-alive trong HTTP</div>
+            <p>Chạy <code>curl -v https://example.com -v https://example.com</code>. Có thể thấy connection được tái sử dụng không? Thêm <code>--http1.1</code>. Quan sát <code>Connection:</code> header.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> 3-way handshake gồm các packet?</p>
+              <ul class="quiz-options">
+                <li>SYN, ACK, ACK</li>
+                <li>SYN, SYN, ACK</li>
+                <li>SYN → SYN-ACK → ACK</li>
+                <li>FIN, FIN-ACK, ACK</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: SYN → SYN-ACK → ACK.</strong> Mất 1.5 RTT. SYN-ACK = 1 packet với cả SYN flag và ACK flag.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> Tại sao cần 3 packet, không phải 2?</p>
+              <ul class="quiz-options">
+                <li>Để cả 2 bên xác nhận seq của nhau (mỗi bên cần ACK seq của bên kia)</li>
+                <li>Vì TCP cần 3 layer</li>
+                <li>Để chống virus</li>
+                <li>Vì IPv4 yêu cầu</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: confirm 2 chiều.</strong> 2-way chỉ confirm 1 chiều — server không biết client nhận được seq mình.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 3.</strong> TIME_WAIT tồn tại để?</p>
+              <ul class="quiz-options">
+                <li>Tăng tốc connection</li>
+                <li>Đảm bảo ACK cuối tới được peer + tránh ghost packet đụng connection mới</li>
+                <li>Chống virus</li>
+                <li>Lưu log</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ACK cuối + ghost packet.</strong> 2*MSL ~60s — đủ để mọi packet cũ "chết" trong network.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Sliding Window dùng cho?</p>
+              <ul class="quiz-options">
+                <li>Routing</li>
+                <li>Encryption</li>
+                <li>Flow control — receiver advertise window, sender không gửi quá window byte chưa ACK</li>
+                <li>Compression</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: flow control.</strong> Tránh sender ngập receiver.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 5.</strong> AIMD trong congestion control?</p>
+              <ul class="quiz-options">
+                <li>Additive Increase (mỗi RTT cwnd += 1) + Multiplicative Decrease (loss → cwnd /= 2)</li>
+                <li>Average Increase, Mean Decrease</li>
+                <li>Atomic Increment, Mutex Decrement</li>
+                <li>API Increase Method Decrease</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: AIMD.</strong> Tăng dần, khi mất giảm mạnh (back off). Behavior này tạo nên "saw-tooth" graph.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 6.</strong> ACK number = N nghĩa là?</p>
+              <ul class="quiz-options">
+                <li>Đã nhận N byte data</li>
+                <li>Mong byte tiếp theo có seq = N (đã nhận hết byte trước N)</li>
+                <li>Sequence number kế tiếp tôi sẽ gửi</li>
+                <li>Số connection</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: byte tiếp theo mong nhận = N.</strong> ACK là "cumulative" — xác nhận tất cả byte trước.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Khi server có quá nhiều TIME_WAIT, hệ quả?</p>
+              <ul class="quiz-options">
+                <li>Server crash</li>
+                <li>RAM hết</li>
+                <li>Ephemeral port exhaustion → connection mới fail (port không còn)</li>
+                <li>Disk đầy</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: port exhaustion.</strong> Linux có ~28K ephemeral port. Server bận với short connections → kẹt.
+                Fix: keep-alive, connection pooling.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> TCP_NODELAY tắt cái gì?</p>
+              <ul class="quiz-options">
+                <li>Tắt encryption</li>
+                <li>Tắt Nagle's algorithm — gửi data ngay, không đợi gom batch</li>
+                <li>Tắt connection</li>
+                <li>Tắt timeout</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: tắt Nagle.</strong> Cho realtime game, RPC — cần latency thấp hơn throughput.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 3</h2>
+          <ul>
+            <li>✅ TCP = connection-oriented, reliable, in-order, có flow + congestion control</li>
+            <li>✅ <strong>3-way handshake</strong>: SYN → SYN-ACK → ACK (1.5 RTT)</li>
+            <li>✅ <strong>4-way termination</strong>: FIN, ACK, FIN, ACK</li>
+            <li>✅ Sequence # đánh số byte; ACK # = byte tiếp theo mong nhận; cumulative</li>
+            <li>✅ <strong>Sliding Window</strong> = flow control (không ngập receiver)</li>
+            <li>✅ <strong>Congestion control</strong>: slow start (×2 mỗi RTT) → AIMD (+1 / ÷2)</li>
+            <li>✅ Linux dùng Cubic mặc định; Google đẩy mạnh BBR</li>
+            <li>✅ <strong>TIME_WAIT</strong> 2*MSL ~60s — bug port exhaustion ở proxy/gateway bận</li>
+            <li>✅ Fix: keep-alive, connection pooling, <code>tcp_tw_reuse</code></li>
+            <li>✅ Tools: <code>ss -tan</code>, Wireshark, <code>tcpdump</code></li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong2.html">
+        <span class="label">← Chương trước</span>
+        Chương 02: IP, Subnet, Routing
+      </a>
+      <a href="chuong4.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 04: UDP →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◆</span> Networking Mastery · Chương 03 · TCP
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

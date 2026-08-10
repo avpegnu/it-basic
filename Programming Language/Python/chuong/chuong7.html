@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — Decorators &amp; Context Managers · Python Sub-pillar</title>
+  <meta name="description" content="Decorator pattern, @functools.wraps, decorator factory, lru_cache. Context manager với with, __enter__/__exit__, contextlib.contextmanager, ExitStack, suppress." />
+  <meta name="theme-color" content="#306998" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-py">Py</span>
+        Python · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../index.html" class="active">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Python</a><span class="sep">/</span>
+        <span>Chương 7</span>
+      </div>
+      <div class="chapter-num">Chương 07 · Decorators &amp; Context Managers</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Decorator và Context Manager — hai metaprogramming tool Pythonic
+      </h1>
+      <p class="lead">
+        Decorator (<code><span class="tok-dec">@dec</span></code>) là syntax sugar cho "function nhận function, trả function" — dùng để
+        <strong>wrap behavior</strong> mà không phải sửa function gốc. Context manager (<code>with</code>) là
+        <strong>RAII của Python</strong> — đảm bảo cleanup chạy ngay cả khi có exception. Hai feature này xuất hiện khắp
+        stdlib (<code><span class="tok-dec">@dataclass</span></code>, <code><span class="tok-dec">@property</span></code>,
+        <code>with open()</code>) và là dấu hiệu code "Pythonic".
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-6</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu decorator là "function nhận function, trả function". Giải mã syntax <code><span class="tok-dec">@dec</span> def f(): ...</code> = <code>f = dec(f)</code>.</li>
+            <li>Viết được decorator đơn giản (logging, timing) và decorator có argument (decorator factory).</li>
+            <li>Hiểu vì sao cần <code><span class="tok-dec">@functools.wraps</span></code> — bảo toàn metadata của function gốc.</li>
+            <li>Hiểu thứ tự apply khi stack nhiều decorator: <strong>bottom-up</strong>.</li>
+            <li>Dùng <code><span class="tok-dec">@functools.cache</span></code> / <code><span class="tok-dec">@lru_cache</span></code> để memoize, đặc biệt cho recursion.</li>
+            <li>Hiểu context manager protocol: <code>__enter__</code> và <code>__exit__</code>. Khi nào nên suppress exception.</li>
+            <li>Viết context manager bằng 2 cách: class với <code>__enter__</code>/<code>__exit__</code> hoặc generator với <code><span class="tok-dec">@contextlib.contextmanager</span></code>.</li>
+            <li>Quản lý nhiều resource: nested <code>with</code>, <code>ExitStack</code> cho số resource động, <code>suppress</code> để bỏ qua exception cụ thể.</li>
+          </ul>
+        </div>
+
+        <h2 id="decorator-mental-model">1. Decorator — mental model</h2>
+
+        <p>
+          Decorator trong Python <strong>không phải</strong> "Decorator pattern" của Gang of Four. Tên trùng nhau nhưng
+          khác concept. Decorator của Python là một <strong>callable</strong> (thường là function) <strong>nhận một
+          callable</strong> và <strong>trả về một callable</strong>. Mục đích: bọc thêm hành vi (logging, timing, retry,
+          caching, validation) <em>mà không phải sửa code function gốc</em>.
+        </p>
+
+        <p>
+          Syntax <code><span class="tok-dec">@decorator</span></code> ở trên dòng <code>def</code> chỉ là <strong>syntax
+          sugar</strong>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Decorator = syntax sugar</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Đây:</span>
+<span class="tok-dec">@decorator</span>
+<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
+    <span class="tok-kw">pass</span>
+
+<span class="tok-com"># Tương đương:</span>
+<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
+    <span class="tok-kw">pass</span>
+f = decorator(f)  <span class="tok-com"># gán đè biến f bằng kết quả decorator(f)</span></code></pre>
+        </div>
+
+        <p>
+          Nói cách khác, sau khi <code>def f</code> evaluate xong, Python lập tức gọi <code>decorator(f)</code> và gán
+          <strong>kết quả</strong> vào tên <code>f</code>. Kết quả thường là một function khác (gọi là
+          <em>wrapper</em>) bao quanh function gốc.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — "Người gói quà"</div>
+          <p>
+            Hình dung function gốc là <strong>cái quà</strong>. Decorator là <strong>người gói quà</strong>: nhận quà,
+            bọc giấy, dán nơ, trả ra một <strong>gói quà đã đóng gói</strong>. Bạn (caller) cầm gói quà gọi như cầm
+            chính món quà — bên trong nó tự mở ra, làm thêm gì đó (logging, timing), rồi mới đưa cho function thật.
+          </p>
+          <p style="margin-top: 10px;">
+            Bạn vẫn dùng <code>f(x)</code> như cũ, nhưng <code>f</code> bây giờ là wrapper, không phải function gốc nữa.
+            Function gốc bị "ẩn" bên trong wrapper qua closure.
+          </p>
+        </div>
+
+        <p>Quan trọng — decorator chạy <strong>tại thời điểm <code>def</code> được evaluate</strong>, không phải khi gọi <code>f()</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Decorator chạy lúc nào</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">noisy</span>(fn):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"decorator đang wrap </span>{fn.__name__}<span class="tok-str">"</span>)
+    <span class="tok-kw">return</span> fn
+
+<span class="tok-dec">@noisy</span>
+<span class="tok-kw">def</span> <span class="tok-fn">hello</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">"hello"</span>)
+
+<span class="tok-com"># Đã in ra "decorator đang wrap hello" — NGAY KHI def evaluate</span>
+<span class="tok-com"># Chưa hề gọi hello()</span>
+
+hello()  <span class="tok-com"># Bây giờ in "hello"</span></code></pre>
+        </div>
+
+        <h2 id="decorator-simple">2. Viết decorator đơn giản</h2>
+
+        <p>
+          Decorator điển hình có 2 lớp: outer (nhận <code>fn</code>) và inner (wrapper thực sự được gọi). Inner phải
+          chấp nhận mọi argument bằng <code>*args, **kwargs</code> để wrap được mọi signature.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Decorator @trace</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">trace</span>(fn):
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
+        <span class="tok-fn">print</span>(<span class="tok-str">f"→ calling </span>{fn.__name__}<span class="tok-str">(</span>{args}<span class="tok-str">, </span>{kwargs}<span class="tok-str">)"</span>)
+        result = fn(*args, **kwargs)
+        <span class="tok-fn">print</span>(<span class="tok-str">f"← </span>{fn.__name__}<span class="tok-str"> trả về </span>{result!r}<span class="tok-str">"</span>)
+        <span class="tok-kw">return</span> result
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@trace</span>
+<span class="tok-kw">def</span> <span class="tok-fn">add</span>(a, b):
+    <span class="tok-kw">return</span> a + b
+
+add(<span class="tok-num">2</span>, <span class="tok-num">3</span>)
+<span class="tok-com"># → calling add((2, 3), {})</span>
+<span class="tok-com"># ← add trả về 5</span></code></pre>
+        </div>
+
+        <p>Phân tích từng dòng:</p>
+
+        <ul>
+          <li><code>def trace(fn)</code> — outer function, nhận function được wrap.</li>
+          <li><code>def wrapper(*args, **kwargs)</code> — inner function, sẽ thay <code>add</code>. Signature linh hoạt để wrap mọi function.</li>
+          <li><code>fn(*args, **kwargs)</code> — gọi function gốc với đúng args caller truyền vào.</li>
+          <li><code>return wrapper</code> — outer trả về wrapper. <code><span class="tok-dec">@trace</span></code> khiến <code>add = trace(add) = wrapper</code>.</li>
+        </ul>
+
+        <p>Vì <code>wrapper</code> capture biến <code>fn</code> qua closure (xem Chương 3), function gốc không bị mất.</p>
+
+        <div class="py-feature">
+          <h4>Tại sao <code>*args, **kwargs</code>?</h4>
+          <p>
+            Nếu bạn viết <code>def wrapper(a, b)</code>, decorator chỉ wrap được function có đúng signature <code>(a, b)</code>.
+            Dùng <code>*args, **kwargs</code> để wrapper "trong suốt" — nhận mọi argument, chuyển hết xuống function gốc.
+          </p>
+        </div>
+
+        <h2 id="functools-wraps">3. <code>functools.wraps</code> — bảo toàn metadata</h2>
+
+        <p>
+          Có một vấn đề tinh tế với decorator. Sau khi wrap, <code>add</code> không còn trỏ vào function gốc nữa, mà trỏ
+          vào <code>wrapper</code>. Hệ quả: metadata như <code>__name__</code>, <code>__doc__</code>, <code>__module__</code>,
+          <code>__annotations__</code> của <code>add</code> bị thay bằng của <code>wrapper</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Metadata bị mất</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">trace</span>(fn):
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
+        <span class="tok-kw">return</span> fn(*args, **kwargs)
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@trace</span>
+<span class="tok-kw">def</span> <span class="tok-fn">add</span>(a, b):
+    <span class="tok-str">"""Cộng 2 số."""</span>
+    <span class="tok-kw">return</span> a + b
+
+<span class="tok-fn">print</span>(add.__name__)  <span class="tok-com"># 'wrapper' 🔥 (đáng lẽ 'add')</span>
+<span class="tok-fn">print</span>(add.__doc__)   <span class="tok-com"># None       🔥 (mất docstring)</span>
+help(add)            <span class="tok-com"># Help on function wrapper... 🔥</span></code></pre>
+        </div>
+
+        <p>
+          Điều này phá vỡ <code>help()</code>, debugger, profiler, tài liệu tự sinh (Sphinx). Fix bằng
+          <code><span class="tok-dec">@functools.wraps(fn)</span></code> trên <code>wrapper</code> — copy metadata từ
+          <code>fn</code> sang <code>wrapper</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Fix với functools.wraps</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> functools
+
+<span class="tok-kw">def</span> <span class="tok-fn">trace</span>(fn):
+    <span class="tok-dec">@functools.wraps(fn)</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
+        <span class="tok-kw">return</span> fn(*args, **kwargs)
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@trace</span>
+<span class="tok-kw">def</span> <span class="tok-fn">add</span>(a, b):
+    <span class="tok-str">"""Cộng 2 số."""</span>
+    <span class="tok-kw">return</span> a + b
+
+<span class="tok-fn">print</span>(add.__name__)      <span class="tok-com"># 'add'         ✓</span>
+<span class="tok-fn">print</span>(add.__doc__)       <span class="tok-com"># 'Cộng 2 số.'  ✓</span>
+<span class="tok-fn">print</span>(add.__wrapped__)   <span class="tok-com"># &lt;function add&gt; ← reference function gốc</span></code></pre>
+        </div>
+
+        <p>
+          <code>functools.wraps</code> copy: <code>__module__</code>, <code>__name__</code>, <code>__qualname__</code>,
+          <code>__annotations__</code>, <code>__doc__</code>, và set <code>__wrapped__</code> trỏ về <code>fn</code> gốc.
+          Cái <code>__wrapped__</code> hữu ích khi cần "unwrap" decorator để introspect function gốc (vd:
+          <code>inspect.signature</code> dùng nó).
+        </p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Quy tắc</div>
+          <p>
+            <strong>Mọi decorator nên dùng <code><span class="tok-dec">@functools.wraps(fn)</span></code></strong> trên wrapper.
+            Không có ngoại lệ trừ khi bạn cố ý không muốn (rất hiếm).
+          </p>
+        </div>
+
+        <h2 id="decorator-factory">4. Decorator có argument — decorator factory</h2>
+
+        <p>
+          Đôi khi bạn cần decorator nhận tham số: <code><span class="tok-dec">@repeat(3)</span></code>,
+          <code><span class="tok-dec">@retry(times=3)</span></code>, <code><span class="tok-dec">@route('/users')</span></code>.
+          Cần thêm <strong>1 lớp ngoài</strong>: decorator factory nhận argument, trả về decorator thật.
+        </p>
+
+        <p>Phân tích chuyển hoá:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@repeat(3)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">greet</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">"hi"</span>)
+
+<span class="tok-com"># Tương đương:</span>
+<span class="tok-kw">def</span> <span class="tok-fn">greet</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">"hi"</span>)
+greet = repeat(<span class="tok-num">3</span>)(greet)
+<span class="tok-com">#        ↑ gọi factory   ↑ gọi decorator trả về</span></code></pre>
+        </div>
+
+        <p>Vậy <code>repeat(3)</code> phải trả về một decorator (function nhận function trả function). Cấu trúc 3 tầng:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Decorator factory @repeat(n)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> functools
+
+<span class="tok-kw">def</span> <span class="tok-fn">repeat</span>(n):                       <span class="tok-com"># Tầng 1: factory, nhận args</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">decorator</span>(fn):               <span class="tok-com"># Tầng 2: decorator thật, nhận fn</span>
+        <span class="tok-dec">@functools.wraps(fn)</span>
+        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs): <span class="tok-com"># Tầng 3: wrapper, replace fn</span>
+            result = <span class="tok-kw">None</span>
+            <span class="tok-kw">for</span> _ <span class="tok-kw">in</span> <span class="tok-fn">range</span>(n):
+                result = fn(*args, **kwargs)
+            <span class="tok-kw">return</span> result
+        <span class="tok-kw">return</span> wrapper
+    <span class="tok-kw">return</span> decorator
+
+<span class="tok-dec">@repeat(3)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"hi </span>{name}<span class="tok-str">"</span>)
+
+greet(<span class="tok-str">"An"</span>)
+<span class="tok-com"># hi An</span>
+<span class="tok-com"># hi An</span>
+<span class="tok-com"># hi An</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — quên dấu ngoặc</div>
+          <p>
+            <code><span class="tok-dec">@repeat</span></code> (không ngoặc) và <code><span class="tok-dec">@repeat(3)</span></code> (có ngoặc)
+            là 2 chuyện khác nhau:
+          </p>
+<pre><code><span class="tok-dec">@repeat</span>          <span class="tok-com"># f = repeat(f) — repeat nhận function!</span>
+<span class="tok-dec">@repeat()</span>        <span class="tok-com"># f = repeat()(f) — repeat nhận () rồi mới wrap</span>
+<span class="tok-dec">@repeat(3)</span>       <span class="tok-com"># f = repeat(3)(f)</span></code></pre>
+          <p>
+            Nếu bạn viết decorator factory mà không truyền arg, sẽ ra lỗi rất khó hiểu:
+            <code>TypeError: 'function' object is not callable</code> hoặc tương tự — vì <code>repeat</code> nhận <code>f</code>
+            tưởng đó là số <code>n</code>.
+          </p>
+        </div>
+
+        <h2 id="decorator-stack">5. Stack decorator — thứ tự apply</h2>
+
+        <p>
+          Bạn có thể chồng nhiều decorator lên 1 function. Thứ tự apply là <strong>bottom-up</strong> (từ dưới lên):
+          decorator gần <code>def</code> nhất apply trước.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Decorator stack</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-dec">@a</span>
+<span class="tok-dec">@b</span>
+<span class="tok-dec">@c</span>
+<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
+    <span class="tok-kw">pass</span>
+
+<span class="tok-com"># Tương đương:</span>
+<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
+    <span class="tok-kw">pass</span>
+f = a(b(c(f)))
+<span class="tok-com">#     ↑ c apply trước (gần def nhất)</span>
+<span class="tok-com">#   ↑ rồi b</span>
+<span class="tok-com"># ↑ rồi a (ngoài cùng)</span></code></pre>
+        </div>
+
+        <p>
+          Khi gọi <code>f(x)</code>, control flow là <strong>top-down</strong>: <code>a</code> chạy trước, gọi <code>b</code>,
+          rồi <code>b</code> gọi <code>c</code>, rồi <code>c</code> gọi function gốc. Trả về thì reverse.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Demo thứ tự</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">make_dec</span>(label):
+    <span class="tok-kw">def</span> <span class="tok-fn">dec</span>(fn):
+        <span class="tok-dec">@functools.wraps(fn)</span>
+        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
+            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{label}<span class="tok-str"> trước"</span>)
+            result = fn(*args, **kw)
+            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{label}<span class="tok-str"> sau"</span>)
+            <span class="tok-kw">return</span> result
+        <span class="tok-kw">return</span> wrapper
+    <span class="tok-kw">return</span> dec
+
+<span class="tok-dec">@make_dec("A")</span>
+<span class="tok-dec">@make_dec("B")</span>
+<span class="tok-dec">@make_dec("C")</span>
+<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">"  f"</span>)
+
+f()
+<span class="tok-com"># A trước</span>
+<span class="tok-com"># B trước</span>
+<span class="tok-com"># C trước</span>
+<span class="tok-com">#   f</span>
+<span class="tok-com"># C sau</span>
+<span class="tok-com"># B sau</span>
+<span class="tok-com"># A sau</span></code></pre>
+        </div>
+
+        <p>
+          <strong>Order matters!</strong> Vd: <code><span class="tok-dec">@cache</span></code> ngoài <code><span class="tok-dec">@trace</span></code>
+          vs <code><span class="tok-dec">@trace</span></code> ngoài <code><span class="tok-dec">@cache</span></code> — kết quả khác:
+        </p>
+
+        <ul>
+          <li><code><span class="tok-dec">@cache</span></code> trên cùng → cache hit không in trace (vì cache trả ngay, không gọi xuống).</li>
+          <li><code><span class="tok-dec">@trace</span></code> trên cùng → mỗi call đều log, kể cả cache hit.</li>
+        </ul>
+
+        <h2 id="cache-lru">6. <code>functools.cache</code> / <code>lru_cache</code> — memoization</h2>
+
+        <p>
+          Memoization là tối ưu kinh điển: lưu kết quả function theo argument, lần sau cùng args trả ngay từ cache.
+          Python có sẵn 2 decorator:
+        </p>
+
+        <ul>
+          <li><code><span class="tok-dec">@functools.cache</span></code> — Python 3.9+. Cache <strong>không giới hạn</strong>.</li>
+          <li><code><span class="tok-dec">@functools.lru_cache(maxsize=128)</span></code> — Có giới hạn (LRU eviction). Default 128.</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Fibonacci không cache vs có cache</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> functools
+<span class="tok-kw">import</span> time
+
+<span class="tok-com"># Không cache: exponential O(2^n)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">fib_slow</span>(n):
+    <span class="tok-kw">if</span> n &lt; <span class="tok-num">2</span>:
+        <span class="tok-kw">return</span> n
+    <span class="tok-kw">return</span> fib_slow(n - <span class="tok-num">1</span>) + fib_slow(n - <span class="tok-num">2</span>)
+
+t = time.perf_counter()
+fib_slow(<span class="tok-num">35</span>)               <span class="tok-com"># ~2-3 giây</span>
+<span class="tok-fn">print</span>(time.perf_counter() - t)
+
+<span class="tok-com"># Có cache: linear O(n) (sau khi memoize)</span>
+<span class="tok-dec">@functools.cache</span>
+<span class="tok-kw">def</span> <span class="tok-fn">fib_fast</span>(n):
+    <span class="tok-kw">if</span> n &lt; <span class="tok-num">2</span>:
+        <span class="tok-kw">return</span> n
+    <span class="tok-kw">return</span> fib_fast(n - <span class="tok-num">1</span>) + fib_fast(n - <span class="tok-num">2</span>)
+
+t = time.perf_counter()
+fib_fast(<span class="tok-num">500</span>)              <span class="tok-com"># vài microseconds</span>
+<span class="tok-fn">print</span>(time.perf_counter() - t)
+<span class="tok-fn">print</span>(fib_fast.cache_info())  <span class="tok-com"># CacheInfo(hits=..., misses=..., ...)</span></code></pre>
+        </div>
+
+        <p>Hai biến thể có signature cache giống nhau, chỉ khác policy eviction:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>—</th><th><code><span class="tok-dec">@cache</span></code></th><th><code><span class="tok-dec">@lru_cache(maxsize=N)</span></code></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Python version</td><td>3.9+</td><td>3.2+</td></tr>
+              <tr><td>Giới hạn</td><td>Không giới hạn</td><td>Có, LRU eviction</td></tr>
+              <tr><td>Phù hợp khi</td><td>Pure function, args ít</td><td>Args nhiều, sợ leak memory</td></tr>
+              <tr><td>API</td><td><code>f.cache_clear()</code>, <code>f.cache_info()</code></td><td>Giống <code>cache</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Constraint — args phải hashable</div>
+          <p>
+            <code>cache</code>/<code>lru_cache</code> lưu kết quả vào dict, key là <code>(args, kwargs)</code> tuple. Argument phải
+            <strong>hashable</strong> — int, str, tuple, frozenset OK. <code>list</code>, <code>dict</code>, <code>set</code> sẽ
+            throw <code>TypeError: unhashable type</code>.
+          </p>
+          <p>Workaround: convert sang tuple trước khi gọi, hoặc dùng <code>frozenset</code>.</p>
+        </div>
+
+        <h2 id="class-decorator">7. Class-based decorator</h2>
+
+        <p>
+          Decorator không nhất thiết là function. Bất cứ object nào <strong>callable</strong> đều dùng được. Một class
+          với <code>__call__</code> là decorator hợp lệ. Hữu ích khi cần <strong>giữ state</strong> giữa các lần gọi.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Class-based @CountCalls</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> functools
+
+<span class="tok-kw">class</span> <span class="tok-cls">CountCalls</span>:
+    <span class="tok-kw">def</span> __init__(self, fn):
+        functools.update_wrapper(self, fn)  <span class="tok-com"># thay cho @wraps</span>
+        self.fn = fn
+        self.count = <span class="tok-num">0</span>
+
+    <span class="tok-kw">def</span> __call__(self, *args, **kwargs):
+        self.count += <span class="tok-num">1</span>
+        <span class="tok-fn">print</span>(<span class="tok-str">f"Call #</span>{self.count}<span class="tok-str"> to </span>{self.fn.__name__}<span class="tok-str">"</span>)
+        <span class="tok-kw">return</span> self.fn(*args, **kwargs)
+
+<span class="tok-dec">@CountCalls</span>
+<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"Hi </span>{name}<span class="tok-str">"</span>)
+
+greet(<span class="tok-str">"An"</span>)   <span class="tok-com"># Call #1 to greet</span>
+greet(<span class="tok-str">"Bình"</span>) <span class="tok-com"># Call #2 to greet</span>
+<span class="tok-fn">print</span>(greet.count)  <span class="tok-com"># 2 — truy cập state qua attribute</span></code></pre>
+        </div>
+
+        <p>
+          Khi <code><span class="tok-dec">@CountCalls</span></code> apply, Python gọi <code>CountCalls(greet)</code> → tạo instance,
+          gán vào <code>greet</code>. Mỗi <code>greet(...)</code> thực ra là <code>instance(...)</code> → trigger
+          <code>__call__</code>.
+        </p>
+
+        <p>Class-based decorator có argument (decorator factory) khác chút:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Retry</span>:
+    <span class="tok-kw">def</span> __init__(self, times):
+        self.times = times
+
+    <span class="tok-kw">def</span> __call__(self, fn):
+        <span class="tok-dec">@functools.wraps(fn)</span>
+        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
+            <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(self.times):
+                <span class="tok-kw">try</span>:
+                    <span class="tok-kw">return</span> fn(*args, **kw)
+                <span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
+                    <span class="tok-kw">if</span> i == self.times - <span class="tok-num">1</span>: <span class="tok-kw">raise</span>
+        <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@Retry(times=3)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">flaky</span>():
+    ...</code></pre>
+        </div>
+
+        <h2 id="decorator-stdlib">8. Decorator phổ biến trong stdlib và lib</h2>
+
+        <p>Decorator có mặt khắp Python ecosystem. Một số tiêu biểu bạn sẽ gặp hằng ngày:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Decorator</th><th>Module</th><th>Dùng làm gì</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code><span class="tok-dec">@dataclass</span></code></td><td><code>dataclasses</code></td><td>Tự sinh <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code> (Chương 5)</td></tr>
+              <tr><td><code><span class="tok-dec">@property</span></code></td><td>builtin</td><td>Method → property getter (Chương 5)</td></tr>
+              <tr><td><code><span class="tok-dec">@classmethod</span></code></td><td>builtin</td><td>Method nhận <code>cls</code> thay <code>self</code></td></tr>
+              <tr><td><code><span class="tok-dec">@staticmethod</span></code></td><td>builtin</td><td>Method không nhận <code>self</code>/<code>cls</code></td></tr>
+              <tr><td><code><span class="tok-dec">@functools.cache</span></code></td><td><code>functools</code></td><td>Memoization (mục 6)</td></tr>
+              <tr><td><code><span class="tok-dec">@app.route('/users')</span></code></td><td>Flask</td><td>Đăng ký URL handler</td></tr>
+              <tr><td><code><span class="tok-dec">@app.get('/users')</span></code></td><td>FastAPI</td><td>Đăng ký GET endpoint</td></tr>
+              <tr><td><code><span class="tok-dec">@pytest.fixture</span></code></td><td>pytest</td><td>Khai báo fixture cho test (Chương 10)</td></tr>
+              <tr><td><code><span class="tok-dec">@pytest.mark.parametrize(...)</span></code></td><td>pytest</td><td>Chạy test với nhiều input</td></tr>
+              <tr><td><code><span class="tok-dec">@contextmanager</span></code></td><td><code>contextlib</code></td><td>Generator → context manager (mục 11)</td></tr>
+              <tr><td><code><span class="tok-dec">@asynccontextmanager</span></code></td><td><code>contextlib</code></td><td>Async context manager (Chương 8)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Khi đọc framework code thấy <code><span class="tok-dec">@something</span></code>, hỏi 3 câu: (1) nó wrap function thành cái
+          gì khác? (2) chạy lúc nào — at-import hay at-call? (3) thêm state/side-effect gì? Nắm 3 câu là hiểu được
+          decorator bất kỳ.
+        </p>
+
+        <h2 id="context-manager-with">9. Context manager với <code>with</code> statement</h2>
+
+        <p>
+          Context manager giải quyết bài toán: <strong>"luôn cleanup resource khi xong, kể cả khi exception"</strong>.
+          Resource có thể là file, socket, lock, database connection, transaction, temp directory.
+        </p>
+
+        <p>Cách viết "thủ công" với <code>try/finally</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Mở file kiểu cũ</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>f = <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>)
+<span class="tok-kw">try</span>:
+    content = f.read()
+    process(content)        <span class="tok-com"># nếu cái này throw...</span>
+<span class="tok-kw">finally</span>:
+    f.close()               <span class="tok-com"># file vẫn được close. Tốt nhưng verbose.</span></code></pre>
+        </div>
+
+        <p>Cách Pythonic với <code>with</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Mở file Pythonic</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>) <span class="tok-kw">as</span> f:
+    content = f.read()
+    process(content)
+<span class="tok-com"># f.close() được gọi tự động khi ra khỏi with, kể cả khi exception</span></code></pre>
+        </div>
+
+        <p>Cú pháp:</p>
+
+        <ul>
+          <li><code>with EXPR as VAR:</code> — <code>EXPR</code> là biểu thức trả về context manager. <code>VAR</code> binding kết quả <code>__enter__</code>.</li>
+          <li>Phần <code>as VAR</code> là <strong>optional</strong>. Có context manager không cần bind (vd lock).</li>
+          <li>Khi block kết thúc (bình thường hoặc do exception), <code>__exit__</code> được gọi.</li>
+        </ul>
+
+        <p>Các use case phổ biến:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">import</span> threading
+
+<span class="tok-com"># File — close tự động</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"a.txt"</span>, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> f:
+    f.write(<span class="tok-str">"hi"</span>)
+
+<span class="tok-com"># Lock — release tự động</span>
+lock = threading.Lock()
+<span class="tok-kw">with</span> lock:
+    shared_state += <span class="tok-num">1</span>
+
+<span class="tok-com"># Database connection (SQLite) — commit/rollback + close</span>
+<span class="tok-kw">import</span> sqlite3
+<span class="tok-kw">with</span> sqlite3.connect(<span class="tok-str">"db.sqlite"</span>) <span class="tok-kw">as</span> conn:
+    conn.execute(<span class="tok-str">"INSERT INTO ..."</span>)
+    <span class="tok-com"># commit khi không exception, rollback nếu có</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — RAII của Python</div>
+          <p>
+            Nếu bạn quen C++, context manager chính là <strong>RAII</strong> (Resource Acquisition Is Initialization).
+            Khi vào block <code>with</code>: acquire resource. Khi ra block: release. Khác C++ destructor (gọi khi out of
+            scope), Python gọi <code>__exit__</code> tại đúng điểm cuối <code>with</code> — deterministic, không phụ
+            thuộc GC.
+          </p>
+          <p style="margin-top: 10px;">
+            Khác JS: JS không có cấu trúc tương đương. Bạn phải dùng <code>try/finally</code> hoặc disposable pattern
+            (TC39 explicit resource management đang propose). Đây là một ưu điểm của Python.
+          </p>
+        </div>
+
+        <h2 id="cm-class">10. Viết context manager dạng class</h2>
+
+        <p>Để một object dùng được trong <code>with</code>, nó phải implement <strong>context manager protocol</strong> — 2 dunder method:</p>
+
+        <ul>
+          <li><code>__enter__(self)</code> — chạy khi vào block. Return value được bind vào <code>as VAR</code>.</li>
+          <li><code>__exit__(self, exc_type, exc_val, exc_tb)</code> — chạy khi ra block. Nhận info về exception (nếu có).</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Class context manager — Timer</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> time
+
+<span class="tok-kw">class</span> <span class="tok-cls">Timer</span>:
+    <span class="tok-kw">def</span> __init__(self, label=<span class="tok-str">"block"</span>):
+        self.label = label
+
+    <span class="tok-kw">def</span> __enter__(self):
+        self.start = time.perf_counter()
+        <span class="tok-kw">return</span> self                <span class="tok-com"># bind vào `as t`</span>
+
+    <span class="tok-kw">def</span> __exit__(self, exc_type, exc_val, exc_tb):
+        elapsed = time.perf_counter() - self.start
+        <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{self.label}<span class="tok-str">: </span>{elapsed:.3f}<span class="tok-str">s"</span>)
+        <span class="tok-com"># không return gì = return None = không suppress exception</span>
+
+<span class="tok-kw">with</span> <span class="tok-cls">Timer</span>(<span class="tok-str">"loop"</span>) <span class="tok-kw">as</span> t:
+    total = <span class="tok-fn">sum</span>(<span class="tok-fn">range</span>(<span class="tok-num">10_000_000</span>))
+
+<span class="tok-com"># loop: 0.142s</span></code></pre>
+        </div>
+
+        <p><code>__exit__</code> arguments khi <strong>không</strong> có exception: cả 3 đều <code>None</code>.</p>
+        <p><code>__exit__</code> arguments khi <strong>có</strong> exception trong block: <code>exc_type</code> = class exception (vd <code>ValueError</code>), <code>exc_val</code> = instance exception, <code>exc_tb</code> = traceback object.</p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Return value của <code>__exit__</code></div>
+          <p>
+            Nếu <code>__exit__</code> return <strong><code>True</code></strong> (truthy), Python <strong>nuốt exception</strong> — không
+            re-raise. Nếu return <code>None</code>/<code>False</code> (default), exception <strong>propagate</strong> ra ngoài.
+          </p>
+          <p>
+            <strong>Cẩn thận:</strong> chỉ suppress khi có lý do rõ (vd cleanup riêng cho lỗi này). Nuốt bừa exception
+            là anti-pattern.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Suppress exception trong __exit__</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">IgnoreKeyError</span>:
+    <span class="tok-kw">def</span> __enter__(self): <span class="tok-kw">return</span> self
+    <span class="tok-kw">def</span> __exit__(self, exc_type, exc_val, exc_tb):
+        <span class="tok-kw">if</span> exc_type <span class="tok-kw">is</span> <span class="tok-cls">KeyError</span>:
+            <span class="tok-fn">print</span>(<span class="tok-str">"Bỏ qua KeyError"</span>)
+            <span class="tok-kw">return</span> <span class="tok-kw">True</span>      <span class="tok-com"># suppress chỉ KeyError</span>
+        <span class="tok-com"># return None ngầm cho exception khác → re-raise</span>
+
+<span class="tok-kw">with</span> <span class="tok-cls">IgnoreKeyError</span>():
+    {}[<span class="tok-str">"missing"</span>]    <span class="tok-com"># raise KeyError, nhưng bị nuốt</span>
+<span class="tok-fn">print</span>(<span class="tok-str">"vẫn chạy tiếp"</span>)</code></pre>
+        </div>
+
+        <h2 id="contextmanager-decorator">11. <code>@contextlib.contextmanager</code> — generator thành context manager</h2>
+
+        <p>
+          Viết class với <code>__enter__</code>/<code>__exit__</code> đôi khi dài dòng cho case đơn giản. <code>contextlib</code>
+          cung cấp một decorator biến <strong>generator function</strong> (yield đúng 1 lần) thành context manager. Cấu
+          trúc <code>try / yield / finally</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>@contextmanager — Timer phiên bản generator</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> contextmanager
+<span class="tok-kw">import</span> time
+
+<span class="tok-dec">@contextmanager</span>
+<span class="tok-kw">def</span> <span class="tok-fn">timer</span>(label=<span class="tok-str">"block"</span>):
+    start = time.perf_counter()
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">yield</span> start          <span class="tok-com"># value bind vào `as`</span>
+    <span class="tok-kw">finally</span>:
+        elapsed = time.perf_counter() - start
+        <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{label}<span class="tok-str">: </span>{elapsed:.3f}<span class="tok-str">s"</span>)
+
+<span class="tok-kw">with</span> <span class="tok-fn">timer</span>(<span class="tok-str">"loop"</span>):
+    total = <span class="tok-fn">sum</span>(<span class="tok-fn">range</span>(<span class="tok-num">10_000_000</span>))
+<span class="tok-com"># loop: 0.142s</span></code></pre>
+        </div>
+
+        <p>Map ngữ nghĩa:</p>
+
+        <ul>
+          <li>Code <strong>trước <code>yield</code></strong> = <code>__enter__</code> (setup).</li>
+          <li>Giá trị <strong><code>yield</code></strong> = giá trị trả về <code>__enter__</code>, bind vào <code>as</code>.</li>
+          <li>Code <strong>trong <code>finally</code></strong> = <code>__exit__</code> (cleanup, luôn chạy).</li>
+          <li>Code trong <code>except</code> (nếu có) = xử lý exception. Re-raise hoặc nuốt qua không re-raise.</li>
+        </ul>
+
+        <p>Phiên bản đầy đủ với handle exception:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@contextmanager</span>
+<span class="tok-kw">def</span> <span class="tok-fn">managed_resource</span>(name):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"acquire </span>{name}<span class="tok-str">"</span>)
+    res = acquire(name)
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">yield</span> res
+    <span class="tok-kw">except</span> <span class="tok-cls">ValueError</span> <span class="tok-kw">as</span> e:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"ValueError bị nuốt: </span>{e}<span class="tok-str">"</span>)
+        <span class="tok-com"># không re-raise = suppress exception</span>
+    <span class="tok-kw">finally</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"release </span>{name}<span class="tok-str">"</span>)
+        release(res)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Class hay generator?</div>
+          <ul>
+            <li>Generator (<code>@contextmanager</code>) — ngắn, đẹp cho case đơn giản, không có state phức tạp.</li>
+            <li>Class — khi có nhiều method/attribute, hoặc khi context manager là một thực thể có ý nghĩa riêng (vd <code>Connection</code> class).</li>
+            <li>Cả 2 đều correct, chọn theo độ phức tạp.</li>
+          </ul>
+        </div>
+
+        <h2 id="nested-with">12. Nested <code>with</code> — nhiều context manager trong 1 dòng</h2>
+
+        <p>Khi cần nhiều resource cùng lúc, viết liền nhau cách bởi dấu phẩy. Tránh nested deep indent:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Multiple context manager</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Cách viết phổ biến (Python 3.1+)</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"in.txt"</span>) <span class="tok-kw">as</span> fin, <span class="tok-fn">open</span>(<span class="tok-str">"out.txt"</span>, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> fout:
+    fout.write(fin.read().upper())
+
+<span class="tok-com"># Python 3.10+ cho phép parentheses để xuống dòng:</span>
+<span class="tok-kw">with</span> (
+    <span class="tok-fn">open</span>(<span class="tok-str">"in.txt"</span>) <span class="tok-kw">as</span> fin,
+    <span class="tok-fn">open</span>(<span class="tok-str">"out.txt"</span>, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> fout,
+    lock,
+):
+    ...</code></pre>
+        </div>
+
+        <p>
+          Thứ tự: cm bên trái được <code>__enter__</code> trước, cm bên phải sau. Khi exit: ngược lại (phải trước, trái
+          sau) — đối xứng nested.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Cleanup đúng cả khi acquire fail</div>
+          <p>
+            Câu hỏi quan trọng: <code>with open(a) as f1, open(b) as f2:</code> — nếu <code>open(b)</code> lỗi, <code>f1</code>
+            có được close không?
+          </p>
+          <p style="margin-top: 10px;">
+            <strong>Có.</strong> Python đã <code>__enter__</code> cm1 thành công, rồi <code>__enter__</code> cm2 fail. Exception
+            bắt đầu propagate, Python trigger <code>__exit__</code> của cm1 (đã enter rồi) → f1 close. Đây là behavior
+            đối xứng của <code>with</code>, không cần bạn làm gì.
+          </p>
+        </div>
+
+        <h2 id="exitstack">13. <code>contextlib.ExitStack</code> — số resource động</h2>
+
+        <p>
+          Khi số lượng resource chỉ biết tại runtime (vd: mở N file theo input), không thể viết tĩnh
+          <code>with open(a), open(b), ...</code>. Dùng <code>ExitStack</code> — collection-style context manager.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Mở nhiều file động</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> ExitStack
+
+paths = [<span class="tok-str">"a.txt"</span>, <span class="tok-str">"b.txt"</span>, <span class="tok-str">"c.txt"</span>]   <span class="tok-com"># động, chỉ biết runtime</span>
+
+<span class="tok-kw">with</span> ExitStack() <span class="tok-kw">as</span> stack:
+    files = [stack.enter_context(<span class="tok-fn">open</span>(p)) <span class="tok-kw">for</span> p <span class="tok-kw">in</span> paths]
+    <span class="tok-com"># tất cả file mở, cleanup khi ra block</span>
+    <span class="tok-kw">for</span> f <span class="tok-kw">in</span> files:
+        process(f)
+<span class="tok-com"># Tất cả file được close, kể cả nếu giữa chừng có lỗi</span></code></pre>
+        </div>
+
+        <p>API chính của <code>ExitStack</code>:</p>
+
+        <ul>
+          <li><code>enter_context(cm)</code> — push 1 context manager vào stack, gọi <code>__enter__</code>, trả value.</li>
+          <li><code>callback(fn, *args, **kwargs)</code> — đăng ký 1 function gọi khi cleanup (giống <code>defer</code> của Go).</li>
+          <li><code>push(cm)</code> — push một cm đã enter từ trước.</li>
+          <li><code>pop_all()</code> — chuyển ownership cleanup sang ExitStack mới (advanced).</li>
+        </ul>
+
+        <p>Ví dụ <code>callback</code> như <code>defer</code>:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">with</span> ExitStack() <span class="tok-kw">as</span> stack:
+    conn = db.connect()
+    stack.callback(conn.close)        <span class="tok-com"># defer close</span>
+
+    tmp = create_temp_file()
+    stack.callback(os.remove, tmp)    <span class="tok-com"># defer remove</span>
+
+    do_work(conn, tmp)
+<span class="tok-com"># Cleanup chạy theo LIFO: remove tmp trước, rồi close conn</span></code></pre>
+        </div>
+
+        <h2 id="suppress">14. <code>contextlib.suppress</code> — bỏ qua exception cụ thể</h2>
+
+        <p>
+          Idiom "thử làm gì đó, nếu lỗi loại X thì bỏ qua, lỗi khác thì re-raise" rất phổ biến. Cách "thủ công":
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">import</span> os
+<span class="tok-kw">try</span>:
+    os.remove(<span class="tok-str">"temp.txt"</span>)
+<span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span>:
+    <span class="tok-kw">pass</span></code></pre>
+        </div>
+
+        <p>Cách Pythonic ngắn hơn với <code>suppress</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>contextlib.suppress</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> suppress
+<span class="tok-kw">import</span> os
+
+<span class="tok-kw">with</span> suppress(<span class="tok-cls">FileNotFoundError</span>):
+    os.remove(<span class="tok-str">"temp.txt"</span>)
+
+<span class="tok-com"># Nhiều exception type cùng lúc:</span>
+<span class="tok-kw">with</span> suppress(<span class="tok-cls">FileNotFoundError</span>, <span class="tok-cls">PermissionError</span>):
+    os.remove(<span class="tok-str">"sensitive.log"</span>)</code></pre>
+        </div>
+
+        <p>
+          <code>suppress</code> chỉ "nuốt" đúng exception thuộc tuple đã chỉ định. Exception khác vẫn propagate bình
+          thường — không phải catch-all <code>except Exception</code> (đó là anti-pattern).
+        </p>
+
+        <p>Vài utility khác trong <code>contextlib</code> hay dùng:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tool</th><th>Dùng làm gì</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>contextmanager</code></td><td>Generator → cm (mục 11)</td></tr>
+              <tr><td><code>ExitStack</code></td><td>Số cm động (mục 13)</td></tr>
+              <tr><td><code>suppress</code></td><td>Bỏ qua exception cụ thể (mục 14)</td></tr>
+              <tr><td><code>closing(obj)</code></td><td>Wrap object có <code>.close()</code> nhưng không phải cm, biến thành cm</td></tr>
+              <tr><td><code>redirect_stdout(file)</code></td><td>Tạm chuyển <code>sys.stdout</code> sang file/io.StringIO</td></tr>
+              <tr><td><code>redirect_stderr(file)</code></td><td>Tương tự cho stderr</td></tr>
+              <tr><td><code>nullcontext(value)</code></td><td>cm "rỗng" — return <code>value</code>, không cleanup gì. Hữu ích cho code conditional</td></tr>
+              <tr><td><code>asynccontextmanager</code></td><td>Async version (Chương 8)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="zen-quote">
+          Beautiful is better than ugly. Errors should never pass silently. Unless explicitly silenced.
+        </div>
+
+        <p>
+          Triết lý của <code>suppress</code> chính là dòng "<em>unless explicitly silenced</em>" trong Zen of Python:
+          không catch bừa, nhưng cho phép tắt rõ ràng khi cần.
+        </p>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — <code><span class="tok-dec">@measure_time</span></code></h4>
+            <div class="exercise-body">
+              <p>Viết decorator <code>measure_time</code> log thời gian function chạy (giây, 4 chữ số thập phân).</p>
+              <ul>
+                <li>Phải hoạt động với mọi signature (<code>*args, **kwargs</code>).</li>
+                <li>Phải bảo toàn metadata bằng <code><span class="tok-dec">@functools.wraps</span></code>.</li>
+                <li>In ra dạng <code>"&lt;name&gt;: 0.1234s"</code>.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> functools, time
+
+<span class="tok-kw">def</span> <span class="tok-fn">measure_time</span>(fn):
+    <span class="tok-dec">@functools.wraps(fn)</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
+        start = time.perf_counter()
+        <span class="tok-kw">try</span>:
+            <span class="tok-kw">return</span> fn(*args, **kwargs)
+        <span class="tok-kw">finally</span>:
+            elapsed = time.perf_counter() - start
+            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{fn.__name__}<span class="tok-str">: </span>{elapsed:.4f}<span class="tok-str">s"</span>)
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@measure_time</span>
+<span class="tok-kw">def</span> <span class="tok-fn">slow_sum</span>(n):
+    <span class="tok-kw">return</span> <span class="tok-fn">sum</span>(<span class="tok-fn">range</span>(n))
+
+slow_sum(<span class="tok-num">10_000_000</span>)  <span class="tok-com"># slow_sum: 0.1421s</span></code></pre>
+                  <p>Lưu ý: dùng <code>try/finally</code> để log thời gian kể cả khi function throw — vẫn báo cáo thời gian đã chạy.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — Decorator factory <code><span class="tok-dec">@retry</span></code></h4>
+            <div class="exercise-body">
+              <p>Viết <code><span class="tok-dec">@retry(times=3, exceptions=(IOError,))</span></code> retry function khi gặp exception thuộc tuple <code>exceptions</code>.</p>
+              <ul>
+                <li>Default <code>times=3</code>, <code>exceptions=(Exception,)</code>.</li>
+                <li>Sleep <code>0.1 * attempt</code> giây giữa các lần retry (exponential-ish).</li>
+                <li>Sau khi hết retry vẫn lỗi → re-raise exception cuối.</li>
+                <li>Exception <strong>không thuộc</strong> tuple → re-raise ngay, không retry.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> functools, time
+
+<span class="tok-kw">def</span> <span class="tok-fn">retry</span>(times=<span class="tok-num">3</span>, exceptions=(<span class="tok-cls">Exception</span>,)):
+    <span class="tok-kw">def</span> <span class="tok-fn">decorator</span>(fn):
+        <span class="tok-dec">@functools.wraps(fn)</span>
+        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
+            last_exc = <span class="tok-kw">None</span>
+            <span class="tok-kw">for</span> attempt <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">1</span>, times + <span class="tok-num">1</span>):
+                <span class="tok-kw">try</span>:
+                    <span class="tok-kw">return</span> fn(*args, **kw)
+                <span class="tok-kw">except</span> exceptions <span class="tok-kw">as</span> e:
+                    last_exc = e
+                    <span class="tok-fn">print</span>(<span class="tok-str">f"attempt </span>{attempt}<span class="tok-str"> failed: </span>{e}<span class="tok-str">"</span>)
+                    <span class="tok-kw">if</span> attempt &lt; times:
+                        time.sleep(<span class="tok-num">0.1</span> * attempt)
+            <span class="tok-kw">raise</span> last_exc
+        <span class="tok-kw">return</span> wrapper
+    <span class="tok-kw">return</span> decorator
+
+<span class="tok-dec">@retry(times=3, exceptions=(IOError,))</span>
+<span class="tok-kw">def</span> <span class="tok-fn">flaky</span>():
+    <span class="tok-kw">import</span> random
+    <span class="tok-kw">if</span> random.random() &lt; <span class="tok-num">0.8</span>: <span class="tok-kw">raise</span> <span class="tok-cls">IOError</span>(<span class="tok-str">"network"</span>)
+    <span class="tok-kw">return</span> <span class="tok-str">"ok"</span></code></pre>
+                  <p>Exception ngoài tuple (vd <code>ValueError</code>) sẽ <strong>không</strong> bị bắt bởi <code>except exceptions</code> → propagate ngay, không retry.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Context manager <code>temp_file()</code></h4>
+            <div class="exercise-body">
+              <p>Viết context manager <code>temp_file(suffix=".txt")</code>:</p>
+              <ul>
+                <li>Tạo file tạm với suffix cho trước (gợi ý: <code>tempfile.mkstemp</code>).</li>
+                <li><code>yield</code> đường dẫn file ra cho block.</li>
+                <li>Khi exit (dù bình thường hay exception) → xoá file, kể cả khi đã không còn tồn tại (dùng <code>suppress</code>).</li>
+              </ul>
+              <p>Yêu cầu: viết bằng <code><span class="tok-dec">@contextmanager</span></code> (generator).</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> os, tempfile
+<span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> contextmanager, suppress
+
+<span class="tok-dec">@contextmanager</span>
+<span class="tok-kw">def</span> <span class="tok-fn">temp_file</span>(suffix=<span class="tok-str">".txt"</span>):
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)             <span class="tok-com"># mkstemp mở sẵn, close để user tự open lại</span>
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">yield</span> path
+    <span class="tok-kw">finally</span>:
+        <span class="tok-kw">with</span> suppress(<span class="tok-cls">FileNotFoundError</span>):
+            os.remove(path)
+
+<span class="tok-kw">with</span> <span class="tok-fn">temp_file</span>() <span class="tok-kw">as</span> p:
+    <span class="tok-kw">with</span> <span class="tok-fn">open</span>(p, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> f:
+        f.write(<span class="tok-str">"hello"</span>)
+    <span class="tok-fn">print</span>(<span class="tok-fn">open</span>(p).read())
+<span class="tok-com"># File đã bị xoá sau block</span>
+<span class="tok-kw">assert</span> <span class="tok-kw">not</span> os.path.exists(p)</code></pre>
+                  <p>Phiên bản class cũng OK (<code>__enter__</code> tạo file, <code>__exit__</code> xoá). Generator gọn hơn cho case này.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — <code><span class="tok-dec">@validate_types</span></code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết decorator <code>validate_types</code> đọc type hints của function, raise <code>TypeError</code> nếu
+                argument truyền vào không match hint.
+              </p>
+              <ul>
+                <li>Gợi ý: <code>typing.get_type_hints(fn)</code> trả dict <code>{param_name: type}</code>.</li>
+                <li>Gợi ý: <code>inspect.signature(fn).bind(*args, **kwargs)</code> để map args đến param name.</li>
+                <li>Check bằng <code>isinstance(value, expected_type)</code>.</li>
+                <li>Bỏ qua key <code>'return'</code> trong type hints.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> functools, inspect, typing
+
+<span class="tok-kw">def</span> <span class="tok-fn">validate_types</span>(fn):
+    hints = typing.get_type_hints(fn)
+    sig = inspect.signature(fn)
+
+    <span class="tok-dec">@functools.wraps(fn)</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        <span class="tok-kw">for</span> name, value <span class="tok-kw">in</span> bound.arguments.items():
+            expected = hints.get(name)
+            <span class="tok-kw">if</span> expected <span class="tok-kw">is</span> <span class="tok-kw">None</span>: <span class="tok-kw">continue</span>
+            <span class="tok-kw">if</span> <span class="tok-kw">not</span> <span class="tok-fn">isinstance</span>(value, expected):
+                <span class="tok-kw">raise</span> <span class="tok-cls">TypeError</span>(
+                    <span class="tok-str">f"</span>{name}<span class="tok-str">=</span>{value!r}<span class="tok-str"> không match </span>{expected}<span class="tok-str">"</span>
+                )
+        <span class="tok-kw">return</span> fn(*args, **kwargs)
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@validate_types</span>
+<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name: <span class="tok-cls">str</span>, age: <span class="tok-cls">int</span>) -&gt; <span class="tok-cls">str</span>:
+    <span class="tok-kw">return</span> <span class="tok-str">f"</span>{name}<span class="tok-str"> </span>{age}<span class="tok-str">"</span>
+
+greet(<span class="tok-str">"An"</span>, <span class="tok-num">25</span>)        <span class="tok-com"># OK</span>
+greet(<span class="tok-str">"An"</span>, <span class="tok-str">"25"</span>)      <span class="tok-com"># TypeError: age='25' không match &lt;class 'int'&gt;</span></code></pre>
+                  <p>
+                    Lưu ý: phiên bản đơn giản này không xử lý generic (vd <code>list[int]</code>, <code>Optional[X]</code>).
+                    Lib <code>typeguard</code> hoặc <code>pydantic</code> xử lý đầy đủ. Chương 9 (Type hints) sẽ đào sâu.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Tìm bug: decorator mất docstring</h4>
+            <div class="exercise-body">
+              <p>Code dưới có bug — <code>help(divide)</code> không in ra docstring "Chia a cho b". Tìm và fix.</p>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">safe</span>(fn):
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
+        <span class="tok-kw">try</span>:
+            <span class="tok-kw">return</span> fn(*args, **kw)
+        <span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span>:
+            <span class="tok-kw">return</span> <span class="tok-kw">None</span>
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-dec">@safe</span>
+<span class="tok-kw">def</span> <span class="tok-fn">divide</span>(a, b):
+    <span class="tok-str">"""Chia a cho b. Trả None nếu chia 0."""</span>
+    <span class="tok-kw">return</span> a / b
+
+help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
+<span class="tok-fn">print</span>(divide.__name__)  <span class="tok-com"># 'wrapper' ← BUG</span></code></pre>
+              <details class="exercise-hint">
+                <summary>Bug + Fix</summary>
+                <div class="hint-content">
+                  <p>
+                    <strong>Bug:</strong> wrapper không copy metadata của <code>divide</code>. Sau khi
+                    <code><span class="tok-dec">@safe</span></code> apply, <code>divide</code> trỏ vào <code>wrapper</code> — nên
+                    <code>__name__</code> = <code>'wrapper'</code>, <code>__doc__</code> = <code>None</code>.
+                  </p>
+                  <p><strong>Fix:</strong> dùng <code><span class="tok-dec">@functools.wraps(fn)</span></code> trên <code>wrapper</code>.</p>
+<pre><code><span class="tok-kw">import</span> functools
+
+<span class="tok-kw">def</span> <span class="tok-fn">safe</span>(fn):
+    <span class="tok-dec">@functools.wraps(fn)</span>      <span class="tok-com"># ← thêm dòng này</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
+        <span class="tok-kw">try</span>:
+            <span class="tok-kw">return</span> fn(*args, **kw)
+        <span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span>:
+            <span class="tok-kw">return</span> <span class="tok-kw">None</span>
+    <span class="tok-kw">return</span> wrapper
+
+<span class="tok-com"># Bây giờ:</span>
+<span class="tok-fn">print</span>(divide.__name__)  <span class="tok-com"># 'divide'</span>
+<span class="tok-fn">print</span>(divide.__doc__)   <span class="tok-com"># 'Chia a cho b. Trả None nếu chia 0.'</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code><span class="tok-dec">@dec</span> def f(): ...</code> — decorator <code>dec</code> chạy khi nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Tại thời điểm <code>def f</code> được evaluate</strong> (thường là lúc import module hoặc class
+                được parse), không phải khi gọi <code>f()</code>. Decorator gọi <code>dec(f)</code> ngay, kết quả gán vào
+                tên <code>f</code>. Đó là lý do mọi side-effect ngay trong outer của decorator chạy at-import-time.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Decorator stack <code><span class="tok-dec">@a</span> <span class="tok-dec">@b</span> def f(): ...</code> apply theo thứ tự nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Bottom-up</strong>: <code>b</code> apply trước (gần <code>def</code> nhất), <code>a</code> apply sau. Cuối cùng:
+                <code>f = a(b(f))</code>. Khi gọi <code>f()</code> control flow ngược lại: <code>a</code>'s wrapper chạy trước,
+                gọi <code>b</code>'s wrapper, mới đến function gốc.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>functools.wraps</code> làm gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Copy metadata từ function gốc sang wrapper: <code>__name__</code>, <code>__qualname__</code>,
+                <code>__module__</code>, <code>__doc__</code>, <code>__annotations__</code>. Cũng set
+                <code>wrapper.__wrapped__ = fn</code> để introspection tool có thể "unwrap".
+              </p>
+              <p>Không có nó, decorator phá <code>help()</code>, debugger và Sphinx docs.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p><code>__exit__</code> return <code>True</code> có ý nghĩa gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Suppress exception</strong> — Python không re-raise exception ra khỏi <code>with</code> block.
+                Default (return <code>None</code> hoặc <code>False</code>) thì exception propagate bình thường.
+              </p>
+              <p>
+                Suppress chỉ nên dùng khi có lý do rõ ràng (vd: cleanup chỉ áp dụng cho lỗi cụ thể này). Nuốt bừa
+                exception là anti-pattern — debug khó kinh khủng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>with open(a) as f1, open(b) as f2:</code> — nếu <code>open(b)</code> lỗi, <code>f1</code> có được close?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Có.</strong> Python đã <code>__enter__</code> cm1 thành công (mở <code>a</code>). Khi
+                <code>open(b)</code> throw exception, exception bắt đầu propagate. Vì cm1 đã enter, Python lập tức trigger
+                <code>__exit__</code> của cm1 với info exception — <code>f1.close()</code> được gọi.
+              </p>
+              <p>Đây là behavior đối xứng của multiple <code>with</code> — đảm bảo cleanup đúng cả khi acquire sau fail.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p><code><span class="tok-dec">@functools.cache</span></code> và <code><span class="tok-dec">@functools.lru_cache</span></code> khác nhau thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>cache</code> (Python 3.9+) — cache <strong>không giới hạn</strong>, đơn giản hơn, có thể leak memory nếu
+                function chạy nhiều args khác nhau.<br/>
+                <code>lru_cache(maxsize=128)</code> — có giới hạn (LRU eviction), default 128, an toàn hơn cho long-running
+                process.
+              </p>
+              <p>
+                Cả 2 yêu cầu arguments <strong>hashable</strong> (int/str/tuple/frozenset OK; list/dict/set không OK). Cả
+                2 có <code>fn.cache_info()</code> và <code>fn.cache_clear()</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Class có <code>__call__</code> có thể dùng làm decorator không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Có.</strong> Decorator chỉ cần là callable (có thể gọi như function). Class với <code>__call__</code>
+                là callable hợp lệ. <code><span class="tok-dec">@MyClass</span></code> tương đương <code>f = MyClass(f)</code> — tạo instance,
+                gán đè <code>f</code>. Mỗi <code>f(...)</code> sau đó trigger <code>__call__</code>.
+              </p>
+              <p>Hữu ích khi cần giữ state (counter, registry) giữa các call mà không dùng global.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p><code>with</code> và <code>try/finally</code> khác nhau gì? Thực ra <code>with</code> có làm gì "magic" không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Về <strong>semantics</strong> không khác nhiều — <code>with</code> behind the scenes đúng là một
+                <code>try/finally</code> gọi <code>__enter__</code>/<code>__exit__</code>. Khác chủ yếu về <strong>syntax</strong> và
+                <strong>encapsulation</strong>:
+              </p>
+              <ul>
+                <li><code>with</code> ngắn hơn, ít boilerplate.</li>
+                <li>Logic acquire/release đóng gói trong context manager — caller không cần biết chi tiết.</li>
+                <li>Dễ stack nhiều resource trên 1 dòng.</li>
+                <li>Reusable — viết cm 1 lần, dùng nhiều nơi. Khó quên cleanup hơn.</li>
+              </ul>
+              <p>
+                Bonus: <code>__exit__</code> nhận thông tin exception (<code>exc_type</code>, <code>exc_val</code>) → có thể
+                phân biệt "exit bình thường" vs "exit do lỗi". <code>try/finally</code> thuần phải dùng biến cờ riêng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau Chương 7 bạn nên đã master:</p>
+        <ul>
+          <li><strong>Decorator</strong> = function nhận function trả function. <code><span class="tok-dec">@dec</span> def f</code> = <code>f = dec(f)</code>. Chạy at-import-time.</li>
+          <li><strong>Mọi decorator nên dùng <code><span class="tok-dec">@functools.wraps(fn)</span></code></strong> trên wrapper — bảo toàn metadata.</li>
+          <li><strong>Decorator có argument</strong> = factory: 3 tầng (factory → decorator → wrapper).</li>
+          <li><strong>Stack decorator</strong>: bottom-up apply, top-down execute. <code><span class="tok-dec">@a</span> <span class="tok-dec">@b</span> def f</code> = <code>a(b(f))</code>.</li>
+          <li><strong>Memoization</strong> với <code><span class="tok-dec">@cache</span></code> / <code><span class="tok-dec">@lru_cache</span></code> — đặc biệt cho recursion. Args phải hashable.</li>
+          <li><strong>Class-based decorator</strong>: class + <code>__call__</code>. Tiện cho stateful decorator.</li>
+          <li><strong>Decorator stdlib/lib</strong>: <code><span class="tok-dec">@dataclass</span></code>, <code><span class="tok-dec">@property</span></code>, <code><span class="tok-dec">@route</span></code>, <code><span class="tok-dec">@fixture</span></code>… đâu cũng thấy.</li>
+          <li><strong>Context manager</strong> với <code>with</code> — RAII của Python, đảm bảo cleanup cả khi exception.</li>
+          <li><strong>2 cách viết cm</strong>: class với <code>__enter__</code>/<code>__exit__</code>, hoặc generator với <code><span class="tok-dec">@contextmanager</span></code>.</li>
+          <li><strong><code>__exit__</code> return <code>True</code></strong> = suppress exception. Default = re-raise.</li>
+          <li><strong>Nhiều cm</strong>: viết liền dấu phẩy, hoặc <code>ExitStack</code> cho số động.</li>
+          <li><strong><code>suppress(ExceptionType)</code></strong> = idiom Pythonic cho "try / except / pass".</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+
+        <ul>
+          <li><strong>Chương 3 (Functions &amp; Closures)</strong> — wrapper trong decorator chính là closure capture <code>fn</code>. Hiểu closure giúp hiểu decorator.</li>
+          <li><strong>Chương 5 (OOP)</strong> — <code><span class="tok-dec">@property</span></code>, <code><span class="tok-dec">@classmethod</span></code>, <code><span class="tok-dec">@staticmethod</span></code>, <code><span class="tok-dec">@dataclass</span></code> đều là decorator. Nay bạn hiểu chúng vận hành thế nào.</li>
+          <li><strong>Chương 6 (Iterators &amp; Generators)</strong> — <code><span class="tok-dec">@contextmanager</span></code> biến generator (yield 1 lần) thành cm. Đây chính là use case quan trọng của generator ngoài lazy iteration.</li>
+          <li><strong>Chương 8 (Async Python)</strong> — Async có <code><span class="tok-dec">@asynccontextmanager</span></code> và <code>async with</code>. Concept giống hệt, chỉ là async version.</li>
+          <li><strong>Chương 10 (Testing với pytest)</strong> — <code><span class="tok-dec">@pytest.fixture</span></code>, <code><span class="tok-dec">@pytest.mark.parametrize</span></code> là decorator. pytest fixture cũng dùng generator + yield giống <code><span class="tok-dec">@contextmanager</span></code>.</li>
+          <li><strong>JS Chương 7 (HOC/closures)</strong> — JS không có decorator syntax (TC39 stage-3 đang chờ), nhưng pattern HOC <code>withLogging(fn)</code> tương đương Python decorator.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong6.html" class="prev">
+            <div class="dir">← Chương 6</div>
+            <div class="label">Iterators &amp; Generators</div>
+          </a>
+          <a href="chuong8.html" class="next">
+            <div class="dir">Chương 8 →</div>
+            <div class="label">Async Python</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#decorator-mental-model">1. Decorator — mental model</a></li>
+          <li><a href="#decorator-simple">2. Decorator đơn giản</a></li>
+          <li><a href="#functools-wraps">3. functools.wraps</a></li>
+          <li><a href="#decorator-factory">4. Decorator có argument</a></li>
+          <li><a href="#decorator-stack">5. Stack decorator</a></li>
+          <li><a href="#cache-lru">6. cache / lru_cache</a></li>
+          <li><a href="#class-decorator">7. Class-based decorator</a></li>
+          <li><a href="#decorator-stdlib">8. Decorator trong stdlib</a></li>
+          <li><a href="#context-manager-with">9. Context manager với <code>with</code></a></li>
+          <li><a href="#cm-class">10. Context manager dạng class</a></li>
+          <li><a href="#contextmanager-decorator">11. @contextmanager</a></li>
+          <li><a href="#nested-with">12. Nested with</a></li>
+          <li><a href="#exitstack">13. ExitStack</a></li>
+          <li><a href="#suppress">14. suppress</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 7 — Decorators &amp; Context Managers · Python sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong6.html">← Chương 6</a> · <a href="../index.html">Python TOC</a> · <a href="chuong8.html">Chương 8 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

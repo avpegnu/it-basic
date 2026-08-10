@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — Heap & Priority Queue · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong9.html">← Ch.09</a></li>
+        <li><a href="chuong10.html" class="active">Ch.10</a></li>
+        <li><a href="chuong11.html">Ch.11 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 10 · TREE-BASED DS · ~110 phút</div>
+      <h1>Heap &amp;<br/><span class="text-amber">Priority Queue</span></h1>
+      <p class="lead">
+        Heap là binary tree đặc biệt được lưu <strong>trong array</strong>. Priority Queue được cài bằng heap.
+        Đây là vũ khí cho bài <strong>Top-K</strong>, K-th largest, scheduling, và Dijkstra (chương 11).
+        JS không có built-in PriorityQueue → bạn phải tự cài.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#concept">10.1 Heap là gì?</a></li>
+          <li><a href="#array">10.2 Lưu heap trong array</a></li>
+          <li><a href="#sift-up">10.3 Insert + sift-up</a></li>
+          <li><a href="#sift-down">10.4 Extract + sift-down</a></li>
+          <li><a href="#heapify">10.5 Heapify O(n)</a></li>
+          <li><a href="#impl">10.6 Cài đặt MinHeap đầy đủ</a></li>
+          <li><a href="#topk">10.7 Pattern Top-K</a></li>
+          <li><a href="#two-heap">10.8 Two-Heap (Median)</a></li>
+          <li><a href="#applications">10.9 Ứng dụng khác</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 10.1 -->
+        <section id="concept">
+          <h2>10.1 Heap là gì?</h2>
+
+          <p>
+            <strong>Heap</strong> là binary tree thoả 2 tính chất:
+          </p>
+
+          <ol>
+            <li><strong>Complete binary tree</strong>: tất cả các level đầy, level cuối điền từ trái sang phải</li>
+            <li><strong>Heap property:</strong>
+              <ul>
+                <li><strong>Min-heap:</strong> mỗi node ≤ các con</li>
+                <li><strong>Max-heap:</strong> mỗi node ≥ các con</li>
+              </ul>
+            </li>
+          </ol>
+
+          <pre data-lang="text"><code>      Min-heap                    Max-heap
+         [1]                         [9]
+        /   \                       /   \
+      [3]   [2]                   [7]   [8]
+      / \   / \                   / \   / \
+    [5] [4][8][6]               [3] [5][1][6]</code></pre>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Heap KHÔNG phải BST</div>
+            <p>Trong BST: left &lt; node &lt; right. Trong heap: chỉ yêu cầu node ≤ con (hoặc ≥).
+            Heap KHÔNG sort các phần tử — nó chỉ đảm bảo gốc là min/max.</p>
+            <p>
+              Vì thế heap KHÔNG hỗ trợ search hiệu quả (O(n)). Nhưng <strong>get min/max O(1)</strong>
+              và <strong>insert/extract O(log n)</strong> — đó là điểm mạnh.
+            </p>
+          </div>
+        </section>
+
+        <!-- 10.2 -->
+        <section id="array">
+          <h2>10.2 Lưu Heap trong Array — không cần Node class</h2>
+
+          <p>
+            Vì heap là complete binary tree, ta có thể lưu trong array tuyến tính bằng công thức index:
+          </p>
+
+          <pre data-lang="text"><code>Index:    0   1   2   3   4   5   6
+Array:  [ 1, 3, 2, 5, 4, 8, 6 ]
+
+Cây tương ứng:
+              [0]
+             /   \
+           [1]   [2]
+           / \   / \
+         [3][4][5][6]
+
+Quan hệ index:
+- parent của i = (i - 1) / 2  (làm tròn xuống)
+- left  con của i = 2*i + 1
+- right con của i = 2*i + 2</code></pre>
+
+          <pre data-lang="javascript"><code>function parent(i) { return Math.floor((i - 1) / 2); }
+function left(i)   { return 2 * i + 1; }
+function right(i)  { return 2 * i + 2; }</code></pre>
+
+          <p>Cách lưu này cực kỳ hiệu quả — không cần pointer, cache-friendly, dễ duyệt.</p>
+        </section>
+
+        <!-- 10.3 -->
+        <section id="sift-up">
+          <h2>10.3 Insert + Sift-up (Bubble-up) — O(log n)</h2>
+
+          <p>Khi insert phần tử mới:</p>
+          <ol>
+            <li>Thêm vào cuối array (giữ tính complete)</li>
+            <li>"Sift up": so với parent, swap nếu vi phạm heap property</li>
+            <li>Lặp đến khi đến root hoặc không cần swap</li>
+          </ol>
+
+          <pre data-lang="javascript"><code>function siftUp(heap, i) {
+  while (i &gt; 0) {
+    const p = Math.floor((i - 1) / 2);
+    if (heap[i] &lt; heap[p]) {  // min-heap: con &lt; cha thì swap
+      [heap[i], heap[p]] = [heap[p], heap[i]];
+      i = p;
+    } else break;
+  }
+}
+
+function insert(heap, val) {
+  heap.push(val);
+  siftUp(heap, heap.length - 1);
+}</code></pre>
+
+          <p><strong>Big-O:</strong> O(log n) vì sift-up đi tối đa height = log n.</p>
+        </section>
+
+        <!-- 10.4 -->
+        <section id="sift-down">
+          <h2>10.4 Extract-min + Sift-down — O(log n)</h2>
+
+          <p>Khi lấy phần tử min ra:</p>
+          <ol>
+            <li>Lấy <code>heap[0]</code> (lưu lại để return)</li>
+            <li>Đưa phần tử cuối lên đầu (giữ complete)</li>
+            <li>"Sift down": so với 2 con, swap với con nhỏ hơn nếu vi phạm</li>
+            <li>Lặp đến khi không cần swap hoặc đến leaf</li>
+          </ol>
+
+          <pre data-lang="javascript"><code>function siftDown(heap, i) {
+  const n = heap.length;
+  while (true) {
+    const l = 2 * i + 1, r = 2 * i + 2;
+    let smallest = i;
+    if (l &lt; n &amp;&amp; heap[l] &lt; heap[smallest]) smallest = l;
+    if (r &lt; n &amp;&amp; heap[r] &lt; heap[smallest]) smallest = r;
+    if (smallest === i) break;
+    [heap[i], heap[smallest]] = [heap[smallest], heap[i]];
+    i = smallest;
+  }
+}
+
+function extractMin(heap) {
+  if (heap.length === 0) return undefined;
+  const min = heap[0];
+  const last = heap.pop();
+  if (heap.length &gt; 0) {
+    heap[0] = last;
+    siftDown(heap, 0);
+  }
+  return min;
+}</code></pre>
+        </section>
+
+        <!-- 10.5 -->
+        <section id="heapify">
+          <h2>10.5 Heapify — Build heap từ array trong O(n) (KHÔNG phải O(n log n))</h2>
+
+          <p>Tưởng chừng build heap = insert n lần × O(log n) = O(n log n). Nhưng có cách <strong>O(n)</strong>:</p>
+
+          <pre data-lang="javascript"><code>function buildHeap(arr) {
+  // Bắt đầu sift-down từ node parent của leaf cuối
+  // Các leaf không cần sift-down (đã thoả heap property một mình)
+  for (let i = Math.floor(arr.length / 2) - 1; i &gt;= 0; i--) {
+    siftDown(arr, i);
+  }
+  return arr;
+}</code></pre>
+
+          <h3>Tại sao O(n)?</h3>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Phân tích chi tiết</div>
+            <p>
+              Tại level h từ dưới (leaf = h=0), có ~n/2^(h+1) node. Sift-down từ node level h tốn O(h).
+              Tổng cost = Σ (h × n/2^h) = n × Σ (h/2^h) = n × 2 = O(n).
+            </p>
+            <p>
+              Lý do: hầu hết node ở các level thấp (gần leaf), chỉ tốn O(1) sift-down. Số ít node ở level cao tốn nhiều, nhưng số lượng ít.
+            </p>
+          </div>
+
+          <p>So sánh:</p>
+          <ul>
+            <li>Insert n lần: O(n log n)</li>
+            <li>Heapify: <strong>O(n)</strong></li>
+          </ul>
+        </section>
+
+        <!-- 10.6 -->
+        <section id="impl">
+          <h2>10.6 Cài đặt MinHeap đầy đủ</h2>
+
+          <pre data-lang="javascript"><code>class MinHeap {
+  constructor(compare = (a, b) =&gt; a - b) {
+    this.data = [];
+    this.compare = compare;  // &lt; 0 nếu a &lt; b
+  }
+
+  get size() { return this.data.length; }
+  peek() { return this.data[0]; }
+
+  push(val) {
+    this.data.push(val);
+    this._siftUp(this.data.length - 1);
+  }
+
+  pop() {
+    if (this.data.length === 0) return undefined;
+    const top = this.data[0];
+    const last = this.data.pop();
+    if (this.data.length &gt; 0) {
+      this.data[0] = last;
+      this._siftDown(0);
+    }
+    return top;
+  }
+
+  _siftUp(i) {
+    while (i &gt; 0) {
+      const p = (i - 1) &gt;&gt; 1;
+      if (this.compare(this.data[i], this.data[p]) &lt; 0) {
+        [this.data[i], this.data[p]] = [this.data[p], this.data[i]];
+        i = p;
+      } else break;
+    }
+  }
+
+  _siftDown(i) {
+    const n = this.data.length;
+    while (true) {
+      const l = 2 * i + 1, r = 2 * i + 2;
+      let best = i;
+      if (l &lt; n &amp;&amp; this.compare(this.data[l], this.data[best]) &lt; 0) best = l;
+      if (r &lt; n &amp;&amp; this.compare(this.data[r], this.data[best]) &lt; 0) best = r;
+      if (best === i) break;
+      [this.data[i], this.data[best]] = [this.data[best], this.data[i]];
+      i = best;
+    }
+  }
+
+  // Build heap từ array trong O(n)
+  static heapify(arr, compare) {
+    const h = new MinHeap(compare);
+    h.data = [...arr];
+    for (let i = (h.data.length &gt;&gt; 1) - 1; i &gt;= 0; i--) h._siftDown(i);
+    return h;
+  }
+}
+
+// Test
+const h = new MinHeap();
+[5, 3, 8, 1, 9, 2].forEach(x =&gt; h.push(x));
+while (h.size) console.log(h.pop());  // 1, 2, 3, 5, 8, 9 (sorted!)</code></pre>
+
+          <h3>Max Heap chỉ là Min Heap với comparator đảo</h3>
+
+          <pre data-lang="javascript"><code>const maxHeap = new MinHeap((a, b) =&gt; b - a);
+[5, 3, 8].forEach(x =&gt; maxHeap.push(x));
+maxHeap.pop();  // 8</code></pre>
+
+          <h3>Heap chứa object</h3>
+
+          <pre data-lang="javascript"><code>// Min-heap theo priority
+const tasks = new MinHeap((a, b) =&gt; a.priority - b.priority);
+tasks.push({name: "A", priority: 3});
+tasks.push({name: "B", priority: 1});
+tasks.push({name: "C", priority: 2});
+console.log(tasks.pop());  // {name: "B", priority: 1}</code></pre>
+        </section>
+
+        <!-- 10.7 -->
+        <section id="topk">
+          <h2>10.7 Pattern Top-K — vũ khí kinh điển</h2>
+
+          <p><strong>Bài toán:</strong> tìm k phần tử lớn nhất / nhỏ nhất trong mảng n phần tử.</p>
+
+          <h3>Cách 1: Sort + slice — O(n log n)</h3>
+
+          <pre data-lang="javascript"><code>function topK(arr, k) {
+  return arr.slice().sort((a, b) =&gt; b - a).slice(0, k);
+}</code></pre>
+
+          <h3>Cách 2: Min-heap kích thước k — O(n log k)</h3>
+
+          <pre data-lang="javascript"><code>function topKHeap(arr, k) {
+  const h = new MinHeap();  // min-heap để giữ k phần tử LỚN nhất
+  for (const x of arr) {
+    h.push(x);
+    if (h.size &gt; k) h.pop();  // bỏ phần tử nhỏ nhất
+  }
+  return [...h.data];
+}</code></pre>
+
+          <p>
+            <strong>Tại sao dùng MIN-heap để tìm K LỚN nhất?</strong> Vì ta giữ k phần tử lớn nhất; phần tử nhỏ nhất trong nhóm đó cần dễ truy cập để loại bỏ khi gặp phần tử mới &gt; nó.
+            Ngược lại: tìm K nhỏ nhất → max-heap.
+          </p>
+
+          <h3>Cách 3: Quickselect — O(n) average</h3>
+
+          <pre data-lang="javascript"><code>// Quickselect: tìm phần tử thứ k, sau đó partition lại
+// Trung bình O(n), worst O(n²)
+function findKthLargest(nums, k) {
+  // Tương đương tìm phần tử thứ (n-k) smallest
+  function quickselect(lo, hi, target) {
+    if (lo === hi) return nums[lo];
+    const p = partition(nums, lo, hi);
+    if (p === target) return nums[p];
+    if (target &lt; p) return quickselect(lo, p - 1, target);
+    return quickselect(p + 1, hi, target);
+  }
+  return quickselect(0, nums.length - 1, nums.length - k);
+}
+
+function partition(arr, lo, hi) {
+  const pivot = arr[hi];
+  let i = lo;
+  for (let j = lo; j &lt; hi; j++) {
+    if (arr[j] &lt; pivot) {
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      i++;
+    }
+  }
+  [arr[i], arr[hi]] = [arr[hi], arr[i]];
+  return i;
+}</code></pre>
+
+          <h3>So sánh 3 cách</h3>
+          <table>
+            <thead><tr><th>Cách</th><th>Time</th><th>Space</th><th>Khi nào dùng</th></tr></thead>
+            <tbody>
+              <tr><td>Sort</td><td>O(n log n)</td><td>O(n) cho sort copy</td><td>Code nhanh, prototype</td></tr>
+              <tr><td>Min-heap kích thước k</td><td>O(n log k)</td><td>O(k)</td><td>Streaming, k &lt;&lt; n</td></tr>
+              <tr><td>Quickselect</td><td>O(n) avg</td><td>O(1)</td><td>Khi chỉ cần phần tử thứ k</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Bài: Top K Frequent Elements</h3>
+
+          <pre data-lang="javascript"><code>function topKFrequent(nums, k) {
+  // Đếm tần suất
+  const freq = new Map();
+  for (const x of nums) freq.set(x, (freq.get(x) || 0) + 1);
+
+  // Min-heap kích thước k theo frequency
+  const h = new MinHeap((a, b) =&gt; a[1] - b[1]);  // [num, freq]
+  for (const [num, f] of freq) {
+    h.push([num, f]);
+    if (h.size &gt; k) h.pop();
+  }
+  return h.data.map(x =&gt; x[0]);
+}</code></pre>
+        </section>
+
+        <!-- 10.8 -->
+        <section id="two-heap">
+          <h2>10.8 Two-Heap Technique — Median of Data Stream</h2>
+
+          <p>
+            <strong>Bài toán cực kinh điển:</strong> liên tục nhận số mới, sau mỗi lần thêm phải trả về median của tất cả số đã thấy.
+            Đạt O(log n) per addNum.
+          </p>
+
+          <p><strong>Ý tưởng:</strong> chia số thành 2 nửa:</p>
+          <ul>
+            <li><strong>Max-heap (lo)</strong>: giữ nửa số nhỏ hơn — top là max của nửa nhỏ</li>
+            <li><strong>Min-heap (hi)</strong>: giữ nửa số lớn hơn — top là min của nửa lớn</li>
+            <li>Median = top(lo) nếu sizes lệch, hoặc avg(top(lo), top(hi)) nếu cân bằng</li>
+          </ul>
+
+          <pre data-lang="javascript"><code>class MedianFinder {
+  constructor() {
+    this.lo = new MinHeap((a, b) =&gt; b - a);  // max-heap
+    this.hi = new MinHeap();                   // min-heap
+  }
+
+  addNum(num) {
+    // Đẩy vào lo trước
+    this.lo.push(num);
+    // Cân bằng: chuyển max của lo sang hi
+    this.hi.push(this.lo.pop());
+    // Đảm bảo lo có nhiều hơn hoặc bằng hi (cho median lẻ dễ hơn)
+    if (this.hi.size &gt; this.lo.size) {
+      this.lo.push(this.hi.pop());
+    }
+  }
+
+  findMedian() {
+    if (this.lo.size &gt; this.hi.size) return this.lo.peek();
+    return (this.lo.peek() + this.hi.peek()) / 2;
+  }
+}
+
+// Big-O: addNum O(log n), findMedian O(1)</code></pre>
+        </section>
+
+        <!-- 10.9 -->
+        <section id="applications">
+          <h2>10.9 Ứng dụng khác của Heap</h2>
+
+          <h3>Merge K Sorted Lists/Arrays — O(N log k)</h3>
+
+          <pre data-lang="javascript"><code>function mergeKSorted(lists) {
+  const h = new MinHeap((a, b) =&gt; a.val - b.val);
+  for (const head of lists) {
+    if (head) h.push(head);
+  }
+  const dummy = {val: 0, next: null};
+  let tail = dummy;
+  while (h.size) {
+    const node = h.pop();
+    tail.next = node;
+    tail = node;
+    if (node.next) h.push(node.next);
+  }
+  return dummy.next;
+}</code></pre>
+
+          <h3>Task Scheduler / Meeting Rooms II</h3>
+
+          <pre data-lang="javascript"><code>// Có nhiều meeting với (start, end). Tìm số phòng tối thiểu cần thiết.
+function minMeetingRooms(intervals) {
+  intervals.sort((a, b) =&gt; a[0] - b[0]);
+  // Min-heap chứa end time của các meeting đang dùng phòng
+  const h = new MinHeap();
+  for (const [start, end] of intervals) {
+    if (h.size &gt; 0 &amp;&amp; h.peek() &lt;= start) h.pop();  // tái dùng phòng
+    h.push(end);
+  }
+  return h.size;
+}</code></pre>
+
+          <h3>Dijkstra — sẽ học chương 11</h3>
+          <p>Dijkstra dùng min-heap (priority queue) để chọn node có khoảng cách nhỏ nhất chưa thăm.</p>
+
+          <h3>K Closest Points to Origin</h3>
+
+          <pre data-lang="javascript"><code>function kClosest(points, k) {
+  // Max-heap kích thước k theo distance (giữ k điểm gần nhất)
+  const h = new MinHeap((a, b) =&gt; b[1] - a[1]);
+  for (const p of points) {
+    const d = p[0] * p[0] + p[1] * p[1];
+    h.push([p, d]);
+    if (h.size &gt; k) h.pop();
+  }
+  return h.data.map(x =&gt; x[0]);
+}</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Cài đặt MinHeap đầy đủ</div>
+            <p>Đã có ở 10.6. Tự gõ tay không nhìn bài. Test với <code>[5, 3, 8, 1, 9, 2]</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Kth Largest Element in Array</div>
+            <p>Cài cả 2 cách: heap và quickselect. So sánh thời gian thực tế.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Top K Frequent Elements</div>
+            <p>Đã có ở 10.7. Tự cài.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Merge K Sorted Lists</div>
+            <p>Đã có ở 10.9. Test với 3 list.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Find Median from Data Stream (Hard)</div>
+            <p>Đã có ở 10.8. Tự cài.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Task Scheduler</div>
+            <p>Cho mảng task và cool-down n. Mỗi task tốn 1 unit time. Cùng task phải cách nhau ≥ n. Tổng thời gian tối thiểu để hoàn thành?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — K Closest Points to Origin</div>
+            <p>Đã có ở 10.9.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 8 — Last Stone Weight</div>
+            <p>Mảng đá. Mỗi vòng: lấy 2 đá nặng nhất, smash chúng. Còn lại = |a - b|. Trả về đá cuối cùng (hoặc 0).</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 1.</strong> Big-O của <code>peek()</code> (xem min/max) trong heap?</p>
+              <ul class="quiz-options">
+                <li>O(log n)</li>
+                <li>O(1)</li>
+                <li>O(n)</li>
+                <li>O(n log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(1).</strong> Min/max luôn ở root = <code>heap[0]</code>. Insert/extract mới là O(log n).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 2.</strong> Heap có hỗ trợ search O(log n) như BST không?</p>
+              <ul class="quiz-options">
+                <li>Có</li>
+                <li>Có, vì tương tự BST</li>
+                <li>Không, search trong heap là O(n) — heap chỉ đảm bảo gốc là min/max</li>
+                <li>Có, O(1)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Không, O(n).</strong> Heap KHÔNG sort cả cây. Bạn không biết phần tử nằm ở nửa nào → phải duyệt hết.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Build heap (heapify) từ mảng có Big-O?</p>
+              <ul class="quiz-options">
+                <li>O(n²)</li>
+                <li>O(n log n)</li>
+                <li>O(n)</li>
+                <li>O(log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n).</strong> Sift-down từ node nội tại, ghế trên cùng tốn nhiều thời gian nhất nhưng số ít. Tổng amortized = O(n).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 4.</strong> Để tìm K phần tử LỚN nhất trong mảng n phần tử bằng heap, dùng?</p>
+              <ul class="quiz-options">
+                <li>Min-heap kích thước k</li>
+                <li>Max-heap kích thước k</li>
+                <li>Min-heap kích thước n</li>
+                <li>Max-heap kích thước n</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Min-heap kích thước k.</strong> Nghe ngược nhưng đúng: ta giữ k phần tử lớn, top của min-heap là phần tử nhỏ nhất trong nhóm đó — dễ loại khi gặp phần tử mới lớn hơn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Big-O Top K bằng min-heap kích thước k, n phần tử input?</p>
+              <ul class="quiz-options">
+                <li>O(n log n)</li>
+                <li>O(n log k)</li>
+                <li>O(n)</li>
+                <li>O(k log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n log k).</strong> n phần tử × log k mỗi insert/pop. Tốt khi k &lt;&lt; n.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Lưu heap trong array, parent của index i là?</p>
+              <ul class="quiz-options">
+                <li>i / 2</li>
+                <li>i - 1</li>
+                <li>(i - 1) / 2 (làm tròn xuống)</li>
+                <li>2 * i</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: (i-1)/2.</strong> Left = 2i+1, Right = 2i+2 → Parent = (i-1)/2 (vì 0-indexed).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> Two-heap technique cho bài "Median of Data Stream" dùng?</p>
+              <ul class="quiz-options">
+                <li>2 max-heap</li>
+                <li>1 max-heap (nửa nhỏ) + 1 min-heap (nửa lớn)</li>
+                <li>2 min-heap</li>
+                <li>1 heap + 1 BST</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: max-heap + min-heap.</strong> Top max-heap = max của nửa nhỏ; top min-heap = min của nửa lớn. Median ở giữa.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 8.</strong> JS có Priority Queue built-in không?</p>
+              <ul class="quiz-options">
+                <li>Không, phải tự cài hoặc dùng thư viện</li>
+                <li>Có, đó là class <code>PriorityQueue</code></li>
+                <li>Có, đó là <code>Array.sort</code></li>
+                <li>Có, trong package <code>util</code></li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Không có built-in.</strong> Khác với Java (PriorityQueue), Python (heapq), C++ (priority_queue), JS phải tự cài hoặc dùng <code>npm install heap-js</code>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 10</h2>
+          <ul>
+            <li>✅ Heap = complete binary tree + heap property; lưu trong array với index <code>(i-1)/2, 2i+1, 2i+2</code></li>
+            <li>✅ peek O(1), insert/extract O(log n), heapify O(n)</li>
+            <li>✅ Heap KHÔNG sort cả cây → search là O(n)</li>
+            <li>✅ <strong>Pattern Top-K:</strong> min-heap size k cho K lớn nhất; max-heap size k cho K nhỏ nhất</li>
+            <li>✅ <strong>Two-heap:</strong> bài median data stream — max-heap (nửa nhỏ) + min-heap (nửa lớn)</li>
+            <li>✅ JS không có Priority Queue built-in — phải tự cài MinHeap class với comparator tuỳ chỉnh</li>
+            <li>✅ Ứng dụng: Top K, Merge K Lists, Meeting Rooms, Dijkstra (chương 11)</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong9.html">
+        <span class="label">← Chương trước</span>
+        Chương 09: Tree
+      </a>
+      <a href="chuong11.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 11: Graph →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 10 · Heap &amp; Priority Queue
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

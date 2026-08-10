@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 1 — Scalability Fundamentals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">System Design</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 01 · Foundations</div>
+      <h1>Scalability Fundamentals</h1>
+      <p class="subtitle">Vertical vs Horizontal scaling, latency vs throughput, percentile P95/P99, availability nine-nines, bottleneck analysis, và back-of-envelope capacity math.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao Scalability?</a></li>
+        <li><a href="#vh">2. Vertical vs Horizontal</a></li>
+        <li><a href="#metrics">3. Latency vs Throughput</a></li>
+        <li><a href="#percentile">4. P50/P95/P99</a></li>
+        <li><a href="#availability">5. Availability — Nine Nines</a></li>
+        <li><a href="#rad">6. Reliability/Availability/Durability</a></li>
+        <li><a href="#bottleneck">7. Bottleneck & USL</a></li>
+        <li><a href="#capacity">8. Capacity Math</a></li>
+        <li><a href="#load-test">9. Load Testing</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao Scalability quan trọng?</h2>
+        <p>
+          <strong>Scalability</strong> = khả năng hệ thống giữ performance khi load tăng. Một hệ scalable: load tăng 10× → throughput tăng gần 10×, latency không tăng đáng kể, chi phí tăng tuyến tính (không quadratic).
+        </p>
+
+        <p>Hầu hết bug "khi prod chết" không phải bug logic — mà là <strong>bug scale</strong>. Code chạy đúng với 100 user, vỡ với 100k user vì:</p>
+        <ul>
+          <li>Query SELECT * không có index — 30s với bảng 100M dòng.</li>
+          <li>1 tab Excel mở 100MB JSON parse — RAM full.</li>
+          <li>Mỗi request gọi external API — 100k QPS → bị throttle.</li>
+          <li>1 cron job lock cả bảng users — block website 5 phút.</li>
+        </ul>
+
+        <h3>1.1. Có 2 cách phát hiện vấn đề scale</h3>
+        <ul>
+          <li><strong>Reactive</strong> — production chết. Kinh khủng. Mất tiền và uy tín.</li>
+          <li><strong>Proactive</strong> — load test trước, profile, capacity planning. Đắt thời gian nhưng cứu mạng.</li>
+        </ul>
+
+        <blockquote>
+          "Một thiết kế tốt là thiết kế hỏng theo cách dự đoán được. Một thiết kế tệ là thiết kế hỏng theo cách bất ngờ."
+        </blockquote>
+      </section>
+
+      <section id="vh">
+        <h2>2. Vertical Scaling vs Horizontal Scaling</h2>
+
+        <div class="compare">
+          <div>
+            <h4>Vertical Scaling (Scale Up)</h4>
+            <p>Mua server mạnh hơn — nhiều CPU core, nhiều RAM, NVMe nhanh hơn.</p>
+            <ul>
+              <li><strong>Ưu</strong>: đơn giản, không sửa app, không phải nghĩ về CAP.</li>
+              <li><strong>Nhược</strong>: trần (server lớn nhất ~1TB RAM, 128 core), giá phi tuyến (server 2× mạnh có thể đắt 5×), <strong>SPOF</strong> (server chết = hệ chết).</li>
+              <li><strong>Khi dùng</strong>: app nhỏ-vừa, chưa đến giới hạn 1 server, ít khi cần HA tuyệt đối.</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Horizontal Scaling (Scale Out)</h4>
+            <p>Thêm nhiều server, chia tải qua load balancer.</p>
+            <ul>
+              <li><strong>Ưu</strong>: scale gần vô hạn, HA tự nhiên (1 server chết, các server khác vẫn chạy), commodity hardware rẻ.</li>
+              <li><strong>Nhược</strong>: app phải <em>stateless</em>, complexity cao (LB, distributed cache, distributed transaction), CAP trade-off.</li>
+              <li><strong>Khi dùng</strong>: app cần scale lớn, downtime không chấp nhận được.</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>2.1. Quy tắc thực dụng</h3>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Thứ tự áp dụng</span>
+          <strong>Vertical → Cache → Read Replica → Sharding</strong>. Đa số app dừng ở bước 2-3. Postgres 1 node có thể xử lý 50k QPS với cấu hình tốt — đừng vội nhảy sang sharding.
+        </div>
+
+        <h3>2.2. Stateless vs Stateful</h3>
+        <p>Horizontal scaling đòi hỏi app <strong>stateless</strong> — không lưu data trong RAM của process. Vì sao?</p>
+
+<pre><code class="language-typescript">// ❌ Stateful — lưu session trong RAM
+const sessions = new Map();
+app.post('/login', (req, res) =&gt; {
+  const sessionId = generateId();
+  sessions.set(sessionId, req.body.userId);
+  res.cookie('session', sessionId);
+});
+
+// User login → server A (sessions có entry)
+// Request tiếp → load balancer route đến server B (KHÔNG có entry)
+// → 401 Unauthorized 😱</code></pre>
+
+        <p>Sửa: lưu session ở <em>shared store</em> (Redis, DB):</p>
+
+<pre><code class="language-typescript">// ✓ Stateless — session trong Redis
+app.post('/login', async (req, res) =&gt; {
+  const sessionId = generateId();
+  await redis.set(`session:${sessionId}`, req.body.userId, 'EX', 3600);
+  res.cookie('session', sessionId);
+});</code></pre>
+
+        <p>Component stateful (DB, Redis, file storage) chỉ ở <em>1 nơi</em> hoặc có replication explicit. App tier hoàn toàn stateless.</p>
+      </section>
+
+      <section id="metrics">
+        <h2>3. Latency vs Throughput</h2>
+
+        <h3>3.1. Định nghĩa</h3>
+        <ul>
+          <li><strong>Latency</strong> — thời gian xử lý 1 request, đo bằng <strong>ms</strong> (mili-giây).</li>
+          <li><strong>Throughput</strong> — số request xử lý/giây, đo bằng <strong>QPS</strong> (queries per second), <strong>RPS</strong> (requests per second), <strong>TPS</strong> (transactions per second).</li>
+        </ul>
+
+        <h3>3.2. Mối quan hệ — Little's Law</h3>
+        <p>
+          <strong>L = λ × W</strong>:
+        </p>
+        <ul>
+          <li>L = số request đang trong hệ (concurrency).</li>
+          <li>λ = throughput (request/s).</li>
+          <li>W = latency trung bình (s).</li>
+        </ul>
+
+        <p>Ví dụ: app xử lý 100ms/request, có 50 worker → throughput tối đa = 50 / 0.1 = 500 QPS.</p>
+        <p>Để tăng throughput: hoặc giảm latency, hoặc tăng concurrency (worker, connection).</p>
+
+        <h3>3.3. Tăng concurrency có thể TĂNG latency (queueing)</h3>
+        <p>Khi worker bận hết, request mới phải <em>chờ trong queue</em> — latency = queue_time + processing_time. Đây là lý do tại sao "máy chủ overload" thường thấy latency tăng vọt 10-100×, không chỉ chậm tuyến tính.</p>
+
+        <div class="ascii">    Latency
+       ▲
+       │                          ╱
+       │                         ╱   ← exponential growth
+       │                       ╱     khi system gần bão hòa
+       │                     ╱
+       │                  ╱
+       │              ╱
+       │       ─────              ← stable region
+       │
+       └────────────────────────────► Throughput
+              80% capacity</div>
+
+        <p>Quy tắc: <strong>không bao giờ vận hành &gt; 80% capacity</strong>. Để dư cho burst traffic và GC pause.</p>
+      </section>
+
+      <section id="percentile">
+        <h2>4. Percentile Metrics — P50, P95, P99</h2>
+
+        <p>
+          Latency trung bình (mean) là <strong>metric tệ</strong> — bị skew bởi outlier. Phân phối latency thường <em>long-tail</em>:
+          đa số request nhanh, vài cái rất chậm.
+        </p>
+
+        <h3>4.1. Tại sao mean lừa</h3>
+        <p>10 request: 9 cái 50ms, 1 cái 5000ms.</p>
+        <ul>
+          <li>Mean = (9×50 + 5000) / 10 = 545ms — sai lệch hoàn toàn.</li>
+          <li>P50 = 50ms — phản ánh median user experience.</li>
+          <li>P90 = 50ms — 90% nhanh.</li>
+          <li>P99 hoặc max = 5000ms — đây mới là worst-case.</li>
+        </ul>
+
+        <h3>4.2. Định nghĩa</h3>
+        <table>
+          <thead><tr><th>Percentile</th><th>Ý nghĩa</th><th>Khi quan tâm</th></tr></thead>
+          <tbody>
+            <tr><td>P50 (median)</td><td>50% request nhanh hơn giá trị này</td><td>Average user experience</td></tr>
+            <tr><td>P90</td><td>90% nhanh hơn</td><td>Most users</td></tr>
+            <tr><td>P95</td><td>95% nhanh hơn</td><td>Standard SLO</td></tr>
+            <tr><td>P99</td><td>99% nhanh hơn</td><td>Worst-case acceptable; 1/100 user hit slowness</td></tr>
+            <tr><td>P99.9</td><td>99.9% nhanh hơn</td><td>SaaS lớn — 1/1000 = nhiều user</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.3. Tail latency amplification</h3>
+        <p>Vấn đề "P99 lan ra": nếu mỗi service có P99 = 10ms, request tổng đụng 10 service tuần tự → xác suất 1 service hit P99 ~ 10% — P99 tổng tăng phi tuyến tính.</p>
+
+        <p>Jeff Dean (Google) tóm tắt:</p>
+        <blockquote>
+          "Even the rare slow request becomes common when the request fans out to many services."
+        </blockquote>
+
+        <p>Cách giảm tail latency:</p>
+        <ul>
+          <li><strong>Hedged requests</strong>: gửi request đến 2 replica, lấy cái về sớm hơn.</li>
+          <li><strong>Tied requests</strong>: gửi tới 1 replica, sau timeout T thì gửi thêm replica 2.</li>
+          <li><strong>Batching + concurrency</strong>: gọi parallel thay tuần tự.</li>
+        </ul>
+
+        <h3>4.4. SLA / SLO / SLI</h3>
+        <ul>
+          <li><strong>SLI</strong> (Service Level <em>Indicator</em>) — metric đo được: P99 latency, error rate, uptime.</li>
+          <li><strong>SLO</strong> (Service Level <em>Objective</em>) — target nội bộ: "P99 &lt; 500ms 99.9% thời gian".</li>
+          <li><strong>SLA</strong> (Service Level <em>Agreement</em>) — cam kết với khách hàng có hậu quả pháp lý: "uptime &gt; 99.9% hoặc refund".</li>
+        </ul>
+
+        <p>SLO &lt; SLA — luôn để buffer.</p>
+      </section>
+
+      <section id="availability">
+        <h2>5. Availability — Nine Nines</h2>
+
+        <table>
+          <thead><tr><th>Availability</th><th>Downtime/năm</th><th>Downtime/tháng</th><th>Downtime/tuần</th></tr></thead>
+          <tbody>
+            <tr><td>99% (2 nines)</td><td>3.65 ngày</td><td>7.2 giờ</td><td>1.68 giờ</td></tr>
+            <tr><td>99.9% (3 nines)</td><td>8.76 giờ</td><td>43.8 phút</td><td>10.1 phút</td></tr>
+            <tr><td>99.95%</td><td>4.38 giờ</td><td>21.9 phút</td><td>5 phút</td></tr>
+            <tr><td>99.99% (4 nines)</td><td>52.6 phút</td><td>4.32 phút</td><td>1.01 phút</td></tr>
+            <tr><td>99.999% (5 nines)</td><td>5.26 phút</td><td>25.9 giây</td><td>6 giây</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.1. Compose availability</h3>
+        <p>Hệ thống có nhiều component nối tiếp (sequential): availability tổng = tích availability từng cái.</p>
+        <ul>
+          <li>Frontend (99.9%) × Backend (99.9%) × DB (99.9%) = 99.7% — chỉ 2.6 nines!</li>
+          <li>Mỗi component thêm <em>giảm</em> availability tổng.</li>
+        </ul>
+
+        <p>Component song song (parallel, redundant): availability tổng = 1 - (1 - a)^n.</p>
+        <ul>
+          <li>2 backend instance 99.9% → 1 - (0.001)² = 99.9999% — 6 nines!</li>
+          <li>Đó là sức mạnh của redundancy.</li>
+        </ul>
+
+        <h3>5.2. Mỗi "9" thêm tốn 10×</h3>
+        <p>Đi từ 99% → 99.9% có thể đơn giản (load balancer + 2 instance). 99.9% → 99.99% cần multi-AZ. 99.99% → 99.999% cần multi-region với replication phức tạp + automated failover dưới phút.</p>
+
+        <p>Cân nhắc thực tế: SaaS B2B thường target <strong>99.9%</strong>. Banking/healthcare: <strong>99.99%</strong>. Ít app cần 99.999% — chỉ telco / hệ thống critical.</p>
+
+        <h3>5.3. Error budget</h3>
+        <p>Nếu SLO = 99.9% (downtime 43 phút/tháng), bạn có "budget" 43 phút mỗi tháng để:</p>
+        <ul>
+          <li>Deploy có rủi ro (canary, A/B test).</li>
+          <li>Maintenance.</li>
+          <li>Migration.</li>
+        </ul>
+        <p>Hết budget → freeze deploy đến hết tháng. Đây là cách Google SRE quản lý risk.</p>
+      </section>
+
+      <section id="rad">
+        <h2>6. Reliability vs Availability vs Durability</h2>
+
+        <table>
+          <thead><tr><th>Khái niệm</th><th>Định nghĩa</th><th>Ví dụ metric</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Reliability</strong></td><td>Hệ thống hoạt động đúng (correct) liên tục</td><td>MTBF (mean time between failures)</td></tr>
+            <tr><td><strong>Availability</strong></td><td>% thời gian hệ thống có thể truy cập được</td><td>Uptime % (99.9%)</td></tr>
+            <tr><td><strong>Durability</strong></td><td>Data không bị mất qua thời gian/lỗi</td><td>S3: 11 nines (99.999999999%)</td></tr>
+          </tbody>
+        </table>
+
+        <p>Có thể có hệ availability cao nhưng reliability thấp (lúc nào cũng up, nhưng trả wrong data). Có hệ durability cao nhưng availability thấp (data an toàn nhưng đôi khi không truy cập được).</p>
+
+        <p>Thiết kế tốt cân bằng cả 3.</p>
+      </section>
+
+      <section id="bottleneck">
+        <h2>7. Bottleneck Analysis & Universal Scalability Law</h2>
+
+        <h3>7.1. Bottleneck — định nghĩa</h3>
+        <p>
+          <strong>Bottleneck</strong> = thành phần chậm nhất / capacity nhỏ nhất quyết định throughput tổng. Không quan trọng các phần khác mạnh mức nào, hệ chạy bằng tốc độ bottleneck.
+        </p>
+
+        <p>Phép ẩn dụ: ống dẫn nước với nhiều đoạn — đoạn hẹp nhất quyết định flow rate.</p>
+
+        <h3>7.2. Phương pháp tìm bottleneck</h3>
+        <ol class="steps">
+          <li><strong>Đo</strong> CPU, RAM, disk I/O, network của mỗi component.</li>
+          <li>Cái nào đầu tiên đạt 80%+ utilization → đó là bottleneck.</li>
+          <li>Tăng capacity của bottleneck — không có ý nghĩa tăng phần khác.</li>
+          <li>Sau khi fix, bottleneck dịch chuyển sang chỗ khác. Lặp lại.</li>
+        </ol>
+
+        <h3>7.3. Amdahl's Law</h3>
+        <p>
+          Speedup tối đa khi parallelize: <strong>S = 1 / ((1-p) + p/n)</strong>, với p = phần parallelize được, n = số core.
+        </p>
+        <p>Nếu 90% code parallelize được, dùng 100 core: S = 1 / (0.1 + 0.9/100) = 9.17×. KHÔNG phải 100×.</p>
+
+        <p>Hệ quả: phần tuần tự (serial) là tường giới hạn. Đó là lý do "scale ngang vô hạn" trong thực tế bị giới hạn bởi phần coordination, sync, lock.</p>
+
+        <h3>7.4. Universal Scalability Law (USL) — Neil Gunther</h3>
+        <p>Mở rộng Amdahl's bằng cách thêm <strong>coherency cost</strong> — overhead cross-coordination tăng quadratic với số node:</p>
+
+        <p><strong>C(N) = N / (1 + α(N-1) + βN(N-1))</strong></p>
+
+        <ul>
+          <li>α = contention (queueing).</li>
+          <li>β = coherency (synchronize between nodes).</li>
+        </ul>
+
+        <p>Khi N tăng đủ lớn, βN² thắng → throughput thực ra <em>giảm</em>. Đây là lý do thêm node có thể không tăng throughput mà còn giảm.</p>
+
+        <h3>7.5. Bài học thực tế</h3>
+        <ul>
+          <li>Không phải lúc nào "thêm máy" = "nhanh hơn".</li>
+          <li>Distributed system có overhead — đôi khi 1 node mạnh nhanh hơn 10 node yếu.</li>
+          <li>Đo trước, scale sau.</li>
+        </ul>
+      </section>
+
+      <section id="capacity">
+        <h2>8. Capacity Planning — Back-of-the-envelope Math</h2>
+
+        <p>Kỹ năng phỏng vấn quan trọng: tính nhanh requirement của hệ. Quy trình 5 bước:</p>
+
+        <ol class="steps">
+          <li><strong>DAU</strong> — daily active users. Nhân với 5-10 = peak concurrent.</li>
+          <li><strong>Mỗi user làm gì</strong> — read/write/upload/search QPS.</li>
+          <li><strong>Tổng QPS</strong> — DAU × actions/user / 86400 (giây/ngày). Peak = 3-5× average.</li>
+          <li><strong>Storage</strong> — size mỗi record × số record × growth.</li>
+          <li><strong>Bandwidth</strong> — request size × QPS.</li>
+        </ol>
+
+        <h3>8.1. Ví dụ: Twitter</h3>
+        <ul>
+          <li>500M users, 20% DAU = 100M.</li>
+          <li>Mỗi user post 1 tweet, đọc 100 tweet → 100M write/day, 10B read/day.</li>
+          <li>Write QPS avg: 100M/86400 ≈ 1160 → peak ~5000.</li>
+          <li>Read QPS avg: 10B/86400 ≈ 116k → peak ~580k.</li>
+          <li>1 tweet ~ 280 char + metadata = 1KB → 100M × 1KB = 100GB/day, 36TB/year.</li>
+          <li>Hot data (recent 30 days) = 3TB → fit RAM cluster cache.</li>
+        </ul>
+
+        <h3>8.2. Số liệu nên thuộc</h3>
+        <table>
+          <thead><tr><th>Operation</th><th>Latency</th></tr></thead>
+          <tbody>
+            <tr><td>L1 cache reference</td><td>1 ns</td></tr>
+            <tr><td>L2 cache reference</td><td>4 ns</td></tr>
+            <tr><td>RAM access</td><td>100 ns</td></tr>
+            <tr><td>Mutex lock/unlock</td><td>17 ns</td></tr>
+            <tr><td>Compress 1KB with Snappy</td><td>2 µs</td></tr>
+            <tr><td>SSD random read 4KB</td><td>50 µs</td></tr>
+            <tr><td>Read 1MB sequentially from RAM</td><td>250 µs</td></tr>
+            <tr><td>Read 1MB sequentially from SSD</td><td>1 ms</td></tr>
+            <tr><td>Network roundtrip same DC</td><td>0.5 ms</td></tr>
+            <tr><td>Read 1MB sequentially from HDD</td><td>20 ms</td></tr>
+            <tr><td>Roundtrip US east ↔ US west</td><td>~70 ms</td></tr>
+            <tr><td>Roundtrip US ↔ EU</td><td>~100 ms</td></tr>
+            <tr><td>Roundtrip US ↔ APAC</td><td>~150 ms</td></tr>
+          </tbody>
+        </table>
+
+        <p>Nguồn: Jeff Dean (Google) — "Numbers Every Programmer Should Know".</p>
+
+        <h3>8.3. Common QPS / Storage benchmark</h3>
+        <ul>
+          <li>1 Postgres node tốt: 50k QPS read, 10-20k QPS write.</li>
+          <li>1 Redis node: 100k+ QPS với latency &lt; 1ms.</li>
+          <li>1 Kafka broker: 1M messages/s.</li>
+          <li>nginx 1 node: 50k+ HTTP/s.</li>
+          <li>1 modern CPU core: ~10k function calls/ms (1ns mỗi cái).</li>
+          <li>1 server modern: 100GB+ RAM, 32-64 core, hàng TB SSD.</li>
+        </ul>
+
+        <h3>8.4. Quy tắc đơn vị nhanh</h3>
+<pre><code>2^10 ≈ 10^3   (1KB ≈ 1000)
+2^20 ≈ 10^6   (1MB ≈ 1M)
+2^30 ≈ 10^9   (1GB ≈ 1B)
+2^40 ≈ 10^12  (1TB ≈ 1T)
+
+86400 s/day ≈ 10^5
+86400 × 30 ≈ 2.6 × 10^6 (1 month)
+86400 × 365 ≈ 3.15 × 10^7 (1 year)</code></pre>
+      </section>
+
+      <section id="load-test">
+        <h2>9. Load Testing — đo trước khi vỡ</h2>
+
+        <h3>9.1. Các loại test</h3>
+        <ul>
+          <li><strong>Load test</strong> — load expected, đo latency/error stable.</li>
+          <li><strong>Stress test</strong> — load tăng dần đến khi vỡ → tìm capacity limit.</li>
+          <li><strong>Spike test</strong> — load tăng đột ngột → kiểm tra autoscale.</li>
+          <li><strong>Endurance test</strong> — load steady trong vài giờ-ngày → tìm memory leak, GC issue.</li>
+          <li><strong>Capacity planning</strong> — đo từng config khác nhau, project khi nào hết capacity.</li>
+        </ul>
+
+        <h3>9.2. Tools</h3>
+        <ul>
+          <li><strong>k6</strong> — JS scripting, modern, dễ dùng.</li>
+          <li><strong>Locust</strong> — Python, distributed.</li>
+          <li><strong>JMeter</strong> — Java, GUI, classic.</li>
+          <li><strong>wrk / wrk2</strong> — đơn giản, throughput cao.</li>
+          <li><strong>vegeta</strong> — Go, command-line.</li>
+        </ul>
+
+        <h3>9.3. Ví dụ k6</h3>
+<pre><code class="language-javascript">// k6-test.js
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export const options = {
+  stages: [
+    { duration: '2m', target: 100 },   // ramp up
+    { duration: '5m', target: 100 },   // stay
+    { duration: '2m', target: 200 },   // increase
+    { duration: '5m', target: 200 },
+    { duration: '2m', target: 0 },     // ramp down
+  ],
+  thresholds: {
+    'http_req_duration{status:200}': ['p(95)&lt;500'],   // P95 &lt; 500ms
+    'http_req_failed': ['rate&lt;0.01'],                  // &lt;1% errors
+  },
+};
+
+export default function () {
+  const res = http.get('https://api.example.com/users/1');
+  check(res, { 'status 200': (r) =&gt; r.status === 200 });
+  sleep(1);
+}
+
+// Run:
+// k6 run k6-test.js</code></pre>
+
+        <h3>9.4. Best practice</h3>
+        <ul>
+          <li>Test trên environment <em>giống prod</em> (hardware, config).</li>
+          <li>Đừng test trên localhost — không meaningful.</li>
+          <li>Đo nhiều metric cùng lúc: latency P50/P95/P99, error rate, CPU/RAM/IO.</li>
+          <li>Lặp lại test nhiều lần — variance lớn.</li>
+          <li>Cẩn thận với rate limit — đừng tự DDOS production.</li>
+        </ul>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <ol>
+          <li>Tính capacity cho ứng dụng đặt vé phim:
+            <ul>
+              <li>10M user, 1M DAU, peak hour = 8-10pm.</li>
+              <li>Mỗi user xem 5 phim/tháng, mỗi phim 30 lần search trước khi đặt.</li>
+              <li>Mỗi search trả 100 movie, mỗi movie 5KB.</li>
+              <li>Tính: read QPS, write QPS, storage/year, bandwidth.</li>
+            </ul>
+          </li>
+
+          <li>So sánh availability:
+            <ul>
+              <li>Hệ A: 1 server 99.9%.</li>
+              <li>Hệ B: 2 server song song mỗi cái 99.9%.</li>
+              <li>Hệ C: 3 server tuần tự (LB → app → DB) mỗi cái 99.9%.</li>
+              <li>Tính availability mỗi hệ.</li>
+            </ul>
+          </li>
+
+          <li>Latency P99 = 1000ms, P50 = 50ms. Vấn đề gì? Cách tìm root cause?</li>
+
+          <li>Setup k6 local. Test 1 endpoint của project bạn. Tìm capacity limit của 1 node.</li>
+
+          <li>Tính: 100k user concurrent, mỗi user xem video 1080p (5 Mbps). Tổng bandwidth bao nhiêu? Cần CDN không?</li>
+
+          <li>Khi nào nên scale vertical thay horizontal? Cho 2 ví dụ thực tế.</li>
+
+          <li>Theo USL, vì sao thêm node có thể không tăng (thậm chí giảm) throughput?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 1</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Vì sao mean (average) latency là metric tệ?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Khó tính</li>
+              <li class="quiz-option">Mean = median trong mọi trường hợp</li>
+              <li class="quiz-option">Bị skew bởi outlier — phân phối latency long-tail, vài request cực chậm kéo mean lên cao và che giấu trải nghiệm thật</li>
+              <li class="quiz-option">Không lưu được</li>
+            </ul>
+            <div class="quiz-explain">9 request 50ms + 1 request 5000ms → mean 545ms (không có user thực nào trải nghiệm con số này). P50 = 50, P99 = 5000ms — cho cái nhìn thực. Luôn dùng percentile, không dùng mean.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Horizontal scaling đòi hỏi app:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Phải dùng Java</li>
+              <li class="quiz-option">Stateless — không lưu data trong RAM của process; session state ở shared store (Redis, DB)</li>
+              <li class="quiz-option">Có ≥ 100 server</li>
+              <li class="quiz-option">Không có database</li>
+            </ul>
+            <div class="quiz-explain">Stateful app + horizontal scale → user log in server A, request kế tiếp đến server B → mất session. Stateless: state ở Redis/DB shared. App tier hoàn toàn stateless, chỉ DB/cache là stateful component.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">99.9% availability tương đương downtime/tháng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">5 phút</li>
+              <li class="quiz-option">1 phút</li>
+              <li class="quiz-option">10 giờ</li>
+              <li class="quiz-option">~43 phút</li>
+            </ul>
+            <div class="quiz-explain">99.9% = 0.1% downtime = 0.001 × 30 ngày × 24 giờ × 60 phút ≈ 43.2 phút/tháng. 99.99% = 4.3 phút. 99.999% = 26 giây. Mỗi "9" thêm tốn 10× chi phí và phức tạp.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Hệ có 3 component nối tiếp 99.9% mỗi cái → availability tổng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">~99.7% (giảm xuống do nhân tích)</li>
+              <li class="quiz-option">99.9% (giữ nguyên)</li>
+              <li class="quiz-option">99.99%</li>
+              <li class="quiz-option">100%</li>
+            </ul>
+            <div class="quiz-explain">Sequential: A × B × C = 0.999 × 0.999 × 0.999 = 0.997 = 99.7%. Mỗi component thêm GIẢM availability tổng. Parallel ngược lại: 1 - (0.001)^n tăng nhanh. Đây là sức mạnh của redundancy.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Little's Law L = λ × W:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">L = latency, λ = lock, W = weight</li>
+              <li class="quiz-option">Liên quan database transaction</li>
+              <li class="quiz-option">L (concurrency in system) = λ (throughput) × W (latency); biết 2 cái suy ra cái thứ 3</li>
+              <li class="quiz-option">Chỉ áp dụng cho queue</li>
+            </ul>
+            <div class="quiz-explain">App 100ms latency, 50 worker → max throughput = 50/0.1 = 500 QPS. Để tăng throughput: giảm latency hoặc tăng concurrency. Nguyên lý cơ bản trong queueing theory, áp dụng cho mọi hệ thống.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">"Tail latency amplification" (Jeff Dean):</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Latency tăng theo log</li>
+              <li class="quiz-option">Khi 1 request fan-out qua nhiều service, P99 nhỏ ở mỗi service trở thành P99 lớn ở request tổng</li>
+              <li class="quiz-option">Network always slow</li>
+              <li class="quiz-option">Caching không có tác dụng</li>
+            </ul>
+            <div class="quiz-explain">10 service mỗi cái 1% chậm → request hit 10 service có 1-(0.99)^10 ≈ 10% gặp slow. Giải: hedged request (gửi 2 replica), tied request, batch concurrent. Đây là vấn đề lớn ở microservice architecture.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">"Universal Scalability Law" (USL) cho thấy:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Mọi hệ scale tuyến tính</li>
+              <li class="quiz-option">Thêm node luôn tăng throughput</li>
+              <li class="quiz-option">Hệ phân tán không có overhead</li>
+              <li class="quiz-option">Vượt N nhất định, coherency cost (sync between nodes) tăng quadratic → throughput thực có thể giảm</li>
+            </ul>
+            <div class="quiz-explain">Amdahl's Law: phần serial giới hạn speedup. USL thêm coherency cost: distributed system có overhead sync. Đỉnh throughput xảy ra ở N cụ thể; thêm N nữa giảm throughput. Đó là lý do "thêm máy" không phải lúc nào cũng = nhanh hơn.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Quy tắc thực dụng vận hành server:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không vận hành quá 80% capacity — để dư cho burst, GC pause, autoscale lag</li>
+              <li class="quiz-option">Vận hành 100% để tối ưu chi phí</li>
+              <li class="quiz-option">Luôn dưới 10%</li>
+              <li class="quiz-option">Tùy ý</li>
+            </ul>
+            <div class="quiz-explain">Khi gần 100%, mọi spike traffic → queue overflow → latency tăng vọt. 80% là sweet spot: đủ utilization tốt, đủ buffer cho burst. Autoscale theo metric này: scale up khi avg &gt; 70%, scale down khi &lt; 30%.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 1. Tiếp theo: <a href="chuong2.html"><strong>Chương 2 — Load Balancer & Reverse Proxy →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>System Design · Chương 1 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 02 — IP, Subnet, Routing · Networking Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">net-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong1.html">← Ch.01</a></li>
+        <li><a href="chuong2.html" class="active">Ch.02</a></li>
+        <li><a href="chuong3.html">Ch.03 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 02 · NETWORK · ~110 phút</div>
+      <h1>IP, Subnet,<br/><span class="text-accent">Routing</span></h1>
+      <p class="lead">
+        Cách máy tính tìm nhau qua mạng. Hiểu chương này, bạn sẽ trả lời được:
+        <em>"Vì sao máy tôi IP <code>192.168.1.5</code> mà vẫn ra được Internet?"</em>,
+        <em>"<code>192.168.1.0/24</code> nghĩa là gì?"</em>, và biết Wireshark hiển thị gì khi bạn ping google.com.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#ipv4">2.1 IPv4 cơ bản</a></li>
+          <li><a href="#subnet">2.2 Subnet &amp; CIDR</a></li>
+          <li><a href="#private">2.3 Private vs Public IP</a></li>
+          <li><a href="#nat">2.4 NAT &amp; Port Forwarding</a></li>
+          <li><a href="#ipv6">2.5 IPv6</a></li>
+          <li><a href="#arp">2.6 ARP — IP tới MAC</a></li>
+          <li><a href="#routing">2.7 Routing</a></li>
+          <li><a href="#icmp">2.8 ICMP — ping/traceroute</a></li>
+          <li><a href="#tools">2.9 Tools thực tế</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 2.1 -->
+        <section id="ipv4">
+          <h2>2.1 IPv4 — địa chỉ 32-bit</h2>
+
+          <p>
+            <strong>IP (Internet Protocol)</strong> address là "địa chỉ nhà" của mỗi máy trên mạng. IPv4 dùng 32 bit, biểu diễn 4 nhóm số 0-255 ngăn cách bởi dấu chấm: <code>192.168.1.5</code>.
+          </p>
+
+          <pre data-lang="text"><code>192 . 168 . 1 . 5
+ │     │    │   │
+11000000 . 10101000 . 00000001 . 00000101
+└──────── 32 bit binary ─────────┘
+
+Tổng số IPv4: 2³² = ~4.3 tỷ địa chỉ → ngày nay đã hết!</code></pre>
+
+          <h3>Cấu trúc IP</h3>
+          <p>
+            Mỗi IP gồm 2 phần:
+          </p>
+          <ul>
+            <li><strong>Network portion</strong>: định danh "mạng" (vd <code>192.168.1.</code>)</li>
+            <li><strong>Host portion</strong>: định danh máy trong mạng đó (vd <code>.5</code>)</li>
+          </ul>
+          <p>Tỷ lệ network/host xác định bằng <strong>subnet mask</strong>.</p>
+
+          <h3>Lịch sử: Class A/B/C/D/E (đã lỗi thời)</h3>
+
+          <table>
+            <thead><tr><th>Class</th><th>Range</th><th>Network bits</th><th>Hosts</th></tr></thead>
+            <tbody>
+              <tr><td>A</td><td>0.0.0.0 – 127.255.255.255</td><td>8</td><td>~16M</td></tr>
+              <tr><td>B</td><td>128.0.0.0 – 191.255.255.255</td><td>16</td><td>~65K</td></tr>
+              <tr><td>C</td><td>192.0.0.0 – 223.255.255.255</td><td>24</td><td>254</td></tr>
+              <tr><td>D</td><td>224.0.0.0 – 239.255.255.255</td><td>—</td><td>Multicast</td></tr>
+              <tr><td>E</td><td>240.0.0.0 – 255.255.255.255</td><td>—</td><td>Reserved</td></tr>
+            </tbody>
+          </table>
+
+          <p>Hệ thống Class quá lãng phí (cấp Class B = 65K IP cho 1 cty dùng 2K máy). Năm 1993 chuyển sang <strong>CIDR</strong>.</p>
+        </section>
+
+        <!-- 2.2 -->
+        <section id="subnet">
+          <h2>2.2 Subnet &amp; CIDR — cách chia mạng linh hoạt</h2>
+
+          <p>
+            <strong>CIDR</strong> (Classless Inter-Domain Routing) viết IP cùng số bit network: <code>192.168.1.0/24</code>.
+            <code>/24</code> nghĩa là 24 bit đầu là network, 8 bit cuối là host.
+          </p>
+
+          <pre data-lang="text"><code>192.168.1.0/24
+                ↑
+     "24 bit network" → 192.168.1.x
+                       (8 bit host = 256 địa chỉ, dùng được 254)
+
+192.168.0.0/16        # mạng lớn, 65K địa chỉ
+                       # 192.168.0.0 – 192.168.255.255
+
+10.0.0.0/8            # cực lớn, 16M địa chỉ
+                       # 10.0.0.0 – 10.255.255.255
+
+192.168.1.0/30        # mạng tí hon, chỉ 4 IP, 2 dùng được
+                       # 192.168.1.0, .1, .2, .3</code></pre>
+
+          <h3>Subnet mask</h3>
+          <p>Cách viết khác của <code>/N</code>: subnet mask là số 32-bit có N bit 1 đầu, còn lại bit 0.</p>
+
+          <table>
+            <thead><tr><th>CIDR</th><th>Subnet mask</th><th>Hosts</th></tr></thead>
+            <tbody>
+              <tr><td>/8</td><td>255.0.0.0</td><td>16,777,214</td></tr>
+              <tr><td>/16</td><td>255.255.0.0</td><td>65,534</td></tr>
+              <tr><td>/24</td><td>255.255.255.0</td><td>254</td></tr>
+              <tr><td>/26</td><td>255.255.255.192</td><td>62</td></tr>
+              <tr><td>/27</td><td>255.255.255.224</td><td>30</td></tr>
+              <tr><td>/30</td><td>255.255.255.252</td><td>2</td></tr>
+              <tr><td>/32</td><td>255.255.255.255</td><td>1 (host route)</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Số host = 2^(32-N) - 2</h3>
+          <p>Trừ 2 vì:</p>
+          <ul>
+            <li><strong>Network address</strong> (host bits = 0): vd <code>192.168.1.0</code> không gán cho máy</li>
+            <li><strong>Broadcast address</strong> (host bits = 1): vd <code>192.168.1.255</code> dùng để gửi đến tất cả máy LAN</li>
+          </ul>
+
+          <h3>Ví dụ tính toán</h3>
+
+          <p><strong>Câu hỏi:</strong> mạng <code>192.168.1.64/26</code> có bao nhiêu host? Range nào?</p>
+          <pre data-lang="text"><code>/26 → 32-26 = 6 bit host → 2⁶-2 = 62 host
+Network: 192.168.1.64       (bit host = 0)
+Range:   192.168.1.65 – 192.168.1.126
+Broadcast: 192.168.1.127    (bit host = 1)
+Total IP: 64 (.64 đến .127)</code></pre>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Tính nhanh</div>
+            <ul>
+              <li>/24 → 256 IP, 254 host</li>
+              <li>/25 → 128 IP, 126 host</li>
+              <li>/26 → 64 IP, 62 host</li>
+              <li>/27 → 32 IP, 30 host</li>
+              <li>/28 → 16 IP, 14 host</li>
+              <li>/29 → 8 IP, 6 host</li>
+              <li>/30 → 4 IP, 2 host (point-to-point link)</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 2.3 -->
+        <section id="private">
+          <h2>2.3 Private vs Public IP (RFC 1918)</h2>
+
+          <p>3 dải IP được "reserved" cho mạng nội bộ — <strong>không route trên Internet</strong>:</p>
+
+          <table>
+            <thead><tr><th>Dải</th><th>CIDR</th><th>Số IP</th><th>Use case</th></tr></thead>
+            <tbody>
+              <tr><td>10.0.0.0 – 10.255.255.255</td><td>10.0.0.0/8</td><td>16M</td><td>Doanh nghiệp lớn</td></tr>
+              <tr><td>172.16.0.0 – 172.31.255.255</td><td>172.16.0.0/12</td><td>1M</td><td>Vừa</td></tr>
+              <tr><td>192.168.0.0 – 192.168.255.255</td><td>192.168.0.0/16</td><td>65K</td><td>Home/SMB</td></tr>
+            </tbody>
+          </table>
+
+          <p>Ngoài ra:</p>
+          <ul>
+            <li><code>127.0.0.0/8</code> — loopback (localhost <code>127.0.0.1</code>)</li>
+            <li><code>169.254.0.0/16</code> — link-local (DHCP fail tự gán)</li>
+          </ul>
+
+          <p><strong>Public IP</strong> = mọi IP còn lại — unique trên Internet, có thể route từ bất kỳ đâu.</p>
+        </section>
+
+        <!-- 2.4 -->
+        <section id="nat">
+          <h2>2.4 NAT — vì sao mạng LAN ra Internet được</h2>
+
+          <p>
+            <strong>Bài toán:</strong> bạn có 10 máy ở nhà, đều dùng IP private <code>192.168.1.x</code>. Router của ISP cấp cho bạn <em>chỉ 1 IP public</em>. Làm sao 10 máy cùng truy cập Internet?
+          </p>
+
+          <p><strong>Giải pháp:</strong> NAT (Network Address Translation) — router "dịch" địa chỉ:</p>
+
+          <div class="ascii-art">
+   LAN (private)                    NAT Router                Internet
+   ─────────────                    ───────────                ────────
+   PC: 192.168.1.5:54321
+       ──────── HTTP request ───────▶
+                                      Rewrite source:
+                                      192.168.1.5:54321
+                                          ↓
+                                      203.0.113.7:54321
+       (NAT table:                       ──────── ───▶  google.com:443
+        192.168.1.5:54321
+        ↔ 203.0.113.7:54321)
+                                      ◀──── reply ────
+                                      203.0.113.7:54321
+                                          ↓
+                                      192.168.1.5:54321
+       ◀──── reply ────
+          </div>
+
+          <h3>Loại NAT</h3>
+          <ul>
+            <li><strong>Static NAT</strong>: 1 private IP ↔ 1 public IP (cố định). Hiếm dùng.</li>
+            <li><strong>Dynamic NAT</strong>: pool public IP, cấp khi cần.</li>
+            <li><strong>PAT / NAPT (Port Address Translation)</strong>: <em>nhiều</em> private IP → 1 public IP, phân biệt qua port. Đây là loại router gia đình dùng.</li>
+          </ul>
+
+          <h3>Port Forwarding — host server sau NAT</h3>
+          <p>NAT mặc định: chỉ cho outbound. Nếu bạn host game server, web server tại nhà, cần config router redirect:</p>
+          <pre data-lang="text"><code>Router config:
+External port 8080  →  Internal 192.168.1.10:80
+
+Khi ai đó connect 203.0.113.7:8080
+Router forward đến 192.168.1.10:80</code></pre>
+
+          <h3>Hệ quả của NAT</h3>
+          <ul>
+            <li>Máy ở LAN không trực tiếp connect được nhau qua Internet (cần STUN/TURN cho WebRTC)</li>
+            <li>Một số protocol stateful (SIP, FTP active) gặp vấn đề với NAT</li>
+            <li>Giảm pressure cho IPv4 — 1 IP public phục vụ hàng triệu máy nội bộ</li>
+          </ul>
+        </section>
+
+        <!-- 2.5 -->
+        <section id="ipv6">
+          <h2>2.5 IPv6 — 128 bit, đủ cho mọi hạt cát</h2>
+
+          <p>IPv4 hết. IPv6 ra đời với 128 bit = 2¹²⁸ ≈ 3.4 × 10³⁸ địa chỉ — nhiều đến mức gán cho mỗi nguyên tử trong vũ trụ vẫn dư.</p>
+
+          <h3>Format</h3>
+
+          <pre data-lang="text"><code>2001:0db8:85a3:0000:0000:8a2e:0370:7334
+└──── 8 nhóm × 16 bit = 128 bit ────┘
+
+Rút gọn:
+- Bỏ leading zeros mỗi nhóm:
+  2001:db8:85a3:0:0:8a2e:370:7334
+- Thay 1 dãy 0 liên tục bằng "::":
+  2001:db8:85a3::8a2e:370:7334
+
+Đặc biệt:
+::1            → loopback (= 127.0.0.1 IPv4)
+::             → unspecified
+fe80::/10      → link-local
+2000::/3       → global unicast (Internet)</code></pre>
+
+          <h3>Khác biệt vs IPv4</h3>
+          <ul>
+            <li>Không có broadcast, dùng multicast</li>
+            <li>Không cần ARP — dùng <strong>NDP</strong> (Neighbor Discovery Protocol)</li>
+            <li>Không cần NAT — đủ IP public cho mọi máy</li>
+            <li>Auto-configuration (SLAAC) — máy tự cấp IP từ router advertisement</li>
+          </ul>
+
+          <p>IPv6 đã được deploy rộng nhưng vẫn chưa thay thế hoàn toàn IPv4. Đa số mạng dùng <strong>dual stack</strong>.</p>
+        </section>
+
+        <!-- 2.6 -->
+        <section id="arp">
+          <h2>2.6 ARP — Address Resolution Protocol</h2>
+
+          <p>
+            Trong cùng LAN, máy gửi packet bằng <strong>MAC address</strong> (L2), không phải IP. Vậy làm sao biết IP <code>192.168.1.5</code> tương ứng MAC nào?
+          </p>
+
+          <p><strong>ARP</strong> giải quyết: broadcast hỏi "Ai có IP <code>192.168.1.5</code>?", máy có sẽ reply MAC.</p>
+
+          <pre data-lang="bash"><code># Xem ARP cache
+arp -a
+# ? (192.168.1.1) at aa:bb:cc:dd:ee:ff [ether] on en0
+# ? (192.168.1.5) at 11:22:33:44:55:66 [ether] on en0
+
+# Linux mới
+ip neigh show</code></pre>
+
+          <h3>ARP spoofing</h3>
+          <p>Attacker gửi ARP reply giả mạo "tôi là gateway" → traffic đi qua máy attacker. Đây là một dạng MITM trong LAN.</p>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ ARP cache poisoning</div>
+            Đây là tấn công nội bộ phổ biến. Mọi máy trong LAN của coffee shop đều có thể bị ARP-poison nếu attacker cùng Wi-Fi.
+            HTTPS giúp tránh leak data nhưng không tránh được attack metadata. Nên dùng VPN trên Wi-Fi công cộng.
+          </div>
+        </section>
+
+        <!-- 2.7 -->
+        <section id="routing">
+          <h2>2.7 Routing — cách packet đi giữa các mạng</h2>
+
+          <p>
+            Khi máy bạn gửi packet đến IP <em>khác mạng</em> (vd google.com), máy không biết đường — nhưng biết <strong>default gateway</strong>:
+            "Cứ gửi cho gateway, gateway lo phần còn lại".
+          </p>
+
+          <h3>Routing table</h3>
+
+          <pre data-lang="bash"><code># macOS / Linux
+netstat -rn
+# hoặc
+ip route show     # Linux
+route -n          # Linux cũ
+
+# Output mẫu:
+# Destination     Gateway          Genmask         Iface
+# 0.0.0.0         192.168.1.1      0.0.0.0         en0    ← default route
+# 192.168.1.0     0.0.0.0          255.255.255.0   en0    ← local LAN
+# 127.0.0.0       0.0.0.0          255.0.0.0       lo     ← loopback</code></pre>
+
+          <p>Quy trình routing:</p>
+          <ol>
+            <li>Máy gửi packet, kiểm tra: dest IP có trong cùng LAN không (so sánh với subnet mask)?</li>
+            <li>Nếu cùng LAN: ARP tìm MAC, gửi trực tiếp</li>
+            <li>Nếu khác LAN: gửi tới <strong>default gateway</strong></li>
+            <li>Gateway xem routing table của nó, forward tiếp đến gateway tiếp theo</li>
+            <li>Lặp đến khi đến đích (mỗi hop = 1 router)</li>
+          </ol>
+
+          <h3>Routing protocols</h3>
+          <p>Internet là mạng các <em>autonomous systems (AS)</em> — mỗi ISP/cty là 1 AS. Routing chia 2 cấp:</p>
+          <ul>
+            <li><strong>IGP (interior)</strong>: routing trong cùng AS — OSPF, IS-IS, RIP</li>
+            <li><strong>EGP (exterior)</strong>: routing giữa các AS — <strong>BGP</strong> (Border Gateway Protocol)</li>
+          </ul>
+
+          <p>
+            BGP "chạy" Internet. Mọi ISP lớn peer BGP với nhau, exchange route. Bug BGP hay gây sự cố Internet diện rộng (vd Facebook 2021 outage 6 giờ vì BGP misconfig).
+          </p>
+        </section>
+
+        <!-- 2.8 -->
+        <section id="icmp">
+          <h2>2.8 ICMP — ping &amp; traceroute</h2>
+
+          <p>
+            <strong>ICMP</strong> (Internet Control Message Protocol) — giao thức L3 dùng cho <em>điều khiển và báo lỗi</em>, không truyền data thực.
+          </p>
+
+          <h3>ping = ICMP Echo Request/Reply</h3>
+          <pre data-lang="bash"><code>ping google.com
+# PING google.com (142.250.74.14): 56 data bytes
+# 64 bytes from 142.250.74.14: icmp_seq=0 ttl=115 time=12.345 ms
+# 64 bytes from 142.250.74.14: icmp_seq=1 ttl=115 time=12.456 ms
+
+# Test latency, packet loss</code></pre>
+
+          <h3>traceroute — TTL trick</h3>
+          <p>Mỗi packet có field <code>TTL</code> (Time To Live), giảm 1 mỗi hop. TTL = 0 → router drop packet và gửi ICMP "Time Exceeded".</p>
+          <p>Traceroute lợi dụng: gửi packet với TTL=1 (chỉ tới hop đầu, nó báo lỗi → biết IP), rồi TTL=2, TTL=3... → biết toàn bộ đường đi.</p>
+
+          <pre data-lang="bash"><code>traceroute google.com
+#  1  router.local (192.168.1.1)         1.234 ms
+#  2  10.10.10.1                          5.678 ms
+#  3  isp-gw.net (203.0.113.1)           12.345 ms
+#  4  ix-tokyo.net                       45.678 ms
+#  5  google-backbone                    50.123 ms
+#  6  google.com (142.250.74.14)         52.789 ms</code></pre>
+
+          <p>Hữu ích để debug: traffic của bạn đi qua đâu? Hop nào bị slow?</p>
+        </section>
+
+        <!-- 2.9 -->
+        <section id="tools">
+          <h2>2.9 Tools thực tế</h2>
+
+          <pre data-lang="bash"><code># Xem IP của các interface
+ifconfig             # macOS/BSD/Linux cũ
+ip addr show         # Linux mới
+
+# Public IP của bạn (qua NAT)
+curl ifconfig.me
+curl ipinfo.io
+
+# Routing
+ip route
+netstat -rn
+
+# DNS lookup
+nslookup google.com
+dig google.com
+
+# Test connectivity
+ping google.com
+mtr google.com       # ping + traceroute kết hợp, real-time
+
+# Bắt packet
+sudo tcpdump -i any -nn 'host google.com' -c 10
+sudo wireshark       # GUI
+
+# Show ARP cache
+arp -a               # macOS/Linux cũ
+ip neigh             # Linux mới
+
+# Tính subnet
+ipcalc 192.168.1.0/26   # cài ipcalc, hiển thị range, broadcast, ...</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Tính subnet</div>
+            <p>Cho <code>10.20.30.0/22</code>: bao nhiêu host? Network address? Broadcast? Range?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Chia subnet</div>
+            <p>Bạn có <code>192.168.0.0/24</code>. Cần chia thành 4 subnet, mỗi subnet ~60 host. Liệt kê 4 subnet với CIDR.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Quan sát NAT của bạn</div>
+            <p>Chạy <code>ifconfig</code> xem IP nội bộ. Chạy <code>curl ifconfig.me</code> xem IP public. Cùng IP không? Tại sao?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Traceroute thực tế</div>
+            <p>Chạy <code>traceroute github.com</code> và <code>traceroute google.com</code>. Có bao nhiêu hop? Hop đầu là gì?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — IPv6 mode</div>
+            <p>Trên Mac/Linux, kiểm tra interface có IPv6 không (<code>ifconfig | grep inet6</code>). Test <code>ping6 google.com</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Port forwarding</div>
+            <p>Bạn muốn host 1 web server cá nhân tại nhà cho bạn bè truy cập. Mô tả các bước cấu hình NAT/port forwarding cần làm.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> <code>192.168.1.0/24</code> có bao nhiêu host dùng được?</p>
+              <ul class="quiz-options">
+                <li>256</li>
+                <li>255</li>
+                <li>254 (256 - 2: trừ network + broadcast)</li>
+                <li>253</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 254.</strong> /24 = 8 bit host = 256 IP. Trừ <code>.0</code> (network) và <code>.255</code> (broadcast).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> Tại sao máy LAN với IP <code>192.168.1.5</code> vẫn ra Internet được?</p>
+              <ul class="quiz-options">
+                <li>Vì IPv6</li>
+                <li>NAT — router rewrite source IP private thành IP public của router; reply về thì rewrite ngược</li>
+                <li>Vì 192.168 là public</li>
+                <li>Tự động routing</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: NAT (PAT).</strong> Nhiều máy LAN dùng chung 1 IP public, phân biệt qua port.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> ARP dùng để?</p>
+              <ul class="quiz-options">
+                <li>Map IP → MAC trong LAN</li>
+                <li>Routing giữa các mạng</li>
+                <li>Map domain → IP</li>
+                <li>Mã hoá traffic</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: IP → MAC.</strong> Trong LAN, máy gửi packet bằng MAC. ARP dùng để biết MAC từ IP.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Traceroute hoạt động bằng cách?</p>
+              <ul class="quiz-options">
+                <li>Hỏi mỗi router trên đường</li>
+                <li>Dùng special packet</li>
+                <li>Gửi packet với TTL tăng dần (1, 2, 3...) — mỗi router TTL=0 báo Time Exceeded để lộ IP</li>
+                <li>Dùng GPS</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: TTL trick.</strong> Cực thông minh — biết toàn bộ hop bằng cách "hỏi gián tiếp".
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Dải nào KHÔNG phải IP private theo RFC 1918?</p>
+              <ul class="quiz-options">
+                <li>10.0.0.0/8</li>
+                <li>11.0.0.0/8</li>
+                <li>172.16.0.0/12</li>
+                <li>192.168.0.0/16</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 11.0.0.0/8.</strong> 11.x là public IP. Private chỉ có 10/8, 172.16/12, 192.168/16.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Tại sao dùng IPv6?</p>
+              <ul class="quiz-options">
+                <li>Nhanh hơn IPv4</li>
+                <li>Bảo mật hơn</li>
+                <li>IPv4 hết IP (~4.3 tỷ); IPv6 có 2¹²⁸ địa chỉ — đủ cho mọi thiết bị</li>
+                <li>Đẹp hơn</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: hết IPv4.</strong> Phụ: IPv6 không cần NAT, có SLAAC tự config.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 7.</strong> BGP là gì?</p>
+              <ul class="quiz-options">
+                <li>Routing protocol giữa các AS — "chạy Internet"</li>
+                <li>Một loại firewall</li>
+                <li>DNS server</li>
+                <li>Browser plugin</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: BGP.</strong> Border Gateway Protocol — routing giữa các autonomous systems.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Dải <code>127.0.0.0/8</code> dùng cho?</p>
+              <ul class="quiz-options">
+                <li>Multicast</li>
+                <li>Loopback (localhost) — máy nói chuyện với chính nó</li>
+                <li>Public IP</li>
+                <li>IPv6</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: loopback.</strong> Phổ biến nhất là <code>127.0.0.1</code>. Cả /8 đều loopback nhưng chỉ <code>.1</code> được dùng phổ biến.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 2</h2>
+          <ul>
+            <li>✅ <strong>IPv4</strong> = 32-bit, ~4.3 tỷ IP, đã hết</li>
+            <li>✅ <strong>CIDR <code>x.x.x.x/N</code></strong>: N bit network, 32-N bit host. Số host = 2^(32-N) - 2</li>
+            <li>✅ <strong>Private IP</strong> (RFC 1918): 10/8, 172.16/12, 192.168/16 — không route Internet</li>
+            <li>✅ <strong>NAT</strong>: router rewrite IP+port → 1 IP public phục vụ nhiều máy LAN</li>
+            <li>✅ <strong>IPv6</strong> = 128-bit, format hex 8 nhóm, có "::" rút gọn 0 liên tục</li>
+            <li>✅ <strong>ARP</strong>: IP → MAC trong LAN; ARP cache có thể bị poison</li>
+            <li>✅ <strong>Routing</strong>: máy có routing table; default gateway lo packet ra ngoài</li>
+            <li>✅ <strong>BGP</strong> giữa AS, OSPF/IS-IS/RIP trong AS</li>
+            <li>✅ <strong>ICMP</strong>: ping (echo), traceroute (TTL trick)</li>
+            <li>✅ Tools: <code>ifconfig</code>, <code>ip route</code>, <code>traceroute</code>, <code>mtr</code>, <code>tcpdump</code>, <code>arp</code></li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong1.html">
+        <span class="label">← Chương trước</span>
+        Chương 01: OSI &amp; TCP/IP
+      </a>
+      <a href="chuong3.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 03: TCP →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◆</span> Networking Mastery · Chương 02 · IP, Subnet, Routing
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

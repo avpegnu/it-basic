@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — Indexes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 05 · Indexes</div>
+      <h1>Indexes — B-tree, Hash, GIN, Composite</h1>
+      <p class="subtitle">Cấu trúc index, khi nào index được dùng, khi nào KHÔNG, composite/covering/partial/functional index, và đọc EXPLAIN cơ bản.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao cần Index?</a></li>
+        <li><a href="#btree">2. B-tree</a></li>
+        <li><a href="#hash">3. Hash index</a></li>
+        <li><a href="#gin">4. GIN / GiST / BRIN</a></li>
+        <li><a href="#bitmap">5. Bitmap (planner)</a></li>
+        <li><a href="#composite">6. Composite index</a></li>
+        <li><a href="#covering">7. Covering (INCLUDE)</a></li>
+        <li><a href="#partial">8. Partial index</a></li>
+        <li><a href="#functional">9. Functional / Expression</a></li>
+        <li><a href="#selectivity">10. Selectivity</a></li>
+        <li><a href="#not-used">11. Khi index KHÔNG được dùng</a></li>
+        <li><a href="#explain">12. EXPLAIN cơ bản</a></li>
+        <li><a href="#exercises">13. Bài tập</a></li>
+        <li><a href="#quiz">14. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao cần Index?</h2>
+        <p>Bảng <code>users</code> có 10 triệu dòng, cột email không có index. Câu query:</p>
+<pre><code class="language-sql">SELECT * FROM users WHERE email = 'alice@example.com';</code></pre>
+        <p>DB phải <strong>Sequential Scan</strong>: đọc toàn bộ 10 triệu dòng từ disk, so sánh từng cái — có thể mất nhiều giây đến phút.</p>
+        <p>Với <strong>B-tree index</strong> trên <code>email</code>, DB chỉ cần <code>log₂(10⁷) ≈ 23</code> bước để tìm. Mỗi bước đọc 1 page (~8KB) → <strong>~1ms</strong> tổng.</p>
+
+        <p>Khác biệt: <strong>30 giây</strong> vs <strong>1 mili-giây</strong> = <strong>30 000 lần</strong>.</p>
+
+        <h3>1.1. Index không miễn phí</h3>
+        <ul>
+          <li><strong>Tốn dung lượng disk</strong> — index thường 10–30% kích thước bảng. 10 index = thêm 1–3× dung lượng.</li>
+          <li><strong>Làm chậm INSERT/UPDATE/DELETE</strong> — mỗi thao tác phải cập nhật cả index. Bảng càng nhiều index, ghi càng chậm.</li>
+          <li><strong>Tốn RAM</strong> — index "nóng" được DB cache vào shared_buffers. Quá nhiều → thiếu RAM cho bảng chính.</li>
+          <li><strong>Mất thời gian build</strong> — CREATE INDEX trên bảng 1 tỉ dòng có thể mất nhiều giờ.</li>
+        </ul>
+
+        <p><strong>Quy tắc:</strong> chỉ tạo index cho cột thực sự được query thường xuyên. Đừng "đánh index phòng xa".</p>
+      </section>
+
+      <section id="btree">
+        <h2>2. B-tree — index mặc định</h2>
+        <p>"B" trong B-tree = "Balanced" (cây cân bằng), không phải "Binary". B-tree là cây nhiều con (mỗi node có nhiều key) và <strong>luôn được giữ cân bằng</strong> qua mỗi insert/delete.</p>
+
+        <div class="ascii">      B-tree (đơn giản, fanout=4, height=2):
+
+      ┌──────────────────────────────────┐
+      │           [25 | 50 | 75]          │  ← root (level 0)
+      └────┬──────────┬──────────┬───────┬┘
+           │          │          │       │
+       ┌───▼──┐    ┌──▼───┐   ┌──▼───┐ ┌─▼────┐
+       │5,15,│    │30,40,│   │60,70,│ │80,90,│  ← leaves (level 1)
+       │20,22│    │45,48 │   │72    │ │95,99│
+       └─────┘    └──────┘   └──────┘ └─────┘
+         │            │          │        │
+         ▼            ▼          ▼        ▼
+       row ptr     row ptr     row ptr   row ptr  → bảng heap</div>
+
+        <h3>2.1. Đặc tính</h3>
+        <ul>
+          <li><strong>Tra cứu O(log n)</strong> — chỉ cần ~log_fanout(N) bước. Với fanout 200 và 10⁹ dòng: ~5 bước.</li>
+          <li><strong>Range scan O(log n + k)</strong> — leaves được link doubly để duyệt khoảng (<code>WHERE x BETWEEN A AND B</code>).</li>
+          <li><strong>Sorted output</strong> — duyệt B-tree → dữ liệu đã sorted theo key. <code>ORDER BY index_col</code> miễn sort.</li>
+          <li><strong>Insert balanced</strong> — page split khi đầy, propagate lên cha.</li>
+        </ul>
+
+        <h3>2.2. B-tree trong Postgres dùng được cho:</h3>
+        <ul>
+          <li><code>=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></li>
+          <li><code>BETWEEN</code></li>
+          <li><code>IN</code></li>
+          <li><code>IS NULL</code> / <code>IS NOT NULL</code></li>
+          <li><code>LIKE 'prefix%'</code> (chỉ với prefix — KHÔNG <code>'%suffix'</code>)</li>
+          <li><code>ORDER BY col</code></li>
+        </ul>
+
+        <h3>2.3. Tạo B-tree</h3>
+<pre><code class="language-sql">-- Mặc định CREATE INDEX là B-tree
+CREATE INDEX idx_users_email ON users(email);
+
+-- Tương đương:
+CREATE INDEX idx_users_email ON users USING BTREE (email);
+
+-- Multi-column (composite):
+CREATE INDEX idx_orders_user_created ON orders(user_id, created_at DESC);
+
+-- DESC, NULLS FIRST/LAST:
+CREATE INDEX idx_users_created ON users(created_at DESC NULLS LAST);
+
+-- UNIQUE B-tree:
+CREATE UNIQUE INDEX idx_users_email_uniq ON users(LOWER(email));
+
+-- CONCURRENTLY (không lock writes — luôn dùng ở production):
+CREATE INDEX CONCURRENTLY idx_orders_status ON orders(status);</code></pre>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">CONCURRENTLY ở production</span>
+          Mặc định <code>CREATE INDEX</code> lock toàn bảng cho writes. Trên bảng 100M dòng có thể lock 30 phút. Luôn dùng <code>CREATE INDEX CONCURRENTLY</code> ở production — chậm hơn 2–3× nhưng không block ghi.
+        </div>
+      </section>
+
+      <section id="hash">
+        <h2>3. Hash index</h2>
+        <p>Map key → bucket qua hash function. Tra cứu O(1) trung bình.</p>
+
+        <h3>3.1. Khi dùng?</h3>
+        <ul>
+          <li>Chỉ cho <code>=</code>, KHÔNG cho range/order.</li>
+          <li>Trên Postgres &lt; 10: hash index không WAL, mất khi crash → không khuyến nghị.</li>
+          <li>Postgres 10+: hash index đã ổn, nhưng B-tree thường vẫn nhanh ngang và linh hoạt hơn.</li>
+        </ul>
+
+<pre><code class="language-sql">CREATE INDEX idx_users_email_hash ON users USING HASH (email);</code></pre>
+
+        <p><strong>Thực hành:</strong> hầu như không cần. Chỉ dùng khi profiling chỉ ra B-tree không đủ và workload chỉ có equality.</p>
+      </section>
+
+      <section id="gin">
+        <h2>4. GIN / GiST / BRIN — index chuyên biệt</h2>
+
+        <h3>4.1. GIN (Generalized Inverted Index)</h3>
+        <p>"Inverted" — như index ngược trong sách: từ → các trang chứa từ đó. Phù hợp với cột chứa <strong>nhiều giá trị nhỏ</strong>:</p>
+        <ul>
+          <li>Full-text search (cột <code>tsvector</code>)</li>
+          <li>Array (<code>tags TEXT[]</code>)</li>
+          <li>JSONB</li>
+        </ul>
+
+<pre><code class="language-sql">-- Full-text:
+ALTER TABLE posts ADD COLUMN search_vector tsvector
+  GENERATED ALWAYS AS (to_tsvector('simple', title || ' ' || body)) STORED;
+CREATE INDEX idx_posts_search ON posts USING GIN(search_vector);
+
+SELECT * FROM posts
+WHERE search_vector @@ to_tsquery('database &amp; (postgres | mysql)');
+
+-- Array:
+CREATE INDEX idx_posts_tags ON posts USING GIN(tags);
+SELECT * FROM posts WHERE tags @&gt; ARRAY['sql','tutorial'];
+
+-- JSONB:
+CREATE INDEX idx_users_meta ON users USING GIN(meta);
+SELECT * FROM users WHERE meta @&gt; '{"role":"admin"}';
+SELECT * FROM users WHERE meta -&gt; 'preferences' -&gt;&gt; 'theme' = 'dark';</code></pre>
+
+        <h3>4.2. GiST (Generalized Search Tree)</h3>
+        <p>Cây tổng quát hỗ trợ các kiểu phức tạp: geometry, range, full-text. Tốt hơn GIN cho:</p>
+        <ul>
+          <li>Spatial (PostGIS) — <code>&amp;&amp;</code>, <code>ST_Contains</code></li>
+          <li>Range types — <code>tstzrange &amp;&amp;</code> (overlap)</li>
+          <li>K-nearest neighbor</li>
+        </ul>
+
+<pre><code class="language-sql">CREATE INDEX idx_bookings_during ON bookings USING GIST (during);
+SELECT * FROM bookings WHERE during &amp;&amp; '[2026-05-09,2026-05-10)'::tstzrange;</code></pre>
+
+        <h3>4.3. BRIN (Block Range Index)</h3>
+        <p>Cực nhỏ, lưu min/max của mỗi block (page) chứ không từng dòng. Phù hợp dữ liệu <strong>tự nhiên sorted</strong> (ví dụ <code>created_at</code> luôn tăng).</p>
+
+<pre><code class="language-sql">CREATE INDEX idx_logs_created_brin ON logs USING BRIN(created_at);</code></pre>
+        <p>Index này có thể nhỏ hơn 1000× B-tree, đổi lại scan rộng hơn. Phù hợp khi bảng 1+ tỉ dòng và bạn muốn index "rẻ".</p>
+
+        <h3>4.4. So sánh nhanh</h3>
+        <table>
+          <thead><tr><th>Loại</th><th>Tốt cho</th><th>Kích thước</th><th>Tốc độ tra cứu</th></tr></thead>
+          <tbody>
+            <tr><td>B-tree</td><td>=, &lt;, &gt;, range, prefix LIKE, ORDER BY</td><td>10–30% bảng</td><td>O(log n) — rất nhanh</td></tr>
+            <tr><td>Hash</td><td>= duy nhất</td><td>Tương tự B-tree</td><td>O(1) — bằng B-tree</td></tr>
+            <tr><td>GIN</td><td>Array, JSONB, full-text</td><td>Có thể bằng/lớn hơn bảng</td><td>O(log n)</td></tr>
+            <tr><td>GiST</td><td>Spatial, range, KNN</td><td>10–30%</td><td>O(log n) — chậm hơn B-tree</td></tr>
+            <tr><td>BRIN</td><td>Cột sorted tự nhiên, table cực lớn</td><td>&lt; 1%</td><td>Chậm nhưng cheap</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="bitmap">
+        <h2>5. Bitmap Index Scan (planner technique)</h2>
+        <p>Khác với MySQL/Oracle có <em>bitmap index</em> như loại index riêng, Postgres có <strong>Bitmap Index Scan</strong> — kỹ thuật planner tạo bitmap tạm thời từ B-tree để kết hợp nhiều điều kiện.</p>
+
+<pre><code class="language-sql">SELECT * FROM users
+WHERE country = 'VN' AND age &gt; 25;
+
+-- Plan có thể là:
+-- BitmapAnd
+--   Bitmap Index Scan idx_country (country='VN')   → bitmap A
+--   Bitmap Index Scan idx_age (age &gt; 25)            → bitmap B
+-- Bitmap Heap Scan: A AND B → đọc dòng thật</code></pre>
+
+        <p>Hiệu quả khi 1 index không đủ chọn lọc, 2 index AND lại sẽ chọn lọc cao.</p>
+      </section>
+
+      <section id="composite">
+        <h2>6. Composite Index — index nhiều cột</h2>
+        <p>Một index trên nhiều cột. Thứ tự cột <strong>cực kỳ quan trọng</strong>.</p>
+
+<pre><code class="language-sql">CREATE INDEX idx_orders_user_created ON orders(user_id, created_at DESC);</code></pre>
+
+        <p>Index này phục vụ tốt:</p>
+        <ul>
+          <li><code>WHERE user_id = 5</code></li>
+          <li><code>WHERE user_id = 5 AND created_at &gt; '2026-01-01'</code></li>
+          <li><code>WHERE user_id = 5 ORDER BY created_at DESC</code></li>
+        </ul>
+
+        <p>NHƯNG <strong>không tốt</strong> cho:</p>
+        <ul>
+          <li><code>WHERE created_at &gt; '2026-01-01'</code> (không có user_id, prefix mismatch — DB có thể skip-scan nhưng kém)</li>
+        </ul>
+
+        <h3>6.1. Quy tắc thứ tự cột</h3>
+        <p><strong>Equality trước, range sau.</strong></p>
+
+<pre><code class="language-sql">-- Query: WHERE country = 'VN' AND age &gt; 25
+-- ✓ Tốt:  CREATE INDEX ... ON users(country, age);   ← equality first
+-- ✗ Tệ:  CREATE INDEX ... ON users(age, country);   ← range first, equality không dùng</code></pre>
+
+        <p><strong>Lý do:</strong> trong B-tree composite, các dòng được sắp theo cột 1, rồi cột 2. Equality trên cột 1 thu hẹp khoảng → range trên cột 2 trở thành sequential scan trong khoảng nhỏ. Ngược lại, range trên cột 1 → cột 2 không sắp cùng → không scan tuần tự được.</p>
+
+        <h3>6.2. Số cột trong composite index</h3>
+        <p>Hiếm khi cần &gt; 3 cột. Nhiều cột = index lớn = ghi chậm + ít phù hợp với nhiều query.</p>
+      </section>
+
+      <section id="covering">
+        <h2>7. Covering Index — INCLUDE clause</h2>
+        <p>Index chứa <strong>thêm cột non-key</strong> để query có thể được trả lời <em>chỉ từ index</em>, không đụng heap. Gọi là "Index-Only Scan".</p>
+
+<pre><code class="language-sql">-- Query phổ biến:
+SELECT id, email FROM users WHERE country = 'VN';
+
+-- Index thường: lookup index → đọc heap để lấy email
+CREATE INDEX idx_country ON users(country);
+
+-- Covering: include email vào index, không cần đọc heap
+CREATE INDEX idx_country_inc ON users(country) INCLUDE (email);</code></pre>
+
+        <p>Lợi: 2× nhanh trở lên cho query phù hợp. Hại: index lớn hơn.</p>
+
+        <p>Trước Postgres 11 (chưa có INCLUDE), người ta tạo composite index <code>(country, email)</code> để cùng đạt hiệu ứng — nhưng cột email trở thành part of key, ảnh hưởng sort order. INCLUDE rõ ràng hơn.</p>
+      </section>
+
+      <section id="partial">
+        <h2>8. Partial Index — chỉ index một phần dữ liệu</h2>
+        <p>Index có <code>WHERE</code> clause — chỉ index các dòng thỏa.</p>
+
+<pre><code class="language-sql">-- 90% user đã verify; query luôn lọc unverified:
+CREATE INDEX idx_users_unverified ON users(email)
+  WHERE email_verified = FALSE;
+
+-- Soft delete: chỉ index dòng chưa xóa:
+CREATE INDEX idx_orders_active ON orders(created_at)
+  WHERE deleted_at IS NULL;
+
+-- Status nóng:
+CREATE INDEX idx_orders_pending ON orders(user_id, created_at)
+  WHERE status = 'pending';</code></pre>
+
+        <p><strong>Lợi:</strong> index nhỏ hơn nhiều → tra cứu nhanh hơn, tốn ít disk/RAM. <strong>Điều kiện:</strong> query phải có cùng predicate trong WHERE để planner dùng được index.</p>
+      </section>
+
+      <section id="functional">
+        <h2>9. Functional / Expression Index</h2>
+        <p>Index trên kết quả 1 hàm/expression.</p>
+
+<pre><code class="language-sql">-- Email case-insensitive:
+CREATE UNIQUE INDEX idx_users_email_lower ON users(LOWER(email));
+SELECT * FROM users WHERE LOWER(email) = LOWER('ALICE@x.com');
+
+-- JSONB attribute:
+CREATE INDEX idx_users_role ON users((meta-&gt;&gt;'role'));
+SELECT * FROM users WHERE meta-&gt;&gt;'role' = 'admin';
+
+-- Date trunc:
+CREATE INDEX idx_orders_month ON orders(DATE_TRUNC('month', created_at));
+SELECT COUNT(*) FROM orders
+WHERE DATE_TRUNC('month', created_at) = '2026-05-01';</code></pre>
+
+        <p><strong>Lưu ý:</strong> query phải dùng đúng expression như index. <code>WHERE email = ...</code> không match <code>idx ON LOWER(email)</code>.</p>
+      </section>
+
+      <section id="selectivity">
+        <h2>10. Selectivity — chìa khóa quyết định index</h2>
+        <p><strong>Selectivity</strong> = số dòng kết quả / tổng số dòng. Càng nhỏ càng tốt cho index.</p>
+        <ul>
+          <li>Cột <code>email</code> trên 10M user, mỗi email unique → selectivity = 1/10M = cực thấp → index <em>cực hữu ích</em>.</li>
+          <li>Cột <code>gender</code> với 2 giá trị → selectivity = 50% → <em>index gần như vô dụng</em>, planner sẽ chọn Seq Scan.</li>
+          <li>Cột <code>status</code> với 80% dòng = 'paid', 20% = 'pending' → index trên 'pending' (rare value) hữu ích, trên 'paid' không.</li>
+        </ul>
+
+        <p>Quy tắc: <strong>nếu DB ước tính query sẽ trả &gt; 5–10% bảng, planner sẽ Sequential Scan thay vì dùng index</strong>. Random IO của index lookup tốn hơn sequential disk read.</p>
+
+        <p>Đó là lý do <strong>Partial Index</strong> mạnh — bạn ép index chỉ chứa phần selective.</p>
+      </section>
+
+      <section id="not-used">
+        <h2>11. Khi nào index KHÔNG được dùng (mặc dù đã tạo)?</h2>
+
+        <h3>11.1. Function trên cột</h3>
+<pre><code class="language-sql">-- ❌ Index trên `email` không được dùng:
+SELECT * FROM users WHERE LOWER(email) = 'a@b.com';
+
+-- ✓ Functional index, hoặc:
+SELECT * FROM users WHERE email = 'A@B.com';  -- nhưng case-sensitive!</code></pre>
+
+        <h3>11.2. Implicit type cast</h3>
+<pre><code class="language-sql">-- email là VARCHAR, nhưng query dùng số:
+SELECT * FROM users WHERE email = 12345;  -- DB cast: ::text
+-- Có thể skip index do mismatch.</code></pre>
+
+        <h3>11.3. <code>OR</code> trên 2 cột khác nhau</h3>
+<pre><code class="language-sql">SELECT * FROM users WHERE email = 'a@x' OR phone = '0912';
+-- Index trên email và phone riêng lẻ — không phải lúc nào planner cũng OR-bitmap-scan.
+-- Có thể fallback Seq Scan. Cách thay thế: UNION 2 query.</code></pre>
+
+        <h3>11.4. Wildcard prefix LIKE</h3>
+<pre><code class="language-sql">-- ❌ Không dùng B-tree:
+SELECT * FROM users WHERE email LIKE '%@gmail.com';
+-- Cần GIN trigram (pg_trgm extension) hoặc full-text search.
+
+-- ✓ Dùng B-tree được:
+SELECT * FROM users WHERE email LIKE 'alice%';</code></pre>
+
+        <h3>11.5. Selectivity quá cao</h3>
+        <p>Nếu query trả về &gt; 5–10% bảng, planner thường chọn Seq Scan. Đó là <em>đúng</em>, không phải bug.</p>
+
+        <h3>11.6. Statistics outdated</h3>
+        <p>Postgres dùng statistics (do <code>ANALYZE</code> thu thập) để estimate. Sau load lớn, chạy:</p>
+<pre><code class="language-sql">ANALYZE users;
+-- Hoặc chỉ 1 cột:
+ANALYZE users (email);</code></pre>
+
+        <h3>11.7. Composite mismatch order</h3>
+<pre><code class="language-sql">CREATE INDEX idx ON orders(user_id, created_at);
+
+-- ✓ Dùng:
+WHERE user_id = 5;
+WHERE user_id = 5 AND created_at &gt; '2026-01-01';
+
+-- ✗ Không dùng tốt:
+WHERE created_at &gt; '2026-01-01';  -- prefix là user_id, không có → không tận dụng được</code></pre>
+
+        <h3>11.8. NULL với constraint</h3>
+        <p>Default Postgres index B-tree <em>có</em> bao gồm NULL. Nhưng <code>WHERE col IS NULL</code> với index không-partial có thể không hiệu quả nếu nhiều NULL.</p>
+      </section>
+
+      <section id="explain">
+        <h2>12. EXPLAIN cơ bản — đo xem index có được dùng</h2>
+        <p>Bạn không "biết" index được dùng — bạn <strong>kiểm tra</strong> bằng EXPLAIN.</p>
+
+<pre><code class="language-sql">EXPLAIN SELECT * FROM users WHERE email = 'alice@x.com';
+
+-- Output:
+-- Index Scan using idx_users_email on users  (cost=0.42..8.44 rows=1 width=85)
+--   Index Cond: (email = 'alice@x.com'::text)</code></pre>
+
+        <p>Điểm quan trọng:</p>
+        <ul>
+          <li><strong>Index Scan</strong> — index được dùng ✓</li>
+          <li><strong>Seq Scan</strong> — index KHÔNG được dùng (hoặc không có)</li>
+          <li><strong>Bitmap Index Scan</strong> — kết hợp nhiều index</li>
+          <li><strong>Index Only Scan</strong> — covering index, không đụng heap</li>
+        </ul>
+
+        <h3>12.1. EXPLAIN ANALYZE — chạy thật, đo thật</h3>
+<pre><code class="language-sql">EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'alice@x.com';
+
+-- Index Scan using idx_users_email on users
+--   (cost=0.42..8.44 rows=1 width=85)
+--   (actual time=0.024..0.025 rows=1 loops=1)
+--   Index Cond: (email = 'alice@x.com'::text)
+-- Planning Time: 0.123 ms
+-- Execution Time: 0.045 ms</code></pre>
+
+        <p><strong>"actual" vs "estimate"</strong>: planner đoán dựa trên statistics. Nếu actual lệch estimate quá nhiều (10× trở lên), nghĩa là statistics outdated → chạy ANALYZE.</p>
+
+        <p>Sẽ học EXPLAIN sâu hơn ở Ch8.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>13. Bài tập</h2>
+
+        <p>Schema:</p>
+<pre><code class="language-sql">CREATE TABLE orders (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT, status VARCHAR(20),
+  total DECIMAL(10,2),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+-- 100M dòng, 1M user, status có 5 giá trị (paid 70%, pending 5%, ...)</code></pre>
+
+        <p>Đề xuất index cho từng query sau, giải thích lựa chọn:</p>
+        <ol>
+          <li><code>SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 20;</code> (timeline user)</li>
+          <li><code>SELECT * FROM orders WHERE status = 'pending';</code> (queue xử lý)</li>
+          <li><code>SELECT * FROM orders WHERE status = 'paid' AND created_at &gt; '2026-05-01';</code> (báo cáo)</li>
+          <li><code>SELECT id, total FROM orders WHERE user_id = ?;</code> (lấy nhanh số tiền của user)</li>
+          <li><code>SELECT * FROM orders WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 100;</code> (recent active)</li>
+        </ol>
+
+        <p><strong>Bài 2.</strong> Vì sao composite <code>(status, user_id)</code> phục vụ <code>WHERE status='X' AND user_id=Y</code> tốt nhưng phục vụ <code>WHERE user_id=Y</code> kém? Có nên đổi sang <code>(user_id, status)</code>?</p>
+
+        <p><strong>Bài 3.</strong> Bạn có 1 index <code>idx_email ON users(email)</code>. Query <code>SELECT * FROM users WHERE LOWER(email) = LOWER('A@B.com')</code> chạy chậm. Vì sao? Sửa thế nào?</p>
+
+        <p><strong>Bài 4.</strong> Cho bảng <code>logs(id, level, message, created_at)</code> với 1 tỉ dòng và <code>created_at</code> tăng dần. Đề xuất loại index phù hợp + lý do.</p>
+
+        <p><strong>Bài 5.</strong> Khi nào nên dùng <code>INCLUDE</code> thay vì thêm cột vào key của composite index?</p>
+      </section>
+
+      <section id="quiz">
+        <h2>14. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 5</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Composite index <code>(user_id, created_at)</code> KHÔNG dùng tốt cho query nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">WHERE user_id = 5</li>
+              <li class="quiz-option">WHERE user_id = 5 AND created_at > '2026'</li>
+              <li class="quiz-option">WHERE created_at > '2026'</li>
+              <li class="quiz-option">WHERE user_id = 5 ORDER BY created_at DESC</li>
+            </ul>
+            <div class="quiz-explain">Composite index sắp xếp theo cột 1 trước. Query không có cột 1 (user_id) → không có "prefix" để bắt đầu. Postgres có thể skip-scan nhưng không hiệu quả. Nên đảo thứ tự nếu cần phục vụ cả query không user_id, hoặc tạo index riêng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Quy tắc thứ tự cột trong composite index:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Range trước, equality sau</li>
+              <li class="quiz-option">Equality trước, range sau</li>
+              <li class="quiz-option">Cột nhỏ trước, cột lớn sau</li>
+              <li class="quiz-option">Không có quy tắc</li>
+            </ul>
+            <div class="quiz-explain">Equality khóa giá trị cố định → range tiếp theo trở thành scan tuần tự trong khoảng nhỏ. Range trước thì cột tiếp theo không liên tục → kém hiệu quả.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Index NÀO phù hợp nhất cho cột <code>tags TEXT[]</code> với query <code>WHERE tags @&gt; ARRAY['sql']</code>?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">B-tree</li>
+              <li class="quiz-option">Hash</li>
+              <li class="quiz-option">BRIN</li>
+              <li class="quiz-option">GIN</li>
+            </ul>
+            <div class="quiz-explain">GIN (Generalized Inverted Index) thiết kế cho cột có nhiều giá trị (array, JSONB, full-text). Truy vấn "tags chứa X" được tối ưu trên GIN, không thể trên B-tree.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Partial index hữu ích khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Bạn chỉ query một subset nhỏ của bảng và muốn index nhỏ hơn / nhanh hơn</li>
+              <li class="quiz-option">Bảng có ít dòng</li>
+              <li class="quiz-option">Bạn muốn tránh constraint</li>
+              <li class="quiz-option">Có composite key</li>
+            </ul>
+            <div class="quiz-explain">Partial index có WHERE clause — chỉ index dòng thỏa. Hữu ích khi 90%+ dòng không bao giờ được query (vd: deleted_at IS NULL, status = 'pending'). Index nhỏ hơn = nhanh hơn + tiết kiệm.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">"Index Only Scan" trong EXPLAIN nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Index không được dùng</li>
+              <li class="quiz-option">Index dùng nhưng vẫn phải đọc heap</li>
+              <li class="quiz-option">Toàn bộ thông tin lấy được từ index, không cần đọc heap → cực nhanh</li>
+              <li class="quiz-option">Index bị corruption</li>
+            </ul>
+            <div class="quiz-explain">Khi index chứa đủ tất cả cột query cần (covering index, hoặc INCLUDE), DB không cần đọc heap → giảm 1 lần IO. Postgres còn cần check visibility map nhưng vẫn nhanh hơn nhiều.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">CREATE INDEX trên bảng 100M dòng ở production nên dùng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">CREATE INDEX (chuẩn)</li>
+              <li class="quiz-option">CREATE INDEX CONCURRENTLY (không lock writes)</li>
+              <li class="quiz-option">DROP INDEX trước</li>
+              <li class="quiz-option">Tắt DB</li>
+            </ul>
+            <div class="quiz-explain">CREATE INDEX chuẩn lock bảng → khóa app vài phút/giờ. CONCURRENTLY chậm hơn 2-3× nhưng không block ghi/đọc → mặc định cho production.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Index trên cột <code>gender</code> chỉ có 2 giá trị (M/F):</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cực hữu ích</li>
+              <li class="quiz-option">Tăng tốc tất cả query</li>
+              <li class="quiz-option">Bắt buộc</li>
+              <li class="quiz-option">Hầu như vô dụng — selectivity ~50%, planner sẽ Seq Scan</li>
+            </ul>
+            <div class="quiz-explain">Khi selectivity cao (5-10%+), random IO của index tốn hơn sequential scan. Với gender 50/50, planner chọn Seq Scan. Index thừa, lãng phí ghi.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">B-tree index KHÔNG phục vụ tốt cho:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">LIKE '%suffix' (wildcard đầu)</li>
+              <li class="quiz-option">LIKE 'prefix%'</li>
+              <li class="quiz-option">BETWEEN</li>
+              <li class="quiz-option">ORDER BY col</li>
+            </ul>
+            <div class="quiz-explain">B-tree dựa trên thứ tự key. <code>'%suffix'</code> không có prefix cố định → không thể tận dụng cây. Cần GIN trigram (pg_trgm) hoặc reverse string. <code>'prefix%'</code> thì OK vì biết bắt đầu ở đâu.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 5. Tiếp theo: <a href="chuong6.html"><strong>Chương 6 — Transactions & ACID Isolation Levels →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 5 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

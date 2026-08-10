@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Giáo trình tổng quan — Database Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="index.html">Lộ trình</a></li>
+        <li><a href="docs.html" class="active">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <div class="badges">
+        <span class="badge">Giáo trình</span>
+        <span class="badge badge-forest">Tổng quan</span>
+      </div>
+      <h1>Giáo trình tổng quan</h1>
+      <p class="subtitle">
+        Trang này cho bạn <strong>bản đồ tư duy</strong> về toàn bộ Database trước khi đi vào từng chương.
+        Đọc xong sẽ trả lời được: <em>Database là gì, có những loại nào, cấu phần lõi gồm gì, khi nào dùng SQL khi nào dùng NoSQL,
+        và tại sao Replication/Sharding/Caching lại quan trọng.</em>
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+
+      <h2>1. Database là gì?</h2>
+      <p>
+        <strong>Database (CSDL)</strong> là một tập hợp dữ liệu có tổ chức, được quản lý bởi một
+        <strong>DBMS</strong> (Database Management System) để hỗ trợ <em>truy vấn, cập nhật, đảm bảo tính nhất quán
+        và bền vững</em>. Khác với file phẳng (.csv, .json), DB cho bạn:
+      </p>
+      <ul>
+        <li><strong>Truy vấn theo cấu trúc</strong> — hỏi "User nào có trên 100 đơn hàng tháng 5?" mà không phải đọc toàn bộ file.</li>
+        <li><strong>Concurrent access</strong> — nhiều client cùng đọc/ghi an toàn (transactions, locks, MVCC).</li>
+        <li><strong>Đảm bảo nhất quán</strong> — qua constraints (FK, UNIQUE, CHECK), schema, ACID.</li>
+        <li><strong>Khôi phục sau crash</strong> — Write-Ahead Log (WAL), backup, replication.</li>
+        <li><strong>Hiệu năng</strong> — Index làm tra cứu O(log n) thay vì O(n) full scan.</li>
+      </ul>
+
+      <div class="callout callout-tip">
+        <span class="callout-title">Quy tắc ngón tay cái</span>
+        Khi dữ liệu vượt quá vài MB, có nhiều người cùng truy cập, hoặc bạn cần truy vấn linh hoạt — hãy dùng DB.
+        File .json/.csv chỉ phù hợp cho cấu hình tĩnh hoặc dữ liệu nhỏ chỉ-đọc.
+      </div>
+
+      <h2>2. Các loại Database</h2>
+
+      <div class="ascii">┌────────────────────── DATABASE ECOSYSTEM ──────────────────────┐
+│                                                                │
+│  ┌─ RELATIONAL (SQL) ──────────────────┐                       │
+│  │  PostgreSQL · MySQL · SQLite        │  ← OLTP, ACID, JOINs  │
+│  │  SQL Server · Oracle · MariaDB      │                       │
+│  └─────────────────────────────────────┘                       │
+│                                                                │
+│  ┌─ NOSQL ─────────────────────────────────────┐               │
+│  │  Key-Value:    Redis · DynamoDB · Memcached │ ← cache, session │
+│  │  Document:     MongoDB · Couchbase          │ ← flexible JSON  │
+│  │  Wide-column:  Cassandra · ScyllaDB · HBase │ ← write-heavy    │
+│  │  Graph:        Neo4j · Neptune · Dgraph     │ ← relationships  │
+│  └─────────────────────────────────────────────┘               │
+│                                                                │
+│  ┌─ ANALYTICAL (OLAP) ─────────────────┐                       │
+│  │  Snowflake · BigQuery · Redshift    │  ← BI, warehouse, columnar │
+│  │  ClickHouse · DuckDB                │                       │
+│  └─────────────────────────────────────┘                       │
+│                                                                │
+│  ┌─ SEARCH / VECTOR ───────────────────┐                       │
+│  │  Elasticsearch · OpenSearch         │  ← full-text search   │
+│  │  Pinecone · Weaviate · pgvector     │  ← AI embeddings      │
+│  └─────────────────────────────────────┘                       │
+│                                                                │
+│  ┌─ TIME-SERIES ───────────────────────┐                       │
+│  │  InfluxDB · TimescaleDB · Prometheus│  ← metrics, IoT       │
+│  └─────────────────────────────────────┘                       │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘</div>
+
+      <p>Trong khóa học này, ta sẽ tập trung vào 3 nhóm chính: <strong>Relational SQL</strong> (Ch1–8), <strong>NoSQL</strong> (Ch9), và các
+      pattern phụ trợ <strong>Caching/Search/OLAP</strong> (Ch11). Time-series và Vector DB được nhắc đến ngắn gọn nhưng không đào sâu.</p>
+
+      <h2>3. Mô hình quan hệ — vì sao SQL thống trị 50 năm?</h2>
+      <p>
+        Năm 1970, Edgar F. Codd publish bài báo nổi tiếng <em>"A Relational Model of Data for Large Shared Data Banks"</em>
+        đặt nền móng cho mô hình quan hệ. Ý tưởng đơn giản: <strong>dữ liệu = tập các bảng (relation), mỗi bảng có dòng (tuple) và cột (attribute).</strong>
+        Sự đơn giản này có 3 sức mạnh:
+      </p>
+      <ol>
+        <li><strong>Declarative</strong> — bạn nói <em>cần gì</em> (SELECT name FROM users WHERE age > 18), không cần nói <em>làm thế nào</em>. DB tự tối ưu.</li>
+        <li><strong>Toán học chặt chẽ</strong> — dựa trên đại số quan hệ và tính toán quan hệ → tối ưu hóa, biến đổi truy vấn được chứng minh đúng.</li>
+        <li><strong>JOIN linh hoạt</strong> — kết hợp nhiều bảng theo nhiều cách mà schema không cần biết trước.</li>
+      </ol>
+
+      <div class="schema-box">
+        <div class="schema-title">users</div>
+        <ul>
+          <li><span class="pk">★ id</span><span class="col-type">BIGINT</span></li>
+          <li>email<span class="col-type">VARCHAR</span></li>
+          <li>created_at<span class="col-type">TIMESTAMP</span></li>
+        </ul>
+      </div>
+      <div class="schema-box">
+        <div class="schema-title">orders</div>
+        <ul>
+          <li><span class="pk">★ id</span><span class="col-type">BIGINT</span></li>
+          <li><span class="fk">→ user_id</span><span class="col-type">BIGINT</span></li>
+          <li>total<span class="col-type">DECIMAL</span></li>
+          <li>status<span class="col-type">ENUM</span></li>
+        </ul>
+      </div>
+      <div class="schema-box">
+        <div class="schema-title">order_items</div>
+        <ul>
+          <li><span class="pk">★ id</span><span class="col-type">BIGINT</span></li>
+          <li><span class="fk">→ order_id</span><span class="col-type">BIGINT</span></li>
+          <li><span class="fk">→ product_id</span><span class="col-type">BIGINT</span></li>
+          <li>qty<span class="col-type">INT</span></li>
+        </ul>
+      </div>
+
+      <p style="margin-top:1.2rem">
+        Ba bảng trên — một schema kinh điển — có thể trả lời được: tổng doanh thu của user X, top 10 sản phẩm bán chạy,
+        đơn hàng pending lâu nhất, v.v. — chỉ với SQL <code>JOIN + GROUP BY</code>.
+      </p>
+
+      <h2>4. ACID — bốn chữ định nghĩa "đáng tin"</h2>
+
+      <table>
+        <thead>
+          <tr><th>Letter</th><th>Tên</th><th>Ý nghĩa</th><th>Ví dụ</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>A</strong></td>
+            <td>Atomicity</td>
+            <td>"Tất cả hoặc không gì cả". Một transaction không thể chỉ thực thi nửa chừng.</td>
+            <td>Chuyển tiền A→B: trừ A và cộng B phải cùng commit hoặc cùng rollback.</td>
+          </tr>
+          <tr>
+            <td><strong>C</strong></td>
+            <td>Consistency</td>
+            <td>Sau transaction, mọi <em>integrity constraint</em> (FK, CHECK, UNIQUE) đều thỏa.</td>
+            <td>Không tồn tại order với <code>user_id</code> không có trong bảng users.</td>
+          </tr>
+          <tr>
+            <td><strong>I</strong></td>
+            <td>Isolation</td>
+            <td>Các transaction chạy đồng thời như thể chạy tuần tự (ở mức Serializable).</td>
+            <td>Hai user cùng book ghế cuối cùng — chỉ một thành công.</td>
+          </tr>
+          <tr>
+            <td><strong>D</strong></td>
+            <td>Durability</td>
+            <td>Sau COMMIT, dữ liệu sống sót qua mọi crash (kể cả mất điện ngay sau đó).</td>
+            <td>Nhờ Write-Ahead Log (WAL) ghi xuống disk trước khi báo COMMIT thành công.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>5. SQL vs NoSQL — chọn cái gì?</h2>
+
+      <div class="compare">
+        <div>
+          <h4>SQL — chọn khi</h4>
+          <ul>
+            <li>Dữ liệu có cấu trúc rõ, schema ổn định.</li>
+            <li>Cần JOIN nhiều bảng linh hoạt, ad-hoc query.</li>
+            <li>Cần ACID mạnh — tài chính, đặt hàng, booking.</li>
+            <li>Đội nhỏ → 1 instance Postgres scale rất xa (TB-scale).</li>
+            <li>Báo cáo BI, analytics tạm thời.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>NoSQL — chọn khi</h4>
+          <ul>
+            <li>Schema thay đổi liên tục (CMS, IoT events, log).</li>
+            <li>Throughput ghi cực cao, scale ngang là bắt buộc.</li>
+            <li>Truy vấn theo key đơn giản → cache, session (Redis).</li>
+            <li>Quan hệ phức tạp nhiều cấp (Graph DB cho social, fraud).</li>
+            <li>Dữ liệu nested không thuần nhất (Document DB).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-title">Anti-pattern phổ biến</span>
+        Dùng MongoDB chỉ vì "schemaless nhanh". Sau 6 tháng app trưởng thành, bạn sẽ nhận ra mình đã <em>tự cài đặt schema bằng tay
+        trong code</em> — kém hơn Postgres làm sẵn cho bạn. Phần lớn dự án CRUD nên bắt đầu bằng Postgres trước.
+      </div>
+
+      <h2>6. CAP Theorem — không thể có cả 3</h2>
+      <p>
+        Trong hệ phân tán, khi xảy ra <strong>Network Partition (P)</strong>, bạn buộc phải chọn:
+      </p>
+      <ul>
+        <li><strong>CP</strong> — Consistency over Availability: từ chối phục vụ nếu không thể đảm bảo mới nhất. Ví dụ: HBase, MongoDB (mặc định), Etcd.</li>
+        <li><strong>AP</strong> — Availability over Consistency: vẫn phục vụ, sẽ đồng bộ sau. Ví dụ: Cassandra, DynamoDB, CouchDB.</li>
+      </ul>
+      <p>
+        Lưu ý <strong>P là bắt buộc</strong> trong thực tế — network sẽ partition, đó không phải tùy chọn. Nên thực sự chỉ là chọn C vs A.
+        Postgres (single-node) thì không phải hệ phân tán nên CAP không áp dụng trực tiếp.
+      </p>
+
+      <h2>7. Các thành phần lõi của một DBMS</h2>
+
+      <div class="ascii">┌──────────────────────────  POSTGRES ARCHITECTURE  ──────────────────────────┐
+│                                                                             │
+│   Client (psql, app)                                                        │
+│        │                                                                    │
+│        ▼                                                                    │
+│   ┌──────────────┐    ┌──────────────────────────────────────────────────┐ │
+│   │ PARSER       │───▶│ QUERY PLANNER / OPTIMIZER                        │ │
+│   │ (SQL → AST)  │    │ Cost-based, dùng table statistics                │ │
+│   └──────────────┘    └────────────────────┬─────────────────────────────┘ │
+│                                            │                               │
+│                                            ▼                               │
+│                              ┌────────────────────────────┐                │
+│                              │ EXECUTOR                   │                │
+│                              │ Index Scan / Seq Scan /    │                │
+│                              │ Hash Join / Merge Join     │                │
+│                              └─────────┬──────────────────┘                │
+│                                        │                                    │
+│         ┌──────────────────────────────┴────────────────────────┐          │
+│         ▼                                                       ▼          │
+│   ┌──────────────┐                                 ┌──────────────────┐   │
+│   │ BUFFER POOL  │ ◀─────── shared_buffers ──────▶ │ STORAGE (heap,   │   │
+│   │ (RAM cache)  │                                 │ index, toast)    │   │
+│   └──────┬───────┘                                 └──────────────────┘   │
+│          │                                                                 │
+│          ▼                                                                 │
+│   ┌──────────────┐         ┌──────────────┐                                │
+│   │ WAL WRITER   │ ──────▶ │ pg_wal/      │  ← durability, replication    │
+│   └──────────────┘         └──────────────┘                                │
+│                                                                             │
+│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                     │
+│   │ CHECKPOINTER │  │ AUTOVACUUM   │  │ BG WRITER    │  ← maintenance      │
+│   └──────────────┘  └──────────────┘  └──────────────┘                     │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+
+      <p>
+        Mọi DBMS lớn đều có 5–7 thành phần này: parser, planner, executor, buffer pool, WAL, vacuum (GC),
+        và replicator. Hiểu kiến trúc giúp bạn đọc <code>EXPLAIN</code> tốt hơn và debug performance vấn đề thực tế.
+      </p>
+
+      <h2>8. Index — vì sao một câu query nhanh hơn 1000 lần</h2>
+      <p>
+        Không có index, mỗi câu <code>WHERE email = 'a@b.com'</code> phải quét toàn bộ bảng (Sequential Scan).
+        Với 10 triệu dòng = 10 triệu so sánh. Với index B-tree, chỉ cần <strong>~24 phép so sánh</strong> (log₂(10⁷) ≈ 23.25).
+        Đó là khác biệt giữa <em>30 giây</em> và <em>1 mili-giây</em>.
+      </p>
+
+      <p>Nhưng index không miễn phí:</p>
+      <ul>
+        <li>Tốn dung lượng disk (mỗi index thường ~10–30% kích thước bảng).</li>
+        <li>Làm chậm INSERT/UPDATE/DELETE vì phải cập nhật cả index.</li>
+        <li>Quá nhiều index → planner mất thời gian chọn, có khi chọn sai.</li>
+      </ul>
+
+      <h2>9. Replication & Sharding — scale theo chiều ngang</h2>
+
+      <div class="compare">
+        <div>
+          <h4>Replication</h4>
+          <p>Sao chép cùng dữ liệu sang nhiều node để: (1) <strong>đọc song song</strong>, (2) <strong>failover</strong>, (3) <strong>backup live</strong>.</p>
+          <ul>
+            <li>Sync — chậm hơn, dữ liệu giống nhau tuyệt đối.</li>
+            <li>Async — nhanh hơn, có lag nhỏ (replication lag).</li>
+            <li>Semi-sync — ít nhất 1 replica xác nhận.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Sharding</h4>
+          <p>Chia dữ liệu thành nhiều phần đặt trên nhiều node, mỗi node giữ <strong>một phần</strong>. Để <strong>scale ghi và scale dung lượng</strong>.</p>
+          <ul>
+            <li>Range — shard theo khoảng (id 1–1M, 1M–2M…).</li>
+            <li>Hash — hash(key) % N → shard.</li>
+            <li>Directory — bảng tra cứu key → shard.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>10. Caching — lớp đầu tiên giảm tải DB</h2>
+      <p>
+        Trước khi nghĩ đến sharding, hãy nghĩ đến cache. <strong>Redis</strong> cho 100k–1M ops/s với latency &lt;1ms,
+        đủ "che" cho 99% read traffic của hầu hết app. Hai pattern phổ biến:
+      </p>
+      <ul>
+        <li><strong>Cache-aside (Lazy loading)</strong>: app đọc cache trước, miss → đọc DB → set cache.</li>
+        <li><strong>Write-through</strong>: ghi DB và cache cùng lúc.</li>
+        <li><strong>Write-behind</strong>: ghi cache trước, async flush DB sau (rủi ro mất dữ liệu).</li>
+      </ul>
+
+      <h2>11. OLTP vs OLAP — hai thế giới khác nhau</h2>
+
+      <table>
+        <thead>
+          <tr><th>Tiêu chí</th><th>OLTP (Online Transaction Processing)</th><th>OLAP (Online Analytical Processing)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Workload</td><td>Read/Write nhỏ, nhiều, nhanh</td><td>Aggregate trên hàng tỷ dòng, ít hơn</td></tr>
+          <tr><td>Latency</td><td>&lt;100ms</td><td>Vài giây — vài phút OK</td></tr>
+          <tr><td>Schema</td><td>Normalized (3NF)</td><td>Star / Snowflake (denormalized)</td></tr>
+          <tr><td>Storage</td><td>Row-oriented</td><td>Column-oriented (Parquet, ORC)</td></tr>
+          <tr><td>DB</td><td>Postgres, MySQL, SQL Server</td><td>BigQuery, Snowflake, ClickHouse</td></tr>
+          <tr><td>Use case</td><td>App backend, e-commerce, banking</td><td>BI dashboard, ML training, reporting</td></tr>
+        </tbody>
+      </table>
+
+      <h2>12. Lộ trình học đề xuất</h2>
+      <ol class="steps">
+        <li><strong>Tuần 1–2:</strong> Ch1–3. Cài Postgres local, viết SQL thuần thạo (JOIN, GROUP BY, CTE, Window).</li>
+        <li><strong>Tuần 3:</strong> Ch4–5. Thiết kế schema cho 1 ý tưởng app (đặt vé, blog, e-commerce mini).</li>
+        <li><strong>Tuần 4:</strong> Ch6–7. Mở 2 client psql, demo Dirty/Phantom read, thử SELECT FOR UPDATE.</li>
+        <li><strong>Tuần 5:</strong> Ch8. Lấy 5 query chậm, dùng EXPLAIN ANALYZE để tối ưu.</li>
+        <li><strong>Tuần 6:</strong> Ch9–10. Cài Redis, MongoDB. Thử shard đơn giản với 2 Postgres instance.</li>
+        <li><strong>Tuần 7:</strong> Ch11–12. Thiết kế hệ Caching cho 1 endpoint nóng. Thực hành migration online với <code>pg_repack</code>.</li>
+      </ol>
+
+      <div class="callout callout-tip">
+        <span class="callout-title">Mẹo phỏng vấn</span>
+        Khi gặp câu hỏi mở "Thiết kế DB cho X", luôn theo thứ tự: (1) <strong>Quy mô</strong> (read/write QPS, dung lượng, user concurrent),
+        (2) <strong>Truy vấn chính</strong> (top 5 query phổ biến nhất), (3) <strong>Schema</strong> (bảng + key + relation),
+        (4) <strong>Index</strong> (cho top query), (5) <strong>Scale</strong> (cache → read replica → shard nếu cần).
+        Đừng vội nói "dùng MongoDB cho linh hoạt" — đó là red flag với senior.
+      </div>
+
+      <p style="margin-top:2rem">
+        Sẵn sàng chưa? Bắt đầu từ <a href="chuong/chuong1.html">Chương 1 — Database Fundamentals & Relational Model</a>.
+      </p>
+
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>IT Basic — Database Mastery · <a href="index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="js/copy.js"></script>
+</body>
+</html>

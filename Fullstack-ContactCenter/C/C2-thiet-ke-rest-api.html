@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C2 · Thiết kế RESTful API</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-c">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">C2 · Thiết kế RESTful API</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần C · Express & REST API</div>
+      <nav class="nav">
+        <a href="C1-express-middleware.html">C1 · Express: routing, middleware</a>
+        <a href="C2-thiet-ke-rest-api.html" class="active">C2 · Thiết kế RESTful API</a>
+        <a href="C3-validation-dto.html">C3 · Validation, DTO, xử lý lỗi</a>
+        <a href="C4-auth-jwt-rbac.html">C4 · Authentication & Phân quyền</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#principles">① Nguyên tắc REST</a>
+        <a href="#resources">② Tài nguyên & URL</a>
+        <a href="#methods">③ HTTP methods & tính chất</a>
+        <a href="#status">④ Status code chi tiết</a>
+        <a href="#versioning">⑤ Versioning</a>
+        <a href="#paging">⑥ Pagination, filter, sort</a>
+        <a href="#design">⑦ Thiết kế API Contact Center</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần C · Express & REST API &nbsp;›&nbsp; <b>C2 · Thiết kế RESTful API</b></div>
+      <div class="live-pill"><span class="blink"></span> api design</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần C · Chương 2</span>
+        <h1>Thiết kế RESTful API chuẩn</h1>
+        <p class="lead">Thiết kế API rõ ràng, nhất quán, đúng ngữ nghĩa HTTP — kỹ năng được soi rất kỹ khi phỏng vấn backend.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Giải thích được <b>6 ràng buộc kiến trúc REST</b> (Roy Fielding) và vì sao <b>stateless</b> là điều kiện sống còn để scale ngang.</p>
+        <p>• Đặt tên tài nguyên đúng chuẩn: danh từ số nhiều, lồng nhau hợp lý, không nhét động từ vào URL.</p>
+        <p>• Chọn đúng HTTP method dựa trên hai tính chất <b>safe</b> và <b>idempotent</b>; phân biệt PUT vs PATCH, POST vs PUT.</p>
+        <p>• Trả về đúng <b>status code</b> (200/201/204, 400/401/403/404/409/422/429, 5xx) thay vì "200 cho mọi thứ".</p>
+        <p>• Thiết kế <b>versioning</b>, <b>pagination</b> (offset vs cursor), filter và sort qua query string một cách nhất quán.</p>
+        <p>• Áp dụng tất cả để thiết kế bộ API thực chiến cho hệ thống Contact Center: agents, calls, tickets, conversations, queues.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế Contact Center</div>
+        <p>Một hệ thống Contact Center có rất nhiều client gọi vào cùng một backend: dashboard giám sát của supervisor, app
+        của tổng đài viên (agent), widget chat trên website khách hàng, và cả service realtime đẩy sự kiện cuộc gọi. Nếu API
+        không nhất quán — chỗ trả <code>200</code> kèm <code>{error:...}</code>, chỗ nhét <code>/getAgentById</code> vào URL,
+        chỗ phân trang kiểu này chỗ kiểu khác — thì mỗi đội frontend phải đoán mò, bug tăng, onboard người mới rất chậm.
+        REST chuẩn chính là <b>hợp đồng (contract)</b> chung giúp nhiều đội nói cùng một ngôn ngữ.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="principles"><span class="ico">①</span> Nguyên tắc REST</h2>
+      <p><strong>REST</strong> (REpresentational State Transfer) là một <b>kiểu kiến trúc (architectural style)</b> do Roy Fielding
+      mô tả trong luận án tiến sĩ năm 2000 — không phải một giao thức hay một thư viện. Nó là tập hợp các <b>ràng buộc</b>
+      (constraints) áp lên cách client và server giao tiếp qua HTTP. Tuân thủ càng nhiều ràng buộc, hệ thống càng dễ mở rộng,
+      dễ cache, dễ tiến hóa độc lập.</p>
+
+      <h3>6 ràng buộc kiến trúc</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🔀</span> Client–Server</div><p>Tách bạch giao diện (client) khỏi lưu trữ/xử lý (server). Hai bên tiến hóa độc lập miễn là giữ nguyên hợp đồng API.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Stateless</div><p>Mỗi request chứa <b>đủ</b> thông tin để xử lý. Server <b>không</b> nhớ ngữ cảnh giữa các request (không session phía server).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📦</span> Cacheable</div><p>Response tự nói rõ nó có cache được không (qua header) để giảm tải, tăng tốc.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🎛️</span> Uniform Interface</div><p>Giao diện đồng nhất: tài nguyên có URI, thao tác qua method chuẩn, dữ liệu tự mô tả. Đây là ràng buộc <b>cốt lõi</b>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🥞</span> Layered System</div><p>Client không biết mình đang nói với server gốc hay qua load balancer/cache/gateway. Cho phép chèn tầng trung gian.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">💻</span> Code on Demand</div><p>(Tùy chọn) Server có thể gửi mã thực thi cho client. Hiếm dùng trong API thực tế.</p></div>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Stateless không có nghĩa là "không có state"</div>
+        <p>Dữ liệu (cuộc gọi, ticket) vẫn được lưu trong database — đó là <b>application state</b>. Cái mà REST yêu cầu là
+        không lưu <b>session state</b> phía server cho từng client. Token xác thực (JWT) đi <b>kèm mỗi request</b> trong header
+        <code>Authorization</code>, không phải lưu trong bộ nhớ server. Nhờ vậy bất kỳ instance Node nào trong cluster cũng
+        xử lý được request — đây là điều kiện để <b>scale ngang</b> và đặt nhiều instance sau load balancer.</p>
+      </div>
+
+      <h3>Uniform Interface có 4 nguyên tắc con</h3>
+      <ul>
+        <li><b>Identification of resources</b> — mỗi tài nguyên định danh bằng một URI (vd <code>/calls/42</code>).</li>
+        <li><b>Manipulation through representations</b> — client thao tác tài nguyên qua biểu diễn của nó (thường là JSON), không thao tác trực tiếp lên dữ liệu trong DB.</li>
+        <li><b>Self-descriptive messages</b> — mỗi message tự mô tả: method, <code>Content-Type</code>, status code nói rõ phải hiểu nó thế nào.</li>
+        <li><b>HATEOAS</b> (Hypermedia As The Engine Of Application State) — response chứa link để client biết hành động kế tiếp. Đây là mức cao nhất, ít dự án thực tế triển khai đầy đủ.</li>
+      </ul>
+
+      <!-- 2 -->
+      <h2 id="resources"><span class="ico">②</span> Tài nguyên & URL</h2>
+      <p>Trong REST, mọi thứ xoay quanh <strong>tài nguyên (resource)</strong> — một "danh từ" mà hệ thống quản lý: một cuộc gọi,
+      một tổng đài viên, một ticket. URL chỉ <b>định danh tài nguyên</b>; <b>hành động</b> nằm ở HTTP method, không nằm trong URL.</p>
+
+      <h3>Quy tắc đặt tên</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Quy tắc</th><th>✅ Nên</th><th>❌ Tránh</th></tr></thead>
+          <tbody>
+            <tr><td>Dùng danh từ, không dùng động từ</td><td><code>GET /calls</code></td><td><code>GET /getCalls</code></td></tr>
+            <tr><td>Danh từ số nhiều cho collection</td><td><code>/agents</code>, <code>/tickets</code></td><td><code>/agent</code>, <code>/ticketList</code></td></tr>
+            <tr><td>Định danh tài nguyên đơn</td><td><code>/agents/77</code></td><td><code>/agents?id=77</code></td></tr>
+            <tr><td>Lồng nhau thể hiện quan hệ</td><td><code>/calls/42/recordings</code></td><td><code>/callRecordings?callId=42</code></td></tr>
+            <tr><td>chữ thường, gạch-nối (kebab-case)</td><td><code>/call-dispositions</code></td><td><code>/callDispositions</code></td></tr>
+            <tr><td>Không để đuôi <code>/</code> thừa</td><td><code>/queues/sales</code></td><td><code>/queues/sales/</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Lồng nhau bao sâu là vừa?</div>
+        <p>Quy tắc kinh nghiệm: <b>không lồng quá 2 cấp</b>. <code>/calls/42/recordings</code> đọc tốt. Nhưng
+        <code>/agents/77/calls/42/recordings/9/segments</code> thì khó dùng — hãy phẳng hóa: <code>/recordings/9/segments</code>.
+        Lồng nhau chỉ nên dùng khi tài nguyên con <b>thực sự thuộc về</b> cha và ít khi truy cập độc lập.</p>
+      </div>
+
+      <h3>Sub-resource và "action" không tự nhiên</h3>
+      <p>Đôi khi có thao tác không ánh xạ gọn vào CRUD — ví dụ "chuyển tiếp cuộc gọi" hay "kết thúc cuộc gọi". Có vài lựa chọn:</p>
+      <ul>
+        <li>Coi action như một <b>sub-resource trạng thái</b>: <code>POST /calls/42/transfers</code> tạo một bản ghi chuyển tiếp.</li>
+        <li>Cập nhật trạng thái qua <code>PATCH /calls/42</code> với body <code>{"status":"ended"}</code>.</li>
+        <li>Khi thực sự cần verb (hiếm), dùng quy ước rõ ràng: <code>POST /calls/42/hangup</code> — chấp nhận lệch REST thuần một chút để dễ hiểu hơn.</li>
+      </ul>
+
+      <!-- 3 -->
+      <h2 id="methods"><span class="ico">③</span> HTTP methods & tính chất</h2>
+      <p>Mỗi HTTP method mang <strong>ngữ nghĩa</strong> riêng. Hai tính chất quan trọng nhất khi phỏng vấn:</p>
+      <ul>
+        <li><b>Safe</b> — không làm thay đổi state trên server (chỉ đọc). Có thể gọi thoải mái, prefetch, cache.</li>
+        <li><b>Idempotent</b> — gọi 1 lần hay N lần liên tiếp cho <b>cùng kết quả state</b>. Cực kỳ quan trọng cho retry khi mạng chập chờn.</li>
+      </ul>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Method</th><th>Ý nghĩa</th><th>Safe</th><th>Idempotent</th><th>Có body?</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td>Đọc tài nguyên</td><td><span class="badge green">Có</span></td><td><span class="badge green">Có</span></td><td>Không</td></tr>
+            <tr><td><code>POST</code></td><td>Tạo mới / kích hoạt xử lý</td><td><span class="badge red">Không</span></td><td><span class="badge red">Không</span></td><td>Có</td></tr>
+            <tr><td><code>PUT</code></td><td>Thay thế toàn bộ tài nguyên</td><td><span class="badge red">Không</span></td><td><span class="badge green">Có</span></td><td>Có</td></tr>
+            <tr><td><code>PATCH</code></td><td>Cập nhật một phần</td><td><span class="badge red">Không</span></td><td><span class="badge amber">Thường không*</span></td><td>Có</td></tr>
+            <tr><td><code>DELETE</code></td><td>Xóa tài nguyên</td><td><span class="badge red">Không</span></td><td><span class="badge green">Có</span></td><td>Hiếm</td></tr>
+            <tr><td><code>HEAD</code></td><td>Như GET nhưng chỉ header</td><td><span class="badge green">Có</span></td><td><span class="badge green">Có</span></td><td>Không</td></tr>
+            <tr><td><code>OPTIONS</code></td><td>Hỏi method/CORS được phép</td><td><span class="badge green">Có</span></td><td><span class="badge green">Có</span></td><td>Không</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Vì sao PATCH "thường không" idempotent?</div>
+        <p>Phụ thuộc <b>nội dung patch</b>. Nếu PATCH gửi giá trị tuyệt đối (<code>{"priority":3}</code>) thì lặp lại vô hại → idempotent.
+        Nhưng nếu PATCH mang ngữ nghĩa tương đối (<code>{"op":"increment","field":"attempts"}</code>) thì gọi 2 lần ra 2 kết quả khác nhau
+        → không idempotent. PUT thì luôn idempotent vì nó <b>thay thế toàn bộ</b> bằng cùng một representation.</p>
+      </div>
+
+      <h3>PUT vs PATCH — minh họa với ticket</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">put-vs-patch.http</span><span class="lang">HTTP</span></div>
+        <pre><code><span class="tok-com"># Giả sử ticket 88 hiện tại:</span>
+<span class="tok-com"># { "id":88, "subject":"Không gọi được", "priority":2, "status":"open", "assignee":"agent-12" }</span>
+
+<span class="tok-com"># PUT = THAY THẾ TOÀN BỘ. Thiếu field nào -&gt; field đó bị xóa/đặt mặc định!</span>
+<span class="tok-key">PUT</span> /v1/tickets/88
+<span class="tok-typ">Content-Type</span>: application/json
+
+{ <span class="tok-str">"subject"</span>: <span class="tok-str">"Không gọi được"</span>, <span class="tok-str">"priority"</span>: <span class="tok-num">3</span>, <span class="tok-str">"status"</span>: <span class="tok-str">"open"</span>, <span class="tok-str">"assignee"</span>: <span class="tok-str">"agent-12"</span> }
+<span class="tok-com"># Gọi lại y hệt 5 lần -&gt; ticket vẫn vậy =&gt; IDEMPOTENT</span>
+
+<span class="tok-com"># PATCH = CHỈ SỬA PHẦN GỬI LÊN. Các field khác giữ nguyên.</span>
+<span class="tok-key">PATCH</span> /v1/tickets/88
+<span class="tok-typ">Content-Type</span>: application/json
+
+{ <span class="tok-str">"priority"</span>: <span class="tok-num">3</span> }
+<span class="tok-com"># Chỉ priority đổi thành 3; subject/status/assignee không đụng tới.</span></code></pre>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Cạm bẫy thực tế</div>
+        <p>Rất nhiều bug "tự dưng mất dữ liệu" đến từ việc frontend dùng <code>PUT</code> nhưng chỉ gửi vài field. Server thay thế toàn bộ,
+        các field không gửi bị về <code>null</code>. Với ticket Contact Center, <code>assignee</code> hay <code>tags</code> biến mất là sự cố nghiêm trọng.
+        Nguyên tắc: <b>cập nhật một phần thì dùng PATCH</b>, và validate kỹ ở C3.</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="status"><span class="ico">④</span> Status code chi tiết</h2>
+      <p>Status code là một phần của <b>self-descriptive message</b>. Trả đúng code giúp client xử lý đúng mà không cần đọc body.
+      Nhóm theo lớp: <b>2xx</b> thành công, <b>3xx</b> chuyển hướng, <b>4xx</b> lỗi phía client, <b>5xx</b> lỗi phía server.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Code</th><th>Tên</th><th>Khi nào dùng (ngữ cảnh Contact Center)</th></tr></thead>
+          <tbody>
+            <tr><td><code>200</code></td><td>OK</td><td>GET thành công, hoặc PATCH/PUT trả về tài nguyên sau cập nhật.</td></tr>
+            <tr><td><code>201</code></td><td>Created</td><td>POST tạo mới thành công. Nên kèm header <code>Location: /v1/calls/42</code>.</td></tr>
+            <tr><td><code>202</code></td><td>Accepted</td><td>Nhận yêu cầu nhưng xử lý <b>bất đồng bộ</b> (vd: yêu cầu xuất bản ghi cuộc gọi, đẩy vào queue).</td></tr>
+            <tr><td><code>204</code></td><td>No Content</td><td>DELETE thành công, hoặc cập nhật không cần trả body.</td></tr>
+            <tr><td><code>301</code></td><td>Moved Permanently</td><td>Endpoint đổi vĩnh viễn. Client nên cập nhật URL.</td></tr>
+            <tr><td><code>304</code></td><td>Not Modified</td><td>Dùng với <code>ETag</code>/<code>If-None-Match</code> — tài nguyên chưa đổi, client dùng bản cache.</td></tr>
+            <tr><td><code>400</code></td><td>Bad Request</td><td>Request <b>sai cú pháp</b>: JSON hỏng, thiếu field bắt buộc, sai kiểu.</td></tr>
+            <tr><td><code>401</code></td><td>Unauthorized</td><td><b>Chưa xác thực</b>: thiếu/sai/hết hạn token. Thực ra nghĩa là "unauthenticated".</td></tr>
+            <tr><td><code>403</code></td><td>Forbidden</td><td>Đã xác thực nhưng <b>không có quyền</b>: agent cố sửa ticket của team khác.</td></tr>
+            <tr><td><code>404</code></td><td>Not Found</td><td>Tài nguyên không tồn tại — hoặc giấu sự tồn tại vì lý do bảo mật.</td></tr>
+            <tr><td><code>409</code></td><td>Conflict</td><td>Xung đột state: agent đang <code>busy</code> nhưng cố nhận thêm cuộc gọi; trùng khóa duy nhất.</td></tr>
+            <tr><td><code>422</code></td><td>Unprocessable Entity</td><td>Cú pháp đúng nhưng <b>vi phạm nghiệp vụ</b>: priority ngoài khoảng cho phép, email sai định dạng.</td></tr>
+            <tr><td><code>429</code></td><td>Too Many Requests</td><td>Vượt rate limit. Nên kèm header <code>Retry-After</code>.</td></tr>
+            <tr><td><code>500</code></td><td>Internal Server Error</td><td>Lỗi không lường trước phía server (exception chưa bắt). Không lộ stack trace.</td></tr>
+            <tr><td><code>502</code></td><td>Bad Gateway</td><td>Gateway nhận response lỗi từ service phía sau (vd telephony engine không phản hồi đúng).</td></tr>
+            <tr><td><code>503</code></td><td>Service Unavailable</td><td>Service quá tải hoặc đang bảo trì. Kèm <code>Retry-After</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ 401 vs 403 — phân biệt rõ</div>
+        <p><b>401 = "tôi không biết bạn là ai"</b> (chưa/sai xác thực) → client nên đăng nhập lại / refresh token.
+        <b>403 = "tôi biết bạn là ai nhưng bạn không được phép"</b> (đã xác thực, thiếu quyền) → đăng nhập lại cũng vô ích.
+        Trả nhầm sẽ khiến frontend xử lý sai (vd cứ logout người dùng dù chỉ là thiếu quyền). Chi tiết phân quyền ở
+        <a href="C4-auth-jwt-rbac.html">C4</a>.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ 400 vs 422 — cú pháp vs nghiệp vụ</div>
+        <p><b>400</b>: request <b>không hợp lệ về cú pháp/cấu trúc</b> — JSON parse lỗi, thiếu field bắt buộc, sai kiểu dữ liệu.
+        <b>422</b>: cú pháp đúng, parse được, nhưng <b>vi phạm luật nghiệp vụ</b> — vd <code>priority: 99</code> trong khi chỉ chấp nhận 1–5,
+        hay tạo cuộc gọi cho agent đã offline. Nhiều team gộp cả hai vào 400 cũng được, miễn <b>nhất quán</b> và body mô tả lỗi rõ ràng.</p>
+      </div>
+
+      <h3>Định dạng body lỗi nhất quán</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">error-shape.json</span><span class="lang">JSON</span></div>
+        <pre><code><span class="tok-com">// 422 — body mô tả lỗi nghiệp vụ, máy đọc được (code) lẫn người đọc được (message)</span>
+{
+  <span class="tok-str">"error"</span>: {
+    <span class="tok-str">"code"</span>: <span class="tok-str">"VALIDATION_FAILED"</span>,
+    <span class="tok-str">"message"</span>: <span class="tok-str">"Dữ liệu ticket không hợp lệ"</span>,
+    <span class="tok-str">"details"</span>: [
+      { <span class="tok-str">"field"</span>: <span class="tok-str">"priority"</span>, <span class="tok-str">"issue"</span>: <span class="tok-str">"phải nằm trong khoảng 1..5"</span> },
+      { <span class="tok-str">"field"</span>: <span class="tok-str">"assignee"</span>, <span class="tok-str">"issue"</span>: <span class="tok-str">"agent không tồn tại"</span> }
+    ],
+    <span class="tok-str">"traceId"</span>: <span class="tok-str">"req_9f3a1c"</span>
+  }
+}</code></pre>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="versioning"><span class="ico">⑤</span> Versioning</h2>
+      <p>API là <b>hợp đồng công khai</b>. Khi bạn cần thay đổi <b>không tương thích ngược</b> (breaking change) — đổi tên field,
+      đổi kiểu, bỏ endpoint — bạn không được phá vỡ các client cũ đang chạy. <strong>Versioning</strong> cho phép vận hành song song
+      nhiều phiên bản trong giai đoạn chuyển đổi.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Cách</th><th>Ví dụ</th><th>Ưu</th><th>Nhược</th></tr></thead>
+          <tbody>
+            <tr><td><b>URL path</b></td><td><code>/v1/calls</code> · <code>/v2/calls</code></td><td>Rõ ràng, dễ test trên trình duyệt, dễ route/cache</td><td>Không "thuần REST" (cùng tài nguyên, khác URI); lan ra mọi đường dẫn</td></tr>
+            <tr><td><b>Header</b></td><td><code>Accept: application/vnd.cc.v2+json</code></td><td>Giữ URI sạch, đúng tinh thần content negotiation</td><td>Khó test bằng tay, dễ quên, cache phức tạp hơn</td></tr>
+            <tr><td><b>Query param</b></td><td><code>/calls?version=2</code></td><td>Đơn giản</td><td>Dễ lẫn với filter; ít dùng cho versioning lớn</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Thực tế đa số chọn URL path</div>
+        <p>Versioning qua <code>/v1</code>, <code>/v2</code> trong path là phổ biến nhất vì dễ hiểu, dễ vận hành, dễ định tuyến ở
+        gateway. Quy tắc vàng: <b>chỉ tăng version khi có breaking change</b>. Thêm field mới (không bắt buộc) hay endpoint mới là
+        <b>tương thích ngược</b> → không cần version mới. Hãy đặt version ngay từ ngày đầu (<code>/v1/...</code>) để sau này không phải refactor toàn bộ.</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="paging"><span class="ico">⑥</span> Pagination, filter, sort</h2>
+      <p>Một endpoint danh sách như <code>GET /calls</code> không bao giờ được trả về <b>toàn bộ</b> hàng triệu bản ghi.
+      Phải <strong>phân trang</strong>. Filter và sort được biểu diễn qua <b>query string</b> — vì chúng là cách <i>xem</i> collection,
+      không tạo ra tài nguyên mới.</p>
+
+      <h3>Offset vs Cursor pagination</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>Offset (limit/offset, page)</th><th>Cursor (keyset)</th></tr></thead>
+          <tbody>
+            <tr><td>Ví dụ</td><td><code>GET /calls?limit=20&amp;offset=40</code></td><td><code>GET /calls?limit=20&amp;cursor=eyJpZCI6OTl9</code></td></tr>
+            <tr><td>Cách hoạt động</td><td>DB bỏ qua N dòng đầu rồi lấy tiếp</td><td>Lấy các dòng "sau" một mốc (id/timestamp) đã mã hóa trong cursor</td></tr>
+            <tr><td>Hiệu năng khi offset lớn</td><td><span class="badge red">Chậm dần</span> (DB vẫn quét N dòng bỏ đi)</td><td><span class="badge green">Ổn định</span> (dùng index, không quét thừa)</td></tr>
+            <tr><td>Dữ liệu thay đổi liên tục</td><td><span class="badge red">Lệch trang</span> (bản ghi mới chèn vào làm trùng/sót)</td><td><span class="badge green">Ổn định</span></td></tr>
+            <tr><td>Nhảy tới trang bất kỳ</td><td><span class="badge green">Dễ</span> (trang 7)</td><td><span class="badge red">Khó</span> (chỉ tiến/lùi tuần tự)</td></tr>
+            <tr><td>Hợp với</td><td>Bảng admin, dữ liệu nhỏ/ổn định, cần số trang</td><td>Feed realtime, log cuộc gọi, "tải thêm" vô hạn</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Vì sao Contact Center hay chọn cursor cho log cuộc gọi</div>
+        <p>Log cuộc gọi sinh ra <b>liên tục</b> — mỗi giây thêm bản ghi mới ở đầu danh sách (sort theo thời gian giảm dần). Với offset,
+        khi supervisor cuộn sang "trang 2", các cuộc gọi mới vừa chèn vào trang 1 sẽ đẩy mọi thứ xuống → trang 2 bị <b>trùng</b> bản ghi
+        đã thấy hoặc <b>sót</b> bản ghi. Cursor (keyset, bám theo <code>id</code>/<code>startedAt</code>) không bị hiện tượng này và còn nhanh hơn ở dữ liệu lớn.</p>
+      </div>
+
+      <h3>Quy ước query thống nhất</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">list-query.http</span><span class="lang">HTTP</span></div>
+        <pre><code><span class="tok-com"># Filter: dùng tên field làm key</span>
+<span class="tok-key">GET</span> /v1/calls?status=missed&amp;queue=sales&amp;agentId=12
+
+<span class="tok-com"># Filter theo khoảng thời gian</span>
+<span class="tok-key">GET</span> /v1/calls?startedAfter=2026-06-01T00:00:00Z&amp;startedBefore=2026-06-09T00:00:00Z
+
+<span class="tok-com"># Sort: dấu '-' = giảm dần, nhiều field ngăn bởi dấu phẩy</span>
+<span class="tok-key">GET</span> /v1/calls?sort=-startedAt,duration
+
+<span class="tok-com"># Pagination kiểu cursor</span>
+<span class="tok-key">GET</span> /v1/calls?limit=20&amp;cursor=eyJpZCI6OTl9
+
+<span class="tok-com"># Chọn field trả về (sparse fieldset) để response gọn</span>
+<span class="tok-key">GET</span> /v1/calls?fields=id,status,startedAt,agentId</code></pre>
+      </div>
+
+      <h3>Hình dạng response danh sách</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">list-response.json</span><span class="lang">JSON</span></div>
+        <pre><code>{
+  <span class="tok-str">"data"</span>: [
+    { <span class="tok-str">"id"</span>: <span class="tok-num">101</span>, <span class="tok-str">"status"</span>: <span class="tok-str">"missed"</span>, <span class="tok-str">"agentId"</span>: <span class="tok-num">12</span>, <span class="tok-str">"startedAt"</span>: <span class="tok-str">"2026-06-09T08:12:00Z"</span> },
+    { <span class="tok-str">"id"</span>: <span class="tok-num">100</span>, <span class="tok-str">"status"</span>: <span class="tok-str">"answered"</span>, <span class="tok-str">"agentId"</span>: <span class="tok-num">12</span>, <span class="tok-str">"startedAt"</span>: <span class="tok-str">"2026-06-09T08:10:00Z"</span> }
+  ],
+  <span class="tok-str">"pagination"</span>: {
+    <span class="tok-str">"limit"</span>: <span class="tok-num">20</span>,
+    <span class="tok-str">"nextCursor"</span>: <span class="tok-str">"eyJpZCI6MTAwfQ"</span>,   <span class="tok-com">// null nếu hết</span>
+    <span class="tok-str">"hasMore"</span>: <span class="tok-key">true</span>
+  }
+}</code></pre>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="design"><span class="ico">⑦</span> Thiết kế API Contact Center</h2>
+      <p>Giờ ta gom mọi thứ lại để thiết kế một bộ API thực chiến. <b>Tư duy thiết kế</b> luôn đi theo trình tự:
+      (1) liệt kê tài nguyên & quan hệ, (2) ánh xạ thao tác vào method, (3) chọn status code & phân trang, (4) cân nhắc đánh đổi.</p>
+
+      <h3>Bước 1 — Mô hình tài nguyên & quan hệ</h3>
+      <div class="flow">
+        <span class="node">queues (hàng đợi)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">calls (cuộc gọi)</span><span class="arr">→</span>
+        <span class="node">recordings</span>
+      </div>
+      <div class="flow">
+        <span class="node">agents (tổng đài viên)</span><span class="arr">↔</span>
+        <span class="node" style="border-color:var(--cyan)">calls</span><span class="arr">→</span>
+        <span class="node">tickets</span><span class="arr">→</span>
+        <span class="node">conversations / messages</span>
+      </div>
+      <p>Các tài nguyên gốc (top-level): <code>agents</code>, <code>queues</code>, <code>calls</code>, <code>tickets</code>,
+      <code>conversations</code>. Sub-resource: <code>recordings</code> của một call, <code>messages</code> của một conversation.</p>
+
+      <h3>Bước 2 — Bảng endpoint</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Method + Path</th><th>Mục đích</th><th>Thành công</th><th>Lỗi hay gặp</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET /v1/agents</code></td><td>Liệt kê tổng đài viên (filter theo status, queue)</td><td>200</td><td>401</td></tr>
+            <tr><td><code>GET /v1/agents/{id}</code></td><td>Chi tiết 1 agent</td><td>200</td><td>404</td></tr>
+            <tr><td><code>PATCH /v1/agents/{id}</code></td><td>Đổi trạng thái (available/busy/offline)</td><td>200</td><td>409 nếu chuyển trạng thái không hợp lệ</td></tr>
+            <tr><td><code>GET /v1/calls</code></td><td>Log cuộc gọi (cursor pagination, sort -startedAt)</td><td>200</td><td>400 nếu cursor hỏng</td></tr>
+            <tr><td><code>POST /v1/calls</code></td><td>Khởi tạo cuộc gọi (outbound)</td><td>201 + Location</td><td>409 nếu agent đang bận; 422 nếu số không hợp lệ</td></tr>
+            <tr><td><code>POST /v1/calls/{id}/transfers</code></td><td>Chuyển tiếp cuộc gọi sang agent/queue khác</td><td>201</td><td>409 nếu call đã kết thúc</td></tr>
+            <tr><td><code>PATCH /v1/calls/{id}</code></td><td>Cập nhật (vd status: ended, disposition)</td><td>200</td><td>409 nếu trạng thái không cho phép</td></tr>
+            <tr><td><code>GET /v1/calls/{id}/recordings</code></td><td>Danh sách bản ghi của cuộc gọi</td><td>200</td><td>404</td></tr>
+            <tr><td><code>POST /v1/tickets</code></td><td>Tạo ticket từ cuộc gọi/chat</td><td>201</td><td>422 nếu thiếu/sai field nghiệp vụ</td></tr>
+            <tr><td><code>PATCH /v1/tickets/{id}</code></td><td>Cập nhật một phần (priority, assignee, status)</td><td>200</td><td>403 nếu khác team; 422</td></tr>
+            <tr><td><code>GET /v1/conversations/{id}/messages</code></td><td>Tin nhắn của 1 hội thoại chat</td><td>200</td><td>404</td></tr>
+            <tr><td><code>POST /v1/conversations/{id}/messages</code></td><td>Gửi tin nhắn mới</td><td>201</td><td>409 nếu hội thoại đã đóng</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Bước 3 — Code thực chiến: route Express tạo cuộc gọi</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">routes/calls.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-key">const</span> router = express.<span class="tok-fn">Router</span>();
+
+<span class="tok-com">// POST /v1/calls — tạo cuộc gọi outbound. Idempotency-Key chống tạo trùng khi retry.</span>
+router.<span class="tok-fn">post</span>(<span class="tok-str">'/calls'</span>, <span class="tok-key">async</span> (req, res) => {
+  <span class="tok-key">const</span> { agentId, to, queue } = req.body;
+
+  <span class="tok-com">// 1) Validate cú pháp -&gt; 400 (chi tiết ở C3)</span>
+  <span class="tok-key">if</span> (!agentId || !to) {
+    <span class="tok-key">return</span> res.<span class="tok-fn">status</span>(<span class="tok-num">400</span>).<span class="tok-fn">json</span>({ error: { code: <span class="tok-str">'BAD_REQUEST'</span>, message: <span class="tok-str">'Thiếu agentId hoặc to'</span> } });
+  }
+
+  <span class="tok-key">const</span> agent = <span class="tok-key">await</span> agents.<span class="tok-fn">find</span>(agentId);
+  <span class="tok-key">if</span> (!agent) {
+    <span class="tok-key">return</span> res.<span class="tok-fn">status</span>(<span class="tok-num">422</span>).<span class="tok-fn">json</span>({ error: { code: <span class="tok-str">'AGENT_NOT_FOUND'</span>, message: <span class="tok-str">'Agent không tồn tại'</span> } });
+  }
+
+  <span class="tok-com">// 2) Xung đột trạng thái -&gt; 409</span>
+  <span class="tok-key">if</span> (agent.status !== <span class="tok-str">'available'</span>) {
+    <span class="tok-key">return</span> res.<span class="tok-fn">status</span>(<span class="tok-num">409</span>).<span class="tok-fn">json</span>({ error: { code: <span class="tok-str">'AGENT_BUSY'</span>, message: <span class="tok-str">'Agent đang không sẵn sàng'</span> } });
+  }
+
+  <span class="tok-com">// 3) Idempotency: cùng key -&gt; trả về call đã tạo, không tạo mới</span>
+  <span class="tok-key">const</span> key = req.<span class="tok-fn">get</span>(<span class="tok-str">'Idempotency-Key'</span>);
+  <span class="tok-key">const</span> existing = key &amp;&amp; <span class="tok-key">await</span> calls.<span class="tok-fn">findByIdempotencyKey</span>(key);
+  <span class="tok-key">if</span> (existing) <span class="tok-key">return</span> res.<span class="tok-fn">status</span>(<span class="tok-num">200</span>).<span class="tok-fn">json</span>(existing);
+
+  <span class="tok-key">const</span> call = <span class="tok-key">await</span> calls.<span class="tok-fn">create</span>({ agentId, to, queue, status: <span class="tok-str">'dialing'</span>, idempotencyKey: key });
+
+  <span class="tok-com">// 4) 201 + Location trỏ tới tài nguyên vừa tạo</span>
+  res.<span class="tok-fn">status</span>(<span class="tok-num">201</span>).<span class="tok-fn">location</span>(<span class="tok-str">`/v1/calls/</span>${call.id}<span class="tok-str">`</span>).<span class="tok-fn">json</span>(call);
+});</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Idempotency-Key — vũ khí cho POST không idempotent</div>
+        <p>POST vốn không idempotent: gọi 2 lần tạo 2 cuộc gọi. Nhưng mạng di động hay rớt → client retry. Giải pháp chuẩn:
+        client sinh một <code>Idempotency-Key</code> (UUID) gửi kèm header; server lưu key này. Lần retry cùng key → server
+        trả về kết quả cũ thay vì tạo mới. Cực kỳ quan trọng với thao tác "tốn tiền" như khởi tạo cuộc gọi hay gửi SMS.</p>
+      </div>
+
+      <h3>Bước 4 — Đánh đổi & Richardson Maturity Model</h3>
+      <p>Mức độ "RESTful" được đo bằng <strong>Richardson Maturity Model</strong> (4 level từ 0 tới 3):</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Level</th><th>Đặc điểm</th><th>Ví dụ</th></tr></thead>
+          <tbody>
+            <tr><td><b>0 — The Swamp of POX</b></td><td>Một URI, một method (thường POST), RPC trá hình</td><td><code>POST /api</code> với body <code>{"action":"getCall"}</code></td></tr>
+            <tr><td><b>1 — Resources</b></td><td>Có nhiều URI tài nguyên, nhưng vẫn dùng 1 method</td><td><code>POST /calls/42</code> cho mọi thao tác</td></tr>
+            <tr><td><b>2 — HTTP Verbs</b></td><td>Dùng đúng method + status code. <b>Đa số API "REST" dừng ở đây</b></td><td><code>GET/POST/PATCH/DELETE /calls</code></td></tr>
+            <tr><td><b>3 — Hypermedia (HATEOAS)</b></td><td>Response chứa link hành động kế tiếp</td><td>call trả kèm <code>{"_links":{"hangup":"/calls/42/hangup"}}</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>REST vs RPC vs GraphQL — chọn gì?</h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>REST</th><th>RPC (vd gRPC)</th><th>GraphQL</th></tr></thead>
+          <tbody>
+            <tr><td>Đơn vị</td><td>Tài nguyên + method</td><td>Lời gọi hàm</td><td>Một endpoint, client tự khai báo cần gì</td></tr>
+            <tr><td>Over/under-fetching</td><td>Hay gặp (cố định field)</td><td>Tùy thiết kế</td><td>Hạn chế tốt — client chọn field</td></tr>
+            <tr><td>Caching HTTP</td><td><span class="badge green">Mạnh</span> (theo URL + verb)</td><td>Yếu hơn</td><td>Khó (đa số POST tới 1 URL)</td></tr>
+            <tr><td>Hợp với</td><td>API công khai, CRUD, nhiều client</td><td>Giao tiếp service-to-service nội bộ, độ trễ thấp</td><td>UI phức tạp, nhiều màn hình, tổng hợp dữ liệu</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Trong một hệ Contact Center thực tế</div>
+        <p>Thường <b>lai</b>: REST cho API quản trị (agents/tickets/queues), gRPC cho giao tiếp giữa các microservice nội bộ
+        (telephony engine ↔ routing service) vì cần độ trễ thấp, và WebSocket/SSE cho sự kiện realtime cuộc gọi (Part E).
+        GraphQL đôi khi dùng ở tầng BFF khi dashboard cần tổng hợp dữ liệu từ nhiều service.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> "200 cho mọi thứ"</div><p>Trả <code>200</code> kèm <code>{success:false}</code> khiến client không thể dựa vào status code. Dùng đúng 4xx/5xx.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Verb trong URL</div><p><code>/getCall</code>, <code>/createTicket</code> — hành động thuộc về method, không thuộc URL.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> PUT để cập nhật một phần</div><p>Làm mất các field không gửi. Dùng PATCH cho cập nhật bộ phận.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên phân trang</div><p><code>GET /calls</code> trả triệu bản ghi → sập client và server. Luôn có limit mặc định.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lẫn 401 và 403</div><p>Gây logout oan hoặc lộ thông tin. Phân biệt unauthenticated vs unauthorized.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lưu session trong RAM server</div><p>Phá vỡ stateless → không scale ngang được. Dùng token tự chứa hoặc store ngoài.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Format lỗi nhất quán</div><p>Luôn cùng một hình dạng <code>{error:{code,message,...}}</code> để client xử lý chung.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Versioning từ ngày đầu</div><p>Đặt <code>/v1</code> ngay từ đầu để sau này thêm <code>/v2</code> không phải refactor.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Sửa API "xấu" thành RESTful</div>
+        <p>Một dịch vụ cũ có các endpoint sau. Hãy thiết kế lại cho đúng chuẩn REST (method + path + status code):</p>
+        <ul>
+          <li><code>POST /api?action=getAgent&amp;id=12</code></li>
+          <li><code>POST /createTicket</code> (luôn trả <code>200 {ok:false}</code> khi lỗi)</li>
+          <li><code>GET /listAllCalls</code> (trả toàn bộ, không phân trang)</li>
+        </ul>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">
+        (1) <code>GET /v1/agents/12</code> → 200 / 404.
+        (2) <code>POST /v1/tickets</code> → 201 nếu OK, 422 nếu vi phạm nghiệp vụ, 400 nếu thiếu field; body lỗi dạng <code>{error:{code,message}}</code>.
+        (3) <code>GET /v1/calls?limit=20&amp;cursor=...&amp;sort=-startedAt</code> → 200, có phân trang cursor và limit mặc định.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Chọn method & status code</div>
+        <p>Cho mỗi tình huống, chọn <b>method</b>, <b>path</b> và <b>status code</b> hợp lý:</p>
+        <ul>
+          <li>Agent đổi trạng thái sang <code>busy</code>.</li>
+          <li>Tạo cuộc gọi nhưng agent đang offline.</li>
+          <li>Xóa một bản ghi (recording) đã tồn tại.</li>
+          <li>Gửi tin nhắn vào hội thoại đã đóng.</li>
+        </ul>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">
+        (1) <code>PATCH /v1/agents/{id}</code> body <code>{"status":"busy"}</code> → 200.
+        (2) <code>POST /v1/calls</code> → 409 (Conflict) vì xung đột trạng thái, hoặc 422 nếu coi là vi phạm nghiệp vụ — miễn nhất quán.
+        (3) <code>DELETE /v1/recordings/{id}</code> → 204 (No Content).
+        (4) <code>POST /v1/conversations/{id}/messages</code> → 409 vì hội thoại đã đóng.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Pagination cho log cuộc gọi</div>
+        <p>Supervisor cần xem log cuộc gọi realtime, cuộn vô hạn, dữ liệu liên tục thêm mới. Bạn chọn offset hay cursor? Thiết kế query và response.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Chọn <b>cursor</b> vì dữ liệu thay đổi liên tục (tránh trùng/sót trang) và nhanh ở dữ liệu lớn.
+        Query: <code>GET /v1/calls?limit=20&amp;cursor=...&amp;sort=-startedAt</code>. Response gồm <code>data[]</code> + <code>pagination:{nextCursor,hasMore}</code>.
+        Cursor mã hóa mốc cuối (vd id hoặc startedAt) bằng base64.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Method nào vừa <b>safe</b> vừa <b>idempotent</b>?</div>
+          <div class="opt">POST</div>
+          <div class="opt" data-correct="true">GET</div>
+          <div class="opt">PATCH</div>
+          <div class="explain"><b>GET.</b> Chỉ đọc (safe) và lặp lại cho cùng kết quả (idempotent). POST không có cả hai; PATCH thường không idempotent.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Agent đã đăng nhập nhưng cố sửa ticket của team khác. Status code đúng?</div>
+          <div class="opt">401 Unauthorized</div>
+          <div class="opt" data-correct="true">403 Forbidden</div>
+          <div class="opt">404 Not Found</div>
+          <div class="explain"><b>403.</b> Đã xác thực (biết là ai) nhưng không có quyền. 401 là chưa/sai xác thực.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> JSON đúng cú pháp nhưng <code>priority=99</code> trong khi chỉ chấp nhận 1..5. Code phù hợp nhất?</div>
+          <div class="opt">400 Bad Request</div>
+          <div class="opt" data-correct="true">422 Unprocessable Entity</div>
+          <div class="opt">500 Internal Server Error</div>
+          <div class="explain"><b>422.</b> Cú pháp ổn nhưng vi phạm luật nghiệp vụ. (Gộp vào 400 cũng chấp nhận nếu nhất quán.)</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Log cuộc gọi thay đổi liên tục, cuộn vô hạn. Nên dùng kiểu phân trang nào?</div>
+          <div class="opt">Offset (limit/offset)</div>
+          <div class="opt" data-correct="true">Cursor (keyset)</div>
+          <div class="opt">Trả toàn bộ rồi cắt ở client</div>
+          <div class="explain"><b>Cursor.</b> Tránh trùng/sót khi dữ liệu thêm mới và nhanh ổn định ở dữ liệu lớn.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Cập nhật <b>một phần</b> ticket (chỉ đổi priority) nên dùng?</div>
+          <div class="opt">PUT (gửi đủ mọi field)</div>
+          <div class="opt" data-correct="true">PATCH (chỉ gửi priority)</div>
+          <div class="opt">POST /tickets/updatePriority</div>
+          <div class="explain"><b>PATCH.</b> PUT thay thế toàn bộ nên dễ làm mất field không gửi; verb trong URL là phản REST.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Thiết kế REST API — chủ đề được soi rất kỹ ở vòng backend.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>REST là gì? Nó là giao thức hay kiểu kiến trúc?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> REST là một <b>kiểu kiến trúc</b> (architectural style) do Roy Fielding mô tả, <b>không phải</b> giao thức hay thư viện. Nó đặt ra các ràng buộc về cách client–server giao tiếp (thường qua HTTP): client-server, stateless, cacheable, uniform interface, layered system, và code-on-demand (tùy chọn). Mục tiêu là hệ thống dễ scale, dễ cache, dễ tiến hóa độc lập.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Phân biệt safe và idempotent. Cho ví dụ.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>Safe</b> = không thay đổi state server (chỉ đọc) — GET, HEAD. <b>Idempotent</b> = gọi 1 hay N lần cho cùng kết quả state — GET, PUT, DELETE. Một method có thể idempotent mà không safe: PUT, DELETE đổi state nhưng lặp lại vô hại. POST thì không safe, không idempotent.</p>
+        <p class="trap">⚠️ Bẫy: "idempotent nghĩa là response giống nhau" — sai. DELETE lần 2 có thể trả 404 thay vì 204, nhưng <b>state cuối</b> vẫn là "đã xóa" → vẫn idempotent.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>PUT khác PATCH thế nào? Khi nào dùng cái nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> PUT <b>thay thế toàn bộ</b> tài nguyên bằng representation gửi lên — thiếu field nào field đó bị xóa/đặt mặc định → luôn idempotent. PATCH <b>cập nhật một phần</b> — chỉ đụng field gửi lên. Dùng PUT khi client có và muốn ghi đè toàn bộ; dùng PATCH khi chỉ đổi vài trường (vd đổi priority ticket).</p>
+        <p class="trap">⚠️ Bẫy thực chiến: dùng PUT mà chỉ gửi vài field sẽ làm mất dữ liệu các field còn lại.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>PATCH có idempotent không?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Tùy nội dung. PATCH với giá trị tuyệt đối (<code>{"priority":3}</code>) thì lặp lại vô hại → idempotent. PATCH mang ngữ nghĩa tương đối (<code>{"op":"increment"}</code>) thì mỗi lần ra kết quả khác → không idempotent. Vì vậy spec nói PATCH "không bắt buộc idempotent".</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Phân biệt 401 và 403.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>401 Unauthorized</b> thực ra là "unauthenticated" — chưa đăng nhập, token thiếu/sai/hết hạn; client nên đăng nhập lại. <b>403 Forbidden</b> — đã xác thực nhưng không có quyền với tài nguyên này; đăng nhập lại không giúp được. Trong Contact Center: agent chưa có token → 401; agent cố sửa ticket team khác → 403.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Khi nào trả 400 vs 422 vs 409?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>400</b>: sai cú pháp/cấu trúc (JSON hỏng, thiếu field bắt buộc, sai kiểu). <b>422</b>: cú pháp đúng nhưng vi phạm luật nghiệp vụ (priority ngoài khoảng, email sai định dạng). <b>409</b>: xung đột state (agent đang busy mà nhận thêm call, trùng khóa duy nhất). Quan trọng là <b>nhất quán</b> trong toàn API; một số team gộp 422 vào 400 cũng được, miễn body mô tả rõ.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Offset pagination khác cursor pagination ra sao? Khi nào chọn cái nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Offset (limit/offset) cho phép nhảy tới trang bất kỳ, dễ làm UI số trang, nhưng chậm khi offset lớn (DB vẫn quét rồi bỏ N dòng) và <b>lệch trang</b> khi dữ liệu thay đổi. Cursor (keyset) lấy các dòng sau một mốc đã mã hóa, nhanh và ổn định trên dữ liệu biến động, nhưng chỉ tiến/lùi tuần tự. Log cuộc gọi realtime → cursor; bảng admin nhỏ cần số trang → offset.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>"Stateless" trong REST nghĩa là gì? Vì sao quan trọng để scale?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mỗi request phải mang đủ thông tin để xử lý; server không lưu <b>session state</b> riêng cho từng client giữa các request (token đi kèm mỗi request). Nhờ vậy bất kỳ instance nào sau load balancer cũng xử lý được request đó → <b>scale ngang</b> dễ dàng, instance chết không mất phiên. Lưu ý: dữ liệu nghiệp vụ vẫn nằm trong DB (application state), stateless chỉ nói về session.</p>
+        <p class="trap">⚠️ Bẫy: nói "REST không có state nào cả" là sai — chỉ là không có session state phía server.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>POST không idempotent — làm sao chống tạo trùng khi client retry?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Dùng <b>Idempotency-Key</b>: client sinh một UUID gửi kèm header; server lưu key cùng kết quả. Lần retry với cùng key, server trả lại kết quả cũ thay vì tạo bản ghi mới. Rất quan trọng với thao tác "tốn kém" như khởi tạo cuộc gọi, gửi SMS, thanh toán. Ngoài ra có thể dùng ràng buộc unique ở DB để chặn trùng ở tầng dữ liệu.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>REST vs GraphQL — đánh đổi là gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> GraphQL cho client tự khai báo cần field nào → giảm over/under-fetching, hợp UI phức tạp nhiều màn hình. REST đơn giản, caching HTTP mạnh (theo URL + verb), hợp API công khai/CRUD nhiều client. Nhược GraphQL: caching khó (thường POST tới một endpoint), dễ bị query nặng, cần kiểm soát độ phức tạp. Thực tế hay lai: REST/gRPC cho service, GraphQL ở tầng BFF khi cần tổng hợp dữ liệu.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Versioning API thế nào? URL hay header?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Phổ biến nhất là version trong URL path (<code>/v1</code>, <code>/v2</code>) vì rõ ràng, dễ test, dễ route/cache ở gateway. Cách "thuần REST" hơn là dùng header content negotiation (<code>Accept: application/vnd.x.v2+json</code>) nhưng khó test bằng tay. Nguyên tắc: chỉ tăng version khi có <b>breaking change</b>; thêm field optional hay endpoint mới là tương thích ngược, không cần version mới.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>HATEOAS là gì? Có cần triển khai trong thực tế không?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> HATEOAS (Hypermedia As The Engine Of Application State) là mức cao nhất (level 3 Richardson): response chứa các <b>link hành động kế tiếp</b>, để client điều hướng theo hypermedia thay vì hard-code URL. Ví dụ object call trả kèm <code>_links</code> tới <code>hangup</code>, <code>transfer</code>. Thực tế đa số API dừng ở level 2 (dùng đúng verb + status code) vì HATEOAS làm response nặng và client thường vẫn hard-code đường dẫn. Biết khái niệm là đủ ghi điểm.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương C2</button>
+      </div>
+
+      <div class="pager">
+        <a href="C1-express-middleware.html"><span class="dir">← Trước</span><span class="ttl">C1 · Express: routing, middleware</span></a>
+        <a href="C3-validation-dto.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">C3 · Validation, DTO, xử lý lỗi</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='C2',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành C2 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương C2'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

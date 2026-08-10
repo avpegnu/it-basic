@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 4 — Database Scaling & Data Patterns</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">System Design</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 04 · Data Layer</div>
+      <h1>Database Scaling & Data Patterns</h1>
+      <p class="subtitle">Read replica routing, sharding decision tree, hot partition, CDC, CQRS, Event Sourcing, polyglot persistence, distributed transaction & Saga.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#recap">1. Recap & system view</a></li>
+        <li><a href="#replica">2. Read replica routing</a></li>
+        <li><a href="#sharding">3. Sharding decision tree</a></li>
+        <li><a href="#hotshard">4. Hot partition problem</a></li>
+        <li><a href="#cdc">5. CDC — Change Data Capture</a></li>
+        <li><a href="#cqrs">6. CQRS</a></li>
+        <li><a href="#es">7. Event Sourcing</a></li>
+        <li><a href="#polyglot">8. Polyglot persistence</a></li>
+        <li><a href="#saga">9. Saga (distributed tx)</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="recap">
+        <h2>1. Recap & System View</h2>
+        <p>
+          Bạn đã học detail ở Database Ch10–11: replication mechanics, sharding strategy, consistent hashing, caching pattern.
+          Ở đây ta nhìn từ <em>kiến trúc hệ thống</em>: data layer ghép thế nào với app, queue, cache, và các pattern phức tạp như CQRS / Event Sourcing.
+        </p>
+
+        <h3>1.1. Decision tree: scale data layer</h3>
+        <ol class="steps">
+          <li>App chậm? → Đo trước. Đa số trường hợp là missing index hoặc N+1, không phải scale issue.</li>
+          <li>Read-heavy? → Cache (Redis) trước, sau đó read replica.</li>
+          <li>Write-heavy? → Tăng vertical (NVMe, RAM, CPU). Sau đó cân nhắc sharding.</li>
+          <li>Specific access pattern (search, time-series, graph)? → Polyglot — bổ sung specialized DB.</li>
+          <li>Cuối cùng: shard primary DB.</li>
+        </ol>
+
+        <p>Sharding là <strong>bước cuối cùng</strong>, không phải bước đầu. Một Postgres tuned tốt có thể xử lý hàng terabyte data + 50k QPS.</p>
+      </section>
+
+      <section id="replica">
+        <h2>2. Read Replica Routing</h2>
+
+        <p>Pattern: write → primary; read → replica (ngẫu nhiên hoặc gần nhất).</p>
+
+        <div class="ascii">                ┌──────────────┐
+        write   │   PRIMARY    │
+        ──────► │   (write)    │
+                └──────┬───────┘
+                       │ async WAL stream
+              ┌────────┼────────┐
+              ▼        ▼        ▼
+        ┌────────┐┌────────┐┌────────┐
+        │REPLICA ││REPLICA ││REPLICA │  ← read traffic
+        │   1    ││   2    ││   3    │
+        └────────┘└────────┘└────────┘
+              ▲        ▲        ▲
+              └────────┴────────┘
+              read    (LB or app router)</div>
+
+        <h3>2.1. Implementation</h3>
+
+<pre><code class="language-typescript">// Hai connection pool riêng
+const writeDb = new Pool({ host: 'primary', max: 50 });
+const readDb  = new Pool({ host: 'replica-lb', max: 100 });   // LB to 3 replicas
+
+// Helper
+async function readQuery(sql: string, params: any[] = []) {
+  return readDb.query(sql, params);
+}
+
+async function writeQuery(sql: string, params: any[] = []) {
+  return writeDb.query(sql, params);
+}
+
+// Code:
+const user = await readQuery('SELECT * FROM users WHERE id=$1', [userId]);
+await writeQuery('UPDATE users SET name=$2 WHERE id=$1', [userId, name]);</code></pre>
+
+        <h3>2.2. Read-your-writes problem</h3>
+        <p>User POST update profile → primary OK → response. User redirect → GET profile → replica chưa apply → user thấy data cũ.</p>
+
+        <h3>2.3. Mitigations</h3>
+
+        <h4>2.3.a. Sticky write (route về primary trong N giây sau write)</h4>
+<pre><code class="language-typescript">async function read(userId: number) {
+  // Nếu user vừa write trong 5 giây qua → đọc primary
+  const recentWrite = await redis.get(`recent_write:${userId}`);
+  if (recentWrite) return writeDb.query(...);
+  return readDb.query(...);
+}
+
+async function write(userId: number, data: any) {
+  await writeDb.query(...);
+  await redis.set(`recent_write:${userId}`, '1', 'EX', 5);
+}</code></pre>
+
+        <h4>2.3.b. Replication lag aware</h4>
+<pre><code class="language-typescript">async function readWithFreshness(query: string, maxLag = 100) {
+  const lag = await getReplicationLag();   // ms
+  if (lag &gt; maxLag) {
+    return writeDb.query(query);   // fallback primary
+  }
+  return readDb.query(query);
+}</code></pre>
+
+        <h4>2.3.c. Synchronous replication</h4>
+        <p>Postgres <code>synchronous_standby_names</code>. Đảm bảo primary chờ replica ack trước khi commit. Latency tăng nhưng RPO=0 và replica luôn fresh.</p>
+
+        <h3>2.4. Routing strategies</h3>
+        <ul>
+          <li><strong>Random</strong> — đơn giản, đều load.</li>
+          <li><strong>Geographic</strong> — replica gần app.</li>
+          <li><strong>Least-loaded</strong> — replica ít connection.</li>
+          <li><strong>Read-only DB session</strong> — ProxySQL, PgBouncer route theo statement type (SELECT vs INSERT/UPDATE).</li>
+        </ul>
+      </section>
+
+      <section id="sharding">
+        <h2>3. Sharding Decision Tree</h2>
+
+        <h3>3.1. Khi nào shard?</h3>
+        <ul>
+          <li>Bảng &gt; 1TB và không thể vertical scale thêm.</li>
+          <li>Write QPS &gt; khả năng 1 node (vài chục k QPS với Postgres tuned).</li>
+          <li>Hot data lớn hơn RAM lớn nhất có thể mua.</li>
+        </ul>
+
+        <p>Trước đó: index, partition (intra-DB), read replica, cache.</p>
+
+        <h3>3.2. Chọn shard key</h3>
+        <p>Đây là quyết định <strong>khó nhất</strong> trong system design. Sai shard key → migration đau đớn.</p>
+
+        <p>Tiêu chí:</p>
+        <ol>
+          <li><strong>Distribute đều</strong> — không hot shard.</li>
+          <li><strong>Match access pattern</strong> — query thường lookup theo key này.</li>
+          <li><strong>Stable</strong> — key không đổi (vd: user_id).</li>
+          <li><strong>Co-located queries</strong> — JOIN/filter cùng shard key tránh cross-shard query.</li>
+        </ol>
+
+        <h3>3.3. Shard key examples</h3>
+        <table>
+          <thead><tr><th>Domain</th><th>Tốt</th><th>Tệ</th></tr></thead>
+          <tbody>
+            <tr><td>Social network</td><td><code>user_id</code> (tweet, message tự nhiên grouped)</td><td><code>created_at</code> (hot shard cuối)</td></tr>
+            <tr><td>E-commerce</td><td><code>customer_id</code> hoặc <code>tenant_id</code></td><td><code>order_id</code> tăng dần</td></tr>
+            <tr><td>Multi-tenant SaaS</td><td><code>tenant_id</code></td><td><code>user_id</code> vì cross-tenant query khó</td></tr>
+            <tr><td>Time-series IoT</td><td><code>(device_id, time_bucket)</code> composite</td><td><code>time</code> alone (hot recent)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3.4. Composite shard key</h3>
+        <p>Khi 1 cột không đủ, dùng nhiều cột:</p>
+
+<pre><code class="language-typescript">// Range trên customer_id, hash trên order_id trong shard
+shardId = customerId % numShards
+recordKey = `${customerId}:${orderId}`</code></pre>
+
+        <p>Cho phép locality (cùng customer cùng shard) + distribute trong shard.</p>
+
+        <h3>3.5. Cross-shard query</h3>
+        <p>Vấn đề lớn nhất sau shard. Vd: "top 10 customer chi nhiều nhất tháng này" — phải scan mọi shard.</p>
+
+        <p>Cách giải:</p>
+        <ul>
+          <li><strong>Scatter-gather</strong> — query mọi shard parallel, merge kết quả ở app.</li>
+          <li><strong>Pre-computed aggregate</strong> — tính trước ở separate analytics DB.</li>
+          <li><strong>Read model riêng</strong> (CQRS — section 6).</li>
+          <li><strong>Avoid</strong> — thiết kế lại query để chỉ touch 1 shard.</li>
+        </ul>
+
+        <h3>3.6. Resharding</h3>
+        <p>Đã đề cập Database Ch10. Recap pattern thực tế:</p>
+        <ul>
+          <li><strong>Pre-shard</strong> ngay từ đầu: 1024 logical shard trên 4 physical node, có thể tăng physical mà không re-shard logical.</li>
+          <li><strong>Online migration</strong>: dual-write + backfill + verify + cut-over.</li>
+          <li><strong>Citus, Vitess, MongoDB</strong> tự động hóa nhiều bước.</li>
+        </ul>
+      </section>
+
+      <section id="hotshard">
+        <h2>4. Hot Partition / Hot Shard Problem</h2>
+
+        <p>Vài shard nhận traffic gấp nhiều lần shard khác → bottleneck dù tổng load OK.</p>
+
+        <h3>4.1. Cause cases</h3>
+        <ul>
+          <li><strong>Celebrity user</strong> — Twitter user 100M follower. Mọi follower fetch tweet → shard chứa user đó hot.</li>
+          <li><strong>Skewed shard key</strong> — country='US' chiếm 80% data.</li>
+          <li><strong>Time-based</strong> — ghi luôn vào shard "ngày hôm nay".</li>
+          <li><strong>Auto-increment ID</strong> — mọi insert đến shard cuối.</li>
+        </ul>
+
+        <h3>4.2. Mitigations</h3>
+
+        <h4>4.2.a. Better shard key</h4>
+        <p>Nếu phát hiện sớm, đổi shard key. Vd: hash thay vì range; composite key thay đơn.</p>
+
+        <h4>4.2.b. Replicate hot key</h4>
+        <p>Detect celebrity → replicate riêng sang nhiều node, route theo round robin.</p>
+
+        <h4>4.2.c. Salt key — distribute write</h4>
+<pre><code class="language-typescript">// Counter cho celebrity tweet — split thành N counter
+// Thay vì:
+INCR tweet:celebrity:likes   // tất cả đụng 1 key
+
+// Dùng N salt:
+const shard = userId % 100;
+INCR tweet:celebrity:likes:shard:${shard}
+
+// Read: SUM tất cả N counter
+const total = await Promise.all(
+  Array.from({length: 100}, (_, i) =&gt; redis.get(`tweet:celebrity:likes:shard:${i}`))
+).then(arr =&gt; arr.reduce((s, v) =&gt; s + Number(v ?? 0), 0));</code></pre>
+
+        <h4>4.2.d. Cache hot key</h4>
+        <p>Detect hot key → cache ở mỗi app instance (multi-tier). Giảm load đến shard storage.</p>
+
+        <h4>4.2.e. Shard splitting</h4>
+        <p>Identify hot shard → split tiếp thành 2-4 sub-shard. DynamoDB, Cassandra tự làm. Postgres phải manual.</p>
+
+        <h3>4.3. Detect hot shard</h3>
+        <p>Monitor metrics per-shard:</p>
+        <ul>
+          <li>QPS / shard.</li>
+          <li>CPU / shard.</li>
+          <li>Disk I/O / shard.</li>
+        </ul>
+
+        <p>Khi 1 shard &gt; 2× median → đã hot, cần action.</p>
+      </section>
+
+      <section id="cdc">
+        <h2>5. CDC — Change Data Capture</h2>
+
+        <p>Đã đề cập Database Ch11. Đây ta đào sâu architecture pattern.</p>
+
+        <h3>5.1. CDC là gì?</h3>
+        <p>Streaming mọi thay đổi từ DB primary đến downstream consumer (search, analytics, cache, audit log) <strong>real-time</strong>.</p>
+
+        <div class="ascii">  Postgres (primary)
+       │
+       │ logical replication / WAL stream
+       ▼
+   ┌──────────┐
+   │ Debezium │  ← CDC tool, parse WAL → events
+   └────┬─────┘
+        │ events
+        ▼
+   ┌──────────┐
+   │  Kafka   │  ← message broker, fan-out
+   └────┬─────┘
+        │
+   ┌────┴───┬────────┬──────────┬──────────┐
+   ▼        ▼        ▼          ▼          ▼
+  Elastic  Redis   Snowflake  Audit log  Microservice
+  (search) (cache) (analytics)            consumer</div>
+
+        <h3>5.2. Lợi ích pattern này</h3>
+        <ul>
+          <li><strong>Single source of truth</strong> — DB primary; mọi consumer dùng cùng data.</li>
+          <li><strong>Decouple</strong> — thêm consumer mới không động source.</li>
+          <li><strong>Eventual consistency</strong> — downstream lag vài giây, OK với search/analytics.</li>
+          <li><strong>Reliable</strong> — Kafka persist event, consumer fail recover được.</li>
+        </ul>
+
+        <h3>5.3. Tools</h3>
+        <ul>
+          <li><strong>Debezium</strong> — open-source, support Postgres/MySQL/Mongo/Oracle.</li>
+          <li><strong>AWS DMS</strong> — managed CDC.</li>
+          <li><strong>Fivetran, Airbyte</strong> — SaaS connectors.</li>
+          <li><strong>Postgres logical replication</strong> — built-in (publication/subscription).</li>
+        </ul>
+
+        <h3>5.4. Use case patterns</h3>
+        <ul>
+          <li><strong>Sync DB → search</strong>: Postgres → Elastic. Search luôn fresh.</li>
+          <li><strong>Cache invalidation</strong>: CDC detect update → invalidate cache key. Tránh "UPDATE → DEL cache" race.</li>
+          <li><strong>Audit log</strong>: stream mọi change vào append-only log.</li>
+          <li><strong>Materialized view</strong>: maintain read model riêng.</li>
+          <li><strong>Cross-service event</strong>: order service publish "order.created" event qua CDC trên outbox table.</li>
+        </ul>
+
+        <h3>5.5. Outbox Pattern</h3>
+        <p>Vấn đề: app cần atomic "save order + publish event". 2 hệ tách (DB + Kafka) → 2-phase commit khó.</p>
+
+        <p>Outbox: app save event vào bảng cùng DB transaction → CDC pull bảng đó → push Kafka. Atomic guarantees.</p>
+
+<pre><code class="language-sql">BEGIN;
+INSERT INTO orders (...) VALUES (...);
+INSERT INTO outbox (event_type, payload) VALUES ('order.created', '{...}');
+COMMIT;
+
+-- Debezium đọc outbox table → publish Kafka
+-- Nếu CDC fail, retry — không mất event
+-- Nếu DB transaction rollback, outbox cũng rollback — không có event lạc</code></pre>
+      </section>
+
+      <section id="cqrs">
+        <h2>6. CQRS — Command Query Responsibility Segregation</h2>
+
+        <h3>6.1. Khái niệm</h3>
+        <p>Tách <strong>read model</strong> và <strong>write model</strong> thành 2 cấu trúc data riêng. Write theo schema chuẩn (3NF, transactional), read theo schema tối ưu cho query (denormalized, indexed cho specific use case).</p>
+
+        <div class="ascii">         ┌─ COMMAND SIDE ──────────────────────┐
+         │                                       │
+   write │   ┌─────────┐    ┌──────────────┐    │
+   ────► │   │  API    │───►│ Write Model  │    │
+         │   └─────────┘    │ Postgres 3NF │    │
+         │                  └──────┬───────┘    │
+         │                         │            │
+         └─────────────────────────┼────────────┘
+                                   │
+                            CDC / events
+                                   │
+         ┌─ QUERY SIDE ────────────┼───────────┐
+         │                         ▼           │
+   read  │   ┌─────────┐    ┌──────────────┐  │
+   ◄──── │   │  API    │◄───│ Read Model   │  │
+         │   └─────────┘    │ Elastic / Mongo │
+         │                  │ denormalized   │
+         │                  └────────────────┘
+         └─────────────────────────────────────┘</div>
+
+        <h3>6.2. Khi nào dùng CQRS?</h3>
+        <ul>
+          <li>Read và write workload khác nhau cực rõ — vd: 99% read, 1% write.</li>
+          <li>Read pattern phức tạp, không fit normalized schema.</li>
+          <li>Cần scale read và write độc lập.</li>
+          <li>Reporting/analytics khác hoàn toàn với transactional.</li>
+        </ul>
+
+        <h3>6.3. Khi KHÔNG dùng</h3>
+        <ul>
+          <li>App CRUD đơn giản — 2 model = 2× complexity không đáng.</li>
+          <li>Team nhỏ.</li>
+          <li>Read và write tương tự nhau.</li>
+        </ul>
+
+        <h3>6.4. Trade-off</h3>
+        <ul>
+          <li>(+) Read query cực nhanh (denormalized).</li>
+          <li>(+) Scale read/write độc lập.</li>
+          <li>(−) Eventual consistency giữa write → read model.</li>
+          <li>(−) Complexity 2× — code, deploy, test.</li>
+          <li>(−) Read model "out of sync" temporarily — UI có thể stale.</li>
+        </ul>
+      </section>
+
+      <section id="es">
+        <h2>7. Event Sourcing</h2>
+
+        <h3>7.1. Khái niệm</h3>
+        <p>Thay vì lưu <em>state hiện tại</em>, lưu <em>chuỗi event</em>. Current state = replay events.</p>
+
+<pre><code class="language-typescript">// ❌ State-based:
+account: { id: 1, balance: 1500 }
+
+// ✓ Event-sourced:
+events:
+  { type: 'AccountOpened', id: 1, time: t0 }
+  { type: 'Deposited',     amount: 1000, time: t1 }
+  { type: 'Deposited',     amount: 500,  time: t2 }
+  { type: 'Withdrawn',     amount: 200,  time: t3 }
+  { type: 'Deposited',     amount: 200,  time: t4 }
+
+// State = sum: 1000 + 500 - 200 + 200 = 1500</code></pre>
+
+        <h3>7.2. Lợi ích</h3>
+        <ul>
+          <li><strong>Audit log built-in</strong> — mọi thay đổi đều ghi.</li>
+          <li><strong>Time travel</strong> — replay đến thời điểm bất kỳ.</li>
+          <li><strong>Multiple read model</strong> — derive từ event stream.</li>
+          <li><strong>Debug</strong> — xem chuỗi event để hiểu state hiện tại.</li>
+          <li><strong>Integration</strong> — event là natural unit để publish.</li>
+        </ul>
+
+        <h3>7.3. Trade-off</h3>
+        <ul>
+          <li>(−) Query state cần replay → phải có snapshot định kỳ.</li>
+          <li>(−) Schema event evolution khó (event là immutable).</li>
+          <li>(−) Event store lớn theo thời gian.</li>
+          <li>(−) Eventual consistency — read model lag.</li>
+          <li>(−) Learning curve cao.</li>
+        </ul>
+
+        <h3>7.4. Khi nào dùng?</h3>
+        <ul>
+          <li>Audit là yêu cầu pháp lý (banking, healthcare).</li>
+          <li>Workflow phức tạp với nhiều state transition (booking, order pipeline).</li>
+          <li>Cần derive nhiều read model khác nhau.</li>
+          <li>Domain phù hợp event-driven (DDD).</li>
+        </ul>
+
+        <h3>7.5. CQRS + Event Sourcing</h3>
+        <p>Hai pattern thường đi cùng:</p>
+        <ul>
+          <li>Write side: lưu event vào event store.</li>
+          <li>Read side: subscribe event, build read model (Postgres view, Elastic, cache).</li>
+        </ul>
+
+        <p>Nhưng: <em>không bắt buộc</em>. CQRS dùng được không Event Sourcing. Event Sourcing dùng được không CQRS.</p>
+      </section>
+
+      <section id="polyglot">
+        <h2>8. Polyglot Persistence</h2>
+
+        <p>"Right tool for right job" — dùng nhiều DB khác nhau cho các phần khác nhau của hệ.</p>
+
+        <h3>8.1. Ví dụ kiến trúc thực tế (e-commerce)</h3>
+
+        <div class="ascii">  ┌──────────────────────────────────────────────────────┐
+  │              POLYGLOT PERSISTENCE                     │
+  └──────────────────────────────────────────────────────┘
+
+  ┌─────────────────┐        ┌─────────────────┐
+  │ User profile    │        │ Catalog (read)  │
+  │ Postgres        │        │ MongoDB         │
+  │ (ACID, 3NF)     │        │ (flexible doc)  │
+  └─────────────────┘        └─────────────────┘
+
+  ┌─────────────────┐        ┌─────────────────┐
+  │ Search          │        │ Recommendations │
+  │ Elasticsearch   │        │ Neo4j (graph)   │
+  │ (full-text)     │        │ (similar users) │
+  └─────────────────┘        └─────────────────┘
+
+  ┌─────────────────┐        ┌─────────────────┐
+  │ Cart, session   │        │ Analytics       │
+  │ Redis           │        │ ClickHouse      │
+  │ (TTL, fast)     │        │ (columnar OLAP) │
+  └─────────────────┘        └─────────────────┘
+
+  ┌─────────────────┐        ┌─────────────────┐
+  │ Image, video    │        │ Time-series    │
+  │ S3 (object)     │        │ TimescaleDB     │
+  └─────────────────┘        └─────────────────┘</div>
+
+        <h3>8.2. Trade-off</h3>
+        <ul>
+          <li>(+) Mỗi DB tối ưu cho 1 use case → performance tốt.</li>
+          <li>(+) Scale độc lập.</li>
+          <li>(−) Operational complexity — backup, monitor, upgrade nhiều system.</li>
+          <li>(−) Data consistency cross-DB khó.</li>
+          <li>(−) Learning curve cho team.</li>
+        </ul>
+
+        <h3>8.3. Quy tắc thực dụng</h3>
+        <ul>
+          <li>Bắt đầu với Postgres làm "everything" — JSONB, tsvector, geometry, ltree đủ cho hầu hết case.</li>
+          <li>Thêm Redis khi cần cache/session/queue.</li>
+          <li>Thêm Elasticsearch khi search là core feature, Postgres tsvector không đủ.</li>
+          <li>Thêm Cassandra/ClickHouse cho specific scale (write throughput, OLAP).</li>
+          <li>Mỗi DB mới = 1 production responsibility — chỉ thêm khi profile chỉ rõ cần.</li>
+        </ul>
+      </section>
+
+      <section id="saga">
+        <h2>9. Distributed Transactions & Saga Pattern</h2>
+
+        <h3>9.1. Vấn đề</h3>
+        <p>Transaction trong 1 DB = ACID. Cross-DB hoặc cross-service?</p>
+
+        <p>Ví dụ booking: trừ tiền (payment service) + giảm inventory (inventory service) + tạo booking (booking service). Nếu 1 fail thì sao?</p>
+
+        <h3>9.2. Two-Phase Commit (2PC)</h3>
+        <p>Solution cổ điển — coordinator hỏi mọi participant "ready?" → tất cả OK thì commit, không thì rollback.</p>
+
+        <p>Vấn đề:</p>
+        <ul>
+          <li>Coordinator chết giữa phase 2 → participant kẹt (locked).</li>
+          <li>Latency cao (2 round-trip + lock).</li>
+          <li>Không scale ngang.</li>
+        </ul>
+
+        <p>Đa số system hiện đại <strong>tránh 2PC</strong>.</p>
+
+        <h3>9.3. Saga Pattern</h3>
+        <p>Chuỗi local transaction. Mỗi bước có <strong>compensating action</strong> để undo nếu sau đó fail.</p>
+
+        <div class="ascii">  Booking saga (success):
+   ┌─────────┐    ┌──────────┐    ┌──────────┐
+   │ Payment │───►│ Inventory │───►│ Booking  │  ✓
+   │ deduct  │    │ decrement │    │ create   │
+   └─────────┘    └──────────┘    └──────────┘
+
+  Booking saga (fail at booking):
+   ┌─────────┐    ┌──────────┐    ┌──────────┐
+   │ Payment │───►│ Inventory │───►│ Booking  │  ✗ FAIL
+   │ deduct  │    │ decrement │    │ create   │
+   └─────────┘    └──────────┘    └─────┬────┘
+                                          │
+                                          ▼ trigger compensating
+   ┌─────────┐    ┌──────────┐
+   │ Payment │◄───│ Inventory │
+   │ refund  │    │ increment │   ← undo bằng "compensating"
+   │(undo)   │    │ (undo)    │
+   └─────────┘    └──────────┘</div>
+
+        <h3>9.4. Saga implementation styles</h3>
+
+        <h4>9.4.a. Choreography</h4>
+        <p>Mỗi service publish event sau khi xong, service tiếp theo subscribe và react. Không có coordinator central.</p>
+
+<pre><code>PaymentService → publish "payment.completed"
+                       ▼
+InventoryService subscribe → decrement → publish "inventory.reserved"
+                       ▼
+BookingService subscribe → create → publish "booking.created"</code></pre>
+
+        <p>Khi fail: service publish "*.failed" event, các service trước subscribe và compensate.</p>
+
+        <ul>
+          <li>(+) Decentralized, loosely coupled.</li>
+          <li>(−) Khó visualize toàn flow; debug khó.</li>
+        </ul>
+
+        <h4>9.4.b. Orchestration</h4>
+        <p>1 orchestrator service điều phối từng bước.</p>
+
+<pre><code class="language-typescript">async function bookingSaga(bookingData) {
+  const completed = [];
+  try {
+    await paymentService.charge(bookingData);
+    completed.push('payment');
+
+    await inventoryService.reserve(bookingData);
+    completed.push('inventory');
+
+    await bookingService.create(bookingData);
+    completed.push('booking');
+
+    return { success: true };
+  } catch (err) {
+    // Compensate ngược lại
+    if (completed.includes('inventory')) await inventoryService.release(bookingData);
+    if (completed.includes('payment'))   await paymentService.refund(bookingData);
+    return { success: false, error: err.message };
+  }
+}</code></pre>
+
+        <ul>
+          <li>(+) Flow rõ, dễ debug.</li>
+          <li>(−) Orchestrator = central → có thể trở thành SPOF/bottleneck.</li>
+        </ul>
+
+        <p>Tools: AWS Step Functions, Temporal, Camunda. Hỗ trợ retry, timeout, compensation tự động.</p>
+
+        <h3>9.5. Idempotency — yêu cầu bắt buộc</h3>
+        <p>Saga compensate có thể chạy lại nhiều lần do retry. Mọi action phải <strong>idempotent</strong>:</p>
+<pre><code class="language-typescript">// ❌ Không idempotent
+function refund(orderId, amount) {
+  account.balance += amount;
+}
+
+// ✓ Idempotent qua idempotency key
+async function refund(orderId, amount) {
+  const exists = await db.query('SELECT 1 FROM refunds WHERE order_id=$1', [orderId]);
+  if (exists.rowCount &gt; 0) return;   // đã refund
+  await db.query('INSERT INTO refunds (order_id, amount) VALUES ($1, $2)', [orderId, amount]);
+  account.balance += amount;
+}</code></pre>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <ol>
+          <li>Thiết kế read replica routing cho app:
+            <ul>
+              <li>3 replica + 1 primary.</li>
+              <li>"Read your writes" cho profile update (5 giây).</li>
+              <li>Background reporting đọc từ replica có lag &lt; 30s.</li>
+            </ul>
+          </li>
+
+          <li>Cho domain Twitter, đề xuất shard key cho 3 entity: User, Tweet, Follow. Lý giải.</li>
+
+          <li>Phát hiện hot shard: shard 5 có QPS 50k, 11 shard khác mỗi cái 5k. Đề xuất 3 cách fix.</li>
+
+          <li>Implement Outbox pattern cho service Order: save order + publish event "order.created" atomic. Mock CDC reader.</li>
+
+          <li>So sánh CQRS vs đơn giản 1 model với index tốt: cho 2 use case, mỗi cái phân tích trade-off.</li>
+
+          <li>Implement Saga orchestration cho booking flow (payment → inventory → booking) với compensation. Test scenario fail ở booking step.</li>
+
+          <li>Polyglot persistence: design e-commerce mini cho Twitter clone — chọn DB nào cho user/tweet/timeline/search/notification.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 4</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Sharding nên là bước:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Đầu tiên</li>
+              <li class="quiz-option">Cuối cùng — sau khi cache, read replica đã không đủ</li>
+              <li class="quiz-option">Mọi project đều cần</li>
+              <li class="quiz-option">Chỉ NoSQL có</li>
+            </ul>
+            <div class="quiz-explain">Postgres tuned tốt: 50k+ QPS, hàng terabyte data. Trước sharding, hãy: (1) index, (2) cache, (3) read replica, (4) partition intra-DB. Sharding cực phức tạp — JOIN cross-shard, distributed tx, resharding pain.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">"Read your writes" với async replica:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không có vấn đề</li>
+              <li class="quiz-option">Chỉ xảy ra ở MongoDB</li>
+              <li class="quiz-option">Sticky session</li>
+              <li class="quiz-option">User vừa POST update profile, GET kế tiếp đọc replica chưa apply → thấy data cũ. Sửa: route về primary trong N giây sau write</li>
+            </ul>
+            <div class="quiz-explain">Phổ biến với multi-replica setup. Mitigation: sticky write (Redis flag "recent_write:userId" với TTL 5s, route về primary nếu có), hoặc lag-aware read (kiểm tra replica lag, fallback primary nếu cao), hoặc sync replication.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Hot shard "celebrity user" trên Twitter, 1 cách fix là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tăng RAM</li>
+              <li class="quiz-option">Đổi DB</li>
+              <li class="quiz-option">Replicate hot key sang nhiều node + cache aggressive ở app layer</li>
+              <li class="quiz-option">Bỏ user celebrity</li>
+            </ul>
+            <div class="quiz-explain">User 100M follower → mọi follower fetch tweet đụng cùng shard → bottleneck. Cách: detect celebrity tự động, replicate tweets của họ sang nhiều node, cache aggressive ở app/CDN. Twitter dùng "fan-out on write" để pre-compute timeline.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Outbox pattern giải quyết:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Atomic "save data + publish event" qua DB transaction; CDC pull bảng outbox push vào Kafka</li>
+              <li class="quiz-option">Caching</li>
+              <li class="quiz-option">Sharding</li>
+              <li class="quiz-option">Replication</li>
+            </ul>
+            <div class="quiz-explain">App save data + publish event là 2 hệ tách → 2PC khó. Outbox: insert event vào bảng cùng DB transaction → atomic. CDC reader pull bảng outbox push Kafka. Nếu CDC fail, retry không mất event. Pattern phổ biến trong microservice.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">CQRS phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">App CRUD đơn giản</li>
+              <li class="quiz-option">Read và write workload khác nhau cực rõ; read pattern phức tạp không fit normalized schema</li>
+              <li class="quiz-option">Team 2 người</li>
+              <li class="quiz-option">Mọi project</li>
+            </ul>
+            <div class="quiz-explain">CQRS = 2 model riêng cho read và write. Read model denormalized, indexed cho specific query. Phù hợp khi: 99% read 1% write, query phức tạp aggregate, scale read/write riêng. KHÔNG phù hợp app CRUD nhỏ — overhead 2× không đáng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Event Sourcing nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Lưu state hiện tại</li>
+              <li class="quiz-option">Pub/Sub</li>
+              <li class="quiz-option">Lưu chuỗi event thay state; current state = replay events; có audit log built-in, time travel, multiple read model</li>
+              <li class="quiz-option">CDC</li>
+            </ul>
+            <div class="quiz-explain">Account state = không lưu trực tiếp. Lưu chuỗi events: opened, deposited 1000, withdrawn 200. State = sum. Lợi: audit, time travel, replay. Trade-off: query state cần replay (snapshot định kỳ); event schema evolution khó.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Saga vs 2PC:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">2PC nhanh hơn</li>
+              <li class="quiz-option">Saga không cần compensation</li>
+              <li class="quiz-option">2PC scale tốt hơn</li>
+              <li class="quiz-option">2PC: lock + atomic commit, nhưng coordinator chết = participant kẹt; latency cao. Saga: chuỗi local tx + compensation; eventual consistency, scale tốt hơn — pattern phổ biến hơn ở microservice</li>
+            </ul>
+            <div class="quiz-explain">2PC strong consistency nhưng kém HA và latency. Saga sacrifice strong consistency cho availability + scale. Mỗi step là local transaction; fail → compensating action undo. Cần idempotency cho mọi action vì retry.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Polyglot persistence quy tắc thực dụng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Bắt đầu Postgres "everything"; thêm specialized DB khi profile chỉ rõ cần — mỗi DB mới là 1 production responsibility</li>
+              <li class="quiz-option">Dùng càng nhiều DB càng tốt</li>
+              <li class="quiz-option">Mỗi service 1 DB riêng</li>
+              <li class="quiz-option">Tránh polyglot</li>
+            </ul>
+            <div class="quiz-explain">Postgres làm được 95% — JSONB, tsvector, geometry, time-series qua TimescaleDB. Thêm Redis cho cache/queue, Elastic khi search là core. Mỗi DB mới: backup, monitor, expertise, on-call. Đừng "polyglot for the sake of polyglot".</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 4. Tiếp theo: <a href="chuong5.html"><strong>Chương 5 — Message Queue & Async Communication →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>System Design · Chương 4 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H5 · Phân quyền + Workflow</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-h">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">H5 · Phân quyền + Workflow</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần H · Nghiệp vụ & Thiết kế</div>
+      <nav class="nav">
+        <a href="H1-tong-quan-contact-center.html">H1 · Tổng quan Contact Center</a>
+        <a href="H2-call-center-acd.html">H2 · Call Center: ACD, IVR</a>
+        <a href="H3-live-chat-omnichannel.html">H3 · Live Chat Omnichannel</a>
+        <a href="H4-crm-dashboard.html">H4 · CRM & Dashboard realtime</a>
+        <a href="H5-rbac-workflow.html" class="active">H5 · Phân quyền + Workflow</a>
+        <a href="H6-multi-tenancy.html">H6 · SaaS Multi-tenancy</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#authz">① Mô hình phân quyền</a>
+        <a href="#rbacabac">② RBAC vs ABAC vs ACL</a>
+        <a href="#permission">③ Thiết kế permission đa vai trò</a>
+        <a href="#workflow">④ Workflow engine</a>
+        <a href="#automation">⑤ Automation & rules</a>
+        <a href="#audit">⑥ Audit log</a>
+        <a href="#design">⑦ Tư duy thiết kế</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần H · Nghiệp vụ & Thiết kế &nbsp;›&nbsp; <b>H5 · Phân quyền + Workflow</b></div>
+      <div class="live-pill"><span class="blink"></span> policy engine</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần H · Chương 5</span>
+        <h1>Phân quyền (RBAC) & Workflow Automation</h1>
+        <p class="lead">Thiết kế hệ thống phân quyền đa vai trò và một workflow/automation engine cấu hình được — đúng với "hệ thống phân quyền, workflow và automation" trong JD.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phân biệt ba mô hình phân quyền lớn — <b>RBAC, ABAC, ACL</b> — và biết khi nào kết hợp chúng.</p>
+        <p>• Thiết kế lược đồ <b>permission đa vai trò</b> (admin / supervisor / agent) có độ mịn <code>resource:action</code> và an toàn theo tenant.</p>
+        <p>• Mô hình hóa một <b>workflow engine data-driven</b>: state, transition, guard, action, trigger — áp cho vòng đời ticket và escalation.</p>
+        <p>• Thiết kế một <b>rule engine</b> theo mẫu Event → Condition → Action cho auto-assign, escalation theo SLA, business hours.</p>
+        <p>• Cài đặt <b>audit log</b> trả lời "ai làm gì, lúc nào, trên tài nguyên nào" và đặt đúng <b>điểm thực thi (guard)</b>.</p>
+        <p>• Có tư duy thiết kế hệ phân quyền + workflow <b>cấu hình được</b>, tránh hardcode quyền/luồng vào code.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế Contact Center</div>
+        <p>Trong một hệ thống Contact Center, <b>agent</b> chỉ được thấy ticket/cuộc gọi của mình hoặc của hàng đợi mình thuộc về;
+        <b>supervisor</b> giám sát cả team, được "barge-in" hoặc reassign; <b>admin</b> cấu hình IVR, hàng đợi, giờ làm việc.
+        Đồng thời hệ thống chạy nền: ticket quá hạn SLA tự <i>escalate</i>, chat mới tự gán cho agent rảnh, ngoài giờ làm việc tự
+        chuyển sang voicemail. Tất cả những thứ đó chính là <b>phân quyền + workflow + automation</b> — trái tim cấu hình của sản phẩm,
+        và là phần được hỏi sâu nhất khi phỏng vấn vị trí có mô tả "build configurable workflow & permission system".</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="authz"><span class="ico">①</span> Mô hình phân quyền (Authorization)</h2>
+      <p>Trước hết phải tách bạch hai khái niệm hay bị nhập làm một:</p>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🪪</span> Authentication (xác thực)</div><p>Trả lời câu hỏi <b>"Bạn là ai?"</b> — đăng nhập, kiểm tra mật khẩu, cấp JWT/session. Kết quả là một <i>identity</i> đã được xác minh.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🛡️</span> Authorization (phân quyền)</div><p>Trả lời câu hỏi <b>"Bạn được làm gì?"</b> — sau khi đã biết bạn là ai, hệ thống quyết định cho phép/từ chối hành động trên tài nguyên.</p></div>
+      </div>
+      <p>Chương này nói về <strong>authorization</strong>. Một quyết định phân quyền luôn là một bộ ba: <b>Subject</b> (ai) muốn thực hiện
+      <b>Action</b> (hành động) trên <b>Resource</b> (tài nguyên), trong một <b>Context</b> (ngữ cảnh: thời gian, tenant, IP...).
+      Mọi mô hình chỉ khác nhau ở chỗ <em>dựa vào cái gì</em> để ra quyết định "allow / deny".</p>
+      <div class="flow">
+        <span class="node">Subject (agent #42)</span><span class="arr">+</span>
+        <span class="node">Action (reassign)</span><span class="arr">+</span>
+        <span class="node">Resource (ticket #918)</span><span class="arr">+</span>
+        <span class="node" style="border-color:var(--cyan)">Context (tenant, giờ)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">Decision: allow / deny</span>
+      </div>
+      <h3>Hai chiến lược nền tảng</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Allow-list (mặc định cấm)</div><p>Mặc định <b>deny</b> mọi thứ, chỉ cho phép cái được liệt kê. An toàn hơn — đây là mặc định bạn nên chọn cho hệ thống nghiệp vụ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⛔</span> Deny-list (mặc định cho)</div><p>Mặc định <b>allow</b>, chỉ cấm cái liệt kê. Dễ rò quyền khi thêm tính năng mới mà quên cấm. Tránh.</p></div>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Nguyên tắc least privilege</div>
+        <p>Luôn cấp quyền <b>tối thiểu đủ dùng</b>. Một agent không cần quyền xóa hàng đợi chỉ vì "cho tiện sau này". Mỗi quyền thừa là một
+        bề mặt tấn công và một rủi ro vận hành (agent lỡ tay xóa dữ liệu của khách hàng khác).</p>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="rbacabac"><span class="ico">②</span> RBAC vs ABAC vs ACL</h2>
+      <p>Ba mô hình phổ biến nhất. Đừng coi chúng là loại trừ nhau — hệ thống thực tế thường <strong>kết hợp</strong>: RBAC làm xương sống,
+      ABAC bổ sung các luật theo ngữ cảnh, ACL cho vài chia sẻ tài nguyên đặc thù.</p>
+
+      <h3>RBAC — Role-Based Access Control</h3>
+      <p>Gán quyền cho <b>vai trò (role)</b>, rồi gán role cho người dùng. Quyết định dựa trên: "user này có role nào, role đó có permission nào".
+      Đây là mô hình dễ hiểu, dễ quản trị nhất — và là lựa chọn mặc định cho Contact Center.</p>
+      <div class="flow">
+        <span class="node">User</span><span class="arr">→</span>
+        <span class="node">Role (agent)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Permissions</span><span class="arr">→</span>
+        <span class="node">Resource</span>
+      </div>
+
+      <h3>ABAC — Attribute-Based Access Control</h3>
+      <p>Quyết định dựa trên <b>thuộc tính</b> của subject, resource và context, được biểu diễn thành các <b>policy</b>. Ví dụ: "cho phép nếu
+      <code>ticket.queueId ∈ user.queues</code> <i>và</i> <code>now ∈ businessHours</code> <i>và</i> <code>ticket.tenantId == user.tenantId</code>".
+      Linh hoạt vượt trội nhưng khó suy luận và khó audit hơn.</p>
+
+      <h3>ACL — Access Control List</h3>
+      <p>Gắn trực tiếp danh sách "ai được làm gì" <b>lên từng tài nguyên</b>. Ví dụ một ticket có thể được share riêng cho 2 agent cụ thể.
+      Rất mịn nhưng bùng nổ về số lượng entry khi tài nguyên nhiều — thường chỉ dùng cho tính năng chia sẻ/cộng tác cục bộ.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>RBAC</th><th>ABAC</th><th>ACL</th></tr></thead>
+          <tbody>
+            <tr><td>Ra quyết định dựa trên</td><td>Role → permission</td><td>Thuộc tính + policy</td><td>Danh sách trên từng resource</td></tr>
+            <tr><td>Độ linh hoạt</td><td>Trung bình</td><td>Rất cao</td><td>Cao (nhưng cục bộ)</td></tr>
+            <tr><td>Dễ quản trị</td><td><b>Cao</b> — quản role</td><td>Thấp — viết/duyệt policy</td><td>Thấp — bùng nổ entry</td></tr>
+            <tr><td>Dễ audit</td><td>Cao</td><td>Trung bình</td><td>Thấp</td></tr>
+            <tr><td>Hợp với</td><td>Hệ nghiệp vụ có vai trò rõ ràng</td><td>Luật theo ngữ cảnh, multi-tenant phức tạp</td><td>Chia sẻ tài nguyên riêng lẻ</td></tr>
+            <tr><td>Ví dụ Contact Center</td><td>agent / supervisor / admin</td><td>"chỉ ticket trong queue của tôi, trong giờ làm việc"</td><td>"share ticket #918 cho agent X"</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Mô hình lai (production thực tế)</div>
+        <p>Kiến trúc hay gặp nhất: <b>RBAC + ABAC</b>. RBAC trả lời "loại hành động này có nằm trong quyền của role không"
+        (<code>ticket:reassign</code>), còn ABAC trả lời "trên <i>đúng tài nguyên cụ thể này</i> thì có được không"
+        (cùng tenant? đúng queue?). Hãy nghĩ: <b>RBAC chọn động từ, ABAC khoanh phạm vi danh từ.</b></p>
+      </div>
+
+      <h3>Role phân cấp (role hierarchy)</h3>
+      <p>Các role thường có quan hệ kế thừa: <b>admin</b> kế thừa toàn bộ quyền của <b>supervisor</b>, supervisor kế thừa quyền của <b>agent</b>,
+      cộng thêm quyền riêng. Mô hình hóa bằng đồ thị kế thừa giúp tránh lặp lại permission và giảm sai sót.</p>
+      <div class="flow">
+        <span class="node">agent</span><span class="arr">⊂</span>
+        <span class="node">supervisor</span><span class="arr">⊂</span>
+        <span class="node" style="border-color:var(--violet)">admin</span>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Đừng để kế thừa "rò ngược"</div>
+        <p>Kế thừa chỉ nên đi theo một chiều (cấp cao bao trùm cấp thấp). Cẩn thận với các quyền "nguy hiểm" như xóa tenant, sửa role —
+        đừng để nó bị kế thừa lan man. Một số hệ thống tách riêng nhóm <b>"super permission"</b> không tự động kế thừa.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="permission"><span class="ico">③</span> Thiết kế permission đa vai trò</h2>
+      <p>Trái tim của RBAC là một <b>quy ước đặt tên permission</b> nhất quán. Mẫu phổ biến và đáng tin nhất là
+      <code>resource:action</code> (đôi khi thêm <code>:scope</code>). Độ mịn quá thô thì không phân quyền được chi tiết; quá mịn thì bùng nổ
+      và khó quản. Mức <code>resource:action</code> là điểm cân bằng tốt.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Permission</th><th>Ý nghĩa</th><th>agent</th><th>supervisor</th><th>admin</th></tr></thead>
+          <tbody>
+            <tr><td><code>ticket:read</code></td><td>Xem ticket</td><td>✓ (của mình/queue)</td><td>✓ (cả team)</td><td>✓</td></tr>
+            <tr><td><code>ticket:reassign</code></td><td>Chuyển ticket cho người khác</td><td>—</td><td>✓</td><td>✓</td></tr>
+            <tr><td><code>call:listen</code></td><td>Nghe ngầm cuộc gọi (monitor)</td><td>—</td><td>✓</td><td>✓</td></tr>
+            <tr><td><code>call:barge</code></td><td>Chen vào cuộc gọi</td><td>—</td><td>✓</td><td>✓</td></tr>
+            <tr><td><code>queue:config</code></td><td>Cấu hình hàng đợi/IVR</td><td>—</td><td>—</td><td>✓</td></tr>
+            <tr><td><code>report:export</code></td><td>Xuất báo cáo</td><td>—</td><td>✓</td><td>✓</td></tr>
+            <tr><td><code>user:manage</code></td><td>Tạo/khóa tài khoản agent</td><td>—</td><td>—</td><td>✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Lược đồ dữ liệu</h3>
+      <p>Mô hình quan hệ kinh điển: <code>users ─ user_roles ─ roles ─ role_permissions ─ permissions</code>. Quan trọng: mọi bảng gắn
+      <code>tenant_id</code> để cô lập dữ liệu giữa các khách hàng (xem H6).</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">schema.sql</span><span class="lang">SQL</span></div>
+        <pre><code><span class="tok-com">-- Mỗi role thuộc về một tenant (trừ role hệ thống tenant_id = NULL)</span>
+<span class="tok-key">CREATE TABLE</span> roles (
+  id          <span class="tok-typ">UUID</span> <span class="tok-key">PRIMARY KEY</span>,
+  tenant_id   <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> tenants(id),
+  name        <span class="tok-typ">TEXT</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- 'agent' | 'supervisor' | 'admin'</span>
+  parent_id   <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> roles(id) <span class="tok-com">-- kế thừa (role hierarchy)</span>
+);
+
+<span class="tok-key">CREATE TABLE</span> permissions (
+  id    <span class="tok-typ">UUID</span> <span class="tok-key">PRIMARY KEY</span>,
+  key   <span class="tok-typ">TEXT</span> <span class="tok-key">UNIQUE</span>          <span class="tok-com">-- 'ticket:reassign', 'call:barge'...</span>
+);
+
+<span class="tok-key">CREATE TABLE</span> role_permissions (
+  role_id        <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> roles(id),
+  permission_id  <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> permissions(id),
+  <span class="tok-key">PRIMARY KEY</span> (role_id, permission_id)
+);
+
+<span class="tok-key">CREATE TABLE</span> user_roles (
+  user_id  <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> users(id),
+  role_id  <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> roles(id),
+  <span class="tok-key">PRIMARY KEY</span> (user_id, role_id)
+);</code></pre>
+      </div>
+
+      <h3>Điểm thực thi (enforcement point / guard)</h3>
+      <p>Permission chỉ có giá trị nếu được <b>thực thi nhất quán</b> ở mọi cửa ngõ. Một guard ở Express/NestJS là nơi tốt để chặn theo
+      <em>động từ</em> (RBAC), còn việc kiểm tra <em>danh từ cụ thể</em> (ABAC: đúng tenant/queue) nên đặt sát tầng nghiệp vụ.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">authz.middleware.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Tập permission của user đã được tính sẵn (gộp role + kế thừa), cache trong token/Redis</span>
+<span class="tok-key">function</span> <span class="tok-fn">requirePermission</span>(<span class="tok-var">perm</span>: <span class="tok-typ">string</span>) {
+  <span class="tok-key">return</span> (<span class="tok-var">req</span>, <span class="tok-var">res</span>, <span class="tok-var">next</span>) => {
+    <span class="tok-key">const</span> perms = req.user.permissions; <span class="tok-com">// Set&lt;string&gt;</span>
+    <span class="tok-key">if</span> (!perms.<span class="tok-fn">has</span>(perm)) {
+      <span class="tok-key">return</span> res.<span class="tok-fn">status</span>(<span class="tok-num">403</span>).<span class="tok-fn">json</span>({ error: <span class="tok-str">'FORBIDDEN'</span>, need: perm });
+    }
+    <span class="tok-fn">next</span>();
+  };
+}
+
+<span class="tok-com">// RBAC guard chặn theo động từ ↓ ; ABAC check theo danh từ nằm trong service ↓↓</span>
+router.<span class="tok-fn">post</span>(<span class="tok-str">'/tickets/:id/reassign'</span>,
+  <span class="tok-fn">requirePermission</span>(<span class="tok-str">'ticket:reassign'</span>),
+  <span class="tok-key">async</span> (req, res) => {
+    <span class="tok-key">const</span> ticket = <span class="tok-key">await</span> tickets.<span class="tok-fn">findById</span>(req.params.id);
+
+    <span class="tok-com">// ABAC: cùng tenant? thuộc team mà supervisor này quản?</span>
+    <span class="tok-key">if</span> (ticket.tenantId !== req.user.tenantId) <span class="tok-key">return</span> res.<span class="tok-fn">sendStatus</span>(<span class="tok-num">404</span>);
+    <span class="tok-key">if</span> (!req.user.teams.<span class="tok-fn">includes</span>(ticket.teamId)) <span class="tok-key">return</span> res.<span class="tok-fn">sendStatus</span>(<span class="tok-num">403</span>);
+
+    <span class="tok-key">await</span> tickets.<span class="tok-fn">reassign</span>(ticket.id, req.body.toAgentId, req.user.id);
+    res.<span class="tok-fn">json</span>({ ok: <span class="tok-key">true</span> });
+  });</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Bẫy bảo mật: cross-tenant leak</div>
+        <p>Lưu ý ở trên trả về <code>404</code> (không phải <code>403</code>) khi sai tenant — để <b>không tiết lộ</b> rằng ticket đó tồn tại.
+        Một lỗi cực phổ biến là kiểm tra <code>ticket:reassign</code> rồi quên kiểm tra <i>ticket có thuộc tenant của user không</i>, dẫn tới
+        một supervisor của khách hàng A reassign được ticket của khách hàng B. RBAC một mình <b>không</b> chống được lỗi này — phải có ABAC khoanh phạm vi.</p>
+      </div>
+
+      <h3>Tính permission hiệu quả khi có kế thừa</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">resolvePermissions.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Gộp permission từ tất cả role của user + leo lên cây kế thừa</span>
+<span class="tok-key">async function</span> <span class="tok-fn">resolvePermissions</span>(<span class="tok-var">userId</span>: <span class="tok-typ">string</span>): <span class="tok-typ">Promise</span>&lt;<span class="tok-typ">Set</span>&lt;<span class="tok-typ">string</span>&gt;&gt; {
+  <span class="tok-key">const</span> roles = <span class="tok-key">await</span> <span class="tok-fn">getUserRoles</span>(userId);
+  <span class="tok-key">const</span> result = <span class="tok-key">new</span> <span class="tok-typ">Set</span>&lt;<span class="tok-typ">string</span>&gt;();
+
+  <span class="tok-key">for</span> (<span class="tok-key">let</span> role <span class="tok-key">of</span> roles) {
+    <span class="tok-com">// leo từ role hiện tại lên cha, ông... gom hết permission</span>
+    <span class="tok-key">while</span> (role) {
+      (<span class="tok-key">await</span> <span class="tok-fn">getRolePermissions</span>(role.id)).<span class="tok-fn">forEach</span>(p =&gt; result.<span class="tok-fn">add</span>(p));
+      role = role.parentId ? <span class="tok-key">await</span> <span class="tok-fn">getRole</span>(role.parentId) : <span class="tok-key">null</span>;
+    }
+  }
+  <span class="tok-key">return</span> result; <span class="tok-com">// cache theo userId, invalidate khi đổi role/permission</span>
+}</code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Cache & invalidation</div>
+        <p>Tính permission mỗi request là tốn kém. Hãy cache tập permission trong JWT (đánh đổi: token to hơn, khó thu hồi tức thì) hoặc
+        trong Redis theo <code>userId</code> (đánh đổi: thêm một round-trip nhưng <b>thu hồi tức thì</b> được). Khi admin sửa role/permission,
+        phải <b>invalidate cache</b> của mọi user mang role đó. Nhiều hệ chọn Redis vì khả năng thu hồi quyền ngay lập tức quan trọng hơn.</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="workflow"><span class="ico">④</span> Workflow engine</h2>
+      <p>Một <b>workflow engine</b> mô hình hóa vòng đời của một thực thể nghiệp vụ (ticket, cuộc gọi, phiên chat) như một
+      <strong>máy trạng thái (state machine)</strong>. Thay vì rải <code>if/else</code> khắp code, bạn khai báo các trạng thái và luật chuyển
+      trạng thái dưới dạng <b>dữ liệu</b>, rồi engine đọc dữ liệu đó để vận hành. Đây là chìa khóa để hệ thống <b>cấu hình được</b> mà không phải deploy lại.</p>
+      <h3>Năm thành phần cốt lõi</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">⬛</span> State (trạng thái)</div><p>Một trạng thái hợp lệ: <code>new</code>, <code>open</code>, <code>pending</code>, <code>resolved</code>, <code>closed</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">➡️</span> Transition (chuyển)</div><p>Cặp (from → to) hợp lệ kèm tên action. Cái không khai báo thì <b>cấm</b>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚦</span> Guard / Condition</div><p>Điều kiện boolean phải đúng thì transition mới chạy (vd có quyền? đã gán agent?).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⚙️</span> Action / Effect</div><p>Việc cần làm khi chuyển: gửi thông báo, ghi audit, bắt đầu đếm SLA.</p></div>
+      </div>
+      <p>Thành phần thứ năm là <b>Trigger</b> — cái gì kích hoạt transition: do người dùng (agent bấm "Resolve"), do hệ thống (hết giờ chờ), hay do sự kiện khác (khách trả lời).</p>
+
+      <h3>Vòng đời ticket bằng .flow</h3>
+      <div class="flow">
+        <span class="node" style="border-color:var(--cyan)">new</span><span class="arr">→</span>
+        <span class="node">open</span><span class="arr">→</span>
+        <span class="node">pending</span><span class="arr">→</span>
+        <span class="node">resolved</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">closed</span>
+      </div>
+      <p>Cùng với các nhánh đặc biệt: từ <code>pending</code> khách trả lời thì quay lại <code>open</code>; từ bất kỳ trạng thái mở nào,
+      nếu quá hạn SLA thì <code>escalated</code> (tăng mức ưu tiên + báo supervisor).</p>
+
+      <h3>Định nghĩa workflow dưới dạng dữ liệu</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">ticket.workflow.json</span><span class="lang">JSON</span></div>
+        <pre><code>{
+  <span class="tok-str">"initial"</span>: <span class="tok-str">"new"</span>,
+  <span class="tok-str">"states"</span>: {
+    <span class="tok-str">"new"</span>:      { <span class="tok-str">"transitions"</span>: [{ <span class="tok-str">"on"</span>: <span class="tok-str">"assign"</span>,  <span class="tok-str">"to"</span>: <span class="tok-str">"open"</span>,     <span class="tok-str">"guard"</span>: <span class="tok-str">"hasAgent"</span> }] },
+    <span class="tok-str">"open"</span>:     { <span class="tok-str">"transitions"</span>: [
+                   { <span class="tok-str">"on"</span>: <span class="tok-str">"waitCustomer"</span>, <span class="tok-str">"to"</span>: <span class="tok-str">"pending"</span> },
+                   { <span class="tok-str">"on"</span>: <span class="tok-str">"resolve"</span>, <span class="tok-str">"to"</span>: <span class="tok-str">"resolved"</span>, <span class="tok-str">"guard"</span>: <span class="tok-str">"canResolve"</span> },
+                   { <span class="tok-str">"on"</span>: <span class="tok-str">"breachSla"</span>, <span class="tok-str">"to"</span>: <span class="tok-str">"escalated"</span>, <span class="tok-str">"action"</span>: <span class="tok-str">"notifySupervisor"</span> }
+                 ] },
+    <span class="tok-str">"pending"</span>:  { <span class="tok-str">"transitions"</span>: [{ <span class="tok-str">"on"</span>: <span class="tok-str">"customerReply"</span>, <span class="tok-str">"to"</span>: <span class="tok-str">"open"</span> }] },
+    <span class="tok-str">"escalated"</span>:{ <span class="tok-str">"transitions"</span>: [{ <span class="tok-str">"on"</span>: <span class="tok-str">"resolve"</span>, <span class="tok-str">"to"</span>: <span class="tok-str">"resolved"</span> }] },
+    <span class="tok-str">"resolved"</span>: { <span class="tok-str">"transitions"</span>: [{ <span class="tok-str">"on"</span>: <span class="tok-str">"close"</span>, <span class="tok-str">"to"</span>: <span class="tok-str">"closed"</span> }] },
+    <span class="tok-str">"closed"</span>:   { <span class="tok-str">"final"</span>: <span class="tok-key">true</span> }
+  }
+}</code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Vì sao data-driven thắng hardcode</div>
+        <p>Khi luồng nằm trong JSON/DB, một khách hàng có thể có quy trình 5 bước, khách khác 8 bước — chỉ cần đổi <b>cấu hình</b>, không sửa code.
+        Đây chính xác là điều JD muốn khi viết "configurable workflow". Đổi lại, bạn phải đầu tư một engine vận hành đúng và một UI cấu hình.</p>
+      </div>
+
+      <h3>Engine thực thi transition</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">workflow-engine.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">class</span> <span class="tok-typ">WorkflowEngine</span> {
+  <span class="tok-key">constructor</span>(<span class="tok-key">private</span> def, <span class="tok-key">private</span> guards, <span class="tok-key">private</span> actions) {}
+
+  <span class="tok-key">async</span> <span class="tok-fn">apply</span>(entity, event, ctx) {
+    <span class="tok-key">const</span> state = <span class="tok-key">this</span>.def.states[entity.state];
+    <span class="tok-key">const</span> t = state.transitions?.<span class="tok-fn">find</span>(x =&gt; x.on === event);
+    <span class="tok-key">if</span> (!t) <span class="tok-key">throw new</span> <span class="tok-typ">Error</span>(<span class="tok-str">`Không có transition '</span>${event}<span class="tok-str">' từ '</span>${entity.state}<span class="tok-str">'`</span>);
+
+    <span class="tok-com">// 1) Guard — điều kiện phải đúng</span>
+    <span class="tok-key">if</span> (t.guard &amp;&amp; !(<span class="tok-key">await</span> <span class="tok-key">this</span>.guards[t.guard](entity, ctx))) {
+      <span class="tok-key">throw new</span> <span class="tok-typ">Error</span>(<span class="tok-str">`Guard '</span>${t.guard}<span class="tok-str">' không thỏa`</span>);
+    }
+    <span class="tok-key">const</span> from = entity.state;
+    entity.state = t.to;                 <span class="tok-com">// 2) Chuyển state</span>
+
+    <span class="tok-com">// 3) Action (side-effect) + 4) Audit luôn được ghi</span>
+    <span class="tok-key">if</span> (t.action) <span class="tok-key">await this</span>.actions[t.action](entity, ctx);
+    <span class="tok-key">await</span> <span class="tok-fn">writeAudit</span>({ entity: entity.id, from, to: t.to, event, by: ctx.userId });
+    <span class="tok-key">return</span> entity;
+  }
+}</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Idempotency & race condition</div>
+        <p>Hai sự kiện cùng đến (agent bấm Resolve trong lúc SLA breach tự escalate) có thể gây transition kép. Hãy dùng
+        <b>optimistic locking</b> (cột <code>version</code>) hoặc lock theo <code>entity.id</code>, và làm transition <b>idempotent</b>:
+        áp cùng một event hai lần không được tạo hai lần side-effect.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="automation"><span class="ico">⑤</span> Automation & rules</h2>
+      <p>Nếu workflow engine quyết định "<i>được phép</i> chuyển sang trạng thái nào", thì <b>automation</b> quyết định "<i>tự động</i> làm gì khi
+      có sự kiện". Mẫu phổ biến nhất là <strong>ECA — Event → Condition → Action</strong>: khi <i>Event</i> xảy ra, nếu <i>Condition</i> đúng thì chạy <i>Action</i>.</p>
+      <div class="flow">
+        <span class="node" style="border-color:var(--cyan)">Event (ticket.created)</span><span class="arr">→</span>
+        <span class="node">Condition (priority = high)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">Action (auto-assign senior)</span>
+      </div>
+
+      <h3>Các automation kinh điển trong Contact Center</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🎯</span> Auto-assign</div><p>Chat/ticket mới tự gán cho agent rảnh, đúng kỹ năng (skill-based routing), tải thấp nhất.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⏫</span> SLA escalation</div><p>Quá X phút chưa phản hồi → tăng ưu tiên, báo supervisor, đổi hàng đợi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🕘</span> Business hours</div><p>Ngoài giờ → chuyển voicemail / auto-reply / xếp hàng cho ca sau.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔔</span> Notify & tagging</div><p>Tự gắn nhãn, tự thông báo, tự tạo follow-up khi khách dùng từ khóa nhất định.</p></div>
+      </div>
+
+      <h3>Mô hình rule dưới dạng dữ liệu</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">rules.json</span><span class="lang">JSON</span></div>
+        <pre><code>[
+  {
+    <span class="tok-str">"id"</span>: <span class="tok-str">"escalate-high-priority"</span>,
+    <span class="tok-str">"on"</span>: <span class="tok-str">"ticket.sla.warning"</span>,
+    <span class="tok-str">"when"</span>: {
+      <span class="tok-str">"all"</span>: [
+        { <span class="tok-str">"fact"</span>: <span class="tok-str">"priority"</span>,  <span class="tok-str">"op"</span>: <span class="tok-str">"in"</span>, <span class="tok-str">"value"</span>: [<span class="tok-str">"high"</span>, <span class="tok-str">"urgent"</span>] },
+        { <span class="tok-str">"fact"</span>: <span class="tok-str">"state"</span>,     <span class="tok-str">"op"</span>: <span class="tok-str">"neq"</span>, <span class="tok-str">"value"</span>: <span class="tok-str">"resolved"</span> }
+      ]
+    },
+    <span class="tok-str">"then"</span>: [
+      { <span class="tok-str">"action"</span>: <span class="tok-str">"escalate"</span>,         <span class="tok-str">"params"</span>: { <span class="tok-str">"toQueue"</span>: <span class="tok-str">"tier-2"</span> } },
+      { <span class="tok-str">"action"</span>: <span class="tok-str">"notifySupervisor"</span> }
+    ]
+  }
+]</code></pre>
+      </div>
+
+      <h3>Bộ đánh giá điều kiện (rule evaluator)</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">rule-engine.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">const</span> OPS = {
+  eq:  (a, b) =&gt; a === b,
+  neq: (a, b) =&gt; a !== b,
+  in:  (a, b) =&gt; b.<span class="tok-fn">includes</span>(a),
+  gt:  (a, b) =&gt; a &gt; b,
+};
+
+<span class="tok-key">function</span> <span class="tok-fn">evalCondition</span>(cond, facts) {
+  <span class="tok-key">if</span> (cond.all) <span class="tok-key">return</span> cond.all.<span class="tok-fn">every</span>(c =&gt; <span class="tok-fn">evalCondition</span>(c, facts));
+  <span class="tok-key">if</span> (cond.any) <span class="tok-key">return</span> cond.any.<span class="tok-fn">some</span>(c =&gt; <span class="tok-fn">evalCondition</span>(c, facts));
+  <span class="tok-key">return</span> OPS[cond.op](facts[cond.fact], cond.value);  <span class="tok-com">// leaf</span>
+}
+
+<span class="tok-key">async function</span> <span class="tok-fn">runRules</span>(event, facts, ctx) {
+  <span class="tok-key">const</span> rules = <span class="tok-key">await</span> <span class="tok-fn">getRulesFor</span>(event, ctx.tenantId);   <span class="tok-com">// rule theo tenant</span>
+  <span class="tok-key">for</span> (<span class="tok-key">const</span> rule <span class="tok-key">of</span> rules) {
+    <span class="tok-key">if</span> (<span class="tok-fn">evalCondition</span>(rule.when, facts)) {
+      <span class="tok-key">for</span> (<span class="tok-key">const</span> a <span class="tok-key">of</span> rule.then) <span class="tok-key">await</span> ACTIONS[a.action](facts, a.params, ctx);
+    }
+  }
+}</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Escalation theo SLA cần timer, không phải event tức thời</div>
+        <p>"Quá 15 phút chưa phản hồi" không phải sự kiện do người dùng tạo — nó là <b>thời gian trôi qua</b>. Hãy lên lịch một
+        <b>delayed job</b> khi ticket vào trạng thái chờ (BullMQ delayed job, hoặc timer trong DB quét định kỳ). Khi job chạy, kiểm tra lại
+        điều kiện <i>tại thời điểm đó</i> (ticket có thể đã được trả lời) rồi mới escalate — tránh escalate nhầm.</p>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Workflow vs Automation — đừng nhầm</div>
+        <p><b>Workflow</b> = các trạng thái hợp lệ và luật chuyển (cái gì <i>được phép</i>). <b>Automation</b> = phản ứng tự động khi có sự kiện
+        (cái gì <i>tự xảy ra</i>). Một automation thường <b>kích hoạt</b> một transition của workflow. Tách hai khái niệm giúp hệ thống sạch và dễ test.</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="audit"><span class="ico">⑥</span> Audit log</h2>
+      <p>Audit log trả lời câu hỏi quản trị và pháp lý: <strong>ai (who) đã làm gì (what) vào lúc nào (when) trên tài nguyên nào (where),
+      kết quả ra sao (outcome)</strong>. Với Contact Center, audit cực kỳ quan trọng: tranh chấp với khách, điều tra rò rỉ dữ liệu, tuân thủ
+      (compliance), và đánh giá hiệu suất supervisor.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Trường</th><th>Ví dụ</th><th>Vì sao cần</th></tr></thead>
+          <tbody>
+            <tr><td><code>actor_id</code> + role</td><td>agent #42 (supervisor)</td><td>Ai thực hiện</td></tr>
+            <tr><td><code>action</code></td><td><code>ticket.reassign</code></td><td>Hành động gì</td></tr>
+            <tr><td><code>resource</code></td><td>ticket #918</td><td>Trên đối tượng nào</td></tr>
+            <tr><td><code>before / after</code></td><td>agent A → agent B</td><td>Thay đổi cụ thể (diff)</td></tr>
+            <tr><td><code>tenant_id</code></td><td>tenant-001</td><td>Cô lập & lọc theo khách</td></tr>
+            <tr><td><code>timestamp</code>, <code>ip</code>, <code>requestId</code></td><td>2026-06-09T…, 1.2.3.4</td><td>Truy vết, tương quan log</td></tr>
+            <tr><td><code>outcome</code></td><td>allow / deny</td><td>Cả lần bị từ chối cũng phải log</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Audit log phải bất biến (append-only)</div>
+        <p>Nếu người dùng có thể <b>sửa/xóa</b> audit log thì nó vô giá trị khi điều tra. Audit nên là <b>append-only</b>: chỉ thêm, không
+        update/delete. Cân nhắc ghi sang store riêng (write-once), ký hash móc xích (hash chaining) để phát hiện chỉnh sửa, và tách quyền —
+        ngay cả admin cũng không được sửa audit.</p>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">audit.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">async function</span> <span class="tok-fn">writeAudit</span>(e) {
+  <span class="tok-key">await</span> db.<span class="tok-fn">insert</span>(<span class="tok-str">'audit_log'</span>, {
+    actor_id:   e.userId,
+    action:     e.action,            <span class="tok-com">// 'ticket.reassign'</span>
+    resource:   <span class="tok-str">`ticket:</span>${e.entity}<span class="tok-str">`</span>,
+    tenant_id:  e.tenantId,
+    diff:       { from: e.from, to: e.to },
+    outcome:    e.outcome ?? <span class="tok-str">'allow'</span>,
+    ip:         e.ip,
+    request_id: e.requestId,
+    at:         <span class="tok-key">new</span> <span class="tok-typ">Date</span>(),
+  });
+  <span class="tok-com">// KHÔNG có hàm updateAudit / deleteAudit — append-only by design</span>
+}</code></pre>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="design"><span class="ico">⑦</span> Tư duy thiết kế</h2>
+      <p>Phần này là cốt lõi khi phỏng vấn vị trí "build configurable workflow & permission engine". Hãy trình bày theo trình tự:
+      <b>yêu cầu → phương án & đánh đổi → sơ đồ → lý do chọn</b>.</p>
+
+      <h3>Yêu cầu (làm rõ trước khi vẽ)</h3>
+      <ul>
+        <li><b>Cấu hình được:</b> mỗi tenant có thể có role, permission, workflow, rule khác nhau — không deploy lại khi đổi.</li>
+        <li><b>An toàn theo tenant:</b> tuyệt đối không rò dữ liệu/quyền giữa các khách hàng.</li>
+        <li><b>Audit đầy đủ:</b> mọi thay đổi quyền/trạng thái phải truy vết được.</li>
+        <li><b>Hiệu năng:</b> kiểm tra quyền phải nhanh (đặt trên đường nóng của mọi request).</li>
+        <li><b>Thu hồi quyền tức thì:</b> khóa một agent thì hiệu lực ngay.</li>
+      </ul>
+
+      <h3>Phương án & đánh đổi</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Quyết định</th><th>Phương án A</th><th>Phương án B</th><th>Chọn & lý do</th></tr></thead>
+          <tbody>
+            <tr><td>Mô hình quyền</td><td>RBAC thuần</td><td>RBAC + ABAC lai</td><td><b>B</b> — RBAC quản trị dễ, ABAC khoanh phạm vi tenant/queue</td></tr>
+            <tr><td>Lưu permission user</td><td>Trong JWT</td><td>Trong Redis</td><td><b>Redis</b> — thu hồi tức thì quan trọng hơn 1 round-trip</td></tr>
+            <tr><td>Định nghĩa workflow</td><td>Hardcode trong code</td><td>Data-driven (DB/JSON)</td><td><b>Data-driven</b> — cấu hình được, đúng JD</td></tr>
+            <tr><td>SLA escalation</td><td>Cron quét toàn bảng</td><td>Delayed job per ticket</td><td><b>Delayed job</b> — chính xác, ít tải; cron dự phòng</td></tr>
+            <tr><td>Audit store</td><td>Cùng DB nghiệp vụ</td><td>Store append-only riêng</td><td><b>Riêng</b> — bất biến, không lẫn với quyền sửa nghiệp vụ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Sơ đồ kiến trúc tổng thể</h3>
+      <div class="flow">
+        <span class="node">Request</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">AuthZ Guard (RBAC)</span><span class="arr">→</span>
+        <span class="node">Service (ABAC scope check)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--violet)">Workflow Engine</span><span class="arr">→</span>
+        <span class="node">Event Bus</span>
+      </div>
+      <div class="flow">
+        <span class="node">Event Bus</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">Rule Engine (ECA)</span><span class="arr">→</span>
+        <span class="node">Actions (assign/notify)</span>
+        <span class="arr">&amp;</span>
+        <span class="node" style="border-color:var(--amber)">Audit Log (append-only)</span>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Nguyên tắc vàng: tách "policy" khỏi "code"</div>
+        <p>Code chỉ chứa <b>engine</b> (cách đánh giá quyền, cách chạy state machine, cách evaluate rule). Còn <b>chính sách cụ thể</b>
+        (role nào có quyền gì, workflow gồm trạng thái nào, rule gồm điều kiện nào) nằm trong <b>dữ liệu</b>. Khi nghiệp vụ đổi, bạn đổi dữ liệu
+        — không sửa code, không deploy lại. Đây là câu trả lời cho "làm sao tránh hardcode quyền/luồng" mà người phỏng vấn rất muốn nghe.</p>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Thực thi quyền xuyên service (microservices)</div>
+        <p>Khi hệ thống tách nhiều service (call, chat, ticket, report), đừng để mỗi service tự diễn giải quyền theo một kiểu. Giải pháp:
+        một <b>policy service</b> tập trung (hoặc thư viện chung) để mọi service hỏi cùng một nguồn sự thật, và truyền <b>danh tính + tenant</b>
+        qua mỗi hop (JWT propagation / context). Nếu không, sớm muộn cũng có service quên check tenant.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Hardcode role trong code</div><p><code>if (user.role === 'admin')</code> rải khắp nơi → đổi nghiệp vụ phải sửa code. Hãy check <b>permission</b>, không check role.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên check tenant</div><p>Có <code>ticket:reassign</code> nhưng quên xác minh ticket thuộc tenant của user → rò dữ liệu cross-tenant.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Chỉ check quyền ở frontend</div><p>Ẩn nút trên UI <b>không phải</b> phân quyền. Mọi quyết định phải thực thi ở backend.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Transition tùy tiện</div><p>Cho phép nhảy trạng thái không khai báo (vd <code>new → closed</code>) → dữ liệu bẩn. Cái gì không khai báo thì cấm.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Audit thiếu lần "deny"</div><p>Chỉ log thành công thì không phát hiện được hành vi dò quyền. Log cả lần bị từ chối.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Default deny + least privilege</div><p>Mặc định cấm, cấp quyền tối thiểu, đặt guard nhất quán, cache permission có invalidation rõ ràng.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Thiết kế permission cho 4 vai trò</div>
+        <p>Cho thêm vai trò <b>quality-assurance (QA)</b> chỉ được <i>nghe lại</i> ghi âm cuộc gọi và <i>chấm điểm</i>, nhưng không được reassign
+        hay sửa ticket. Hãy liệt kê các permission <code>resource:action</code> của QA, và quyết định QA có nên kế thừa từ agent không.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">QA cần: <code>call:recording:read</code>, <code>qa:score:create</code>, có thể <code>ticket:read</code> để xem ngữ cảnh.
+        <b>Không</b> nên kế thừa agent (agent có quyền trả lời khách — QA không cần). Đây là vai trò "ngang" (cross-functional), nên định nghĩa
+        permission tường minh thay vì leo cây kế thừa. Đừng cấp <code>ticket:reassign</code>/<code>ticket:write</code> theo nguyên tắc least privilege.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Bổ sung transition reopen</div>
+        <p>Khách hàng phản hồi sau khi ticket đã <code>closed</code> trong vòng 48 giờ thì được <i>reopen</i> về trạng thái <code>open</code>;
+        sau 48 giờ thì tạo ticket mới. Hãy viết transition (kèm guard) cho workflow JSON ở mục ④ và mô tả guard <code>withinReopenWindow</code>.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Thêm vào state <code>closed</code>: <code>{ "on": "customerReply", "to": "open", "guard": "withinReopenWindow" }</code>.
+        Guard <code>withinReopenWindow(ticket)</code> trả về <code>Date.now() - ticket.closedAt &lt; 48h</code>. Nếu guard sai, automation bắt sự kiện
+        <code>ticket.replyAfterClose</code> và chạy action <code>createLinkedTicket</code>. Chú ý: vì <code>closed</code> đang là <code>final</code>,
+        bạn phải bỏ <code>final:true</code> hoặc cho phép transition rời khỏi final có điều kiện.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Rule auto-assign theo tải</div>
+        <p>Thiết kế một rule ECA: khi <code>chat.created</code>, gán cho agent <b>online</b>, đúng <b>skill</b> của hàng đợi, có <b>số phiên đang xử lý ít nhất</b>.
+        Viết phần <code>when</code> và <code>then</code>, và nêu việc gì cần làm khi không có agent nào thỏa.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px"><code>when</code>: <code>{ all: [{fact:'queueHasOnlineAgent', op:'eq', value:true}] }</code>.
+        <code>then</code>: <code>[{ action:'assignLeastBusy', params:{ skill:'$queue.skill' } }]</code>. Action <code>assignLeastBusy</code> truy vấn
+        agent online cùng skill, sort theo <code>activeSessions</code> tăng dần, gán cho người đầu. <b>Khi không có ai thỏa:</b> đẩy vào hàng đợi chờ
+        (queued), bật automation "thông báo supervisor nếu chờ &gt; N giây", và ngoài giờ làm việc thì chuyển auto-reply.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> RBAC ra quyết định phân quyền dựa trên?</div>
+          <div class="opt">Thuộc tính của tài nguyên và ngữ cảnh</div>
+          <div class="opt" data-correct="true">Vai trò (role) của user và permission gắn với role đó</div>
+          <div class="opt">Danh sách gắn trực tiếp lên từng tài nguyên</div>
+          <div class="explain"><b>Role → permission.</b> Dựa trên thuộc tính là ABAC; danh sách trên từng resource là ACL.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Một supervisor của khách hàng A reassign được ticket của khách hàng B. Nguyên nhân gốc?</div>
+          <div class="opt">Thiếu permission <code>ticket:reassign</code></div>
+          <div class="opt" data-correct="true">Có RBAC nhưng thiếu kiểm tra phạm vi tenant (ABAC scope)</div>
+          <div class="opt">JWT hết hạn</div>
+          <div class="explain"><b>Thiếu ABAC scope.</b> RBAC chỉ cấp "động từ"; phải khoanh "danh từ" bằng kiểm tra <code>tenantId</code>.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Trong workflow engine, "guard" là gì?</div>
+          <div class="opt">Side-effect chạy sau khi chuyển trạng thái</div>
+          <div class="opt" data-correct="true">Điều kiện boolean phải đúng thì transition mới được phép</div>
+          <div class="opt">Tên của trạng thái cuối</div>
+          <div class="explain"><b>Điều kiện chặn transition.</b> Side-effect là action; trạng thái cuối là final state.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Vì sao nên định nghĩa workflow dưới dạng dữ liệu (data-driven)?</div>
+          <div class="opt">Để code chạy nhanh hơn</div>
+          <div class="opt" data-correct="true">Để cấu hình luồng theo từng tenant mà không phải sửa code/deploy lại</div>
+          <div class="opt">Vì JSON an toàn hơn TypeScript</div>
+          <div class="explain"><b>Cấu hình được.</b> Tách policy khỏi engine giúp đổi nghiệp vụ mà không deploy.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Audit log nên được thiết kế như thế nào?</div>
+          <div class="opt">Cho phép admin sửa để dọn dữ liệu sai</div>
+          <div class="opt" data-correct="true">Append-only (chỉ thêm, không update/delete), log cả lần bị từ chối</div>
+          <div class="opt">Chỉ ghi khi hành động thành công</div>
+          <div class="explain"><b>Append-only.</b> Bất biến mới đáng tin khi điều tra; phải log cả "deny" để phát hiện dò quyền.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Phân quyền + workflow + automation — phần được hỏi sâu nhất cho vai trò "configurable system".</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Phân biệt Authentication và Authorization.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Authentication (xác thực) trả lời "bạn là ai" — đăng nhập, kiểm tra mật khẩu, cấp token. Authorization (phân quyền)
+        trả lời "bạn được làm gì" — sau khi biết danh tính, quyết định cho phép/từ chối hành động trên tài nguyên. Authentication xảy ra trước, là tiền đề cho authorization.</p>
+        <p class="trap">⚠️ Bẫy: nói "đăng nhập rồi thì làm gì cũng được" — sai; đăng nhập chỉ là bước đầu, mỗi hành động vẫn cần kiểm tra quyền.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>RBAC vs ABAC khác nhau thế nào? Khi nào dùng cái nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> RBAC gán permission cho role, quyết định dựa trên "user có role nào". Dễ quản trị, dễ audit, hợp khi vai trò rõ ràng
+        (agent/supervisor/admin). ABAC quyết định dựa trên thuộc tính của subject/resource/context qua policy, linh hoạt hơn nhiều (vd "chỉ ticket
+        trong queue của tôi, trong giờ làm việc, cùng tenant") nhưng khó suy luận và audit. Thực tế thường <b>kết hợp</b>: RBAC chọn động từ (loại hành động),
+        ABAC khoanh danh từ (phạm vi tài nguyên cụ thể).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Thiết kế hệ thống permission cho Contact Center có admin/supervisor/agent.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Dùng RBAC làm xương sống với permission đặt tên <code>resource:action</code> (<code>ticket:read</code>, <code>call:barge</code>,
+        <code>queue:config</code>...). Lược đồ: <code>users–user_roles–roles–role_permissions–permissions</code>, mọi bảng gắn <code>tenant_id</code>.
+        Role hierarchy: admin ⊃ supervisor ⊃ agent để tránh lặp permission. Tính tập permission hiệu quả (gộp role + leo cây kế thừa), cache trong Redis,
+        invalidate khi đổi role. Guard RBAC ở middleware chặn theo permission; kiểm tra tenant/team (ABAC) ở tầng service. Audit mọi thay đổi.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Role phân cấp (hierarchy) là gì? Có rủi ro gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Role hierarchy cho phép role cấp cao kế thừa permission của role cấp thấp (admin kế thừa supervisor kế thừa agent),
+        giảm trùng lặp và dễ bảo trì. Rủi ro: (1) kế thừa lan man khiến role cấp cao vô tình có quyền nguy hiểm; (2) vòng lặp kế thừa nếu mô hình hóa sai;
+        (3) khó hiểu "vì sao user này có quyền X". Giảm thiểu bằng cách tách nhóm "super permission" không tự kế thừa, kiểm tra chu trình, và công cụ giải thích quyền (why-authorized).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Làm sao tránh hardcode quyền và luồng nghiệp vụ vào code?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Tách <b>policy</b> khỏi <b>engine</b>. Code chỉ chứa engine: cách đánh giá permission, cách chạy state machine, cách evaluate rule.
+        Chính sách cụ thể (role có quyền gì, workflow gồm trạng thái nào, rule có điều kiện nào) nằm trong dữ liệu (DB/JSON) và cấu hình theo tenant.
+        Kiểm tra <b>permission</b> chứ không kiểm tra <code>role === 'admin'</code>. Nhờ vậy đổi nghiệp vụ chỉ cần đổi dữ liệu, không deploy lại — đúng yêu cầu "configurable system".</p>
+        <p class="trap">⚠️ Bẫy: trả lời "tạo thêm nhiều if/else theo role" — đó chính là hardcode, ngược với mục tiêu.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Thiết kế một workflow engine tổng quát cho vòng đời ticket.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mô hình hóa bằng state machine data-driven: định nghĩa <code>states</code>, mỗi state có danh sách <code>transitions</code>
+        gồm <code>on</code> (event), <code>to</code> (state đích), <code>guard</code> (điều kiện) và <code>action</code> (side-effect). Engine nhận
+        (entity, event, ctx): tìm transition hợp lệ từ state hiện tại, chạy guard, đổi state, chạy action, ghi audit. Cái gì không khai báo thì cấm.
+        Xử lý idempotency và race bằng optimistic locking. Lưu định nghĩa workflow trong DB để cấu hình theo tenant.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Mô hình rule automation (ECA) hoạt động ra sao? Cho ví dụ escalation.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> ECA = Event → Condition → Action. Khi một event xảy ra (vd <code>ticket.sla.warning</code>), engine lấy các rule đăng ký cho
+        event đó (theo tenant), evaluate phần <code>when</code> (cây điều kiện all/any/leaf so khớp với "facts"), nếu đúng thì chạy danh sách <code>then</code>
+        (action có tham số). Ví dụ escalation: khi cảnh báo SLA, nếu <code>priority ∈ {high, urgent}</code> và chưa resolved thì <code>escalate(toQueue: tier-2)</code>
+        và <code>notifySupervisor</code>. Điều kiện và action đều khai báo bằng dữ liệu nên cấu hình được.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Escalation theo SLA nên triển khai bằng cron hay delayed job?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Ưu tiên <b>delayed job</b> (vd BullMQ): khi ticket vào trạng thái chờ, lên lịch một job sẽ chạy đúng thời điểm hết hạn. Chính xác,
+        ít tải, không quét toàn bảng. Khi job chạy phải <b>kiểm tra lại điều kiện tại thời điểm đó</b> (ticket có thể đã được trả lời) để tránh escalate nhầm —
+        làm cho thao tác idempotent. Cron quét định kỳ vẫn nên giữ làm <b>lưới an toàn (fallback)</b> phòng job bị mất. Cron đơn thuần thì kém chính xác và nặng khi dữ liệu lớn.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Thực thi permission xuyên nhiều microservice thế nào cho nhất quán?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Cần một <b>nguồn sự thật chung</b>: hoặc một policy service tập trung để các service hỏi, hoặc một thư viện/SDK chung nhúng vào mỗi service.
+        Truyền danh tính + tenant + permission qua mỗi hop (JWT propagation, hoặc context được ký). Quyết định coarse-grained (động từ) có thể làm ở gateway,
+        nhưng kiểm tra fine-grained theo tài nguyên (đúng tenant/owner) phải làm ở service sở hữu dữ liệu vì chỉ nó biết quan hệ sở hữu. Tránh để mỗi service tự diễn giải quyền khác nhau.</p>
+        <p class="trap">⚠️ Bẫy: tin rằng "gateway check xong là đủ" — gateway không biết quan hệ sở hữu dữ liệu nội bộ của từng service.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Vì sao chỉ ẩn nút trên UI là chưa đủ để phân quyền?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Frontend chạy trên máy người dùng và có thể bị bỏ qua hoàn toàn (gọi API trực tiếp, sửa request). Ẩn nút chỉ là cải thiện UX —
+        ngăn người dùng làm điều họ không được phép một cách vô tình. Quyết định phân quyền thực sự <b>phải</b> được thực thi ở backend, tại mỗi endpoint, vì đó là nơi duy nhất kẻ tấn công không kiểm soát được.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Nên lưu permission của user trong JWT hay Redis? Đánh đổi gì?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> JWT: nhanh (không round-trip), stateless, dễ scale; nhưng token to hơn và <b>khó thu hồi tức thì</b> (phải đợi hết hạn hoặc duy trì blacklist).
+        Redis: thêm một round-trip nhưng cho phép <b>thu hồi/đổi quyền tức thì</b> và dễ invalidate khi admin sửa role. Với hệ thống cần khóa agent ngay lập tức
+        (bảo mật/tuân thủ), Redis thường thắng. Nhiều hệ kết hợp: JWT mang định danh + tenant, còn permission tra Redis có cache ngắn.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Audit log thiết kế thế nào để đáng tin khi điều tra?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Append-only (chỉ thêm, không update/delete), kể cả admin cũng không sửa được. Mỗi bản ghi gồm: actor + role, action, resource,
+        diff before/after, tenant_id, timestamp, ip, request_id, và outcome (allow/deny — log cả lần bị từ chối). Cân nhắc store riêng write-once, hash chaining
+        để phát hiện chỉnh sửa, và tách quyền truy cập audit. Như vậy mới trả lời đáng tin câu "ai làm gì, lúc nào, trên cái gì, kết quả ra sao".</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương H5</button>
+      </div>
+
+      <div class="pager">
+        <a href="H4-crm-dashboard.html"><span class="dir">← Trước</span><span class="ttl">H4 · CRM & Dashboard realtime</span></a>
+        <a href="H6-multi-tenancy.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">H6 · SaaS Multi-tenancy</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='H5',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành H5 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương H5'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

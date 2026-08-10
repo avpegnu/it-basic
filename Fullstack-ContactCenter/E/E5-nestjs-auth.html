@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E5 · Authentication/Authorization</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-e">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">E5 · Authentication/Authorization</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần E · NestJS</div>
+      <nav class="nav">
+        <a href="E1-nestjs-kien-truc-di.html">E1 · Kiến trúc NestJS & DI</a>
+        <a href="E2-nestjs-modules-providers.html">E2 · Modules, Controllers, Providers</a>
+        <a href="E3-nestjs-guards-interceptors.html">E3 · Guards, Interceptors, Pipes</a>
+        <a href="E4-nestjs-database.html">E4 · NestJS + Database + Config</a>
+        <a href="E5-nestjs-auth.html" class="active">E5 · Authentication/Authorization</a>
+        <a href="E6-nestjs-websocket.html">E6 · WebSocket Gateway & Microservices</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#passport">① Passport & strategies</a>
+        <a href="#jwtstrategy">② JWT strategy</a>
+        <a href="#guards">③ AuthGuard & UseGuards</a>
+        <a href="#rbac">④ RBAC với Guard + Reflector</a>
+        <a href="#refresh">⑤ Refresh token</a>
+        <a href="#security">⑥ Bảo mật & best practices</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần E · NestJS &nbsp;›&nbsp; <b>E5 · Authentication/Authorization</b></div>
+      <div class="live-pill"><span class="blink"></span> passport guard</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần E · Chương 5</span>
+        <h1>NestJS Authentication & Authorization</h1>
+        <p class="lead">Cài đặt xác thực JWT bằng Passport và phân quyền RBAC bằng Guard + Reflector — bản dựng thực tế của yêu cầu "xác thực và phân quyền" trong JD.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phân biệt rõ <b>Authentication</b> (bạn là ai) và <b>Authorization</b> (bạn được làm gì) — hai khái niệm hay bị lẫn.</p>
+        <p>• Hiểu kiến trúc Passport trong NestJS: <code>Strategy</code> → <code>validate()</code> → <code>AuthGuard</code> → <code>req.user</code>.</p>
+        <p>• Tự viết JWT strategy: trích token từ header, verify chữ ký, gắn payload vào request.</p>
+        <p>• Cài <b>RBAC</b> bằng <code>@Roles</code> (SetMetadata) + <code>RolesGuard</code> đọc <code>Reflector</code>.</p>
+        <p>• Thiết kế <b>refresh token</b> có rotation, và route <code>@Public</code> cho endpoint mở.</p>
+        <p>• Áp dụng best practice bảo mật: httpOnly cookie, bcrypt, throttler, helmet.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế hệ thống Contact Center</div>
+        <p>Một Contact Center có nhiều vai trò: <b>agent</b> (nhận cuộc gọi/chat), <b>supervisor</b> (giám sát hàng đợi, nghe lén cuộc gọi),
+        <b>admin</b> (cấu hình IVR, quản lý người dùng). Cùng một API <code>GET /calls/:id</code> nhưng agent chỉ xem cuộc gọi của mình,
+        supervisor xem cả team, admin xem tất cả. Đây chính là bài toán mà <b>JWT + RBAC Guard</b> giải quyết: token chứng minh "bạn là agent #42",
+        còn Guard quyết định "agent có được nghe lén không". Toàn bộ chương này là khung xương cho lớp bảo mật đó.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="passport"><span class="ico">①</span> Passport & strategies</h2>
+      <p><strong>Passport</strong> là thư viện xác thực phổ biến nhất của hệ Node, và NestJS bọc nó qua package
+      <code>@nestjs/passport</code>. Triết lý của Passport rất gọn: mỗi cách đăng nhập là một <b>strategy</b> (chiến lược).
+      Bạn cài chiến lược nào thì hệ thống "biết" xác thực kiểu đó — đăng nhập bằng username/password (<code>local</code>),
+      bằng JWT (<code>jwt</code>), bằng Google OAuth (<code>google</code>)... Tất cả đều có chung một giao diện: nhận thông tin xác thực,
+      kiểm tra, rồi trả về một object <code>user</code>.</p>
+
+      <p>Trong NestJS, một strategy là một <b>provider</b> kế thừa <code>PassportStrategy(StrategyBase)</code> và bắt buộc cài đặt hàm
+      <code>validate()</code>. Giá trị mà <code>validate()</code> <b>return</b> sẽ được Passport gắn vào <code>request.user</code> —
+      đây là điểm mấu chốt cần nhớ.</p>
+
+      <div class="flow">
+        <span class="node">Client gửi credentials</span><span class="arr">→</span>
+        <span class="node">AuthGuard kích hoạt Strategy</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Strategy.validate()</span><span class="arr">→</span>
+        <span class="node">return user</span><span class="arr">→</span>
+        <span class="node">req.user</span>
+      </div>
+
+      <h3>Local strategy — đăng nhập username/password</h3>
+      <p>Chiến lược <code>local</code> dùng cho bước <b>đăng nhập đầu tiên</b>: client gửi email + mật khẩu, ta xác minh trong DB,
+      nếu đúng thì phát hành JWT. Hàm <code>validate()</code> của local nhận đúng hai tham số (mặc định <code>username</code>, <code>password</code>).</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">local.strategy.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-key">import</span> { Strategy } <span class="tok-key">from</span> <span class="tok-str">'passport-local'</span>;
+<span class="tok-key">import</span> { PassportStrategy } <span class="tok-key">from</span> <span class="tok-str">'@nestjs/passport'</span>;
+<span class="tok-key">import</span> { Injectable, UnauthorizedException } <span class="tok-key">from</span> <span class="tok-str">'@nestjs/common'</span>;
+
+<span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">LocalStrategy</span> <span class="tok-key">extends</span> <span class="tok-fn">PassportStrategy</span>(Strategy) {
+  <span class="tok-fn">constructor</span>(<span class="tok-key">private</span> auth: <span class="tok-typ">AuthService</span>) {
+    <span class="tok-key">super</span>({ usernameField: <span class="tok-str">'email'</span> }); <span class="tok-com">// đổi field mặc định 'username' → 'email'</span>
+  }
+
+  <span class="tok-com">// validate() chạy MỖI lần qua AuthGuard('local')</span>
+  <span class="tok-key">async</span> <span class="tok-fn">validate</span>(email: <span class="tok-typ">string</span>, password: <span class="tok-typ">string</span>) {
+    <span class="tok-key">const</span> agent = <span class="tok-key">await</span> <span class="tok-key">this</span>.auth.<span class="tok-fn">verifyAgent</span>(email, password);
+    <span class="tok-key">if</span> (!agent) <span class="tok-key">throw new</span> <span class="tok-fn">UnauthorizedException</span>(<span class="tok-str">'Sai email hoặc mật khẩu'</span>);
+    <span class="tok-key">return</span> agent; <span class="tok-com">// → gắn vào req.user, controller dùng để ký JWT</span>
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ validate() trả về gì = req.user là cái đó</div>
+        <p>Đừng trả về cả entity có <code>passwordHash</code>! Hãy loại bỏ trường nhạy cảm trong <code>verifyAgent</code> hoặc map sang DTO gọn
+        (id, email, roles). Bất cứ thứ gì lọt ra <code>req.user</code> đều có nguy cơ bị log hoặc serialize ra response.</p>
+      </div>
+
+      <h3>Đăng ký strategy trong module</h3>
+      <p>Strategy chỉ là provider — phải khai báo trong <code>providers</code> của module thì DI mới khởi tạo và Passport mới "thấy" nó.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">auth.module.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Module</span>({
+  imports: [
+    <span class="tok-typ">PassportModule</span>,
+    <span class="tok-typ">JwtModule</span>.<span class="tok-fn">register</span>({ secret: process.env.<span class="tok-var">JWT_SECRET</span>, signOptions: { expiresIn: <span class="tok-str">'15m'</span> } }),
+    <span class="tok-typ">AgentsModule</span>,
+  ],
+  providers: [<span class="tok-typ">AuthService</span>, <span class="tok-typ">LocalStrategy</span>, <span class="tok-typ">JwtStrategy</span>], <span class="tok-com">// strategy phải nằm ở đây</span>
+  controllers: [<span class="tok-typ">AuthController</span>],
+})
+<span class="tok-key">export class</span> <span class="tok-typ">AuthModule</span> {}</code></pre>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="jwtstrategy"><span class="ico">②</span> JWT strategy</h2>
+      <p>Sau khi đăng nhập thành công, server ký một <b>JWT</b> (JSON Web Token) và trả về client. Mọi request sau đó client đính kèm token này;
+      server chỉ cần <b>verify chữ ký</b> là biết người gọi là ai mà <em>không cần truy DB</em> — đó là sức mạnh của JWT (stateless).</p>
+
+      <p>Cấu trúc JWT gồm 3 phần ngăn bởi dấu chấm: <code>header.payload.signature</code>. Payload chứa các <b>claim</b> như
+      <code>sub</code> (subject = id người dùng), <code>roles</code>, <code>exp</code> (hết hạn). Signature bảo đảm payload không bị sửa.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">jwt.strategy.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-key">import</span> { ExtractJwt, Strategy } <span class="tok-key">from</span> <span class="tok-str">'passport-jwt'</span>;
+<span class="tok-key">import</span> { PassportStrategy } <span class="tok-key">from</span> <span class="tok-str">'@nestjs/passport'</span>;
+
+<span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">JwtStrategy</span> <span class="tok-key">extends</span> <span class="tok-fn">PassportStrategy</span>(Strategy) {
+  <span class="tok-fn">constructor</span>() {
+    <span class="tok-key">super</span>({
+      <span class="tok-com">// trích token từ header: "Authorization: Bearer &lt;token&gt;"</span>
+      jwtFromRequest: <span class="tok-typ">ExtractJwt</span>.<span class="tok-fn">fromAuthHeaderAsBearerToken</span>(),
+      ignoreExpiration: <span class="tok-key">false</span>,           <span class="tok-com">// hết hạn thì từ chối</span>
+      secretOrKey: process.env.<span class="tok-var">JWT_SECRET</span>, <span class="tok-com">// dùng để verify chữ ký</span>
+    });
+  }
+
+  <span class="tok-com">// Chỉ chạy SAU KHI token đã verify chữ ký + còn hạn.</span>
+  <span class="tok-com">// 'payload' chính là phần đã giải mã của JWT.</span>
+  <span class="tok-key">async</span> <span class="tok-fn">validate</span>(payload: { sub: <span class="tok-typ">number</span>; email: <span class="tok-typ">string</span>; roles: <span class="tok-typ">string</span>[] }) {
+    <span class="tok-com">// return → req.user. Có thể truy DB ở đây nếu cần dữ liệu tươi.</span>
+    <span class="tok-key">return</span> { id: payload.sub, email: payload.email, roles: payload.roles };
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout info">
+        <div class="c-title">🔎 Thứ tự xử lý bên trong passport-jwt</div>
+        <p>1) Trích token từ <code>Authorization: Bearer ...</code> → 2) verify chữ ký bằng <code>secretOrKey</code> → 3) kiểm tra <code>exp</code> →
+        4) <em>chỉ khi</em> mọi bước trên hợp lệ mới gọi <code>validate(payload)</code>. Nếu token sai/hết hạn, <code>validate()</code> <b>không chạy</b>
+        và Passport tự ném <code>401 Unauthorized</code>. Vì vậy bên trong <code>validate()</code> bạn chỉ cần lo "payload này map ra user nào".</p>
+      </div>
+
+      <h3>Ký token khi đăng nhập</h3>
+      <p>Sau khi <code>LocalStrategy</code> xác minh xong, controller dùng <code>JwtService</code> để ký token với đúng các claim mà
+      <code>JwtStrategy.validate</code> mong đợi.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">auth.service.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">AuthService</span> {
+  <span class="tok-fn">constructor</span>(<span class="tok-key">private</span> jwt: <span class="tok-typ">JwtService</span>) {}
+
+  <span class="tok-fn">issueAccessToken</span>(agent: <span class="tok-typ">Agent</span>) {
+    <span class="tok-key">const</span> payload = { sub: agent.id, email: agent.email, roles: agent.roles };
+    <span class="tok-key">return</span> <span class="tok-key">this</span>.jwt.<span class="tok-fn">sign</span>(payload); <span class="tok-com">// expiresIn lấy từ JwtModule.register</span>
+  }
+}</code></pre>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="guards"><span class="ico">③</span> AuthGuard & @UseGuards</h2>
+      <p>Strategy biết <em>cách</em> xác thực, nhưng cái <b>kích hoạt</b> nó ở từng route là <strong>Guard</strong>.
+      <code>@nestjs/passport</code> cung cấp factory <code>AuthGuard('tên-strategy')</code> sinh ra một Guard chạy đúng strategy đó.
+      Bạn gắn Guard vào route/controller bằng decorator <code>@UseGuards</code>.</p>
+
+      <p>Nhắc lại từ <a href="E3-nestjs-guards-interceptors.html">E3</a>: Guard chạy <b>sau middleware, trước interceptor và pipe</b>;
+      nó trả về <code>true/false</code> (hoặc Promise/Observable) để quyết định request có được vào handler hay không.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">auth.controller.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Controller</span>(<span class="tok-str">'auth'</span>)
+<span class="tok-key">export class</span> <span class="tok-typ">AuthController</span> {
+  <span class="tok-com">// Bước đăng nhập: dùng AuthGuard('local') để chạy LocalStrategy</span>
+  <span class="tok-op">@</span><span class="tok-fn">UseGuards</span>(<span class="tok-fn">AuthGuard</span>(<span class="tok-str">'local'</span>))
+  <span class="tok-op">@</span><span class="tok-fn">Post</span>(<span class="tok-str">'login'</span>)
+  <span class="tok-fn">login</span>(<span class="tok-op">@</span><span class="tok-fn">Req</span>() req) {
+    <span class="tok-com">// req.user do LocalStrategy.validate() trả về</span>
+    <span class="tok-key">return</span> <span class="tok-key">this</span>.auth.<span class="tok-fn">issueAccessToken</span>(req.user);
+  }
+}
+
+<span class="tok-op">@</span><span class="tok-fn">Controller</span>(<span class="tok-str">'calls'</span>)
+<span class="tok-op">@</span><span class="tok-fn">UseGuards</span>(<span class="tok-fn">AuthGuard</span>(<span class="tok-str">'jwt'</span>)) <span class="tok-com">// áp cho TẤT CẢ route trong controller</span>
+<span class="tok-key">export class</span> <span class="tok-typ">CallsController</span> {
+  <span class="tok-op">@</span><span class="tok-fn">Get</span>()
+  <span class="tok-fn">myCalls</span>(<span class="tok-op">@</span><span class="tok-fn">Req</span>() req) {
+    <span class="tok-key">return</span> <span class="tok-key">this</span>.calls.<span class="tok-fn">findByAgent</span>(req.user.id); <span class="tok-com">// req.user từ JwtStrategy</span>
+  }
+}</code></pre>
+      </div>
+
+      <h3>Ba cấp áp Guard</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Cấp</th><th>Cách khai báo</th><th>Phạm vi</th></tr></thead>
+          <tbody>
+            <tr><td><b>Route</b></td><td><code>@UseGuards(...)</code> trên 1 method</td><td>Chỉ endpoint đó</td></tr>
+            <tr><td><b>Controller</b></td><td><code>@UseGuards(...)</code> trên class</td><td>Mọi route của controller</td></tr>
+            <tr><td><b>Global</b></td><td><code>app.useGlobalGuards()</code> hoặc <code>APP_GUARD</code></td><td>Toàn ứng dụng</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Global Guard kiểu "secure by default"</div>
+        <p>Mẫu phổ biến trong dự án thật: đăng ký <code>JwtAuthGuard</code> ở mức global qua <code>APP_GUARD</code> để <b>mọi route mặc định phải có token</b>,
+        rồi mở ngoại lệ cho vài route public bằng decorator <code>@Public</code> (xem mục ⑤). Như vậy quên gắn guard sẽ là "đóng" chứ không phải "mở" —
+        an toàn hơn nhiều so với phải nhớ gắn từng route.</p>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">app.module.ts (global guard)</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Module</span>({
+  providers: [
+    { provide: <span class="tok-typ">APP_GUARD</span>, useClass: <span class="tok-typ">JwtAuthGuard</span> }, <span class="tok-com">// chạy DI bình thường</span>
+  ],
+})
+<span class="tok-key">export class</span> <span class="tok-typ">AppModule</span> {}</code></pre>
+      </div>
+
+      <p>Một mẹo hay: tạo lớp <code>JwtAuthGuard</code> kế thừa <code>AuthGuard('jwt')</code> để có thể tùy biến (vd: bỏ qua route public).
+      Đây cũng là nơi ta override <code>canActivate</code>/<code>handleRequest</code>.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">jwt-auth.guard.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">JwtAuthGuard</span> <span class="tok-key">extends</span> <span class="tok-fn">AuthGuard</span>(<span class="tok-str">'jwt'</span>) {
+  <span class="tok-com">// có thể override handleRequest để custom thông điệp lỗi</span>
+  <span class="tok-fn">handleRequest</span>(err, user, info) {
+    <span class="tok-key">if</span> (err || !user) {
+      <span class="tok-key">throw</span> err || <span class="tok-key">new</span> <span class="tok-fn">UnauthorizedException</span>(<span class="tok-str">'Token không hợp lệ hoặc đã hết hạn'</span>);
+    }
+    <span class="tok-key">return</span> user;
+  }
+}</code></pre>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="rbac"><span class="ico">④</span> RBAC với Guard + Reflector</h2>
+      <p>Đến đây ta đã biết <em>người gọi là ai</em> (authentication). Bước tiếp theo là <strong>Authorization</strong>:
+      người này được làm gì? Mô hình phổ biến nhất là <b>RBAC</b> (Role-Based Access Control) — gán mỗi route một danh sách
+      vai trò được phép, rồi so khớp với <code>req.user.roles</code>.</p>
+
+      <p>Kỹ thuật: dùng <code>SetMetadata</code> để "đính" metadata vai trò lên route, rồi viết một <code>RolesGuard</code> dùng
+      <code>Reflector</code> để <b>đọc lại</b> metadata đó lúc runtime.</p>
+
+      <div class="flow">
+        <span class="node">@Roles('supervisor')</span><span class="arr">→</span>
+        <span class="node">SetMetadata gắn vào route</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">RolesGuard.canActivate</span><span class="arr">→</span>
+        <span class="node">Reflector đọc metadata</span><span class="arr">→</span>
+        <span class="node">so khớp req.user.roles</span>
+      </div>
+
+      <h3>Decorator @Roles (SetMetadata)</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">roles.decorator.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-key">import</span> { SetMetadata } <span class="tok-key">from</span> <span class="tok-str">'@nestjs/common'</span>;
+
+<span class="tok-key">export const</span> <span class="tok-typ">ROLES_KEY</span> = <span class="tok-str">'roles'</span>;
+<span class="tok-com">// @Roles('admin','supervisor') → gắn metadata ['admin','supervisor']</span>
+<span class="tok-key">export const</span> <span class="tok-fn">Roles</span> = (...roles: <span class="tok-typ">string</span>[]) =&gt; <span class="tok-fn">SetMetadata</span>(<span class="tok-typ">ROLES_KEY</span>, roles);</code></pre>
+      </div>
+
+      <h3>RolesGuard đọc Reflector</h3>
+      <p><code>Reflector</code> là tiện ích của Nest để đọc metadata. Hai hàm hay dùng: <code>get()</code> (đọc 1 chỗ) và
+      <code>getAllAndOverride()</code> (đọc cả method lẫn class, method ưu tiên — rất hợp khi vừa gắn <code>@Roles</code> ở controller vừa ở route).</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">roles.guard.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">RolesGuard</span> <span class="tok-key">implements</span> <span class="tok-typ">CanActivate</span> {
+  <span class="tok-fn">constructor</span>(<span class="tok-key">private</span> reflector: <span class="tok-typ">Reflector</span>) {} <span class="tok-com">// Reflector inject qua DI</span>
+
+  <span class="tok-fn">canActivate</span>(ctx: <span class="tok-typ">ExecutionContext</span>): <span class="tok-typ">boolean</span> {
+    <span class="tok-com">// đọc metadata từ method, fallback sang class</span>
+    <span class="tok-key">const</span> required = <span class="tok-key">this</span>.reflector.<span class="tok-fn">getAllAndOverride</span>&lt;<span class="tok-typ">string</span>[]&gt;(<span class="tok-typ">ROLES_KEY</span>, [
+      ctx.<span class="tok-fn">getHandler</span>(), <span class="tok-com">// route method</span>
+      ctx.<span class="tok-fn">getClass</span>(),   <span class="tok-com">// controller class</span>
+    ]);
+
+    <span class="tok-com">// route không yêu cầu role nào → cho qua (chỉ cần đã đăng nhập)</span>
+    <span class="tok-key">if</span> (!required || required.length === <span class="tok-num">0</span>) <span class="tok-key">return</span> <span class="tok-key">true</span>;
+
+    <span class="tok-key">const</span> { user } = ctx.<span class="tok-fn">switchToHttp</span>().<span class="tok-fn">getRequest</span>();
+    <span class="tok-com">// user do JwtStrategy gắn vào — so khớp ít nhất 1 role</span>
+    <span class="tok-key">const</span> ok = required.<span class="tok-fn">some</span>((r) =&gt; user?.roles?.<span class="tok-fn">includes</span>(r));
+    <span class="tok-key">if</span> (!ok) <span class="tok-key">throw new</span> <span class="tok-fn">ForbiddenException</span>(<span class="tok-str">'Bạn không có quyền thực hiện thao tác này'</span>);
+    <span class="tok-key">return</span> <span class="tok-key">true</span>;
+  }
+}</code></pre>
+      </div>
+
+      <h3>Kết hợp AuthGuard + RolesGuard</h3>
+      <p>Hai guard này phối hợp theo <b>thứ tự khai báo</b>: <code>JwtAuthGuard</code> chạy <em>trước</em> để xác thực và gắn
+      <code>req.user</code>; rồi <code>RolesGuard</code> chạy <em>sau</em> mới có <code>user.roles</code> để so khớp. Đảo thứ tự là sai.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">supervisor.controller.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Controller</span>(<span class="tok-str">'monitor'</span>)
+<span class="tok-op">@</span><span class="tok-fn">UseGuards</span>(<span class="tok-typ">JwtAuthGuard</span>, <span class="tok-typ">RolesGuard</span>) <span class="tok-com">// thứ tự: xác thực TRƯỚC, phân quyền SAU</span>
+<span class="tok-key">export class</span> <span class="tok-typ">MonitorController</span> {
+
+  <span class="tok-op">@</span><span class="tok-fn">Roles</span>(<span class="tok-str">'supervisor'</span>, <span class="tok-str">'admin'</span>)
+  <span class="tok-op">@</span><span class="tok-fn">Post</span>(<span class="tok-str">'calls/:id/barge-in'</span>) <span class="tok-com">// nghe lén/chen vào cuộc gọi</span>
+  <span class="tok-fn">bargeIn</span>(<span class="tok-op">@</span><span class="tok-fn">Param</span>(<span class="tok-str">'id'</span>) id: <span class="tok-typ">string</span>, <span class="tok-op">@</span><span class="tok-fn">Req</span>() req) {
+    <span class="tok-key">return</span> <span class="tok-key">this</span>.monitor.<span class="tok-fn">bargeIn</span>(id, req.user.id);
+  }
+
+  <span class="tok-op">@</span><span class="tok-fn">Roles</span>(<span class="tok-str">'admin'</span>)
+  <span class="tok-op">@</span><span class="tok-fn">Delete</span>(<span class="tok-str">'queues/:id'</span>) <span class="tok-com">// chỉ admin được xóa hàng đợi</span>
+  <span class="tok-fn">removeQueue</span>(<span class="tok-op">@</span><span class="tok-fn">Param</span>(<span class="tok-str">'id'</span>) id: <span class="tok-typ">string</span>) {
+    <span class="tok-key">return</span> <span class="tok-key">this</span>.queues.<span class="tok-fn">remove</span>(id);
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 RBAC chưa đủ cho "ownership"</div>
+        <p>RBAC trả lời "agent có được xem cuộc gọi không", nhưng <b>không</b> trả lời "agent có được xem cuộc gọi <em>của người khác</em> không".
+        Cần thêm kiểm tra <b>resource-level</b> (ABAC): trong service, so <code>call.agentId === req.user.id</code>, hoặc cho supervisor xem theo team.
+        Đừng tin RBAC giải quyết mọi thứ — đó là bẫy phỏng vấn rất hay gặp.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="refresh"><span class="ico">⑤</span> Refresh token & route @Public</h2>
+      <p>Access token nên <b>sống ngắn</b> (vd 15 phút) để giảm thiệt hại nếu bị lộ. Nhưng bắt agent đăng nhập lại mỗi 15 phút thì tệ.
+      Giải pháp: cấp thêm <strong>refresh token</strong> sống dài (vd 7 ngày), lưu an toàn, dùng để xin access token mới khi cái cũ hết hạn.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th></th><th>Access token</th><th>Refresh token</th></tr></thead>
+          <tbody>
+            <tr><td><b>Tuổi thọ</b></td><td>Ngắn (5–15 phút)</td><td>Dài (vài ngày–tuần)</td></tr>
+            <tr><td><b>Dùng để</b></td><td>Gọi API thường ngày</td><td>Chỉ để xin access token mới</td></tr>
+            <tr><td><b>Lưu ở</b></td><td>Memory/header (Bearer)</td><td>httpOnly cookie (an toàn nhất)</td></tr>
+            <tr><td><b>Thu hồi</b></td><td>Khó (stateless)</td><td>Dễ — lưu hash trong DB, xóa là revoke</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Strategy & endpoint riêng cho refresh</h3>
+      <p>Tách hẳn một <code>jwt-refresh</code> strategy với secret riêng (<code>JWT_REFRESH_SECRET</code>), trích token từ cookie thay vì header,
+      và một endpoint <code>POST /auth/refresh</code> được bảo vệ bằng strategy đó.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">jwt-refresh.strategy.ts</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">JwtRefreshStrategy</span> <span class="tok-key">extends</span> <span class="tok-fn">PassportStrategy</span>(Strategy, <span class="tok-str">'jwt-refresh'</span>) {
+  <span class="tok-fn">constructor</span>(<span class="tok-key">private</span> auth: <span class="tok-typ">AuthService</span>) {
+    <span class="tok-key">super</span>({
+      jwtFromRequest: <span class="tok-typ">ExtractJwt</span>.<span class="tok-fn">fromExtractors</span>([
+        (req) =&gt; req?.cookies?.<span class="tok-var">refresh_token</span>, <span class="tok-com">// lấy từ httpOnly cookie</span>
+      ]),
+      secretOrKey: process.env.<span class="tok-var">JWT_REFRESH_SECRET</span>,
+      passReqToCallback: <span class="tok-key">true</span>, <span class="tok-com">// để truy lại raw token trong validate</span>
+    });
+  }
+
+  <span class="tok-key">async</span> <span class="tok-fn">validate</span>(req, payload) {
+    <span class="tok-key">const</span> token = req.cookies.<span class="tok-var">refresh_token</span>;
+    <span class="tok-com">// so token với hash đã lưu trong DB → chống token cũ/bị thu hồi</span>
+    <span class="tok-key">const</span> agent = <span class="tok-key">await</span> <span class="tok-key">this</span>.auth.<span class="tok-fn">validateRefreshToken</span>(payload.sub, token);
+    <span class="tok-key">if</span> (!agent) <span class="tok-key">throw new</span> <span class="tok-fn">UnauthorizedException</span>();
+    <span class="tok-key">return</span> agent;
+  }
+}</code></pre>
+      </div>
+
+      <h3>Rotation — xoay token mỗi lần refresh</h3>
+      <p><b>Refresh token rotation</b>: mỗi lần dùng refresh token, cấp luôn refresh token <em>mới</em> và <b>vô hiệu hóa cái cũ</b>.
+      Nếu kẻ tấn công trộm được token cũ và dùng lại, hệ thống phát hiện "token đã bị xoay" → coi như bị lộ → thu hồi cả phiên.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">auth.controller.ts (refresh)</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">UseGuards</span>(<span class="tok-fn">AuthGuard</span>(<span class="tok-str">'jwt-refresh'</span>))
+<span class="tok-op">@</span><span class="tok-fn">Post</span>(<span class="tok-str">'refresh'</span>)
+<span class="tok-key">async</span> <span class="tok-fn">refresh</span>(<span class="tok-op">@</span><span class="tok-fn">Req</span>() req, <span class="tok-op">@</span><span class="tok-fn">Res</span>({ passthrough: <span class="tok-key">true</span> }) res) {
+  <span class="tok-key">const</span> agent = req.user;
+  <span class="tok-key">const</span> access = <span class="tok-key">this</span>.auth.<span class="tok-fn">issueAccessToken</span>(agent);
+  <span class="tok-key">const</span> refresh = <span class="tok-key">await</span> <span class="tok-key">this</span>.auth.<span class="tok-fn">rotateRefreshToken</span>(agent); <span class="tok-com">// xoay + lưu hash mới</span>
+
+  res.<span class="tok-fn">cookie</span>(<span class="tok-str">'refresh_token'</span>, refresh, {
+    httpOnly: <span class="tok-key">true</span>, secure: <span class="tok-key">true</span>, sameSite: <span class="tok-str">'strict'</span>,
+  });
+  <span class="tok-key">return</span> { access_token: access };
+}</code></pre>
+      </div>
+
+      <h3>@Public — mở ngoại lệ cho global guard</h3>
+      <p>Khi đã dùng global <code>JwtAuthGuard</code>, các route như <code>login</code>, <code>health-check</code> cần "miễn xác thực".
+      Ta tạo decorator <code>@Public</code> đánh metadata, rồi cho guard bỏ qua khi gặp metadata đó.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">public.decorator.ts + guard</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-key">export const</span> <span class="tok-typ">IS_PUBLIC</span> = <span class="tok-str">'isPublic'</span>;
+<span class="tok-key">export const</span> <span class="tok-fn">Public</span> = () =&gt; <span class="tok-fn">SetMetadata</span>(<span class="tok-typ">IS_PUBLIC</span>, <span class="tok-key">true</span>);
+
+<span class="tok-op">@</span><span class="tok-fn">Injectable</span>()
+<span class="tok-key">export class</span> <span class="tok-typ">JwtAuthGuard</span> <span class="tok-key">extends</span> <span class="tok-fn">AuthGuard</span>(<span class="tok-str">'jwt'</span>) {
+  <span class="tok-fn">constructor</span>(<span class="tok-key">private</span> reflector: <span class="tok-typ">Reflector</span>) { <span class="tok-key">super</span>(); }
+
+  <span class="tok-fn">canActivate</span>(ctx: <span class="tok-typ">ExecutionContext</span>) {
+    <span class="tok-key">const</span> isPublic = <span class="tok-key">this</span>.reflector.<span class="tok-fn">getAllAndOverride</span>&lt;<span class="tok-typ">boolean</span>&gt;(<span class="tok-typ">IS_PUBLIC</span>, [
+      ctx.<span class="tok-fn">getHandler</span>(), ctx.<span class="tok-fn">getClass</span>(),
+    ]);
+    <span class="tok-key">if</span> (isPublic) <span class="tok-key">return</span> <span class="tok-key">true</span>; <span class="tok-com">// bỏ qua xác thực</span>
+    <span class="tok-key">return</span> <span class="tok-key">super</span>.<span class="tok-fn">canActivate</span>(ctx); <span class="tok-com">// còn lại chạy JWT như thường</span>
+  }
+}
+
+<span class="tok-com">// dùng: @Public() @Post('login') login() {...}</span></code></pre>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="security"><span class="ico">⑥</span> Bảo mật & best practices</h2>
+      <p>Cài đúng cơ chế chưa đủ — phải cài <b>an toàn</b>. Dưới đây là những lớp phòng thủ tối thiểu cho một service xác thực thực tế.</p>
+
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🔒</span> bcrypt cho mật khẩu</div><p>Không bao giờ lưu mật khẩu thô. Băm bằng <code>bcrypt</code> (salt + cost factor ~10–12). Đây là tác vụ CPU dùng thread pool.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🍪</span> httpOnly cookie</div><p>Refresh token để trong cookie <code>httpOnly + secure + sameSite</code> → JS không đọc được, chống XSS đánh cắp token.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⏱️</span> Throttler (rate limit)</div><p><code>@nestjs/throttler</code> chặn brute-force login: vd tối đa 5 lần thử / phút / IP cho <code>/auth/login</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🛡️</span> helmet</div><p>Đặt các HTTP header bảo mật (CSP, HSTS, X-Frame-Options...) chỉ với 1 dòng <code>app.use(helmet())</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔑</span> Secret qua env</div><p><code>JWT_SECRET</code> đủ dài, ngẫu nhiên, lưu trong biến môi trường/secret manager — không hard-code, không commit.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⌛</span> Token sống ngắn</div><p>Access ngắn hạn + refresh rotation giảm cửa sổ tấn công nếu token bị lộ.</p></div>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">main.ts (lớp bảo vệ hạ tầng)</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-key">const</span> app = <span class="tok-key">await</span> <span class="tok-typ">NestFactory</span>.<span class="tok-fn">create</span>(<span class="tok-typ">AppModule</span>);
+app.<span class="tok-fn">use</span>(<span class="tok-fn">helmet</span>());                 <span class="tok-com">// security headers</span>
+app.<span class="tok-fn">use</span>(<span class="tok-fn">cookieParser</span>());           <span class="tok-com">// đọc refresh_token cookie</span>
+app.<span class="tok-fn">enableCors</span>({ origin: process.env.<span class="tok-var">CLIENT_URL</span>, credentials: <span class="tok-key">true</span> });
+app.<span class="tok-fn">useGlobalPipes</span>(<span class="tok-key">new</span> <span class="tok-fn">ValidationPipe</span>({ whitelist: <span class="tok-key">true</span> }));
+<span class="tok-key">await</span> app.<span class="tok-fn">listen</span>(<span class="tok-num">3000</span>);</code></pre>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">throttler trên login</span><span class="lang">NestJS</span></div>
+        <pre><code><span class="tok-op">@</span><span class="tok-fn">UseGuards</span>(<span class="tok-typ">ThrottlerGuard</span>)
+<span class="tok-op">@</span><span class="tok-fn">Throttle</span>({ default: { limit: <span class="tok-num">5</span>, ttl: <span class="tok-num">60000</span> } }) <span class="tok-com">// 5 lần / 60s</span>
+<span class="tok-op">@</span><span class="tok-fn">Public</span>()
+<span class="tok-op">@</span><span class="tok-fn">Post</span>(<span class="tok-str">'login'</span>)
+<span class="tok-fn">login</span>(<span class="tok-op">@</span><span class="tok-fn">Body</span>() dto: <span class="tok-typ">LoginDto</span>) { <span class="tok-com">/* ... */</span> }</code></pre>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ JWT stateless = khó "đăng xuất ngay"</div>
+        <p>Vì access token tự verify được, ta <b>không thể</b> hủy nó trước hạn chỉ bằng cách xóa ở client. Muốn "đăng xuất tức thì" hoặc
+        "khóa tài khoản ngay" cần: token sống thật ngắn, hoặc duy trì một <b>blacklist/deny-list</b> (lưu jti bị thu hồi trong Redis),
+        hoặc dùng cơ chế phiên qua refresh token. Đây là đánh đổi cố hữu của stateless auth.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên đăng ký strategy</div><p>Strategy không nằm trong <code>providers</code> → <code>AuthGuard('jwt')</code> báo "Unknown strategy". Phải khai báo provider.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Đảo thứ tự guard</div><p>Đặt <code>RolesGuard</code> trước <code>JwtAuthGuard</code> → chưa có <code>req.user</code> → phân quyền luôn fail. Xác thực trước.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lộ passwordHash ra req.user</div><p><code>validate()</code> trả nguyên entity → hash lọt vào response/log. Map sang DTO gọn.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Để secret trong code</div><p>Hard-code <code>JWT_SECRET</code> rồi commit → toàn bộ token bị giả mạo được. Dùng env/secret manager.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Tin RBAC giải quyết ownership</div><p>RBAC chỉ check vai trò, không check "của ai". Thêm kiểm tra resource-level trong service.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Refresh token sống mãi, không rotate</div><p>Token dài hạn bất biến → lộ là toang lâu dài. Luôn rotation + lưu hash để thu hồi được.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Guard chỉ cho supervisor cùng team</div>
+        <p>Viết một <code>TeamGuard</code> đảm bảo supervisor chỉ xem được cuộc gọi của <b>agent trong team mình</b>, không phải mọi team.
+        Cần đọc gì từ <code>req.user</code> và <code>req.params</code>? Vì sao RBAC thuần không đủ?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">RBAC chỉ xác nhận "là supervisor". <code>TeamGuard</code> cần lấy <code>req.user.teamId</code> và id cuộc gọi từ <code>req.params</code>,
+        truy DB để biết cuộc gọi thuộc team nào, rồi so khớp. Đây là <b>resource-level / ABAC</b> — phụ thuộc dữ liệu nên thường đặt trong guard hoặc service, không thể tĩnh hóa bằng metadata.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Tự cài RolesGuard từ đầu</div>
+        <p>Cài đặt lại <code>@Roles</code> decorator + <code>RolesGuard</code> sao cho hỗ trợ cả gắn ở controller lẫn route, route ưu tiên hơn controller.
+        Dùng hàm nào của <code>Reflector</code>? Trả về gì khi route không khai báo role?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Dùng <code>reflector.getAllAndOverride(ROLES_KEY, [getHandler(), getClass()])</code> — phần tử đầu (method) thắng.
+        Nếu kết quả là <code>undefined</code>/rỗng nghĩa là route không yêu cầu role cụ thể → <code>return true</code> (chỉ cần đã đăng nhập).</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Refresh rotation phát hiện reuse</div>
+        <p>Thiết kế luồng phát hiện "refresh token bị dùng lại sau khi đã xoay". Khi phát hiện reuse, hệ thống nên làm gì với phiên của agent đó?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Mỗi refresh token lưu hash + trạng thái (active/used). Khi nhận token đã ở trạng thái <code>used</code> → đây là dấu hiệu bị lộ →
+        <b>thu hồi toàn bộ refresh token</b> của agent (xóa hết phiên), buộc đăng nhập lại, và ghi log cảnh báo bảo mật.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Giá trị mà <code>Strategy.validate()</code> trả về sẽ được gắn vào đâu?</div>
+          <div class="opt"><code>req.body</code></div>
+          <div class="opt" data-correct="true"><code>req.user</code></div>
+          <div class="opt"><code>req.session</code></div>
+          <div class="explain"><b>req.user.</b> Passport gắn kết quả của <code>validate()</code> vào <code>req.user</code> để handler dùng.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> <code>JwtStrategy.validate(payload)</code> chạy khi nào?</div>
+          <div class="opt">Trước khi verify chữ ký</div>
+          <div class="opt" data-correct="true">Sau khi token đã verify chữ ký và còn hạn</div>
+          <div class="opt">Mỗi khi server khởi động</div>
+          <div class="explain"><b>Sau khi verify.</b> Token sai/hết hạn thì <code>validate()</code> không chạy, Passport tự ném 401.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Trong <code>RolesGuard</code>, công cụ nào đọc metadata của <code>@Roles</code>?</div>
+          <div class="opt"><code>ConfigService</code></div>
+          <div class="opt" data-correct="true"><code>Reflector</code></div>
+          <div class="opt"><code>JwtService</code></div>
+          <div class="explain"><b>Reflector.</b> <code>getAllAndOverride(ROLES_KEY, [handler, class])</code> đọc metadata do <code>SetMetadata</code> gắn.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Thứ tự đúng khi kết hợp xác thực + phân quyền?</div>
+          <div class="opt"><code>RolesGuard</code> trước, <code>JwtAuthGuard</code> sau</div>
+          <div class="opt" data-correct="true"><code>JwtAuthGuard</code> trước, <code>RolesGuard</code> sau</div>
+          <div class="opt">Thứ tự nào cũng được</div>
+          <div class="explain"><b>JWT trước.</b> Phải có <code>req.user</code> (do JWT gắn) thì <code>RolesGuard</code> mới so khớp <code>roles</code> được.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Cách an toàn nhất để lưu refresh token ở client?</div>
+          <div class="opt"><code>localStorage</code></div>
+          <div class="opt" data-correct="true">Cookie <code>httpOnly + secure + sameSite</code></div>
+          <div class="opt">Biến toàn cục trong JS</div>
+          <div class="explain"><b>httpOnly cookie.</b> JS không đọc được nên chống XSS đánh cắp; <code>localStorage</code> thì script độc đọc được ngay.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Auth/Authz trong NestJS — chủ đề gần như chắc chắn được hỏi cho vị trí backend.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Phân biệt Authentication và Authorization.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Authentication (xác thực) trả lời "bạn là ai" — kiểm tra danh tính qua mật khẩu/JWT. Authorization (phân quyền) trả lời "bạn được làm gì" — kiểm tra quyền truy cập tài nguyên/thao tác. Trong Nest, xác thực thường do <code>AuthGuard</code>/JwtStrategy lo, phân quyền do <code>RolesGuard</code> + <code>@Roles</code> lo.</p>
+        <p class="trap">⚠️ Bẫy: nói chúng giống nhau, hoặc gộp làm một guard duy nhất. Chúng là hai lớp tách biệt, chạy nối tiếp.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Mô tả luồng của một Passport strategy trong NestJS.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Request đi qua route có <code>@UseGuards(AuthGuard('jwt'))</code> → guard kích hoạt strategy tương ứng → strategy trích thông tin xác thực (token từ header/credentials từ body), kiểm tra → gọi <code>validate()</code> → giá trị return được gắn vào <code>req.user</code>. Nếu thất bại, Passport ném 401. Strategy là provider kế thừa <code>PassportStrategy</code> và khai trong <code>providers</code>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>JWT strategy trích token từ đâu và xác minh thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Cấu hình <code>jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken()</code> để lấy token từ header <code>Authorization: Bearer</code>. Passport verify chữ ký bằng <code>secretOrKey</code>, kiểm tra <code>exp</code> (vì <code>ignoreExpiration: false</code>), rồi mới gọi <code>validate(payload)</code>. Payload là phần đã giải mã, ta map ra object user gắn vào <code>req.user</code>. Có thể trích từ cookie qua <code>fromExtractors</code> nếu cần.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span><code>req.user</code> được gắn ở đâu? Ai gắn?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Passport gắn <code>req.user</code> bằng <b>giá trị return của <code>Strategy.validate()</code></b>. Sau khi guard cho qua, handler đọc <code>req.user</code> (hoặc qua custom decorator <code>@CurrentUser()</code>) để biết người gọi. Nội dung của nó hoàn toàn do bạn quyết định trong <code>validate()</code>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Tự cài một RolesGuard — bạn sẽ làm thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> (1) Tạo <code>@Roles(...roles)</code> = <code>SetMetadata(ROLES_KEY, roles)</code>. (2) Viết <code>RolesGuard implements CanActivate</code>, inject <code>Reflector</code>. (3) Trong <code>canActivate</code> dùng <code>reflector.getAllAndOverride(ROLES_KEY, [getHandler(), getClass()])</code> đọc role yêu cầu; nếu rỗng thì cho qua. (4) Lấy <code>req.user.roles</code> và so khớp <code>some()</code>; không khớp thì ném <code>ForbiddenException</code>. (5) Áp guard cùng <code>JwtAuthGuard</code> theo đúng thứ tự.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span><code>Reflector</code> dùng để làm gì? <code>getAllAndOverride</code> khác <code>get</code> ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>Reflector</code> đọc metadata mà <code>SetMetadata</code>/decorator đã gắn lên handler hoặc class lúc runtime. <code>get(key, target)</code> đọc 1 chỗ. <code>getAllAndOverride(key, [handler, class])</code> đọc nhiều cấp và lấy giá trị đầu tiên tìm thấy (method ưu tiên hơn class) — hữu ích khi metadata có thể gắn ở cả controller và route. Còn <code>getAllAndMerge</code> thì gộp mảng lại.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Khi kết hợp AuthGuard và RolesGuard, thứ tự quan trọng không? Vì sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Rất quan trọng. Guard chạy theo <b>thứ tự liệt kê trong <code>@UseGuards</code></b>. Phải để <code>JwtAuthGuard</code> trước để xác thực và gắn <code>req.user</code>; rồi <code>RolesGuard</code> mới có <code>user.roles</code> để so khớp. Đảo lại thì <code>RolesGuard</code> chạy khi chưa có <code>req.user</code> → luôn fail hoặc lỗi.</p>
+        <p class="trap">⚠️ Bẫy: nói "guard chạy song song" hay "thứ tự không quan trọng" — sai.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Làm sao tạo route public khi đã có global JwtAuthGuard?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Tạo decorator <code>@Public()</code> = <code>SetMetadata('isPublic', true)</code>. Trong <code>JwtAuthGuard.canActivate</code>, dùng <code>Reflector</code> đọc metadata này; nếu là public thì <code>return true</code> bỏ qua xác thực, ngược lại gọi <code>super.canActivate()</code>. Áp <code>@Public()</code> lên <code>login</code>, <code>health-check</code>... Cách này giữ "secure by default" mà vẫn linh hoạt.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Refresh token là gì? Triển khai trong NestJS thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Refresh token sống dài, chỉ dùng để xin access token mới khi access (ngắn hạn) hết hạn. Trong Nest: tạo strategy riêng <code>jwt-refresh</code> với secret riêng, trích token từ httpOnly cookie, <code>validate()</code> so token với hash đã lưu trong DB. Endpoint <code>POST /auth/refresh</code> bảo vệ bằng strategy đó, cấp access mới và <b>rotate</b> refresh (xoay token + lưu hash mới, vô hiệu cái cũ). Lưu hash giúp thu hồi được — bù cho việc JWT vốn stateless.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>RBAC có đủ để bảo vệ "agent chỉ xem cuộc gọi của mình" không?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Không. RBAC chỉ xác nhận vai trò ("là agent"), không biết tài nguyên cụ thể thuộc về ai. Cần thêm kiểm tra <b>resource-level/ownership</b> (một dạng ABAC): trong service hoặc guard, so <code>call.agentId === req.user.id</code>, hoặc cho supervisor xem theo team. Phân quyền tốt thường kết hợp RBAC (thô) + kiểm tra ownership (mịn).</p>
+        <p class="trap">⚠️ Bẫy: trả lời "chỉ cần <code>@Roles('agent')</code> là xong" — bỏ sót tầng ownership.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>JWT stateless — làm sao "đăng xuất ngay" hoặc khóa tài khoản tức thì?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Vì access token tự verify được nên không hủy trực tiếp được. Giải pháp: (1) access token sống thật ngắn để cửa sổ nhỏ; (2) duy trì deny-list (lưu <code>jti</code> bị thu hồi trong Redis, guard kiểm tra mỗi request — đánh đổi tính stateless); (3) quản phiên qua refresh token: thu hồi refresh là chặn gia hạn. Tùy yêu cầu mà chọn — đây là đánh đổi cố hữu giữa stateless (nhanh, dễ scale) và khả năng thu hồi tức thì.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Những lớp bảo mật nào bạn luôn thêm cho service auth?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Băm mật khẩu bằng <code>bcrypt</code> (salt + cost), không lưu mật khẩu thô; rate limit login bằng <code>@nestjs/throttler</code> chống brute-force; <code>helmet</code> đặt security header; refresh token trong httpOnly+secure+sameSite cookie; secret đủ mạnh qua env/secret manager; access ngắn hạn + refresh rotation; <code>ValidationPipe(whitelist)</code> lọc input; CORS giới hạn origin. Quan trọng là phối hợp nhiều lớp (defense in depth) chứ không trông cậy một biện pháp.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương E5</button>
+      </div>
+
+      <div class="pager">
+        <a href="E4-nestjs-database.html"><span class="dir">← Trước</span><span class="ttl">E4 · NestJS + Database + Config</span></a>
+        <a href="E6-nestjs-websocket.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">E6 · WebSocket Gateway & Microservices</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='E5',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành E5 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương E5'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

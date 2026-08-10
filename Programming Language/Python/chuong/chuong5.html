@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — OOP in Python · Python Sub-pillar</title>
+  <meta name="description" content="Class, __init__, dunder methods, inheritance, MRO C3, @property, @dataclass, abc.ABC, typing.Protocol, duck typing — mô hình OOP đặc trưng của Python." />
+  <meta name="theme-color" content="#306998" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-py">Py</span>
+        Python · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Python</a><span class="sep">/</span>
+        <span>Chương 5</span>
+      </div>
+      <div class="chapter-num">Chương 05 · OOP in Python</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Lập trình hướng đối tượng trong Python
+      </h1>
+      <p class="lead">
+        Python không "tin" hoàn toàn vào OOP cứng kiểu Java. <code>class</code> trong Python là một <strong>namespace
+        khả tạo instance</strong> — không có <code>new</code>, không có private thật sự, không có <code>interface</code>
+        tách rời. Thay vào đó, Python có <strong>dunder method</strong> (cho phép class hòa nhập syntax ngôn ngữ),
+        <strong>duck typing</strong> (hành vi quan trọng hơn lớp), <strong>MRO C3</strong> (multiple inheritance an
+        toàn), <code>@dataclass</code>, <code>@property</code>, <code>abc</code> và <code>Protocol</code>. Hiểu trọn
+        gói = code Python "Pythonic" thay vì "Java-in-Python".
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1100 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-4</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Khai báo <code>class</code> và <code>__init__</code> — hiểu vai trò của <code>self</code>.</li>
+            <li>Phân biệt <strong>instance attribute</strong> và <strong>class attribute</strong>; tránh bẫy mutable class attribute.</li>
+            <li>Sử dụng đúng <code>@classmethod</code>, <code>@staticmethod</code>, instance method.</li>
+            <li>Master <strong>inheritance</strong> và <code>super()</code>; hiểu <strong>MRO C3 linearization</strong> với multiple inheritance.</li>
+            <li>Implement <strong>dunder method</strong>: <code>__repr__</code>, <code>__eq__</code>, <code>__hash__</code>, <code>__len__</code>, <code>__iter__</code>, <code>__getitem__</code>, <code>__call__</code>.</li>
+            <li>Dùng <code>@property</code> cho computed attribute và validation.</li>
+            <li>Dùng <code>@dataclass</code> để giảm boilerplate; biết khi nào <code>frozen=True</code>, <code>slots=True</code>.</li>
+            <li>Phân biệt <code>abc.ABC</code> (nominal subtype) và <code>typing.Protocol</code> (structural subtype).</li>
+            <li>Tư duy <strong>duck typing</strong> + <strong>EAFP</strong> thay vì <code>isinstance</code> check khắp nơi.</li>
+          </ul>
+        </div>
+
+        <div class="zen-quote">
+          Special cases aren't special enough to break the rules.<br/>
+          Although practicality beats purity.
+        </div>
+
+        <h2 id="class-basics">1. <code>class</code> — cú pháp tạo class</h2>
+
+        <p>
+          Class trong Python được khai báo bằng từ khóa <code>class</code>, theo sau là tên class (convention
+          <strong>PascalCase</strong>) và dấu hai chấm. Body của class là một <em>namespace</em> — chứa attribute và
+          method. Một class rỗng nhất có thể chỉ cần một dòng với <code>pass</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>class_basic.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    <span class="tok-kw">pass</span>
+
+<span class="tok-com"># Tạo instance — KHÔNG có new keyword</span>
+u = <span class="tok-fn">User</span>()
+<span class="tok-fn">print</span>(<span class="tok-fn">type</span>(u))   <span class="tok-com"># &lt;class '__main__.User'&gt;</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">isinstance</span>(u, <span class="tok-cls">User</span>))  <span class="tok-com"># True</span>
+
+<span class="tok-com"># Có thể gán attribute động vào instance (giống JS)</span>
+u.name = <span class="tok-str">"Anh"</span>
+<span class="tok-fn">print</span>(u.name)   <span class="tok-com"># 'Anh'</span></code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
+          <p>
+            <strong>JS</strong>: <code>class User {}</code>, tạo instance qua <code>new User()</code>. JS class là syntactic sugar trên prototype.
+            <strong>Dart</strong>: <code>class User {}</code>, tạo instance <code>User()</code> (Dart 2+ bỏ <code>new</code> bắt buộc); class là first-class type với compile-time check.
+            <strong>Python</strong>: <code>User()</code> — không có <code>new</code>. Class chính là callable; gọi class trả về instance. Class là một object thực sự (instance của <code>type</code>).
+          </p>
+        </div>
+
+        <p>
+          Vì class chỉ là namespace, có thể tham chiếu class như một giá trị bình thường: gán biến, truyền vào hàm,
+          trả về từ hàm. <em>"Everything is an object"</em> — đây là một câu thường được trích từ cộng đồng Python; kể
+          cả class cũng là object (instance của metaclass <code>type</code>).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>class_is_object.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    <span class="tok-kw">pass</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">type</span>(<span class="tok-cls">User</span>))         <span class="tok-com"># &lt;class 'type'&gt; — class là instance của type</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">isinstance</span>(<span class="tok-cls">User</span>, <span class="tok-cls">type</span>))  <span class="tok-com"># True</span>
+
+<span class="tok-com"># Truyền class như giá trị</span>
+factories = [<span class="tok-cls">User</span>, <span class="tok-cls">dict</span>, <span class="tok-cls">list</span>]
+instances = [f() <span class="tok-kw">for</span> f <span class="tok-kw">in</span> factories]
+<span class="tok-fn">print</span>(instances)        <span class="tok-com"># [&lt;User ...&gt;, {}, []]</span></code></pre>
+        </div>
+
+        <h2 id="init"><span id="dunder-init"></span>2. <code>__init__</code> — constructor và <code>self</code></h2>
+
+        <p>
+          <code>__init__</code> là <em>initializer</em> được Python gọi <strong>ngay sau khi</strong> tạo instance.
+          Tham số đầu tiên luôn là <code>self</code> — tham chiếu tới instance vừa tạo. <code>self</code> không phải
+          từ khóa; nó chỉ là <em>convention</em>, nhưng tuyệt đối đừng đổi tên (vi phạm PEP 8 và làm code khó đọc).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>init.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name: <span class="tok-type">str</span>, age: <span class="tok-type">int</span>):
+        <span class="tok-kw">self</span>.name = name
+        <span class="tok-kw">self</span>.age = age
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">str</span>:
+        <span class="tok-kw">return</span> <span class="tok-str">f"Xin chào, tôi là </span>{<span class="tok-kw">self</span>.name}<span class="tok-str">"</span>
+
+u = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">22</span>)
+<span class="tok-fn">print</span>(u.<span class="tok-fn">greet</span>())   <span class="tok-com"># 'Xin chào, tôi là Anh'</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — <code>self</code> tự pass</div>
+          <p>
+            Khi viết <code>u.greet()</code>, Python ngầm dịch thành <code>User.greet(u)</code> — instance được pass
+            như tham số đầu tiên. Đây gọi là <em>bound method</em>. Vì vậy hàm trong class luôn cần <code>self</code>
+            ở vị trí đầu. Nếu quên: <code>TypeError: greet() takes 0 positional arguments but 1 was given</code>.
+          </p>
+        </div>
+
+        <p>
+          <code>__init__</code> <strong>không phải</strong> là người tạo ra object. Việc tạo instance thực ra do
+          <code>__new__</code> đảm nhiệm (rất hiếm khi cần ghi đè). <code>__init__</code> chỉ khởi tạo state lên
+          object đã có. Đó là lý do <code>__init__</code> không có <code>return</code> (thực ra return được nhưng phải
+          là <code>None</code>).
+        </p>
+
+        <div class="py-feature">
+          <h4>Type hints trong <code>__init__</code></h4>
+          <p>
+            Từ Python 3.5+, có thể annotate kiểu cho tham số và return. <code>__init__</code> trả <code>None</code>
+            nên thường bỏ annotation return. Type hints không bị runtime enforce — chỉ tooling (mypy, IDE) kiểm tra.
+            Sẽ học sâu ở <strong>Chương 9</strong>.
+          </p>
+        </div>
+
+        <h2 id="instance-vs-class-attr">3. Instance attribute vs class attribute</h2>
+
+        <p>
+          Có hai chỗ để gán attribute:
+        </p>
+        <ul>
+          <li><strong>Instance attribute</strong>: <code>self.x = ...</code> trong method (thường ở <code>__init__</code>). Mỗi instance có bản sao riêng.</li>
+          <li><strong>Class attribute</strong>: khai báo trực tiếp trong body class, ngoài method. <em>Một bản chia sẻ</em> giữa mọi instance.</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>attr_kinds.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    species = <span class="tok-str">"human"</span>      <span class="tok-com"># class attribute — share</span>
+    count = <span class="tok-num">0</span>             <span class="tok-com"># class attribute</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name):
+        <span class="tok-kw">self</span>.name = name    <span class="tok-com"># instance attribute — riêng từng instance</span>
+        <span class="tok-cls">User</span>.count += <span class="tok-num">1</span>     <span class="tok-com"># cập nhật class attr qua tên class</span>
+
+a = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>)
+b = <span class="tok-fn">User</span>(<span class="tok-str">"Bình"</span>)
+<span class="tok-fn">print</span>(a.species, b.species)   <span class="tok-com"># human human — chia sẻ</span>
+<span class="tok-fn">print</span>(<span class="tok-cls">User</span>.count)              <span class="tok-com"># 2</span>
+<span class="tok-fn">print</span>(a.name, b.name)         <span class="tok-com"># Anh Bình — riêng</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Bẫy mutable class attribute</div>
+          <p>
+            <strong>Đừng bao giờ</strong> dùng <code>list</code>, <code>dict</code>, <code>set</code> làm class
+            attribute mặc định cho dữ liệu instance. Vì class attribute chia sẻ — mọi instance sẽ <em>mutate cùng một
+            list</em>!
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>mutable-trap.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># SAI</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Cart</span>:
+    items = []                  <span class="tok-com"># class attr — chia sẻ!</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">add</span>(<span class="tok-kw">self</span>, x):
+        <span class="tok-kw">self</span>.items.<span class="tok-fn">append</span>(x)   <span class="tok-com"># mutate list chung</span>
+
+c1, c2 = <span class="tok-fn">Cart</span>(), <span class="tok-fn">Cart</span>()
+c1.<span class="tok-fn">add</span>(<span class="tok-str">"A"</span>)
+<span class="tok-fn">print</span>(c2.items)             <span class="tok-com"># ['A'] — Cart() khác cũng thấy!</span>
+
+<span class="tok-com"># ĐÚNG</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Cart</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">self</span>.items = []        <span class="tok-com"># instance attr — list riêng</span></code></pre>
+          </div>
+        </div>
+
+        <p>
+          Khi đọc <code>a.x</code>, Python tra cứu theo thứ tự: instance dict → class dict → MRO của các lớp cha. Vì
+          vậy class attribute hoạt động như <em>fallback</em> nếu instance không có. Một khi gán <code>a.x = ...</code>,
+          giá trị mới được tạo trong instance dict và <em>che lấp</em> class attribute (không ảnh hưởng class).
+        </p>
+
+        <h2 id="method-types">4. Ba loại method — instance / class / static</h2>
+
+        <p>
+          Python phân biệt 3 loại method qua decorator. Sự khác biệt nằm ở <strong>tham số đầu tiên tự pass</strong>:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Loại</th>
+                <th>Decorator</th>
+                <th>Tham số tự pass</th>
+                <th>Truy cập gì</th>
+                <th>Khi nào dùng</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Instance method</strong></td>
+                <td>(không cần)</td>
+                <td><code>self</code> (instance)</td>
+                <td>Instance + class attr</td>
+                <td>Hành vi của 1 instance</td>
+              </tr>
+              <tr>
+                <td><strong>Class method</strong></td>
+                <td><code>@classmethod</code></td>
+                <td><code>cls</code> (class)</td>
+                <td>Class attr; tạo instance thay thế</td>
+                <td>Alternative constructor, factory</td>
+              </tr>
+              <tr>
+                <td><strong>Static method</strong></td>
+                <td><code>@staticmethod</code></td>
+                <td>(không có)</td>
+                <td>Không tự pass; chỉ là namespace</td>
+                <td>Utility liên quan logic của class</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>method_kinds.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> __future__ <span class="tok-kw">import</span> annotations
+<span class="tok-kw">from</span> datetime <span class="tok-kw">import</span> date
+
+<span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name: <span class="tok-type">str</span>, birth_year: <span class="tok-type">int</span>):
+        <span class="tok-kw">self</span>.name = name
+        <span class="tok-kw">self</span>.birth_year = birth_year
+
+    <span class="tok-com"># Instance method — dùng self</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">age</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">int</span>:
+        <span class="tok-kw">return</span> date.<span class="tok-fn">today</span>().year - <span class="tok-kw">self</span>.birth_year
+
+    <span class="tok-com"># Class method — alternative constructor</span>
+    <span class="tok-dec">@classmethod</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">from_dict</span>(<span class="tok-kw">cls</span>, data: <span class="tok-type">dict</span>) -&gt; <span class="tok-cls">User</span>:
+        <span class="tok-kw">return</span> <span class="tok-kw">cls</span>(name=data[<span class="tok-str">"name"</span>], birth_year=data[<span class="tok-str">"birth_year"</span>])
+
+    <span class="tok-com"># Static method — utility</span>
+    <span class="tok-dec">@staticmethod</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">is_adult_age</span>(age: <span class="tok-type">int</span>) -&gt; <span class="tok-type">bool</span>:
+        <span class="tok-kw">return</span> age &gt;= <span class="tok-num">18</span>
+
+u = <span class="tok-cls">User</span>.<span class="tok-fn">from_dict</span>({<span class="tok-str">"name"</span>: <span class="tok-str">"Anh"</span>, <span class="tok-str">"birth_year"</span>: <span class="tok-num">2003</span>})
+<span class="tok-fn">print</span>(u.<span class="tok-fn">age</span>())                  <span class="tok-com"># 23</span>
+<span class="tok-fn">print</span>(<span class="tok-cls">User</span>.<span class="tok-fn">is_adult_age</span>(<span class="tok-num">17</span>))      <span class="tok-com"># False</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 <code>@classmethod</code> ưu việt với inheritance</div>
+          <p>
+            <code>cls</code> trong <code>@classmethod</code> là class <strong>thực tế</strong> được gọi — không phải
+            class khai báo. Khi <code>Admin</code> kế thừa <code>User</code> và gọi <code>Admin.from_dict(...)</code>,
+            <code>cls</code> chính là <code>Admin</code>, nên kết quả là một instance <code>Admin</code>. Nếu hard-code
+            <code>User(...)</code> bên trong, subclass sẽ không được tận dụng.
+          </p>
+        </div>
+
+        <h2 id="inheritance">5. Inheritance — <code>class Admin(User)</code></h2>
+
+        <p>
+          Để kế thừa, đặt class cha trong dấu ngoặc: <code>class Admin(User):</code>. Subclass tự động thừa hưởng mọi
+          method và attribute của parent. Override = định nghĩa lại method cùng tên trong subclass. Để gọi
+          implementation của cha (ví dụ trong <code>__init__</code> của subclass), dùng <code>super()</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>inheritance.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name):
+        <span class="tok-kw">self</span>.name = name
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-str">f"Hi, </span>{<span class="tok-kw">self</span>.name}<span class="tok-str">"</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">Admin</span>(<span class="tok-cls">User</span>):
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, level):
+        <span class="tok-fn">super</span>().<span class="tok-fn">__init__</span>(name)   <span class="tok-com"># chain init lên cha</span>
+        <span class="tok-kw">self</span>.level = level
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):                 <span class="tok-com"># override</span>
+        base = <span class="tok-fn">super</span>().<span class="tok-fn">greet</span>()        <span class="tok-com"># gọi version của cha</span>
+        <span class="tok-kw">return</span> <span class="tok-str">f"</span>{base}<span class="tok-str"> [admin lv </span>{<span class="tok-kw">self</span>.level}<span class="tok-str">]"</span>
+
+a = <span class="tok-fn">Admin</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">2</span>)
+<span class="tok-fn">print</span>(a.<span class="tok-fn">greet</span>())   <span class="tok-com"># 'Hi, Anh [admin lv 2]'</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">isinstance</span>(a, <span class="tok-cls">User</span>))  <span class="tok-com"># True</span></code></pre>
+        </div>
+
+        <p>
+          Không cần truyền <code>self</code> hay class hiện tại vào <code>super()</code> — Python tự suy ra từ context.
+          Trong Python 2, phải viết <code>super(Admin, self).__init__(name)</code>, nhưng Python 3 đã đơn giản hóa.
+        </p>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
+          <p>
+            <strong>JS</strong>: <code>class Admin extends User { constructor(name, level) { super(name); this.level = level; } }</code>. Bắt buộc gọi <code>super()</code> trước khi đụng <code>this</code>.
+            <strong>Dart</strong>: <code>class Admin extends User { Admin(super.name, this.level); }</code> — Dart 2.17+ có super-parameter shorthand rất gọn.
+            <strong>Python</strong>: <code>super().__init__(...)</code> không bắt buộc; quên thì instance không có attribute mà parent gán. Tự do hơn nhưng cũng dễ sai hơn.
+          </p>
+        </div>
+
+        <h2 id="multiple-inheritance">6. Multiple inheritance và MRO C3</h2>
+
+        <p>
+          Python cho phép kế thừa nhiều class: <code>class C(A, B):</code>. Khi tra cứu method, Python đi theo
+          <strong>MRO</strong> (Method Resolution Order) — thứ tự duyệt class. Thuật toán dùng là <strong>C3
+          linearization</strong>, đảm bảo: (a) class con trước class cha; (b) thứ tự khai báo bên trái sang phải;
+          (c) tính nhất quán (monotonic).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>mro_basic.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">A</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">who</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"A"</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">B</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">who</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"B"</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">C</span>(<span class="tok-cls">A</span>, <span class="tok-cls">B</span>):
+    <span class="tok-kw">pass</span>
+
+<span class="tok-fn">print</span>(<span class="tok-cls">C</span>().<span class="tok-fn">who</span>())          <span class="tok-com"># 'A' — A đứng trước B trong khai báo</span>
+<span class="tok-fn">print</span>([k.__name__ <span class="tok-kw">for</span> k <span class="tok-kw">in</span> <span class="tok-cls">C</span>.__mro__])
+<span class="tok-com"># ['C', 'A', 'B', 'object']</span></code></pre>
+        </div>
+
+        <p>
+          MRO trở nên thú vị (và đôi khi bối rối) với <strong>diamond inheritance</strong> — hai class cha chia sẻ một
+          ông nội. C3 đảm bảo class ông nội chỉ xuất hiện một lần ở cuối.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>diamond.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Animal</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">describe</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"animal"</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">Swimmer</span>(<span class="tok-cls">Animal</span>):
+    <span class="tok-kw">def</span> <span class="tok-fn">describe</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"swimmer-"</span> + <span class="tok-fn">super</span>().<span class="tok-fn">describe</span>()
+
+<span class="tok-kw">class</span> <span class="tok-cls">Flyer</span>(<span class="tok-cls">Animal</span>):
+    <span class="tok-kw">def</span> <span class="tok-fn">describe</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"flyer-"</span> + <span class="tok-fn">super</span>().<span class="tok-fn">describe</span>()
+
+<span class="tok-kw">class</span> <span class="tok-cls">Duck</span>(<span class="tok-cls">Swimmer</span>, <span class="tok-cls">Flyer</span>):
+    <span class="tok-kw">pass</span>
+
+<span class="tok-fn">print</span>(<span class="tok-cls">Duck</span>.__mro__)
+<span class="tok-com"># (Duck, Swimmer, Flyer, Animal, object)</span>
+<span class="tok-fn">print</span>(<span class="tok-cls">Duck</span>().<span class="tok-fn">describe</span>())
+<span class="tok-com"># 'swimmer-flyer-animal' — super() đi đúng theo MRO</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — <code>super()</code> không phải "cha trực tiếp"</div>
+          <p>
+            Điểm khác biệt then chốt: <code>super()</code> đi tới <strong>class kế tiếp trong MRO</strong>, không phải
+            "parent của class hiện tại". Trong ví dụ <code>Duck</code>, <code>super()</code> bên trong
+            <code>Swimmer.describe</code> trỏ sang <code>Flyer</code> — vì MRO sắp xếp <code>Flyer</code> ngay sau
+            <code>Swimmer</code>. Đây là điều kỳ diệu của C3: chain <code>super()</code> xếp hàng đẹp với diamond.
+          </p>
+        </div>
+
+        <p>
+          Nếu C3 không tìm được thứ tự nhất quán, Python từ chối khai báo class và ném
+          <code>TypeError: Cannot create a consistent method resolution order</code>. Trường hợp đó thường do thứ tự
+          base class mâu thuẫn — cần đổi lại thứ tự khai báo.
+        </p>
+
+        <h2 id="dunder">7. Dunder method — "double underscore" magic</h2>
+
+        <p>
+          Dunder method (đọc là "dander", viết tắt "double underscore") là các method tên kiểu <code>__xxx__</code>
+          mà Python tự gọi khi gặp syntax tương ứng. Override dunder = cho phép class của bạn hòa nhập với syntax ngôn
+          ngữ: <code>+</code>, <code>==</code>, <code>len()</code>, <code>for ... in</code>, <code>print()</code>...
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Dunder</th>
+                <th>Trigger</th>
+                <th>Mục đích</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>__init__</code></td><td>Sau khi tạo instance</td><td>Khởi tạo state</td></tr>
+              <tr><td><code>__repr__</code></td><td><code>repr(obj)</code>, REPL echo</td><td>Debug-friendly, eval-able nếu có thể</td></tr>
+              <tr><td><code>__str__</code></td><td><code>str(obj)</code>, <code>print(obj)</code>, f-string</td><td>User-facing display</td></tr>
+              <tr><td><code>__eq__</code></td><td><code>a == b</code></td><td>So sánh giá trị (mặc định: so sánh id)</td></tr>
+              <tr><td><code>__hash__</code></td><td><code>hash(obj)</code>, key của <code>dict</code>/<code>set</code></td><td>Cùng đi với <code>__eq__</code></td></tr>
+              <tr><td><code>__lt__</code>, <code>__le__</code>, <code>__gt__</code>, <code>__ge__</code></td><td><code>&lt; &lt;= &gt; &gt;=</code></td><td>So sánh thứ tự (xem <code>functools.total_ordering</code>)</td></tr>
+              <tr><td><code>__len__</code></td><td><code>len(obj)</code></td><td>Số phần tử; cũng xác định truthiness nếu không có <code>__bool__</code></td></tr>
+              <tr><td><code>__bool__</code></td><td><code>bool(obj)</code>, <code>if obj:</code></td><td>Truthiness</td></tr>
+              <tr><td><code>__iter__</code></td><td><code>for x in obj</code></td><td>Trả iterator (xem Chương 6)</td></tr>
+              <tr><td><code>__next__</code></td><td><code>next(it)</code></td><td>Iterator protocol</td></tr>
+              <tr><td><code>__contains__</code></td><td><code>x in obj</code></td><td>Membership test</td></tr>
+              <tr><td><code>__getitem__</code></td><td><code>obj[key]</code></td><td>Indexing/slicing</td></tr>
+              <tr><td><code>__setitem__</code></td><td><code>obj[key] = value</code></td><td>Gán index</td></tr>
+              <tr><td><code>__delitem__</code></td><td><code>del obj[key]</code></td><td>Xóa index</td></tr>
+              <tr><td><code>__call__</code></td><td><code>obj(...)</code></td><td>Cho phép instance "gọi như hàm"</td></tr>
+              <tr><td><code>__add__</code>, <code>__sub__</code>, <code>__mul__</code>...</td><td><code>a + b</code>, <code>a - b</code>...</td><td>Toán tử số học</td></tr>
+              <tr><td><code>__enter__</code>, <code>__exit__</code></td><td><code>with obj as x:</code></td><td>Context manager (Chương 7)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="repr-str">7.1. <code>__repr__</code> vs <code>__str__</code></h3>
+
+        <p>
+          Convention quan trọng: <code>__repr__</code> dành cho <em>developer</em> — nên hiển thị chi tiết, tốt nhất
+          là một biểu thức Python hợp lệ có thể <code>eval()</code> lại thành object tương đương. <code>__str__</code>
+          dành cho <em>người dùng cuối</em> — gọn, đẹp. Nếu chỉ định nghĩa <code>__repr__</code>, Python tự lấy nó làm
+          <code>__str__</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>repr_str.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Point</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, x, y):
+        <span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y = x, y
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__repr__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-str">f"Point(x=</span>{<span class="tok-kw">self</span>.x}<span class="tok-str">, y=</span>{<span class="tok-kw">self</span>.y}<span class="tok-str">)"</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__str__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-str">f"(</span>{<span class="tok-kw">self</span>.x}<span class="tok-str">, </span>{<span class="tok-kw">self</span>.y}<span class="tok-str">)"</span>
+
+p = <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>)
+<span class="tok-fn">print</span>(<span class="tok-fn">repr</span>(p))   <span class="tok-com"># Point(x=1, y=2)</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">str</span>(p))    <span class="tok-com"># (1, 2)</span>
+<span class="tok-fn">print</span>(p)         <span class="tok-com"># (1, 2) — print gọi __str__</span></code></pre>
+        </div>
+
+        <h3 id="eq-hash">7.2. <code>__eq__</code> và <code>__hash__</code> — luôn đi cùng nhau</h3>
+
+        <p>
+          Mặc định, hai instance khác nhau <strong>không bằng nhau</strong> dù state giống hệt — Python so sánh
+          bằng id (địa chỉ object). Để so sánh theo giá trị, override <code>__eq__</code>. Nhưng có một quy tắc bắt
+          buộc:
+        </p>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Quy tắc <code>__eq__</code> ⇒ <code>__hash__</code></div>
+          <p>
+            Nếu override <code>__eq__</code> nhưng không định nghĩa <code>__hash__</code>, Python <strong>tự đặt
+            <code>__hash__ = None</code></strong> — instance trở thành <em>unhashable</em>, không bỏ vào <code>set</code>
+            hay làm key <code>dict</code> được. Quy tắc bất di bất dịch của hash: <code>a == b ⇒ hash(a) == hash(b)</code>.
+            Ngược lại không bắt buộc (collision được phép).
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>eq_hash.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Point</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, x, y):
+        <span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y = x, y
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__eq__</span>(<span class="tok-kw">self</span>, other):
+        <span class="tok-kw">if not</span> <span class="tok-fn">isinstance</span>(other, <span class="tok-cls">Point</span>):
+            <span class="tok-kw">return</span> <span class="tok-kw">NotImplemented</span>
+        <span class="tok-kw">return</span> (<span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y) == (other.x, other.y)
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__hash__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-fn">hash</span>((<span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y))   <span class="tok-com"># tuple đã hashable</span>
+
+a, b = <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>), <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>)
+<span class="tok-fn">print</span>(a == b)         <span class="tok-com"># True</span>
+<span class="tok-fn">print</span>({a, b})         <span class="tok-com"># {Point(x=1, y=2)} — set giữ 1 phần tử</span></code></pre>
+        </div>
+
+        <p>
+          Trả về <code>NotImplemented</code> (không phải <code>NotImplementedError</code>!) trong <code>__eq__</code>
+          khi không biết cách so sánh với kiểu khác — Python sẽ thử <code>other.__eq__(self)</code>, rất quan trọng để
+          hỗ trợ subclass và so sánh hai chiều.
+        </p>
+
+        <h3 id="iter-contains">7.3. <code>__iter__</code>, <code>__contains__</code>, <code>__getitem__</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>iterable.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Deck</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">self</span>.cards = [<span class="tok-str">"A♠"</span>, <span class="tok-str">"K♠"</span>, <span class="tok-str">"Q♠"</span>, <span class="tok-str">"J♠"</span>]
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__len__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-fn">len</span>(<span class="tok-kw">self</span>.cards)
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__getitem__</span>(<span class="tok-kw">self</span>, i):
+        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.cards[i]
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__contains__</span>(<span class="tok-kw">self</span>, card):
+        <span class="tok-kw">return</span> card <span class="tok-kw">in</span> <span class="tok-kw">self</span>.cards
+
+d = <span class="tok-fn">Deck</span>()
+<span class="tok-fn">print</span>(<span class="tok-fn">len</span>(d))            <span class="tok-com"># 4</span>
+<span class="tok-fn">print</span>(d[<span class="tok-num">0</span>])             <span class="tok-com"># 'A♠'</span>
+<span class="tok-fn">print</span>(<span class="tok-str">"A♠"</span> <span class="tok-kw">in</span> d)        <span class="tok-com"># True</span>
+<span class="tok-kw">for</span> c <span class="tok-kw">in</span> d:                <span class="tok-com"># for-loop tự dùng __getitem__ nếu không có __iter__</span>
+    <span class="tok-fn">print</span>(c)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Iterable shortcut</div>
+          <p>
+            Nếu có <code>__getitem__</code> chấp nhận số nguyên 0, 1, 2... Python tự coi object là iterable (legacy
+            protocol). Tuy nhiên, cách "Pythonic" hiện đại là implement <code>__iter__</code> — sâu hơn ở
+            <strong>Chương 6 (Iterators &amp; Generators)</strong>.
+          </p>
+        </div>
+
+        <h3 id="call">7.4. <code>__call__</code> — instance như là hàm</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>callable.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Multiplier</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, factor):
+        <span class="tok-kw">self</span>.factor = factor
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__call__</span>(<span class="tok-kw">self</span>, x):
+        <span class="tok-kw">return</span> x * <span class="tok-kw">self</span>.factor
+
+double = <span class="tok-fn">Multiplier</span>(<span class="tok-num">2</span>)
+<span class="tok-fn">print</span>(<span class="tok-fn">double</span>(<span class="tok-num">5</span>))       <span class="tok-com"># 10 — instance gọi như hàm</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">callable</span>(double)) <span class="tok-com"># True</span></code></pre>
+        </div>
+
+        <p>
+          <code>__call__</code> rất hữu ích cho <em>stateful callable</em> — như decorator có config, hàm tính có
+          cache, partial function. Đó cũng là lý do <code>functools.partial</code> trả về một object có
+          <code>__call__</code>.
+        </p>
+
+        <h2 id="property">8. <code>@property</code> — method behave như attribute</h2>
+
+        <p>
+          <code>@property</code> cho phép truy cập một method <em>không cần</em> dấu ngoặc <code>()</code> — y hệt
+          attribute. Dùng cho <strong>computed value</strong> (giá trị tính từ field khác) và <strong>validation</strong>
+          (kiểm tra khi gán).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>property.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Circle</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, radius):
+        <span class="tok-kw">self</span>.radius = radius   <span class="tok-com"># dùng setter nếu có</span>
+
+    <span class="tok-dec">@property</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">radius</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-kw">self</span>._radius
+
+    <span class="tok-dec">@radius.setter</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">radius</span>(<span class="tok-kw">self</span>, value):
+        <span class="tok-kw">if</span> value &lt; <span class="tok-num">0</span>:
+            <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"radius phải &gt;= 0"</span>)
+        <span class="tok-kw">self</span>._radius = value
+
+    <span class="tok-dec">@property</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">from</span> math <span class="tok-kw">import</span> pi
+        <span class="tok-kw">return</span> pi * <span class="tok-kw">self</span>._radius ** <span class="tok-num">2</span>
+
+c = <span class="tok-fn">Circle</span>(<span class="tok-num">3</span>)
+<span class="tok-fn">print</span>(c.radius)   <span class="tok-com"># 3 — không có ()</span>
+<span class="tok-fn">print</span>(c.area)     <span class="tok-com"># 28.274... — computed</span>
+c.radius = <span class="tok-num">5</span>      <span class="tok-com"># setter chạy validation</span>
+<span class="tok-com"># c.radius = -1  → ValueError</span></code></pre>
+        </div>
+
+        <p>
+          Nếu chỉ có <code>@property</code> không có setter — attribute trở thành <strong>read-only</strong>. Có thể
+          thêm <code>@xxx.deleter</code> để custom <code>del obj.xxx</code>.
+        </p>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
+          <p>
+            <strong>JS</strong>: <code>get area() {}</code> / <code>set radius(value) {}</code> trong class.
+            <strong>Dart</strong>: <code>double get area =&gt; pi * _radius * _radius;</code> — getter cú pháp riêng, gọn.
+            <strong>Python</strong>: dùng decorator <code>@property</code> + <code>@xxx.setter</code>. Hơi dài dòng nhưng nhất quán với hệ thống decorator chung của ngôn ngữ.
+          </p>
+        </div>
+
+        <h2 id="dataclass">9. <code>@dataclass</code> — giảm boilerplate</h2>
+
+        <p>
+          Mỗi khi viết class để giữ dữ liệu, ta phải gõ lại <code>__init__</code>, <code>__repr__</code>,
+          <code>__eq__</code> giống nhau. Python 3.7 đưa ra <code>@dataclass</code> — decorator generate những method
+          này tự động dựa trên type annotation của class.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>dataclass.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
+
+<span class="tok-dec">@dataclass</span>
+<span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    name: <span class="tok-type">str</span>
+    age: <span class="tok-type">int</span>
+    email: <span class="tok-type">str</span> = <span class="tok-str">""</span>         <span class="tok-com"># default value</span>
+
+u1 = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">22</span>)
+u2 = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">22</span>)
+<span class="tok-fn">print</span>(u1)               <span class="tok-com"># User(name='Anh', age=22, email='')</span>
+<span class="tok-fn">print</span>(u1 == u2)         <span class="tok-com"># True — __eq__ auto theo field</span></code></pre>
+        </div>
+
+        <p>
+          Mặc định <code>@dataclass</code> tạo: <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>.
+          Các tham số đáng nhớ:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tham số</th><th>Mặc định</th><th>Hiệu ứng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>init=True</code></td><td>True</td><td>Generate <code>__init__</code></td></tr>
+              <tr><td><code>repr=True</code></td><td>True</td><td>Generate <code>__repr__</code></td></tr>
+              <tr><td><code>eq=True</code></td><td>True</td><td>Generate <code>__eq__</code></td></tr>
+              <tr><td><code>order=True</code></td><td>False</td><td>Generate <code>__lt__</code>...<code>__ge__</code></td></tr>
+              <tr><td><code>frozen=True</code></td><td>False</td><td>Instance bất biến + auto <code>__hash__</code></td></tr>
+              <tr><td><code>slots=True</code></td><td>False (3.10+)</td><td>Generate <code>__slots__</code>, tiết kiệm RAM, cấm attr mới</td></tr>
+              <tr><td><code>kw_only=True</code></td><td>False (3.10+)</td><td>Mọi tham số là keyword-only</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>dataclass_frozen.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
+
+<span class="tok-dec">@dataclass</span>(frozen=<span class="tok-kw">True</span>, slots=<span class="tok-kw">True</span>)
+<span class="tok-kw">class</span> <span class="tok-cls">Point</span>:
+    x: <span class="tok-type">float</span>
+    y: <span class="tok-type">float</span>
+
+p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span class="tok-num">2.0</span>)
+<span class="tok-fn">print</span>({p})              <span class="tok-com"># {Point(x=1.0, y=2.0)} — hashable vì frozen</span>
+<span class="tok-com"># p.x = 9  →  FrozenInstanceError</span>
+<span class="tok-com"># p.z = 0  →  AttributeError (slots không cho thêm attr)</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Default mutable trong dataclass</div>
+          <p>
+            Không được viết <code>items: list = []</code> vì sẽ chia sẻ list giữa các instance (giống bẫy mutable
+            class attribute). Dùng <code>field(default_factory=list)</code>:
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>default_factory.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass, field
+
+<span class="tok-dec">@dataclass</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Cart</span>:
+    items: <span class="tok-type">list</span>[<span class="tok-type">str</span>] = field(default_factory=<span class="tok-cls">list</span>)
+    discount: <span class="tok-type">float</span> = <span class="tok-num">0.0</span></code></pre>
+          </div>
+        </div>
+
+        <h2 id="abc">10. Abstract Base Class — <code>abc</code></h2>
+
+        <p>
+          Khi muốn ép subclass phải implement một method nhất định, dùng <code>abc.ABC</code> + decorator
+          <code>@abstractmethod</code>. Class có <code>@abstractmethod</code> không thể tạo instance trực tiếp.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>abc_basic.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> abc <span class="tok-kw">import</span> ABC, abstractmethod
+
+<span class="tok-kw">class</span> <span class="tok-cls">Shape</span>(<span class="tok-cls">ABC</span>):
+    <span class="tok-dec">@abstractmethod</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">float</span>:
+        ...
+
+<span class="tok-kw">class</span> <span class="tok-cls">Square</span>(<span class="tok-cls">Shape</span>):
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, side):
+        <span class="tok-kw">self</span>.side = side
+    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.side ** <span class="tok-num">2</span>
+
+<span class="tok-com"># Shape()  →  TypeError: Can't instantiate abstract class Shape</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">Square</span>(<span class="tok-num">3</span>).<span class="tok-fn">area</span>())   <span class="tok-com"># 9</span></code></pre>
+        </div>
+
+        <p>
+          ABC tương đương <em>interface</em> ở các ngôn ngữ khác — nhưng vẫn được implement bằng class, nên có thể
+          chứa method có sẵn (concrete method) lẫn <code>@abstractmethod</code>. Đó là lý do thường được gọi là
+          "abstract base class" thay vì "interface": vừa làm khung vừa cung cấp logic chung.
+        </p>
+
+        <h2 id="protocol">11. <code>typing.Protocol</code> — structural typing</h2>
+
+        <p>
+          PEP 544 (Python 3.8+) đưa ra <code>typing.Protocol</code> — cho phép khai báo "type theo cấu trúc": "bất kỳ
+          class nào có method X, Y với signature đúng đều coi là <code>SupportsX</code>". Không cần <code>inherit</code>
+          — đây là <strong>structural typing</strong>, giống <code>interface</code> trong TypeScript / Go.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>protocol.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Protocol
+
+<span class="tok-kw">class</span> <span class="tok-cls">SupportsArea</span>(<span class="tok-cls">Protocol</span>):
+    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">float</span>: ...
+
+<span class="tok-kw">class</span> <span class="tok-cls">Box</span>:                       <span class="tok-com"># không inherit SupportsArea</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, w, h):
+        <span class="tok-kw">self</span>.w, <span class="tok-kw">self</span>.h = w, h
+    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">float</span>:
+        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.w * <span class="tok-kw">self</span>.h
+
+<span class="tok-kw">def</span> <span class="tok-fn">describe</span>(s: <span class="tok-cls">SupportsArea</span>) -&gt; <span class="tok-type">str</span>:
+    <span class="tok-kw">return</span> <span class="tok-str">f"area = </span>{s.<span class="tok-fn">area</span>()}<span class="tok-str">"</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">describe</span>(<span class="tok-fn">Box</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>)))   <span class="tok-com"># 'area = 6' — mypy chấp nhận</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — ABC vs Protocol</div>
+          <p>
+            <strong>ABC (nominal)</strong>: "Bạn phải khai báo bạn là Shape" — phải <code>class Box(Shape)</code>.
+            Quan hệ tường minh, kiểm tra được lúc runtime qua <code>isinstance</code>.<br/>
+            <strong>Protocol (structural)</strong>: "Nếu trông giống Shape, làm việc giống Shape, thì bạn là Shape" —
+            không cần khai báo. Chỉ là contract về cấu trúc, chủ yếu phục vụ tooling (mypy). Thường gọn hơn cho API
+            "duck-typed".
+          </p>
+          <p>Chương 9 (Typing) sẽ đào sâu Protocol + Generic + <code>runtime_checkable</code>.</p>
+        </div>
+
+        <h2 id="duck-typing">12. Duck typing — "Nếu kêu quack quack thì là vịt"</h2>
+
+        <p>
+          Câu thành ngữ nguyên gốc: <em>"If it walks like a duck and it quacks like a duck, then it must be a duck."</em>
+          Áp dụng vào Python: ta thường <strong>không quan tâm</strong> đối tượng là class gì, chỉ quan tâm nó có
+          method/attribute cần thiết hay không. Đó là <strong>duck typing</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>duck_typing.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">play_sound</span>(animal):
+    <span class="tok-com"># Không quan tâm animal là class gì, chỉ cần có .speak()</span>
+    <span class="tok-kw">return</span> animal.<span class="tok-fn">speak</span>()
+
+<span class="tok-kw">class</span> <span class="tok-cls">Duck</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">speak</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"quack"</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">Robot</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">speak</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"beep"</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">play_sound</span>(<span class="tok-fn">Duck</span>()))    <span class="tok-com"># 'quack'</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">play_sound</span>(<span class="tok-fn">Robot</span>()))   <span class="tok-com"># 'beep' — Robot không phải Duck nhưng OK</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 EAFP &gt; LBYL</div>
+          <p>
+            Cộng đồng Python đề cao <strong>EAFP</strong> ("Easier to Ask Forgiveness than Permission") — cứ làm, sai
+            thì bắt exception. Đối lập với <strong>LBYL</strong> ("Look Before You Leap") — kiểm tra trước rồi mới làm.
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>eafp_vs_lbyl.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># LBYL — không "Pythonic"</span>
+<span class="tok-kw">if</span> <span class="tok-fn">hasattr</span>(obj, <span class="tok-str">"speak"</span>) <span class="tok-kw">and</span> <span class="tok-fn">callable</span>(obj.speak):
+    obj.<span class="tok-fn">speak</span>()
+
+<span class="tok-com"># EAFP — Pythonic</span>
+<span class="tok-kw">try</span>:
+    obj.<span class="tok-fn">speak</span>()
+<span class="tok-kw">except</span> <span class="tok-cls">AttributeError</span>:
+    <span class="tok-fn">handle_no_speak</span>()</code></pre>
+          </div>
+          <p>
+            Khi nào dùng <code>isinstance</code>? Khi <em>thật sự</em> cần ép contract (vd API public, kiểm tra để
+            hỗ trợ kiểu mới một cách dạng "double dispatch"). Còn lại — tin vào duck typing.
+          </p>
+        </div>
+
+        <div class="zen-quote">
+          Errors should never pass silently.<br/>
+          Unless explicitly silenced.
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Vector 2D với toán tử</h4>
+            <div class="exercise-body">
+              <p>
+                Viết class <code>Vector2D</code> với hai thuộc tính <code>x</code>, <code>y</code>. Implement các
+                dunder method: <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>,
+                <code>__add__</code>, <code>__sub__</code>, <code>__mul__</code> (scalar bên phải). Yêu cầu:
+              </p>
+              <ul>
+                <li><code>Vector2D(1, 2) + Vector2D(3, 4) == Vector2D(4, 6)</code></li>
+                <li><code>Vector2D(3, 4) - Vector2D(1, 2) == Vector2D(2, 2)</code></li>
+                <li><code>Vector2D(1, 2) * 3 == Vector2D(3, 6)</code></li>
+                <li><code>repr(Vector2D(1, 2))</code> phải eval lại được</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Trong các toán tử <code>__add__</code>/<code>__sub__</code>, trả về một instance mới — không
+                    mutate <code>self</code>. <code>__mul__(self, scalar)</code> nhận một số làm tham số thứ hai. Khi
+                    so sánh kiểu khác, trả <code>NotImplemented</code>. Để ổn định <code>repr</code>, dùng
+                    <code>f"Vector2D({self.x}, {self.y})"</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Hierarchy <code>Shape</code> với ABC</h4>
+            <div class="exercise-body">
+              <p>
+                Tạo class trừu tượng <code>Shape</code> (kế thừa <code>abc.ABC</code>) với
+                <code>@abstractmethod area()</code>. Implement <code>Circle(radius)</code>, <code>Square(side)</code>,
+                <code>Rectangle(width, height)</code>. Sau đó:
+              </p>
+              <ul>
+                <li>Tạo list <code>shapes = [Circle(2), Square(3), Rectangle(2, 5)]</code></li>
+                <li>In ra tổng diện tích bằng <code>sum(s.area() for s in shapes)</code></li>
+                <li>Thử <code>Shape()</code> → phải ra <code>TypeError</code></li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>area()</code> ở <code>Shape</code> chỉ cần <code>...</code> (Ellipsis literal) làm body.
+                    Mỗi subclass override <code>area()</code> với công thức riêng. Đây là ví dụ kinh điển của
+                    <strong>polymorphism</strong> — code dùng list không cần biết từng phần tử là Circle hay Square.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Refactor <code>User</code> sang <code>@dataclass(frozen=True)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Cho class <code>User</code> dạng "manual":
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>before.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
+        <span class="tok-kw">self</span>.name = name
+        <span class="tok-kw">self</span>.age = age
+    <span class="tok-kw">def</span> <span class="tok-fn">__repr__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-str">f"User(name=</span>{<span class="tok-kw">self</span>.name!r}<span class="tok-str">, age=</span>{<span class="tok-kw">self</span>.age}<span class="tok-str">)"</span>
+    <span class="tok-kw">def</span> <span class="tok-fn">__eq__</span>(<span class="tok-kw">self</span>, other):
+        <span class="tok-kw">if not</span> <span class="tok-fn">isinstance</span>(other, <span class="tok-cls">User</span>): <span class="tok-kw">return</span> <span class="tok-kw">NotImplemented</span>
+        <span class="tok-kw">return</span> (<span class="tok-kw">self</span>.name, <span class="tok-kw">self</span>.age) == (other.name, other.age)
+    <span class="tok-kw">def</span> <span class="tok-fn">__hash__</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">return</span> <span class="tok-fn">hash</span>((<span class="tok-kw">self</span>.name, <span class="tok-kw">self</span>.age))</code></pre>
+              </div>
+              <p>
+                Viết lại dưới dạng <code>@dataclass(frozen=True)</code>. So sánh số dòng. Kiểm tra:
+                <code>hash(User("A", 1))</code> hoạt động, <code>User("A", 1) == User("A", 1)</code> trả
+                <code>True</code>, và <code>user.name = "B"</code> ném <code>FrozenInstanceError</code>.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>frozen=True</code> đồng thời cấm set attribute <em>và</em> bật <code>eq=True</code>
+                    (mặc định) sẽ kéo theo auto-generate <code>__hash__</code>. Phiên bản sau gọn còn ~4 dòng.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Lớp <code>Temperature</code> đa đơn vị</h4>
+            <div class="exercise-body">
+              <p>
+                Tạo class <code>Temperature</code> lưu state trong <code>_celsius</code> (convention private).
+                Implement <code>@property</code> cho ba đơn vị: <code>celsius</code>, <code>fahrenheit</code>,
+                <code>kelvin</code>. Mỗi property có cả getter và setter — setter chuyển ngược về Celsius rồi cập nhật
+                <code>_celsius</code>.
+              </p>
+              <ul>
+                <li>Công thức: <code>F = C × 9/5 + 32</code>, <code>K = C + 273.15</code></li>
+                <li><code>t = Temperature(); t.celsius = 100; print(t.fahrenheit, t.kelvin)</code> → <code>212.0 373.15</code></li>
+                <li><code>t.fahrenheit = 32; print(t.celsius)</code> → <code>0.0</code></li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Validation hợp lý: setter <code>kelvin</code> kiểm tra <code>value &lt; 0</code> →
+                    <code>ValueError("dưới 0 K không có nghĩa")</code>. Mỗi setter cập nhật <code>_celsius</code>
+                    duy nhất; getter các đơn vị khác đều derive từ <code>_celsius</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Mixin <code>Serializable</code></h4>
+            <div class="exercise-body">
+              <p>
+                Tạo mixin <code>Serializable</code> với method <code>to_json(self)</code> trả về chuỗi JSON đại diện
+                cho instance. Dùng <code>dataclasses.asdict</code> để convert dataclass thành dict, rồi
+                <code>json.dumps</code>. Áp dụng lên dataclass <code>Product</code>:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>start.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
+
+<span class="tok-dec">@dataclass</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Product</span>(<span class="tok-cls">Serializable</span>):
+    sku: <span class="tok-type">str</span>
+    name: <span class="tok-type">str</span>
+    price: <span class="tok-type">float</span>
+
+<span class="tok-fn">print</span>(<span class="tok-cls">Product</span>(<span class="tok-str">"P001"</span>, <span class="tok-str">"Book"</span>, <span class="tok-num">19.99</span>).<span class="tok-fn">to_json</span>())
+<span class="tok-com"># {"sku": "P001", "name": "Book", "price": 19.99}</span></code></pre>
+              </div>
+              <p>
+                Vẽ <code>Product.__mro__</code> và xác nhận thứ tự: <code>Product → Serializable → object</code>.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Mixin là một class thông thường, không cần inherit <code>ABC</code> — chỉ chứa method công cộng để
+                    được mix vào nhiều class khác qua multiple inheritance. Đặt mixin <em>trước</em>
+                    <code>object</code> trong khai báo, nhưng theo convention nên đặt <em>sau</em> class chính nếu có
+                    nhiều base.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>self</code> là gì? Tại sao phải khai báo như tham số đầu?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>self</code> là tham chiếu tới instance mà method đang được gọi trên. Khi viết <code>obj.method(x)</code>,
+                Python ngầm dịch thành <code>Class.method(obj, x)</code> — instance được truyền vào tham số đầu. Vì vậy
+                method instance bắt buộc nhận <code>self</code>. Cái tên "self" chỉ là convention (PEP 8); thay đổi sẽ
+                vẫn chạy được nhưng làm code khó đọc và bị linter cảnh báo.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>@classmethod</code> và <code>@staticmethod</code> khác nhau ra sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>@classmethod</code> nhận <code>cls</code> tự động — là class <em>thực tế</em> được gọi (subclass
+                sẽ thấy class mình). Thường dùng làm <strong>alternative constructor</strong> (<code>from_dict</code>,
+                <code>from_file</code>...). <code>@staticmethod</code> không nhận tham số tự động nào — chỉ là utility
+                được đặt trong namespace class cho gọn. Vì không có <code>cls</code>, static method không hỗ trợ
+                polymorphism qua class. Khi cần override theo subclass, chọn <code>@classmethod</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>__str__</code> và <code>__repr__</code> khác gì? Khi nào ta cần cả hai?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>__str__</code> dành cho <strong>người dùng cuối</strong> — gọn, đẹp, dễ đọc (vd
+                <code>"(1, 2)"</code>). <code>__repr__</code> dành cho <strong>developer</strong> — chi tiết, mục tiêu
+                lý tưởng là <code>eval(repr(obj))</code> trả về object tương đương (vd <code>"Point(x=1, y=2)"</code>).
+                Nếu chỉ định nghĩa <code>__repr__</code>, Python tự lấy nó làm <code>__str__</code> — nên một class
+                tối thiểu chỉ cần <code>__repr__</code>. Override cả hai khi muốn UX hiển thị khác (vd log internal
+                chi tiết hơn cho debug).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Với <code>class C(A, B)</code>, Python quyết định thứ tự lookup method ra sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Python dùng thuật toán <strong>C3 linearization</strong> để tính MRO (Method Resolution Order). Quy
+                tắc: (1) class con trước class cha, (2) bên trái trước bên phải trong khai báo, (3) thứ tự nhất quán
+                giữa các MRO. Có thể xem qua <code>C.__mro__</code> hoặc <code>C.mro()</code>. <code>super()</code> đi
+                theo MRO chứ không phải "cha trực tiếp" — đó là chìa khóa làm cho diamond inheritance hoạt động đúng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>@dataclass</code> tự generate những method nào? Khi nào có <code>__hash__</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Mặc định: <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>. Option <code>order=True</code>
+                bổ sung <code>__lt__</code>...<code>__ge__</code>. <code>__hash__</code> được generate khi
+                <code>frozen=True</code> (cùng với <code>eq=True</code>, đây là mặc định). Nếu chỉ có
+                <code>eq=True</code> mà không <code>frozen=True</code>, dataclass đặt <code>__hash__ = None</code> →
+                instance unhashable. Có thể ép <code>unsafe_hash=True</code> nhưng rủi ro (instance mutable mà hashable
+                → hỏng dict/set).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Setter của <code>@property</code> có bắt buộc không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Không bắt buộc. Nếu chỉ có <code>@property</code> mà không có <code>@xxx.setter</code>, attribute
+                trở thành <strong>read-only</strong> — gán <code>obj.xxx = ...</code> sẽ ném
+                <code>AttributeError: can't set attribute</code>. Đây là cách phổ biến để khai báo <strong>computed
+                property</strong> (vd <code>area</code> tính từ <code>radius</code>) hoặc <strong>immutable field</strong>.
+                Có thể thêm <code>@xxx.deleter</code> để custom <code>del obj.xxx</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Khi override <code>__eq__</code>, ta còn phải override gì? Tại sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Phải override <code>__hash__</code>. Lý do: Python <em>tự đặt</em> <code>__hash__ = None</code> khi
+                phát hiện <code>__eq__</code> custom — instance sẽ unhashable. Quy tắc hash bất di bất dịch:
+                <code>a == b ⇒ hash(a) == hash(b)</code>. Nếu chỉ override <code>__eq__</code> mà không cập nhật hash,
+                hai instance "bằng nhau" lại có hash khác → vi phạm hợp đồng của <code>set</code>/<code>dict</code>,
+                dẫn đến bug khủng khiếp. Quy tắc đơn giản: object mutable (có thể đổi state) → đừng hashable; object
+                immutable → hash từ một tuple các field.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Duck typing vs <code>isinstance</code> check — cái nào "Pythonic" hơn?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Trong đa số trường hợp, <strong>duck typing</strong> Pythonic hơn — kết hợp với phong cách
+                <strong>EAFP</strong> (cứ làm, exception thì bắt). Code linh hoạt, dễ test (mock object chỉ cần expose
+                đúng method), không khóa kiểu cụ thể.<br/>
+                <code>isinstance</code> hợp lý khi: (a) thực sự cần phân biệt nhiều kiểu khác nhau (vd hỗ trợ
+                <code>str</code> và <code>list</code> input cho cùng API); (b) viết API public cần guarantee mạnh;
+                (c) dùng <code>typing.Protocol</code> với <code>@runtime_checkable</code> để kết hợp ưu điểm cả hai —
+                có structural type vẫn check được runtime. Tránh <code>isinstance</code> theo thói quen ép kiểu;
+                tin vào hành vi của object.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 5, bạn đã master:</p>
+        <ul>
+          <li><strong>Class &amp; <code>__init__</code></strong>: cú pháp, <code>self</code>, instance vs class attribute, bẫy mutable.</li>
+          <li><strong>Ba loại method</strong>: instance, <code>@classmethod</code> (alternative constructor), <code>@staticmethod</code> (namespace utility).</li>
+          <li><strong>Inheritance</strong>: <code>class B(A)</code>, override, <code>super().__init__</code> chain.</li>
+          <li><strong>Multiple inheritance &amp; MRO</strong>: C3 linearization, <code>__mro__</code>, diamond.</li>
+          <li><strong>Dunder methods</strong>: <code>__repr__</code>/<code>__str__</code>, <code>__eq__</code>/<code>__hash__</code> luôn đi đôi, <code>__len__</code>, <code>__iter__</code>, <code>__contains__</code>, <code>__getitem__</code>, <code>__call__</code>.</li>
+          <li><strong><code>@property</code></strong>: computed value, validation, read-only attribute.</li>
+          <li><strong><code>@dataclass</code></strong>: <code>frozen</code>, <code>slots</code>, <code>field(default_factory=...)</code>.</li>
+          <li><strong>ABC vs Protocol</strong>: nominal vs structural typing; duck typing &amp; EAFP làm tinh thần cốt lõi.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 6 (Iterators &amp; Generators)</strong> — đào sâu <code>__iter__</code>/<code>__next__</code>, iterable protocol và <code>yield</code> để tạo class lazy.</li>
+          <li><strong>Chương 7 (Decorators &amp; Context Managers)</strong> — <code>@functools.wraps</code> bảo toàn metadata khi decorator class method; <code>__enter__</code>/<code>__exit__</code> cho <code>with</code> statement.</li>
+          <li><strong>Chương 9 (Typing &amp; Static Analysis)</strong> — <code>Protocol</code> đi với <code>Generic</code>, <code>TypedDict</code>, type narrowing qua <code>isinstance</code>; PEP 695 Generic syntax (3.12+).</li>
+          <li><strong>JavaScript Chương 4 (Objects, Prototypes &amp; Classes)</strong> — đối chiếu mô hình prototype của JS với class-as-namespace của Python.</li>
+          <li><strong>Dart Chương 4 (Class Modifiers)</strong> — Dart 3 đưa ra <code>sealed/base/final/interface class</code>, đối lập với phong cách tự do của Python (không có private thật sự, không có sealed).</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong4.html" class="prev">
+            <div class="dir">← Chương 4</div>
+            <div class="label">Control Flow &amp; Functions</div>
+          </a>
+          <a href="chuong6.html" class="next">
+            <div class="dir">Chương 6 →</div>
+            <div class="label">Iterators &amp; Generators</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#class-basics">1. <code>class</code> cơ bản</a></li>
+          <li><a href="#init">2. <code>__init__</code> &amp; <code>self</code></a></li>
+          <li><a href="#instance-vs-class-attr">3. Instance vs class attribute</a></li>
+          <li><a href="#method-types">4. Instance / class / static method</a></li>
+          <li><a href="#inheritance">5. Inheritance &amp; <code>super()</code></a></li>
+          <li><a href="#multiple-inheritance">6. Multiple inheritance &amp; MRO</a></li>
+          <li><a href="#dunder">7. Dunder methods</a></li>
+          <li class="level-3"><a href="#repr-str">7.1. <code>__repr__</code> vs <code>__str__</code></a></li>
+          <li class="level-3"><a href="#eq-hash">7.2. <code>__eq__</code> &amp; <code>__hash__</code></a></li>
+          <li class="level-3"><a href="#iter-contains">7.3. <code>__iter__</code> / <code>__getitem__</code></a></li>
+          <li class="level-3"><a href="#call">7.4. <code>__call__</code></a></li>
+          <li><a href="#property">8. <code>@property</code></a></li>
+          <li><a href="#dataclass">9. <code>@dataclass</code></a></li>
+          <li><a href="#abc">10. <code>abc.ABC</code></a></li>
+          <li><a href="#protocol">11. <code>typing.Protocol</code></a></li>
+          <li><a href="#duck-typing">12. Duck typing &amp; EAFP</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 5 — OOP in Python · Python sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong4.html">← Chương 4</a> · <a href="../index.html">Python TOC</a> · <a href="chuong6.html">Chương 6 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

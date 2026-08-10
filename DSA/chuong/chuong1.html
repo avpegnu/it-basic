@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 01 — Big-O & Phân tích độ phức tạp · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong1.html" class="active">Ch.01</a></li>
+        <li><a href="chuong2.html">Ch.02 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 01 · FOUNDATION · ~90 phút</div>
+      <h1>Big-O &amp; Phân tích<br/><span class="text-amber">độ phức tạp</span></h1>
+      <p class="lead">
+        Nền tảng của <strong>mọi thứ</strong> trong DSA. Không hiểu Big-O thì không thể đánh giá code mình viết là nhanh hay chậm,
+        không thể trả lời "thuật toán này có scale được khi n lớn không?" — câu hỏi xuất hiện trong gần như mọi vòng phỏng vấn coding.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#why">1.1 Tại sao cần Big-O?</a></li>
+          <li><a href="#definition">1.2 Định nghĩa Big-O</a></li>
+          <li><a href="#rules">1.3 Quy tắc đếm Big-O</a></li>
+          <li><a href="#families">1.4 Các "họ" Big-O</a></li>
+          <li><a href="#theta-omega">1.5 Big-Θ và Big-Ω</a></li>
+          <li><a href="#space">1.6 Space complexity</a></li>
+          <li><a href="#amortized">1.7 Amortized analysis</a></li>
+          <li><a href="#js-builtin">1.8 Big-O của JS built-in</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 1.1 -->
+        <section id="why">
+          <h2>1.1 Tại sao cần Big-O?</h2>
+          <p>
+            Hãy tưởng tượng bạn viết hai hàm <code>findUser</code> đều "đúng" — đều trả về user theo email.
+            Nhưng cách thứ nhất chạy 0.001 giây, cách thứ hai chạy 4 giây khi database có 1 triệu user. Cả hai đều <em>đúng logic</em>.
+            Khác biệt nằm ở <strong>độ phức tạp thuật toán</strong>.
+          </p>
+
+          <p>
+            Big-O là <strong>cách diễn đạt tốc độ tăng của thuật toán theo kích thước input</strong> — không quan tâm máy tính nhanh hay chậm,
+            không quan tâm ngôn ngữ là JS hay C, chỉ quan tâm: <em>khi n tăng gấp đôi, thời gian chạy tăng bao nhiêu lần?</em>
+          </p>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Trực quan đơn giản</div>
+            <ul>
+              <li><strong>O(1):</strong> bao nhiêu input cũng vẫn 1 bước. Vd: lấy phần tử thứ i của array.</li>
+              <li><strong>O(n):</strong> input gấp đôi → thời gian gấp đôi. Vd: tìm tuyến tính.</li>
+              <li><strong>O(n²):</strong> input gấp đôi → thời gian gấp 4. Vd: hai vòng for lồng nhau.</li>
+            </ul>
+          </div>
+
+          <h3>Câu chuyện n = 1 triệu</h3>
+          <p>Giả sử máy bạn chạy 10⁸ phép tính/giây. Đây là <strong>thời gian thực tế</strong> để xử lý n = 1,000,000:</p>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Big-O</th>
+                <th>Số phép tính</th>
+                <th>Thời gian chạy</th>
+                <th>Chấp nhận được?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>O(1)</code></td><td>1</td><td>tức thì</td><td class="text-green">✓ Tuyệt vời</td></tr>
+              <tr><td><code>O(log n)</code></td><td>~20</td><td>tức thì</td><td class="text-green">✓ Tuyệt vời</td></tr>
+              <tr><td><code>O(n)</code></td><td>10⁶</td><td>0.01s</td><td class="text-green">✓ Tốt</td></tr>
+              <tr><td><code>O(n log n)</code></td><td>~2×10⁷</td><td>0.2s</td><td class="text-green">✓ Tốt</td></tr>
+              <tr><td><code>O(n²)</code></td><td>10¹²</td><td>~3 giờ</td><td class="text-red">✗ Quá chậm</td></tr>
+              <tr><td><code>O(n³)</code></td><td>10¹⁸</td><td>~300 năm</td><td class="text-red">✗ Vô dụng</td></tr>
+              <tr><td><code>O(2ⁿ)</code></td><td>vũ trụ</td><td>không bao giờ xong</td><td class="text-red">✗ Thảm hoạ</td></tr>
+            </tbody>
+          </table>
+
+          <p>
+            Nhìn bảng này, bạn sẽ hiểu vì sao phỏng vấn luôn hỏi "Big-O của giải pháp này là gì?".
+            Câu trả lời <code>O(n²)</code> với input lớn = bài làm <strong>không pass</strong>.
+          </p>
+        </section>
+
+        <!-- 1.2 -->
+        <section id="definition">
+          <h2>1.2 Định nghĩa Big-O</h2>
+
+          <p>Định nghĩa toán học (đơn giản hoá cho lập trình viên):</p>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Định nghĩa Big-O</div>
+            <code>f(n) = O(g(n))</code> nghĩa là: <strong>tồn tại</strong> hai hằng số <code>c &gt; 0</code> và <code>n₀ &gt; 0</code>
+            sao cho với mọi <code>n ≥ n₀</code>, ta có <code>f(n) ≤ c · g(n)</code>.
+          </div>
+
+          <p>Nói nôm na:</p>
+          <ul>
+            <li>Big-O là <strong>cận trên</strong> của tốc độ tăng (worst case).</li>
+            <li>Khi n đủ lớn, <code>f(n)</code> không tăng nhanh hơn <code>g(n)</code> theo bậc.</li>
+            <li>Hằng số <code>c</code> để "bỏ qua" phần multiply nhỏ — vì lúc n lớn, hằng số không quan trọng.</li>
+          </ul>
+
+          <h3>Ví dụ trực quan</h3>
+
+          <pre data-lang="javascript"><code>function sumArray(arr) {
+  let total = 0;        // 1 bước
+  for (let i = 0; i &lt; arr.length; i++) {
+    total += arr[i];    // n bước
+  }
+  return total;         // 1 bước
+}</code></pre>
+
+          <p>
+            Tổng số phép tính: <code>1 + n + 1 = n + 2</code>.
+            Nhưng Big-O <strong>bỏ qua hằng số</strong> và chỉ giữ <strong>bậc cao nhất</strong> → <code>O(n)</code>.
+          </p>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Tại sao bỏ hằng số?</div>
+            Vì khi n = 1,000,000, sự khác biệt giữa <code>n</code> và <code>n + 2</code> là không đáng kể.
+            Big-O quan tâm <em>tốc độ tăng dài hạn</em>, không quan tâm chính xác từng phép tính.
+          </div>
+        </section>
+
+        <!-- 1.3 -->
+        <section id="rules">
+          <h2>1.3 Quy tắc đếm Big-O</h2>
+
+          <h3>Quy tắc 1 — Bỏ hằng số</h3>
+          <pre data-lang="javascript"><code>// Big-O = O(n), không phải O(2n)
+function double(arr) {
+  for (let i = 0; i &lt; arr.length; i++) console.log(arr[i]);  // n
+  for (let i = 0; i &lt; arr.length; i++) console.log(arr[i]);  // n
+  // 2n → O(n)
+}</code></pre>
+
+          <h3>Quy tắc 2 — Giữ bậc cao nhất</h3>
+          <pre data-lang="javascript"><code>// Big-O = O(n²), không phải O(n² + n)
+function example(arr) {
+  for (let i = 0; i &lt; arr.length; i++) {       // n
+    for (let j = 0; j &lt; arr.length; j++) {     // n
+      console.log(arr[i], arr[j]);              // 1 → tổng n²
+    }
+  }
+  for (let i = 0; i &lt; arr.length; i++) {       // n
+    console.log(arr[i]);                         // 1 → tổng n
+  }
+  // n² + n → O(n²)
+}</code></pre>
+
+          <h3>Quy tắc 3 — Vòng lặp lồng nhau thì NHÂN</h3>
+          <pre data-lang="javascript"><code>// Big-O = O(n²)
+for (let i = 0; i &lt; n; i++) {
+  for (let j = 0; j &lt; n; j++) {
+    // ...
+  }
+}
+
+// Big-O = O(n × m) — KHÁC NHAU khi n và m khác nhau!
+for (let i = 0; i &lt; n; i++) {
+  for (let j = 0; j &lt; m; j++) {
+    // ...
+  }
+}</code></pre>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Lỗi phỏng vấn rất hay mắc</div>
+            Hai vòng lồng nhau chạy trên hai mảng <em>khác nhau</em> là <code>O(n × m)</code>, KHÔNG phải <code>O(n²)</code>.
+            Nếu bạn nói "n²" mà n và m không liên quan → trừ điểm.
+          </div>
+
+          <h3>Quy tắc 4 — Vòng lặp tuần tự thì CỘNG</h3>
+          <pre data-lang="javascript"><code>// Big-O = O(n + m), gộp lại = O(max(n, m))
+for (let i = 0; i &lt; n; i++) { /* ... */ }
+for (let j = 0; j &lt; m; j++) { /* ... */ }</code></pre>
+
+          <h3>Quy tắc 5 — Chia đôi thì có log</h3>
+          <pre data-lang="javascript"><code>// Big-O = O(log n) — mỗi vòng n giảm một nửa
+let i = n;
+while (i &gt; 1) {
+  i = Math.floor(i / 2);
+  // ...
+}
+
+// Binary search là ví dụ kinh điển O(log n)
+function binarySearch(arr, target) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo &lt;= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (arr[mid] === target) return mid;
+    if (arr[mid] &lt; target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}</code></pre>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Vì sao chia đôi → log₂ n?</div>
+            Hỏi: cần chia n cho 2 bao nhiêu lần để còn 1? → đáp án là <code>log₂(n)</code>.
+            Trong Big-O, <code>log₂</code> hay <code>log₁₀</code> hay <code>ln</code> đều viết chung là <code>log n</code>
+            (chúng chỉ khác nhau bởi hằng số nhân — và Big-O bỏ hằng số).
+          </div>
+        </section>
+
+        <!-- 1.4 -->
+        <section id="families">
+          <h2>1.4 Các "họ" Big-O — từ tốt nhất đến tệ nhất</h2>
+
+          <p>Đây là <strong>9 họ Big-O</strong> bạn gặp 99% trong phỏng vấn. Học thuộc thứ tự này.</p>
+
+          <div class="bigo-chart">
+            <div class="bigo-row">
+              <span class="bigo-label">O(1)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-1"></div></div>
+              <span class="bigo-name">constant</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(log n)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-logn"></div></div>
+              <span class="bigo-name">logarithmic</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(√n)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-sqrt"></div></div>
+              <span class="bigo-name">root</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(n)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-n"></div></div>
+              <span class="bigo-name">linear</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(n log n)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-nlogn"></div></div>
+              <span class="bigo-name">log-linear</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(n²)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-n2"></div></div>
+              <span class="bigo-name">quadratic</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(n³)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-n3"></div></div>
+              <span class="bigo-name">cubic</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(2ⁿ)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-2n"></div></div>
+              <span class="bigo-name">exponential</span>
+            </div>
+            <div class="bigo-row">
+              <span class="bigo-label">O(n!)</span>
+              <div class="bigo-bars"><div class="bigo-bar b-nfact"></div></div>
+              <span class="bigo-name">factorial</span>
+            </div>
+          </div>
+
+          <h3>O(1) — Constant</h3>
+          <p>Số phép tính <strong>không phụ thuộc</strong> kích thước input.</p>
+          <pre data-lang="javascript"><code>function getFirst(arr) { return arr[0]; }   // O(1)
+function isEven(n)     { return n % 2 === 0; } // O(1)</code></pre>
+
+          <h3>O(log n) — Logarithmic</h3>
+          <p>Mỗi bước, không gian tìm kiếm <strong>giảm một nửa</strong>. Cực nhanh ngay cả với n khổng lồ.</p>
+          <pre data-lang="javascript"><code>// Binary search — đã ví dụ ở trên: O(log n)
+// Tree traversal trên balanced BST tìm kiếm: O(log n)</code></pre>
+
+          <h3>O(n) — Linear</h3>
+          <p>Đi qua input đúng 1 lần. Đây là <strong>baseline</strong> mà mọi giải pháp tốt nên đạt được.</p>
+          <pre data-lang="javascript"><code>function findMax(arr) {
+  let max = arr[0];
+  for (let i = 1; i &lt; arr.length; i++) {
+    if (arr[i] &gt; max) max = arr[i];
+  }
+  return max;
+}  // O(n)</code></pre>
+
+          <h3>O(n log n) — Log-linear</h3>
+          <p>Hầu hết thuật toán sort hiệu quả (Merge Sort, Heap Sort, TimSort) đạt mức này. Đây là <strong>giới hạn dưới</strong> của comparison-based sort.</p>
+
+          <h3>O(n²) — Quadratic</h3>
+          <p>Hai vòng for lồng nhau. <strong>Phải tránh</strong> nếu input có thể lớn.</p>
+          <pre data-lang="javascript"><code>// Bubble sort, selection sort, brute-force two sum
+function hasPairSum(arr, target) {
+  for (let i = 0; i &lt; arr.length; i++) {
+    for (let j = i + 1; j &lt; arr.length; j++) {
+      if (arr[i] + arr[j] === target) return true;
+    }
+  }
+  return false;
+}  // O(n²)
+
+// Cải tiến với Hash Set → O(n)
+function hasPairSumFast(arr, target) {
+  const seen = new Set();
+  for (const x of arr) {
+    if (seen.has(target - x)) return true;
+    seen.add(x);
+  }
+  return false;
+}  // O(n)</code></pre>
+
+          <h3>O(2ⁿ) — Exponential</h3>
+          <p>Mỗi input mới <strong>nhân đôi</strong> số trường hợp. Thường xuất hiện trong đệ quy không có memoization.</p>
+          <pre data-lang="javascript"><code>// Fibonacci đệ quy "ngây thơ" — O(2ⁿ), kinh điển slow
+function fib(n) {
+  if (n &lt;= 1) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+// fib(40) đã chậm thấy rõ. fib(60) chạy hàng giờ.
+
+// Cải tiến với memoization → O(n)
+function fibMemo(n, memo = {}) {
+  if (n &lt;= 1) return n;
+  if (memo[n]) return memo[n];
+  return memo[n] = fibMemo(n - 1, memo) + fibMemo(n - 2, memo);
+}</code></pre>
+
+          <h3>O(n!) — Factorial</h3>
+          <p>Liệt kê <strong>mọi hoán vị</strong>. Chỉ chạy được khi n ≤ ~10. Bài kinh điển: Travelling Salesman brute force.</p>
+        </section>
+
+        <!-- 1.5 -->
+        <section id="theta-omega">
+          <h2>1.5 Big-Θ (Theta) và Big-Ω (Omega) — khi nào cần phân biệt?</h2>
+
+          <p>Trong giao tiếp hàng ngày, lập trình viên dùng "Big-O" cho mọi thứ. Nhưng học thuật phân biệt 3 ký hiệu:</p>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-green">Big-Ω (Omega)</h4>
+              <p>Cận <strong>dưới</strong> — best case.</p>
+              <p>"Thuật toán này <em>ít nhất</em> nhanh bằng g(n)."</p>
+            </div>
+            <div>
+              <h4 class="text-cyan">Big-Θ (Theta)</h4>
+              <p>Cận <strong>chặt</strong> — vừa trên vừa dưới.</p>
+              <p>"Thuật toán này <em>chính xác</em> bậc g(n)."</p>
+            </div>
+            <div class="bad">
+              <h4 class="text-amber">Big-O</h4>
+              <p>Cận <strong>trên</strong> — worst case.</p>
+              <p>"Thuật toán này <em>không chậm hơn</em> g(n)."</p>
+            </div>
+          </div>
+
+          <p>Ví dụ: thuật toán <strong>Linear Search</strong>:</p>
+          <ul>
+            <li><code>Ω(1)</code> — best case: phần tử ở vị trí đầu tiên.</li>
+            <li><code>O(n)</code> — worst case: phần tử ở cuối hoặc không có.</li>
+            <li>Không có Θ chặt vì best/worst khác nhau.</li>
+          </ul>
+
+          <p>Ví dụ: thuật toán <strong>tính tổng mảng</strong>:</p>
+          <ul>
+            <li><code>Ω(n)</code>, <code>O(n)</code>, <code>Θ(n)</code> — luôn duyệt hết mảng dù sao đi nữa.</li>
+          </ul>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Trong phỏng vấn</div>
+            Khi người ta hỏi "Big-O là gì?" → trả lời <strong>worst case</strong> trừ khi họ hỏi rõ best/average.
+            Đa số trường hợp dùng "Big-O" là đủ, đừng bị cuốn vào tranh luận Θ vs Ω trừ khi nhà tuyển dụng muốn.
+          </div>
+        </section>
+
+        <!-- 1.6 -->
+        <section id="space">
+          <h2>1.6 Space Complexity — không chỉ thời gian, còn bộ nhớ</h2>
+
+          <p>
+            Big-O không chỉ đo thời gian, còn đo <strong>bộ nhớ</strong> mà thuật toán chiếm.
+            Trong phỏng vấn, hỏi "Time complexity?" thường đi kèm "Space complexity?".
+          </p>
+
+          <h3>Cách tính space</h3>
+          <p>Space = bộ nhớ <strong>thêm</strong> mà thuật toán cần (không tính input).</p>
+
+          <pre data-lang="javascript"><code>// Time: O(n), Space: O(1)
+// Chỉ dùng vài biến cố định, không phụ thuộc n
+function sum(arr) {
+  let total = 0;
+  for (let i = 0; i &lt; arr.length; i++) total += arr[i];
+  return total;
+}
+
+// Time: O(n), Space: O(n)
+// Tạo mảng mới có kích thước n
+function double(arr) {
+  const result = [];
+  for (let i = 0; i &lt; arr.length; i++) result.push(arr[i] * 2);
+  return result;
+}</code></pre>
+
+          <h3>Stack space từ đệ quy</h3>
+          <p>
+            Mỗi lời gọi đệ quy chiếm 1 frame trên call stack. Đệ quy sâu n lần → space <code>O(n)</code>
+            ngay cả khi không tạo array nào.
+          </p>
+
+          <pre data-lang="javascript"><code>// Time: O(n), Space: O(n) — vì call stack sâu n
+function factorial(n) {
+  if (n &lt;= 1) return 1;
+  return n * factorial(n - 1);
+}
+
+// Time: O(n), Space: O(1) — phiên bản iterative không tốn stack
+function factorialIter(n) {
+  let result = 1;
+  for (let i = 2; i &lt;= n; i++) result *= i;
+  return result;
+}</code></pre>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Đệ quy sâu = stack overflow</div>
+            JS giới hạn ~10,000-20,000 lần đệ quy (tuỳ engine). Đệ quy không có tail-call optimization
+            sẽ <code>RangeError: Maximum call stack size exceeded</code>. Khi gặp input lớn, chuyển sang iterative.
+          </div>
+        </section>
+
+        <!-- 1.7 -->
+        <section id="amortized">
+          <h2>1.7 Amortized Analysis — "trung bình" thông minh</h2>
+
+          <p>
+            Đôi khi 1 thao tác đôi lúc <em>chậm</em>, đôi lúc <em>cực nhanh</em>, nhưng <strong>trung bình</strong> thì nhanh.
+            Đây là <em>amortized analysis</em> (phân tích biên hoá).
+          </p>
+
+          <h3>Ví dụ kinh điển: Dynamic Array (JS Array)</h3>
+          <p>
+            Khi bạn <code>arr.push(x)</code>, hầu hết thời gian là O(1). Nhưng khi mảng đầy, JS engine phải:
+            (1) cấp phát mảng mới <em>gấp đôi kích thước</em>, (2) copy hết phần tử cũ sang. Lúc đó push tốn O(n).
+          </p>
+
+          <p>Vậy push() có phải O(n) không?</p>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Phân tích amortized</div>
+            <p>Giả sử mảng có capacity 8, bạn push 8 lần đầu — mỗi lần O(1).
+            Lần thứ 9 → resize lên 16, copy 8 phần tử cũ → O(8). Lần 10-16: O(1) mỗi lần.
+            Lần 17 → resize lên 32, copy 16 → O(16)...</p>
+            <p>Tổng cost của n lần push: <code>n + (1 + 2 + 4 + 8 + ... + n/2) ≈ 3n</code></p>
+            <p>Trung bình mỗi push: <code>3n / n = O(1) amortized</code>.</p>
+          </div>
+
+          <p>Vì thế, trong tài liệu của V8 và mọi sách DSA, push được ghi là <strong>O(1) amortized</strong>.</p>
+
+          <h3>Ví dụ khác: Hash Table rehashing</h3>
+          <p>
+            Khi load factor vượt ngưỡng (vd 0.75), hash table phải resize và rehash mọi key — O(n).
+            Nhưng amortized cost của insert vẫn là <strong>O(1)</strong>.
+          </p>
+        </section>
+
+        <!-- 1.8 -->
+        <section id="js-builtin">
+          <h2>1.8 Big-O của các thao tác JavaScript phổ biến</h2>
+
+          <p>Bảng này bạn nên <strong>thuộc lòng</strong>. Phỏng vấn rất hay hỏi "Time complexity của <code>arr.includes()</code> là gì?".</p>
+
+          <h3>Array</h3>
+          <table>
+            <thead>
+              <tr><th>Thao tác</th><th>Big-O</th><th>Ghi chú</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>arr[i]</code> (access)</td><td>O(1)</td><td>Index trực tiếp</td></tr>
+              <tr><td><code>arr.length</code></td><td>O(1)</td><td>Cached property</td></tr>
+              <tr><td><code>arr.push(x)</code></td><td>O(1) amortized</td><td>Resize đôi khi xảy ra</td></tr>
+              <tr><td><code>arr.pop()</code></td><td>O(1)</td><td>Bỏ phần tử cuối</td></tr>
+              <tr><td><code>arr.shift()</code></td><td class="text-red">O(n)</td><td>Phải dịch hết phần tử về trước!</td></tr>
+              <tr><td><code>arr.unshift(x)</code></td><td class="text-red">O(n)</td><td>Phải dịch hết phần tử ra sau</td></tr>
+              <tr><td><code>arr.splice(i, k)</code></td><td>O(n)</td><td>Cắt + dịch</td></tr>
+              <tr><td><code>arr.slice(i, j)</code></td><td>O(j-i)</td><td>Tạo mảng mới</td></tr>
+              <tr><td><code>arr.includes(x)</code></td><td>O(n)</td><td>Tuyến tính</td></tr>
+              <tr><td><code>arr.indexOf(x)</code></td><td>O(n)</td><td>Tuyến tính</td></tr>
+              <tr><td><code>arr.find(fn)</code></td><td>O(n)</td><td>Tuyến tính</td></tr>
+              <tr><td><code>arr.sort()</code></td><td>O(n log n)</td><td>TimSort trong V8</td></tr>
+              <tr><td><code>arr.reverse()</code></td><td>O(n)</td><td>In-place swap</td></tr>
+              <tr><td><code>arr.concat(arr2)</code></td><td>O(n+m)</td><td>Tạo mảng mới</td></tr>
+              <tr><td><code>arr.map / filter / forEach</code></td><td>O(n)</td><td>Duyệt 1 lần</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Map / Set</h3>
+          <table>
+            <thead>
+              <tr><th>Thao tác</th><th>Big-O</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>map.get(k) / map.set(k, v) / map.has(k) / map.delete(k)</code></td><td>O(1) trung bình</td></tr>
+              <tr><td><code>set.add(x) / set.has(x) / set.delete(x)</code></td><td>O(1) trung bình</td></tr>
+              <tr><td><code>map.size / set.size</code></td><td>O(1)</td></tr>
+              <tr><td>Duyệt <code>for...of</code> Map/Set</td><td>O(n)</td></tr>
+            </tbody>
+          </table>
+
+          <h3>String</h3>
+          <table>
+            <thead>
+              <tr><th>Thao tác</th><th>Big-O</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>str[i]</code></td><td>O(1)</td></tr>
+              <tr><td><code>str.length</code></td><td>O(1)</td></tr>
+              <tr><td><code>str.includes(s)</code></td><td>O(n·m)</td></tr>
+              <tr><td><code>str.indexOf(s)</code></td><td>O(n·m)</td></tr>
+              <tr><td><code>str + str2</code> (concat)</td><td>O(n+m)</td></tr>
+              <tr><td><code>str.split / slice</code></td><td>O(n)</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout danger">
+            <div class="callout-title">🚨 Bẫy phỏng vấn JS</div>
+            <p><strong><code>arr.shift()</code> và <code>arr.unshift()</code> là O(n)</strong> — đừng dùng để cài queue!
+            Nếu cần queue, dùng linked list hoặc dùng index thủ công, hoặc thư viện <code>denque</code>.</p>
+            <p>Code <code>while (queue.length) { queue.shift(); ... }</code> trông sạch nhưng chạy O(n²) cho n phần tử!</p>
+          </div>
+        </section>
+
+        <!-- Visualizer demo -->
+        <section id="viz">
+          <h2>Demo trực quan — Linear Search vs Binary Search</h2>
+          <p>Tìm số <code>17</code> trong mảng đã sort:</p>
+
+          <h4>Linear search — duyệt từng ô (worst case 8 bước)</h4>
+          <div class="viz-array">
+            <div class="viz-cell highlight" data-index="0">3</div>
+            <div class="viz-cell highlight" data-index="1">7</div>
+            <div class="viz-cell highlight" data-index="2">9</div>
+            <div class="viz-cell highlight" data-index="3">11</div>
+            <div class="viz-cell highlight" data-index="4">14</div>
+            <div class="viz-cell highlight" data-index="5">15</div>
+            <div class="viz-cell highlight" data-index="6">16</div>
+            <div class="viz-cell highlight" data-index="7">17</div>
+          </div>
+
+          <h4 style="margin-top:32px">Binary search — chia đôi (chỉ 3 bước!)</h4>
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="0">3</div>
+            <div class="viz-cell dim" data-index="1">7</div>
+            <div class="viz-cell dim" data-index="2">9</div>
+            <div class="viz-cell" data-index="3">11</div>
+            <div class="viz-cell highlight" data-index="4">14</div>
+            <div class="viz-cell" data-index="5">15</div>
+            <div class="viz-cell" data-index="6">16</div>
+            <div class="viz-cell" data-index="7">17</div>
+          </div>
+          <p class="text-dim">Bước 1: kiểm tra giữa = 14 → nhỏ hơn 17 → loại nửa trái.</p>
+
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="0">3</div>
+            <div class="viz-cell dim" data-index="1">7</div>
+            <div class="viz-cell dim" data-index="2">9</div>
+            <div class="viz-cell dim" data-index="3">11</div>
+            <div class="viz-cell dim" data-index="4">14</div>
+            <div class="viz-cell" data-index="5">15</div>
+            <div class="viz-cell highlight" data-index="6">16</div>
+            <div class="viz-cell" data-index="7">17</div>
+          </div>
+          <p class="text-dim">Bước 2: kiểm tra giữa nửa phải = 16 → nhỏ hơn 17 → loại tiếp.</p>
+
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="0">3</div>
+            <div class="viz-cell dim" data-index="1">7</div>
+            <div class="viz-cell dim" data-index="2">9</div>
+            <div class="viz-cell dim" data-index="3">11</div>
+            <div class="viz-cell dim" data-index="4">14</div>
+            <div class="viz-cell dim" data-index="5">15</div>
+            <div class="viz-cell dim" data-index="6">16</div>
+            <div class="viz-cell highlight" data-index="7">17</div>
+          </div>
+          <p class="text-dim">Bước 3: kiểm tra phần tử cuối = 17 → tìm thấy! Tổng 3 bước (log₂ 8 = 3).</p>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Thấy sức mạnh O(log n)</div>
+            Với n = 1 tỷ, linear search worst case 1 tỷ bước. Binary search chỉ ~30 bước.
+            <strong>Đó là 33 triệu lần nhanh hơn!</strong>
+          </div>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+          <p>Hãy <strong>tự tính Big-O</strong> trước khi xem đáp án (đáp án ở phần Quiz bên dưới có lời giải).</p>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Hai vòng độc lập</div>
+            <pre data-lang="javascript"><code>function f(n) {
+  for (let i = 0; i &lt; n; i++) console.log(i);
+  for (let j = 0; j &lt; n * n; j++) console.log(j);
+}</code></pre>
+            <p>Big-O time? Space?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Vòng lặp tăng theo cấp số nhân</div>
+            <pre data-lang="javascript"><code>function f(n) {
+  let i = 1;
+  while (i &lt; n) {
+    console.log(i);
+    i *= 2;
+  }
+}</code></pre>
+            <p>Big-O time?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Hai mảng khác nhau</div>
+            <pre data-lang="javascript"><code>function f(arr1, arr2) {
+  for (const a of arr1) {
+    for (const b of arr2) {
+      if (a === b) return true;
+    }
+  }
+  return false;
+}</code></pre>
+            <p>Big-O time? Có cải tiến được không?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Recursion</div>
+            <pre data-lang="javascript"><code>function f(n) {
+  if (n &lt;= 0) return;
+  console.log(n);
+  f(n - 1);
+  f(n - 1);
+}</code></pre>
+            <p>Big-O time? (gợi ý: vẽ recursion tree)</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Lùa qua array với bước nhân</div>
+            <pre data-lang="javascript"><code>function f(arr) {
+  for (let i = 0; i &lt; arr.length; i++) {
+    for (let j = i; j &lt; arr.length; j *= 2) {
+      console.log(arr[i], arr[j]);
+    }
+  }
+}</code></pre>
+            <p>Big-O time? (khó! gợi ý: vòng trong là O(log n))</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương — kiểm tra hiểu biết</h3>
+            <p class="text-dim">Click vào đáp án bạn chọn. Click để xem giải thích.</p>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> Big-O của <code>arr.unshift(x)</code> trong JS là?</p>
+              <ul class="quiz-options">
+                <li>O(1)</li>
+                <li>O(log n)</li>
+                <li>O(n)</li>
+                <li>O(n²)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n).</strong> <code>unshift</code> thêm phần tử vào đầu mảng,
+                phải dịch hết phần tử cũ sang phải 1 vị trí → tốn n thao tác. Đây là cái bẫy phỏng vấn nổi tiếng.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> Đoạn code này có Big-O time là?</p>
+              <pre data-lang="javascript"><code>for (let i = 0; i &lt; n; i++) {
+  for (let j = 0; j &lt; m; j++) {
+    console.log(i, j);
+  }
+}</code></pre>
+              <ul class="quiz-options">
+                <li>O(n²)</li>
+                <li>O(n × m)</li>
+                <li>O(n + m)</li>
+                <li>O(max(n, m))</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n × m).</strong> Hai vòng lồng nhau chạy trên hai biến độc lập n và m.
+                Đáp án "n²" sai vì n và m không nhất thiết bằng nhau.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Big-O của hàm này?</p>
+              <pre data-lang="javascript"><code>function f(n) {
+  let i = 1;
+  while (i &lt; n) {
+    console.log(i);
+    i *= 3;
+  }
+}</code></pre>
+              <ul class="quiz-options">
+                <li>O(1)</li>
+                <li>O(n)</li>
+                <li>O(log n)</li>
+                <li>O(n log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(log n).</strong> Mỗi vòng lặp nhân i với 3 — tức là cần log₃(n) lần để i vượt n.
+                Trong Big-O, log₃ và log₂ đều là <code>log n</code> vì khác nhau hằng số.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 4.</strong> Hàm này có Time và Space complexity là?</p>
+              <pre data-lang="javascript"><code>function fact(n) {
+  if (n &lt;= 1) return 1;
+  return n * fact(n - 1);
+}</code></pre>
+              <ul class="quiz-options">
+                <li>Time O(n), Space O(n)</li>
+                <li>Time O(n), Space O(1)</li>
+                <li>Time O(log n), Space O(log n)</li>
+                <li>Time O(n²), Space O(n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Time O(n), Space O(n).</strong> Đệ quy n lần → time O(n).
+                Mỗi lời gọi tốn 1 frame trên call stack → space O(n). Nếu viết iterative thì space mới là O(1).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Tại sao <code>arr.push(x)</code> được coi là O(1) dù đôi khi phải resize?</p>
+              <ul class="quiz-options">
+                <li>Vì JS engine ưu tiên push hơn các thao tác khác</li>
+                <li>Vì thực ra push là O(log n), không phải O(1)</li>
+                <li>Vì amortized analysis: trung bình mỗi push vẫn O(1) khi nhìn dài hạn</li>
+                <li>Vì máy tính hiện đại resize rất nhanh</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Amortized analysis.</strong> Tuy có những lần push tốn O(n) khi resize,
+                nhưng cost được "biên hoá" đều ra n lần push → trung bình vẫn O(1) per operation.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 6.</strong> Big-O time của hàm này (Bài 4 ở trên)?</p>
+              <pre data-lang="javascript"><code>function f(n) {
+  if (n &lt;= 0) return;
+  console.log(n);
+  f(n - 1);
+  f(n - 1);
+}</code></pre>
+              <ul class="quiz-options">
+                <li>O(n)</li>
+                <li>O(2ⁿ)</li>
+                <li>O(n²)</li>
+                <li>O(n log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(2ⁿ).</strong> Mỗi lần gọi sinh ra 2 lời gọi con (với n-1).
+                Recursion tree có 2 + 4 + 8 + ... + 2ⁿ ≈ 2ⁿ⁺¹ node → O(2ⁿ).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Sau bao nhiêu bước thì binary search tìm được phần tử trong mảng 1 triệu phần tử (worst case)?</p>
+              <ul class="quiz-options">
+                <li>~1,000,000 bước</li>
+                <li>~1,000 bước</li>
+                <li>~20 bước</li>
+                <li>1 bước</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ~20 bước.</strong> log₂(1,000,000) ≈ 19.93 → 20 bước.
+                Đó chính là sức mạnh của O(log n).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Đoạn nào có Big-O <em>chậm hơn</em>?</p>
+              <ul class="quiz-options">
+                <li>O(n + 1000) với n = 1,000,000</li>
+                <li>O(0.001 · n²) với n = 1,000,000</li>
+                <li>Cả hai bằng nhau</li>
+                <li>Không xác định được</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(0.001 · n²).</strong> Big-O bỏ hằng số nên O(n + 1000) = O(n) và O(0.001·n²) = O(n²).
+                Khi n đủ lớn, n² &gt;&gt; n bất kể hằng số nhỏ thế nào. Với n = 10⁶: thứ nhất ~10⁶ phép, thứ hai ~10⁹ phép.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tổng kết -->
+        <section>
+          <h2>Tổng kết chương 1</h2>
+          <ul>
+            <li>✅ Big-O đo <strong>tốc độ tăng</strong>, không phải thời gian tuyệt đối</li>
+            <li>✅ Quy tắc cơ bản: <strong>bỏ hằng số</strong>, <strong>giữ bậc cao nhất</strong></li>
+            <li>✅ Loop lồng nhau → nhân; loop tuần tự → cộng; chia đôi → log</li>
+            <li>✅ Phân biệt time complexity và space complexity (call stack tốn space!)</li>
+            <li>✅ Amortized analysis giải thích vì sao <code>push</code> = O(1) dù đôi khi resize</li>
+            <li>✅ Thuộc lòng Big-O của JS Array/Map/Set built-in — phỏng vấn rất hay hỏi</li>
+          </ul>
+
+          <div class="callout tip">
+            <div class="callout-title">📚 Đề xuất luyện thêm</div>
+            Trước khi qua chương 2, bạn nên:
+            <ol>
+              <li>Tự code lại các đoạn ở mục 1.4 — không nhìn bài, gõ tay.</li>
+              <li>Mở 5 đoạn code random từ project cũ của bạn → tự tính Big-O của nó.</li>
+              <li>Quay lại làm 8 câu quiz đến khi đúng 100%.</li>
+            </ol>
+          </div>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="../index.html">
+        <span class="label">← Quay lại</span>
+        Trang chủ DSA
+      </a>
+      <a href="chuong2.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 02: Array &amp; String →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 01 · Big-O &amp; Phân tích độ phức tạp
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

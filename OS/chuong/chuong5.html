@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 05 — IPC · OS Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">os-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong4.html">← Ch.04</a></li>
+        <li><a href="chuong5.html" class="active">Ch.05</a></li>
+        <li><a href="chuong6.html">Ch.06 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 05 · IPC · ~110 phút</div>
+      <h1>Inter-Process<br/><span class="text-accent">Communication</span></h1>
+      <p class="lead">
+        Process tách biệt nhau về memory — vậy chúng "nói chuyện" thế nào?
+        Đây là chương về 6 cơ chế IPC: <strong>pipe, FIFO, shared memory, message queue, signal, socket</strong>.
+        Hiểu chúng, bạn nắm cách <code>ls | grep</code> hoạt động, vì sao Ctrl+C kill được process, và Docker container giao tiếp ra sao.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#why">5.1 Tại sao cần IPC?</a></li>
+          <li><a href="#pipe">5.2 Pipe (anonymous)</a></li>
+          <li><a href="#fifo">5.3 Named Pipe (FIFO)</a></li>
+          <li><a href="#shm">5.4 Shared Memory</a></li>
+          <li><a href="#msg">5.5 Message Queue</a></li>
+          <li><a href="#signal">5.6 Signal</a></li>
+          <li><a href="#socket">5.7 Socket</a></li>
+          <li><a href="#node">5.8 IPC trong Node.js</a></li>
+          <li><a href="#compare">5.9 So sánh</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 5.1 -->
+        <section id="why">
+          <h2>5.1 Tại sao cần IPC?</h2>
+
+          <p>
+            Process A có biến <code>x = 42</code>. Process B có muốn đọc <code>x</code> không? <strong>Không thể</strong> truy cập trực tiếp —
+            virtual memory cô lập, mỗi process có address space riêng. Address <code>0x7fff...</code> trong A và B trỏ vào page khác nhau.
+          </p>
+          <p>
+            Vậy cần <strong>cơ chế kernel-mediated</strong> để 2 process trao đổi data. Đó là IPC.
+          </p>
+
+          <h3>6 cơ chế IPC chính</h3>
+          <ol>
+            <li><strong>Pipe</strong> — anonymous, parent-child</li>
+            <li><strong>FIFO</strong> — named pipe, processes bất kỳ qua filesystem</li>
+            <li><strong>Shared Memory</strong> — nhanh nhất, cần đồng bộ thủ công</li>
+            <li><strong>Message Queue</strong> — kernel queues messages</li>
+            <li><strong>Signal</strong> — async notification (vd Ctrl+C)</li>
+            <li><strong>Socket</strong> — Unix socket hoặc TCP/UDP — phổ biến nhất hiện nay</li>
+          </ol>
+        </section>
+
+        <!-- 5.2 -->
+        <section id="pipe">
+          <h2>5.2 Pipe (anonymous) — <code>|</code> của shell</h2>
+
+          <p>
+            Pipe là kênh đơn hướng (one-way): 1 process ghi, 1 process đọc. Tạo bằng syscall <code>pipe()</code> trả về 2 file descriptor.
+            Chỉ dùng được giữa <strong>parent-child</strong> (vì cần kế thừa fd qua fork).
+          </p>
+
+          <h3>Hoạt động trong shell</h3>
+
+          <pre data-lang="bash"><code>ls -l | grep .txt
+# 1. Shell tạo pipe → fds: [read_end, write_end]
+# 2. Shell fork ra ls process — child kế thừa pipe fds
+#    + redirect stdout (fd=1) → write_end của pipe
+#    + đóng read_end (không cần)
+#    + exec ls
+# 3. Shell fork ra grep process — child kế thừa pipe fds
+#    + redirect stdin (fd=0) → read_end của pipe
+#    + đóng write_end
+#    + exec grep
+# 4. Output của ls đi qua kernel buffer của pipe vào input của grep</code></pre>
+
+          <h3>Code C — pipe đơn giản</h3>
+
+          <pre data-lang="c"><code>#include &lt;unistd.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main() {
+    int fd[2];
+    pipe(fd);  // fd[0] = read, fd[1] = write
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child: ghi vào pipe
+        close(fd[0]);  // không đọc
+        const char *msg = "Hello from child\n";
+        write(fd[1], msg, strlen(msg));
+        close(fd[1]);
+    } else {
+        // Parent: đọc từ pipe
+        close(fd[1]);  // không ghi
+        char buf[100];
+        ssize_t n = read(fd[0], buf, sizeof(buf) - 1);
+        buf[n] = '\0';
+        printf("Parent received: %s", buf);
+        close(fd[0]);
+    }
+    return 0;
+}</code></pre>
+
+          <h3>Đặc điểm</h3>
+          <ul>
+            <li><strong>One-way</strong>: muốn 2-way phải tạo 2 pipe</li>
+            <li><strong>Parent-child only</strong>: 2 process không liên quan không dùng được</li>
+            <li><strong>FIFO ordering</strong>: data đọc theo đúng thứ tự ghi</li>
+            <li><strong>Buffer kernel</strong>: pipe có buffer (~64KB Linux). Buffer đầy → write block. Buffer rỗng → read block.</li>
+            <li><strong>Atomicity</strong>: write &lt; PIPE_BUF (4KB) là atomic — không bị xen kẽ</li>
+          </ul>
+        </section>
+
+        <!-- 5.3 -->
+        <section id="fifo">
+          <h2>5.3 Named Pipe (FIFO)</h2>
+
+          <p>Giống pipe nhưng có "tên" trong filesystem → process bất kỳ có thể mở.</p>
+
+          <pre data-lang="bash"><code>mkfifo /tmp/mypipe       # tạo named pipe
+ls -l /tmp/mypipe        # prw-r--r-- → 'p' = pipe
+
+# Terminal 1: writer
+echo "Hello from writer" &gt; /tmp/mypipe
+
+# Terminal 2: reader (block đến khi có ai write)
+cat /tmp/mypipe
+# Output: Hello from writer</code></pre>
+
+          <p>FIFO vẫn đơn hướng. Để giao tiếp 2 chiều cần 2 FIFO.</p>
+        </section>
+
+        <!-- 5.4 -->
+        <section id="shm">
+          <h2>5.4 Shared Memory — nhanh nhất</h2>
+
+          <p>
+            Kernel cấp 1 vùng memory mà nhiều process có thể <em>map</em> vào address space của mình.
+            Sau đó đọc/ghi như memory bình thường — <strong>không qua syscall</strong> mỗi lần.
+          </p>
+
+          <h3>POSIX shm_open + mmap</h3>
+
+          <pre data-lang="c"><code>#include &lt;fcntl.h&gt;
+#include &lt;sys/mman.h&gt;
+#include &lt;unistd.h&gt;
+
+int main() {
+    int fd = shm_open("/myshm", O_CREAT | O_RDWR, 0666);
+    ftruncate(fd, 4096);
+
+    char *ptr = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                      MAP_SHARED, fd, 0);
+    // ptr giờ là 1 vùng 4KB shared với mọi process mở "/myshm"
+
+    sprintf(ptr, "Hello shared!");
+    // ... process khác đọc cùng vùng đó
+}</code></pre>
+
+          <h3>Đặc điểm</h3>
+          <ul>
+            <li><strong>Cực nhanh</strong>: không có overhead syscall mỗi lần đọc/ghi (sau khi map)</li>
+            <li><strong>2-way, multi-process</strong></li>
+            <li><strong>Phải tự đồng bộ</strong>: 2 process cùng ghi → race condition. Cần mutex/semaphore (chương 6).</li>
+            <li><strong>Use case</strong>: video streaming, audio buffer, database (PostgreSQL shared_buffers)</li>
+          </ul>
+        </section>
+
+        <!-- 5.5 -->
+        <section id="msg">
+          <h2>5.5 Message Queue</h2>
+
+          <p>
+            Kernel quản lý 1 queue chứa messages có structure (type, payload). Process gửi message vào queue,
+            process khác lấy theo FIFO hoặc theo type filter.
+          </p>
+
+          <pre data-lang="c"><code>#include &lt;mqueue.h&gt;
+#include &lt;fcntl.h&gt;
+
+// Sender
+mqd_t mq = mq_open("/myqueue", O_CREAT | O_WRONLY, 0644, NULL);
+mq_send(mq, "Hello", 5, 0);
+mq_close(mq);
+
+// Receiver
+mqd_t mq = mq_open("/myqueue", O_RDONLY);
+char buf[256];
+mq_receive(mq, buf, sizeof(buf), NULL);</code></pre>
+
+          <h3>So với Pipe</h3>
+          <ul>
+            <li>Pipe = stream byte không cấu trúc. Message queue = unit có ranh giới.</li>
+            <li>Message queue có priority.</li>
+            <li>Cấu trúc hơn nhưng có overhead hơn pipe.</li>
+          </ul>
+
+          <p>
+            Trong production, ít ai dùng SysV/POSIX message queue trực tiếp. Thay vào đó dùng <strong>RabbitMQ, Kafka, Redis Streams</strong> —
+            same concept nhưng phân tán qua network.
+          </p>
+        </section>
+
+        <!-- 5.6 -->
+        <section id="signal">
+          <h2>5.6 Signal — async notification</h2>
+
+          <p>
+            Signal là cách "nhanh" để gửi notification tới process — không có data đi kèm, chỉ là 1 con số (signal number).
+            Process có thể: ignore, default action, hoặc cài handler tự xử lý.
+          </p>
+
+          <h3>Common signals</h3>
+          <table>
+            <thead><tr><th>Signal</th><th>Số</th><th>Ý nghĩa</th><th>Default action</th></tr></thead>
+            <tbody>
+              <tr><td><code>SIGTERM</code></td><td>15</td><td>Yêu cầu kết thúc lịch sự (terminate)</td><td>Terminate</td></tr>
+              <tr><td><code>SIGKILL</code></td><td>9</td><td>Force kill, KHÔNG bắt được</td><td>Terminate</td></tr>
+              <tr><td><code>SIGINT</code></td><td>2</td><td>Ctrl+C trên terminal</td><td>Terminate</td></tr>
+              <tr><td><code>SIGSTOP</code></td><td>19</td><td>Dừng (Ctrl+Z), KHÔNG bắt được</td><td>Stop</td></tr>
+              <tr><td><code>SIGCONT</code></td><td>18</td><td>Tiếp tục sau SIGSTOP</td><td>Continue</td></tr>
+              <tr><td><code>SIGCHLD</code></td><td>17</td><td>Child kết thúc → parent nhận</td><td>Ignore</td></tr>
+              <tr><td><code>SIGSEGV</code></td><td>11</td><td>Segmentation fault</td><td>Terminate + core dump</td></tr>
+              <tr><td><code>SIGPIPE</code></td><td>13</td><td>Ghi pipe mà reader đã chết</td><td>Terminate</td></tr>
+              <tr><td><code>SIGHUP</code></td><td>1</td><td>Terminal đóng (hangup); thường dùng "reload config"</td><td>Terminate</td></tr>
+              <tr><td><code>SIGUSR1</code>/<code>SIGUSR2</code></td><td>10/12</td><td>User defined</td><td>Terminate</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Gửi và bắt signal</h3>
+
+          <pre data-lang="bash"><code>kill -TERM 1234     # gửi SIGTERM
+kill -9 1234        # SIGKILL (force)
+kill -USR1 1234     # custom signal app handle</code></pre>
+
+          <pre data-lang="c"><code>#include &lt;signal.h&gt;
+#include &lt;stdio.h&gt;
+
+void handler(int sig) {
+    printf("Received signal %d\n", sig);
+    // Cleanup, save state, ...
+}
+
+int main() {
+    signal(SIGTERM, handler);
+    signal(SIGINT, handler);
+    while (1) pause();  // đợi signal
+}</code></pre>
+
+          <h3>SIGKILL vs SIGTERM — phải biết</h3>
+          <ul>
+            <li><strong>SIGTERM</strong>: app có thể bắt + cleanup (đóng file, flush buffer...). <em>Phải dùng cái này trước</em>.</li>
+            <li><strong>SIGKILL</strong>: kernel kill ngay, app không kịp làm gì. Mất data có thể.</li>
+            <li>Best practice: gửi SIGTERM, đợi vài giây, nếu chưa chết thì SIGKILL. Đây là cách <code>systemctl stop</code>, <code>kubectl delete pod</code> hoạt động.</li>
+          </ul>
+
+          <h3>Ctrl+C kill được vì sao?</h3>
+          <p>
+            Khi bạn gõ Ctrl+C trên terminal, terminal driver gửi <code>SIGINT</code> đến foreground process group.
+            App nhận, chạy default action (terminate). Nếu app cài handler, có thể intercept.
+          </p>
+        </section>
+
+        <!-- 5.7 -->
+        <section id="socket">
+          <h2>5.7 Socket — IPC phổ biến nhất hiện nay</h2>
+
+          <p>
+            Socket ban đầu thiết kế cho network (TCP/UDP) nhưng cũng dùng được local. Đây là cơ chế IPC <strong>phổ biến nhất</strong>
+            vì cùng API hoạt động cho cả local lẫn remote.
+          </p>
+
+          <h3>Unix Domain Socket vs TCP Socket</h3>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-green">Unix Domain Socket (AF_UNIX)</h4>
+              <ul>
+                <li>Local only — qua filesystem path (vd <code>/var/run/docker.sock</code>)</li>
+                <li>Nhanh hơn TCP loopback (không qua network stack)</li>
+                <li>Có thể truyền file descriptor giữa các process!</li>
+                <li>Có permission như file thường (chmod, chown)</li>
+              </ul>
+            </div>
+            <div class="good">
+              <h4 class="text-green">TCP Socket (AF_INET)</h4>
+              <ul>
+                <li>Local hoặc remote</li>
+                <li>Cần host:port</li>
+                <li>Có cả những network feature: TCP retransmit, ordering...</li>
+                <li>Dùng cho microservices, web</li>
+              </ul>
+            </div>
+          </div>
+
+          <h3>Ví dụ Unix domain socket trong Node.js</h3>
+
+          <pre data-lang="javascript"><code>// Server
+const net = require('net');
+const server = net.createServer(socket =&gt; {
+  socket.on('data', d =&gt; socket.write('Echo: ' + d));
+});
+server.listen('/tmp/myapp.sock');
+
+// Client
+const client = net.connect('/tmp/myapp.sock');
+client.write('Hi');
+client.on('data', d =&gt; console.log(d.toString()));</code></pre>
+
+          <h3>Ai dùng Unix domain socket?</h3>
+          <ul>
+            <li><strong>Docker</strong>: <code>/var/run/docker.sock</code> để CLI nói chuyện với daemon</li>
+            <li><strong>X11</strong>: <code>/tmp/.X11-unix/X0</code></li>
+            <li><strong>PostgreSQL</strong>: <code>/var/run/postgresql/.s.PGSQL.5432</code></li>
+            <li><strong>nginx ↔ PHP-FPM</strong>: thường qua Unix socket cho nhanh</li>
+          </ul>
+        </section>
+
+        <!-- 5.8 -->
+        <section id="node">
+          <h2>5.8 IPC trong Node.js</h2>
+
+          <p>Khi <code>fork</code> Node child, có sẵn IPC channel (thực ra là pipe + protocol JSON).</p>
+
+          <pre data-lang="javascript"><code>// parent.js
+const { fork } = require('child_process');
+const child = fork('./worker.js');
+
+child.send({ task: 'compute', n: 100 });
+
+child.on('message', (msg) =&gt; {
+  console.log('From worker:', msg);
+});
+
+child.on('exit', (code) =&gt; {
+  console.log('Worker exited:', code);
+});</code></pre>
+
+          <pre data-lang="javascript"><code>// worker.js
+process.on('message', (msg) =&gt; {
+  if (msg.task === 'compute') {
+    let sum = 0;
+    for (let i = 1; i &lt;= msg.n; i++) sum += i;
+    process.send({ result: sum });
+  }
+});</code></pre>
+
+          <p>Đây là cách <code>cluster</code> module hoạt động — master process talk với worker qua IPC.</p>
+        </section>
+
+        <!-- 5.9 -->
+        <section id="compare">
+          <h2>5.9 So sánh các cơ chế IPC</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Cơ chế</th>
+                <th>Tốc độ</th>
+                <th>2-way</th>
+                <th>Phạm vi</th>
+                <th>Đặc điểm</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Pipe</td>
+                <td>Nhanh</td>
+                <td>1-way</td>
+                <td>Parent-child</td>
+                <td>Stream bytes; shell `|` dùng nó</td>
+              </tr>
+              <tr>
+                <td>FIFO</td>
+                <td>Nhanh</td>
+                <td>1-way</td>
+                <td>Bất kỳ process</td>
+                <td>Như pipe nhưng có tên</td>
+              </tr>
+              <tr>
+                <td>Shared Memory</td>
+                <td><strong>Nhanh nhất</strong></td>
+                <td>2-way</td>
+                <td>Bất kỳ</td>
+                <td>Phải tự sync; data lớn</td>
+              </tr>
+              <tr>
+                <td>Message Queue</td>
+                <td>Trung bình</td>
+                <td>2-way</td>
+                <td>Bất kỳ</td>
+                <td>Có cấu trúc message + priority</td>
+              </tr>
+              <tr>
+                <td>Signal</td>
+                <td>Nhanh</td>
+                <td>1-way</td>
+                <td>Bất kỳ</td>
+                <td>Notification, không data</td>
+              </tr>
+              <tr>
+                <td>Unix Socket</td>
+                <td>Nhanh</td>
+                <td>2-way</td>
+                <td>Local</td>
+                <td>API giống TCP, có thể truyền fd</td>
+              </tr>
+              <tr>
+                <td>TCP Socket</td>
+                <td>Chậm hơn local</td>
+                <td>2-way</td>
+                <td>Local + remote</td>
+                <td>Phổ biến nhất; dùng cho microservices</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Khi nào dùng cái nào?</h3>
+          <ul>
+            <li>Shell pipeline → <strong>Pipe</strong> (built-in)</li>
+            <li>2 process unrelated nói chuyện đơn giản → <strong>FIFO</strong></li>
+            <li>Cần truyền data lớn nhanh (vd buffer video) → <strong>Shared Memory</strong></li>
+            <li>Notification "process A xong rồi" → <strong>Signal</strong></li>
+            <li>Local app như Docker daemon ↔ CLI → <strong>Unix Socket</strong></li>
+            <li>Microservices giao tiếp → <strong>TCP Socket</strong> (HTTP, gRPC)</li>
+            <li>Async messaging giữa nhiều service → <strong>Message broker</strong> (RabbitMQ, Kafka)</li>
+          </ul>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Pipe trong shell</div>
+            <p>Giải thích từng bước <code>ps aux | grep node | wc -l</code> hoạt động ra sao (3 process, 2 pipe).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Named pipe demo</div>
+            <p>Tạo FIFO bằng <code>mkfifo</code>. Mở 2 terminal: 1 cái write, 1 cái read. Quan sát blocking behavior.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Bắt SIGINT</div>
+            <p>Viết script Node bắt SIGINT (Ctrl+C). Khi nhận, in "Cleaning up..." rồi exit. Test bằng cách chạy + Ctrl+C.</p>
+            <pre data-lang="javascript"><code>process.on('SIGINT', () =&gt; {
+  console.log('Cleaning up...');
+  process.exit(0);
+});
+setInterval(() =&gt; console.log('working'), 1000);</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Graceful shutdown</div>
+            <p>Khi K8s/Docker stop container, gửi SIGTERM. Sau 30s nếu chưa chết → SIGKILL.
+            Viết Node app handle SIGTERM: đóng DB connection, finish HTTP requests đang xử lý, rồi exit.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Docker socket</div>
+            <p>Trên Linux/macOS, file <code>/var/run/docker.sock</code> là gì? Thử <code>curl --unix-socket /var/run/docker.sock http://localhost/version</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Compare Unix socket vs TCP loopback</div>
+            <p>Benchmark: gửi 1 triệu message qua Unix domain socket vs TCP localhost. So sánh throughput &amp; latency.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> Tại sao 2 process không thể đọc trực tiếp biến của nhau?</p>
+              <ul class="quiz-options">
+                <li>Vì memory không đủ</li>
+                <li>Vì process chạy single-threaded</li>
+                <li>Vì virtual memory cô lập — mỗi process có address space riêng</li>
+                <li>Vì C không support</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: virtual memory cô lập.</strong> Cần IPC qua kernel để chia sẻ data.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> Pipe (anonymous) chỉ dùng được giữa?</p>
+              <ul class="quiz-options">
+                <li>2 process bất kỳ</li>
+                <li>Parent và child (vì cần kế thừa fd qua fork)</li>
+                <li>Chỉ trên cùng máy</li>
+                <li>2 thread</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: parent-child.</strong> Anonymous pipe không có tên trong filesystem; cần kế thừa fd qua fork.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> SIGKILL khác SIGTERM ở đâu?</p>
+              <ul class="quiz-options">
+                <li>SIGKILL không thể bắt/ignore — kernel kill ngay; SIGTERM có thể bắt để cleanup</li>
+                <li>SIGKILL chậm hơn</li>
+                <li>SIGTERM cần root</li>
+                <li>Hai cái giống nhau</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: SIGKILL không bắt được.</strong> Best practice: SIGTERM trước (cho app cleanup), nếu không chết → SIGKILL.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> Cơ chế IPC nào nhanh nhất?</p>
+              <ul class="quiz-options">
+                <li>Pipe</li>
+                <li>Shared Memory — không qua syscall mỗi lần đọc/ghi</li>
+                <li>Message Queue</li>
+                <li>Signal</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Shared Memory.</strong> Nhược: phải tự sync (mutex/semaphore — chương 6).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Khi gõ Ctrl+C, terminal làm gì?</p>
+              <ul class="quiz-options">
+                <li>Gọi syscall exit</li>
+                <li>Gửi SIGKILL</li>
+                <li>Gửi SIGINT đến foreground process group</li>
+                <li>Reboot máy</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: SIGINT.</strong> App có thể bắt SIGINT để cleanup. Default action: terminate.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Unix Domain Socket khác TCP loopback như nào?</p>
+              <ul class="quiz-options">
+                <li>Cùng tốc độ</li>
+                <li>Unix socket cần network card</li>
+                <li>Unix socket không qua network stack → nhanh hơn TCP loopback; có thể truyền file descriptor</li>
+                <li>TCP loopback nhanh hơn</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Unix socket nhanh hơn + truyền fd được.</strong> Đó là lý do Docker, PostgreSQL, X11 dùng Unix socket cho local.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 7.</strong> Pipe có buffer kernel ~64KB. Khi buffer đầy mà process tiếp tục write?</p>
+              <ul class="quiz-options">
+                <li>write() block đến khi reader đọc bớt</li>
+                <li>Lỗi EOF</li>
+                <li>Data bị drop</li>
+                <li>Kernel panic</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: write block.</strong> Đây là backpressure tự nhiên — fast producer, slow consumer.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Khi container nhận SIGTERM (vd K8s scale-down), app nên?</p>
+              <ul class="quiz-options">
+                <li>Ignore SIGTERM</li>
+                <li>Bắt SIGTERM, finish in-flight requests, đóng DB connection, exit gracefully</li>
+                <li>exit ngay lập tức</li>
+                <li>Restart container</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: graceful shutdown.</strong> K8s đợi <code>terminationGracePeriodSeconds</code> (default 30s) trước khi SIGKILL.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 5</h2>
+          <ul>
+            <li>✅ IPC = cách process giao tiếp khi memory bị cô lập</li>
+            <li>✅ <strong>Pipe</strong>: 1-way, parent-child, dùng cho shell <code>|</code></li>
+            <li>✅ <strong>FIFO</strong>: pipe có tên trong filesystem</li>
+            <li>✅ <strong>Shared Memory</strong>: nhanh nhất, cần đồng bộ thủ công</li>
+            <li>✅ <strong>Message Queue</strong>: messages có cấu trúc + priority</li>
+            <li>✅ <strong>Signal</strong>: notification không data; SIGTERM (cleanup được) ≠ SIGKILL (force)</li>
+            <li>✅ <strong>Unix Socket</strong>: local, nhanh, truyền fd được — Docker, PostgreSQL dùng</li>
+            <li>✅ <strong>TCP Socket</strong>: phổ biến nhất, dùng cho microservices</li>
+            <li>✅ Graceful shutdown: bắt SIGTERM, cleanup, exit — quan trọng cho production</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong4.html">
+        <span class="label">← Chương trước</span>
+        Chương 04: CPU Scheduling
+      </a>
+      <a href="chuong6.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 06: Synchronization →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">●</span> OS Mastery · Chương 05 · IPC
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

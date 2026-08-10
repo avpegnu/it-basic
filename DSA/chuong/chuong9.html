@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 09 — Tree (Binary Tree, BST, Trie) · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong8.html">← Ch.08</a></li>
+        <li><a href="chuong9.html" class="active">Ch.09</a></li>
+        <li><a href="chuong10.html">Ch.10 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 09 · HIERARCHICAL DS · ~150 phút</div>
+      <h1>Tree<br/><span class="text-amber">Binary Tree, BST, Trie</span></h1>
+      <p class="lead">
+        Tree xuất hiện <strong>khắp nơi</strong>: file system, DOM, JSON, database index (B-tree), AST của parser.
+        Phỏng vấn rất hay hỏi traversal và BST. Học chương này, bạn nắm: 4 loại traversal (recursive + iterative),
+        BST operations, Trie cho autocomplete, và nguyên lý balance tree.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#term">9.1 Terminology</a></li>
+          <li><a href="#binary">9.2 Binary Tree</a></li>
+          <li><a href="#traversal">9.3 Traversal (DFS)</a></li>
+          <li><a href="#bfs">9.4 Level-order (BFS)</a></li>
+          <li><a href="#bst">9.5 Binary Search Tree</a></li>
+          <li><a href="#bst-ops">9.6 BST Operations</a></li>
+          <li><a href="#balanced">9.7 Balanced BST</a></li>
+          <li><a href="#trie">9.8 Trie (Prefix Tree)</a></li>
+          <li><a href="#advanced">9.9 LCA, Diameter</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 9.1 -->
+        <section id="term">
+          <h2>9.1 Terminology — thuật ngữ cần thuộc</h2>
+
+          <pre data-lang="text"><code>           [10]              ← root (gốc)
+          /    \
+        [5]    [15]            ← internal nodes
+        / \      \
+      [3] [7]   [20]           ← leaves (lá) — không có con
+
+- Root:   node trên cùng, không có parent
+- Leaf:   node không có con (cả trái lẫn phải đều null)
+- Parent: node "cha" (level trên)
+- Child:  node "con" (level dưới)
+- Sibling: cùng parent
+- Depth:  khoảng cách từ root đến node (root depth = 0)
+- Height: khoảng cách từ node đến leaf xa nhất
+- Level:  depth + 1 (đôi khi cùng nghĩa)
+- Subtree: cây con bắt nguồn từ một node</code></pre>
+
+          <h3>Phân loại Binary Tree</h3>
+          <ul>
+            <li><strong>Full</strong>: mọi node có 0 hoặc 2 con (không có node có 1 con duy nhất)</li>
+            <li><strong>Complete</strong>: tất cả các level đều đầy, ngoại trừ level cuối có thể chưa đầy nhưng được fill từ trái sang phải</li>
+            <li><strong>Perfect</strong>: full + tất cả leaves cùng level</li>
+            <li><strong>Balanced</strong>: chiều cao giữa nhánh trái và phải của mỗi node chênh nhau ≤ 1 → cây "thấp", thao tác hiệu quả</li>
+            <li><strong>Skewed</strong>: như linked list — mọi node chỉ có 1 con</li>
+          </ul>
+        </section>
+
+        <!-- 9.2 -->
+        <section id="binary">
+          <h2>9.2 Binary Tree — cài đặt cơ bản</h2>
+
+          <pre data-lang="javascript"><code>class TreeNode {
+  constructor(val = 0, left = null, right = null) {
+    this.val = val;
+    this.left = left;
+    this.right = right;
+  }
+}
+
+// Tạo cây thủ công:
+//        1
+//       / \
+//      2   3
+//     / \
+//    4   5
+const root = new TreeNode(1);
+root.left = new TreeNode(2);
+root.right = new TreeNode(3);
+root.left.left = new TreeNode(4);
+root.left.right = new TreeNode(5);</code></pre>
+
+          <h3>Tính chiều cao (height) của cây</h3>
+
+          <pre data-lang="javascript"><code>// Height = số cạnh dài nhất từ node đến leaf
+function height(root) {
+  if (!root) return -1;  // hoặc 0, tuỳ định nghĩa
+  return 1 + Math.max(height(root.left), height(root.right));
+}
+
+// Hoặc đếm theo số node (depth-based):
+function maxDepth(root) {
+  if (!root) return 0;
+  return 1 + Math.max(maxDepth(root.left), maxDepth(root.right));
+}</code></pre>
+
+          <h3>Đếm số node</h3>
+
+          <pre data-lang="javascript"><code>function countNodes(root) {
+  if (!root) return 0;
+  return 1 + countNodes(root.left) + countNodes(root.right);
+}</code></pre>
+        </section>
+
+        <!-- 9.3 -->
+        <section id="traversal">
+          <h2>9.3 Traversal (DFS) — 3 thứ tự cần thuộc</h2>
+
+          <p>3 cách duyệt cây theo DFS, khác nhau ở <strong>thứ tự thăm node</strong>:</p>
+
+          <ul>
+            <li><strong>Pre-order:</strong> Node → Trái → Phải</li>
+            <li><strong>In-order:</strong> Trái → Node → Phải</li>
+            <li><strong>Post-order:</strong> Trái → Phải → Node</li>
+          </ul>
+
+          <pre data-lang="text"><code>           1
+          / \
+         2   3
+        / \
+       4   5
+
+Pre-order:  1, 2, 4, 5, 3
+In-order:   4, 2, 5, 1, 3
+Post-order: 4, 5, 2, 3, 1</code></pre>
+
+          <h3>9.3.1 Recursive — đẹp và dễ hiểu</h3>
+
+          <pre data-lang="javascript"><code>function preOrder(root, result = []) {
+  if (!root) return result;
+  result.push(root.val);
+  preOrder(root.left, result);
+  preOrder(root.right, result);
+  return result;
+}
+
+function inOrder(root, result = []) {
+  if (!root) return result;
+  inOrder(root.left, result);
+  result.push(root.val);
+  inOrder(root.right, result);
+  return result;
+}
+
+function postOrder(root, result = []) {
+  if (!root) return result;
+  postOrder(root.left, result);
+  postOrder(root.right, result);
+  result.push(root.val);
+  return result;
+}</code></pre>
+
+          <h3>9.3.2 Iterative với Stack — bắt buộc biết</h3>
+
+          <pre data-lang="javascript"><code>// Pre-order iterative
+function preOrderIter(root) {
+  if (!root) return [];
+  const result = [], stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    result.push(node.val);
+    if (node.right) stack.push(node.right);  // right trước vì stack LIFO
+    if (node.left)  stack.push(node.left);
+  }
+  return result;
+}
+
+// In-order iterative — tricky hơn
+function inOrderIter(root) {
+  const result = [], stack = [];
+  let curr = root;
+  while (curr || stack.length) {
+    while (curr) {
+      stack.push(curr);
+      curr = curr.left;
+    }
+    curr = stack.pop();
+    result.push(curr.val);
+    curr = curr.right;
+  }
+  return result;
+}
+
+// Post-order iterative — khó nhất
+function postOrderIter(root) {
+  if (!root) return [];
+  const result = [], stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    result.unshift(node.val);  // chèn đầu (đảo thứ tự pre-order)
+    if (node.left)  stack.push(node.left);
+    if (node.right) stack.push(node.right);
+  }
+  return result;
+}
+// Trick: post-order = đảo ngược của (Node → Right → Left)</code></pre>
+
+          <h3>Khi nào dùng cái nào?</h3>
+          <table>
+            <thead><tr><th>Loại</th><th>Khi nào</th></tr></thead>
+            <tbody>
+              <tr><td>Pre-order</td><td>Copy/clone cây, serialize cây, evaluate prefix expression</td></tr>
+              <tr><td>In-order</td><td>BST → cho ra sorted output (Tính chất quan trọng nhất của BST!)</td></tr>
+              <tr><td>Post-order</td><td>Xoá cây (xoá con trước cha), tính kích thước subtree, evaluate postfix</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- 9.4 -->
+        <section id="bfs">
+          <h2>9.4 Level-order Traversal (BFS) — duyệt theo lớp</h2>
+
+          <p>Thăm node theo từng level — root → tất cả depth=1 → tất cả depth=2 → ...</p>
+
+          <pre data-lang="javascript"><code>function levelOrder(root) {
+  if (!root) return [];
+  const result = [], queue = [root];
+  while (queue.length) {
+    const level = [];
+    const sz = queue.length;  // số node ở level hiện tại
+    for (let i = 0; i &lt; sz; i++) {
+      const node = queue.shift();  // (Lưu ý: shift O(n), demo thôi)
+      level.push(node.val);
+      if (node.left)  queue.push(node.left);
+      if (node.right) queue.push(node.right);
+    }
+    result.push(level);
+  }
+  return result;
+}
+
+//        1
+//       / \
+//      2   3
+//     / \
+//    4   5
+// Output: [[1], [2,3], [4,5]]</code></pre>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Đừng dùng arr.shift() làm queue trong production</div>
+            Đã nhắc ở Chương 4. Dùng index thủ công hoặc cài Queue class. Demo trên dùng <code>shift</code> để code ngắn gọn.
+          </div>
+
+          <h3>Variants của Level-order</h3>
+          <ul>
+            <li><strong>Zigzag:</strong> level chẵn trái-phải, level lẻ phải-trái</li>
+            <li><strong>Right Side View:</strong> trả về phần tử phải nhất của mỗi level</li>
+            <li><strong>Average of Levels:</strong> tính trung bình mỗi level</li>
+          </ul>
+
+          <pre data-lang="javascript"><code>// Right Side View
+function rightSideView(root) {
+  if (!root) return [];
+  const result = [], queue = [root];
+  while (queue.length) {
+    const sz = queue.length;
+    for (let i = 0; i &lt; sz; i++) {
+      const node = queue.shift();
+      if (i === sz - 1) result.push(node.val);  // cuối level
+      if (node.left)  queue.push(node.left);
+      if (node.right) queue.push(node.right);
+    }
+  }
+  return result;
+}</code></pre>
+        </section>
+
+        <!-- 9.5 -->
+        <section id="bst">
+          <h2>9.5 Binary Search Tree (BST) — cây tìm kiếm nhị phân</h2>
+
+          <p><strong>Định nghĩa BST:</strong> với mỗi node:</p>
+          <ul>
+            <li>Mọi node trong subtree trái có giá trị &lt; node hiện tại</li>
+            <li>Mọi node trong subtree phải có giá trị &gt; node hiện tại</li>
+            <li>(Tuỳ định nghĩa, có thể cho phép = hoặc không — thường BST chuẩn không cho phép trùng)</li>
+          </ul>
+
+          <pre data-lang="text"><code>           [8]
+          /   \
+        [3]   [10]
+        / \      \
+      [1] [6]   [14]
+          / \    /
+        [4] [7] [13]</code></pre>
+
+          <p>BST là cây "tự sort": in-order traversal của BST cho ra mảng <strong>tăng dần</strong>.</p>
+
+          <h3>Tính chất BẤT ĐẲNG QUAN TRỌNG</h3>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Validate BST</div>
+            Sai lầm phổ biến: chỉ kiểm tra <code>node.left.val &lt; node.val &lt; node.right.val</code>.
+            Phải kiểm tra <em>toàn bộ subtree</em> nằm trong khoảng (min, max).
+          </div>
+
+          <pre data-lang="javascript"><code>// ❌ SAI — chỉ check 1 cấp
+function isValidBSTBad(root) {
+  if (!root) return true;
+  if (root.left &amp;&amp; root.left.val &gt;= root.val) return false;
+  if (root.right &amp;&amp; root.right.val &lt;= root.val) return false;
+  return isValidBSTBad(root.left) &amp;&amp; isValidBSTBad(root.right);
+}
+// Counter-example:
+//      5
+//     / \
+//    3   8
+//       /
+//      2     ← 2 &lt; 5 nhưng nằm trong right subtree → vi phạm!
+
+// ✅ ĐÚNG — truyền (min, max) xuống
+function isValidBST(root, min = -Infinity, max = Infinity) {
+  if (!root) return true;
+  if (root.val &lt;= min || root.val &gt;= max) return false;
+  return isValidBST(root.left, min, root.val) &amp;&amp;
+         isValidBST(root.right, root.val, max);
+}
+
+// ✅ ĐÚNG — dùng in-order traversal (cho ra phải sort tăng)
+function isValidBSTInorder(root) {
+  let prev = -Infinity;
+  function inorder(node) {
+    if (!node) return true;
+    if (!inorder(node.left)) return false;
+    if (node.val &lt;= prev) return false;
+    prev = node.val;
+    return inorder(node.right);
+  }
+  return inorder(root);
+}</code></pre>
+        </section>
+
+        <!-- 9.6 -->
+        <section id="bst-ops">
+          <h2>9.6 BST Operations — search, insert, delete</h2>
+
+          <h3>Search — O(h) với h là height</h3>
+
+          <pre data-lang="javascript"><code>function search(root, target) {
+  if (!root) return null;
+  if (root.val === target) return root;
+  if (target &lt; root.val) return search(root.left, target);
+  return search(root.right, target);
+}</code></pre>
+
+          <h3>Insert</h3>
+
+          <pre data-lang="javascript"><code>function insert(root, val) {
+  if (!root) return new TreeNode(val);
+  if (val &lt; root.val) root.left = insert(root.left, val);
+  else if (val &gt; root.val) root.right = insert(root.right, val);
+  // val === root.val: bỏ qua (BST không cho trùng)
+  return root;
+}</code></pre>
+
+          <h3>Delete — phức tạp nhất, 3 trường hợp</h3>
+
+          <pre data-lang="javascript"><code>function deleteNode(root, key) {
+  if (!root) return null;
+
+  if (key &lt; root.val) {
+    root.left = deleteNode(root.left, key);
+  } else if (key &gt; root.val) {
+    root.right = deleteNode(root.right, key);
+  } else {
+    // Tìm thấy node cần xoá
+    // Case 1: leaf — chỉ cần xoá
+    if (!root.left &amp;&amp; !root.right) return null;
+    // Case 2: chỉ có 1 con — thay bằng con đó
+    if (!root.left)  return root.right;
+    if (!root.right) return root.left;
+    // Case 3: có 2 con — thay bằng successor (nhỏ nhất ở right subtree)
+    let succ = root.right;
+    while (succ.left) succ = succ.left;
+    root.val = succ.val;
+    root.right = deleteNode(root.right, succ.val);
+  }
+  return root;
+}</code></pre>
+
+          <p>Tại sao chọn successor? Vì successor là phần tử <em>vừa lớn hơn</em> node bị xoá → giữ tính chất BST.</p>
+
+          <h3>Big-O của BST operations</h3>
+          <table>
+            <thead><tr><th>Operation</th><th>Average</th><th>Worst</th></tr></thead>
+            <tbody>
+              <tr><td>Search/Insert/Delete</td><td>O(log n)</td><td>O(n)</td></tr>
+            </tbody>
+          </table>
+
+          <p>
+            <strong>Worst O(n)</strong> xảy ra khi BST suy biến thành linked list (vd insert <code>1, 2, 3, 4, 5</code> theo thứ tự).
+            Để tránh, ta cần <strong>self-balancing BST</strong>.
+          </p>
+        </section>
+
+        <!-- 9.7 -->
+        <section id="balanced">
+          <h2>9.7 Balanced BST — AVL, Red-Black</h2>
+
+          <p>
+            Self-balancing BST tự động giữ height ~O(log n) bằng cách <em>xoay (rotation)</em> sau insert/delete.
+            Bạn không cần cài chi tiết, nhưng phải <strong>biết tên + nguyên lý</strong>.
+          </p>
+
+          <h3>AVL Tree (1962)</h3>
+          <ul>
+            <li>Mỗi node lưu "balance factor" = height(left) - height(right)</li>
+            <li>Yêu cầu balance factor luôn ∈ {-1, 0, 1}</li>
+            <li>Khi insert/delete, nếu vi phạm → rotate (LL, LR, RL, RR)</li>
+            <li>Strict balance → search nhanh nhất, nhưng nhiều rotation</li>
+          </ul>
+
+          <h3>Red-Black Tree</h3>
+          <ul>
+            <li>Mỗi node có "màu" đỏ hoặc đen, với 5 invariants</li>
+            <li>Balance "lỏng" hơn AVL — chiều cao có thể lệch nhưng không vượt 2x</li>
+            <li>Ít rotation hơn → insert/delete nhanh hơn</li>
+            <li>Java <code>TreeMap</code>, C++ <code>std::map</code>, Linux kernel scheduler đều dùng</li>
+          </ul>
+
+          <h3>B-tree / B+ tree</h3>
+          <ul>
+            <li>Cây có nhiều con (không chỉ 2) — phù hợp disk-based storage</li>
+            <li>Database index (MySQL InnoDB B+ tree), filesystem (NTFS, HFS+)</li>
+            <li>Giảm số lần đọc disk vì 1 page chứa nhiều keys</li>
+          </ul>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Trong phỏng vấn</div>
+            Bạn không cần code AVL/RB tree từ đầu. Chỉ cần biết:
+            (1) chúng tồn tại, (2) cho O(log n) đảm bảo, (3) dùng ở đâu trong industry. Nếu interviewer hỏi sâu, vẽ ý tưởng rotation đơn giản.
+          </div>
+        </section>
+
+        <!-- 9.8 -->
+        <section id="trie">
+          <h2>9.8 Trie (Prefix Tree) — vũ khí cho string</h2>
+
+          <p>
+            <strong>Trie</strong> (đọc là "try", từ "retrieval") là cây mà mỗi cạnh đại diện 1 ký tự, mỗi đường từ root đến leaf
+            tạo thành 1 từ. Cực kỳ tốt cho:
+          </p>
+          <ul>
+            <li>Autocomplete</li>
+            <li>Spell check</li>
+            <li>IP routing (longest prefix match)</li>
+            <li>Bài "search by prefix"</li>
+          </ul>
+
+          <pre data-lang="text"><code>            [root]
+           /   |   \
+          a    b    c
+         / \   |
+        p   t  e
+        |   |  |
+        p   ●  e
+        |      |
+        l      ●
+        |
+        e
+        |
+        ●
+
+(các ● = end of word: "app", "at", "be", "bee")</code></pre>
+
+          <h3>Cài đặt Trie</h3>
+
+          <pre data-lang="javascript"><code>class TrieNode {
+  constructor() {
+    this.children = {};   // hoặc Map(), hoặc Array(26) cho a-z
+    this.isEnd = false;
+  }
+}
+
+class Trie {
+  constructor() { this.root = new TrieNode(); }
+
+  // O(L) với L = độ dài từ
+  insert(word) {
+    let node = this.root;
+    for (const ch of word) {
+      if (!node.children[ch]) node.children[ch] = new TrieNode();
+      node = node.children[ch];
+    }
+    node.isEnd = true;
+  }
+
+  search(word) {
+    const node = this._traverse(word);
+    return node !== null &amp;&amp; node.isEnd;
+  }
+
+  startsWith(prefix) {
+    return this._traverse(prefix) !== null;
+  }
+
+  _traverse(s) {
+    let node = this.root;
+    for (const ch of s) {
+      if (!node.children[ch]) return null;
+      node = node.children[ch];
+    }
+    return node;
+  }
+}
+
+// Demo
+const t = new Trie();
+t.insert("apple");
+t.insert("app");
+console.log(t.search("apple"));    // true
+console.log(t.search("app"));      // true
+console.log(t.search("ap"));       // false (không phải end)
+console.log(t.startsWith("ap"));   // true</code></pre>
+
+          <h3>Big-O của Trie</h3>
+          <ul>
+            <li><strong>Insert / Search / startsWith:</strong> O(L) với L = độ dài word/prefix</li>
+            <li><strong>Space:</strong> O(N · L) tệ nhất, nhưng tiết kiệm khi nhiều từ chia sẻ prefix</li>
+          </ul>
+
+          <h3>Ưu điểm so với HashSet&lt;String&gt;</h3>
+          <ul>
+            <li>HashSet: O(L) search nhưng <em>không hỗ trợ prefix</em></li>
+            <li>Trie: O(L) search + O(L) prefix search → autocomplete cực nhanh</li>
+          </ul>
+        </section>
+
+        <!-- 9.9 -->
+        <section id="advanced">
+          <h2>9.9 LCA & Diameter — bài kinh điển</h2>
+
+          <h3>9.9.1 Lowest Common Ancestor</h3>
+
+          <p>Tìm ancestor (tổ tiên) thấp nhất của 2 node p, q.</p>
+
+          <pre data-lang="javascript"><code>// Cho cây bất kỳ (không cần BST)
+function lowestCommonAncestor(root, p, q) {
+  if (!root || root === p || root === q) return root;
+  const left  = lowestCommonAncestor(root.left, p, q);
+  const right = lowestCommonAncestor(root.right, p, q);
+  if (left &amp;&amp; right) return root;  // p và q ở 2 subtree khác nhau
+  return left || right;
+}
+
+// Trong BST có thể tận dụng tính chất sort
+function lcaBST(root, p, q) {
+  if (p.val &lt; root.val &amp;&amp; q.val &lt; root.val) return lcaBST(root.left, p, q);
+  if (p.val &gt; root.val &amp;&amp; q.val &gt; root.val) return lcaBST(root.right, p, q);
+  return root;  // p và q nằm hai bên hoặc chính là root
+}</code></pre>
+
+          <h3>9.9.2 Diameter of Binary Tree</h3>
+
+          <p>Đường đi dài nhất giữa 2 node bất kỳ (không nhất thiết qua root).</p>
+
+          <pre data-lang="javascript"><code>function diameter(root) {
+  let max = 0;
+  function depth(node) {
+    if (!node) return 0;
+    const l = depth(node.left);
+    const r = depth(node.right);
+    max = Math.max(max, l + r);  // đường đi qua node = l + r
+    return 1 + Math.max(l, r);
+  }
+  depth(root);
+  return max;
+}</code></pre>
+
+          <h3>9.9.3 Serialize and Deserialize Tree</h3>
+
+          <pre data-lang="javascript"><code>// Serialize: dùng pre-order với marker null
+function serialize(root) {
+  const result = [];
+  function dfs(node) {
+    if (!node) { result.push('#'); return; }
+    result.push(node.val);
+    dfs(node.left);
+    dfs(node.right);
+  }
+  dfs(root);
+  return result.join(',');
+}
+
+function deserialize(data) {
+  const tokens = data.split(',');
+  let i = 0;
+  function build() {
+    const t = tokens[i++];
+    if (t === '#') return null;
+    const node = new TreeNode(Number(t));
+    node.left  = build();
+    node.right = build();
+    return node;
+  }
+  return build();
+}</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Maximum Depth of Binary Tree</div>
+            <p>Tính độ sâu max của cây. Recursive 1 dòng.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Same Tree</div>
+            <p>Hai cây có giống hệt không (cấu trúc + giá trị)?</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Symmetric Tree</div>
+            <p>Cây có đối xứng qua trục giữa không? Hint: viết hàm <code>mirror(left, right)</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Binary Tree Level Order Traversal</div>
+            <p>Đã có ở 9.4. Tự cài đầy đủ.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Validate Binary Search Tree</div>
+            <p>Đã có ở 9.5. Tự cài cả 2 cách (min-max và in-order).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Lowest Common Ancestor</div>
+            <p>Đã có ở 9.9.1. Cài cho cả Binary Tree và BST.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Diameter of Binary Tree</div>
+            <p>Đã có ở 9.9.2.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 8 — Implement Trie</div>
+            <p>LeetCode 208. Đã có ở 9.8.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 9 — Word Search II (Hard)</div>
+            <p>Cho board ký tự và mảng words. Trả về các word có trong board. Hint: build Trie + DFS từ mỗi ô.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 10 — Serialize and Deserialize Binary Tree (Hard)</div>
+            <p>Đã có ở 9.9.3.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> In-order traversal của BST cho ra?</p>
+              <ul class="quiz-options">
+                <li>Mảng ngẫu nhiên</li>
+                <li>Mảng giảm dần</li>
+                <li>Mảng tăng dần (sorted)</li>
+                <li>Theo thứ tự insert</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Mảng tăng dần.</strong> Đây là tính chất quan trọng nhất của BST. Vì với mỗi node, left subtree &lt; node &lt; right subtree → in-order (Left → Node → Right) cho output sort.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> Big-O search trong BST balanced?</p>
+              <ul class="quiz-options">
+                <li>O(n)</li>
+                <li>O(log n)</li>
+                <li>O(1)</li>
+                <li>O(n log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(log n).</strong> Mỗi bước, ta chọn 1 trong 2 nửa con → height = log n. Worst case O(n) khi cây skewed.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> BFS trên cây dùng cấu trúc gì?</p>
+              <ul class="quiz-options">
+                <li>Stack</li>
+                <li>Heap</li>
+                <li>Queue</li>
+                <li>Hash Map</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Queue.</strong> BFS thăm theo lớp → FIFO. DFS dùng Stack hoặc đệ quy.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 4.</strong> Khi delete node có 2 con trong BST, ta thay bằng?</p>
+              <ul class="quiz-options">
+                <li>In-order successor (min của right subtree)</li>
+                <li>Bất kỳ leaf nào</li>
+                <li>Root</li>
+                <li>Không xoá được</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: In-order successor.</strong> Hoặc predecessor (max của left subtree). Cả hai giữ tính chất BST.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> BST suy biến thành linked list khi?</p>
+              <ul class="quiz-options">
+                <li>Khi có quá nhiều node</li>
+                <li>Khi insert theo thứ tự đã sort (vd 1,2,3,4,5)</li>
+                <li>Khi delete root</li>
+                <li>Không thể xảy ra</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Insert sorted input.</strong> Mỗi node mới đi về 1 phía → cây "lệch" (skewed) thành linked list. Để tránh, dùng AVL/Red-Black tree.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 6.</strong> Big-O insert trong Trie với word độ dài L?</p>
+              <ul class="quiz-options">
+                <li>O(L)</li>
+                <li>O(N)</li>
+                <li>O(N · L)</li>
+                <li>O(log N)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(L).</strong> Đi qua L ký tự, mỗi ký tự O(1) lookup trong children map. Không phụ thuộc số word đã insert.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Pre-order = ? In-order = ? Post-order = ?</p>
+              <ul class="quiz-options">
+                <li>Trái-Node-Phải; Node-Trái-Phải; Trái-Phải-Node</li>
+                <li>Node-Trái-Phải; Phải-Node-Trái; Trái-Phải-Node</li>
+                <li>Node-Trái-Phải; Trái-Node-Phải; Trái-Phải-Node</li>
+                <li>Trái-Phải-Node; Trái-Node-Phải; Node-Trái-Phải</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Pre = Node-Trái-Phải, In = Trái-Node-Phải, Post = Trái-Phải-Node.</strong> "Pre/In/Post" chỉ vị trí thăm Node so với 2 con.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Database index thường dùng cấu trúc nào?</p>
+              <ul class="quiz-options">
+                <li>Trie</li>
+                <li>B-tree / B+ tree (cây nhiều con cho disk)</li>
+                <li>Linked list</li>
+                <li>Hash table không sort</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: B-tree/B+ tree.</strong> Mỗi node lưu nhiều key → giảm số lần đọc disk. MySQL InnoDB dùng B+ tree.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 9</h2>
+          <ul>
+            <li>✅ Tree terminology: root, leaf, depth, height, level</li>
+            <li>✅ 4 traversal: <strong>Pre/In/Post-order</strong> (DFS) và <strong>Level-order</strong> (BFS)</li>
+            <li>✅ Iterative traversal dùng Stack (DFS) hoặc Queue (BFS) — phải biết cả recursive lẫn iterative</li>
+            <li>✅ <strong>BST</strong>: in-order = sorted; search/insert/delete O(log n) avg, O(n) worst</li>
+            <li>✅ Validate BST phải kiểm tra với min/max bound, không chỉ 1 cấp</li>
+            <li>✅ Delete node 2 con: thay bằng successor</li>
+            <li>✅ <strong>AVL / Red-Black tree</strong> = self-balancing BST cho O(log n) đảm bảo</li>
+            <li>✅ <strong>Trie</strong>: O(L) insert/search/prefix — vũ khí autocomplete</li>
+            <li>✅ Bài kinh điển: LCA, Diameter, Serialize tree</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong8.html">
+        <span class="label">← Chương trước</span>
+        Chương 08: Searching
+      </a>
+      <a href="chuong10.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 10: Heap →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 09 · Tree
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

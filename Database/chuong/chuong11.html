@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 11 — Caching, Search, OLTP vs OLAP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 11 · Caching & Analytics</div>
+      <h1>Caching, Search, OLTP vs OLAP</h1>
+      <p class="subtitle">Cache patterns + invalidation, search inverted index, Elasticsearch vs Postgres tsvector, data warehouse columnar storage, ETL/ELT.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why-cache">1. Vì sao caching?</a></li>
+        <li><a href="#patterns">2. Cache patterns</a></li>
+        <li><a href="#invalidation">3. Invalidation</a></li>
+        <li><a href="#stampede">4. Stampede</a></li>
+        <li><a href="#redis-cache">5. Redis làm cache</a></li>
+        <li><a href="#search">6. Search & Inverted Index</a></li>
+        <li><a href="#elastic">7. Elasticsearch</a></li>
+        <li><a href="#pg-search">8. Postgres tsvector + GIN</a></li>
+        <li><a href="#oltp-olap">9. OLTP vs OLAP</a></li>
+        <li><a href="#warehouse">10. Data Warehouse</a></li>
+        <li><a href="#star">11. Star schema</a></li>
+        <li><a href="#etl">12. ETL / ELT</a></li>
+        <li><a href="#exercises">13. Bài tập</a></li>
+        <li><a href="#quiz">14. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why-cache">
+        <h2>1. Vì sao caching?</h2>
+        <p>Latency hierarchy (đại khái 2026):</p>
+
+        <div class="ascii">  L1 cache       ~ 1 ns
+  L2 cache       ~ 4 ns
+  L3 cache       ~ 12 ns
+  RAM            ~ 100 ns       (1000× chậm hơn L1)
+  SSD random     ~ 50 µs        (50 000× chậm hơn RAM)
+  SSD sequential ~ 1 µs/MB
+  Network LAN    ~ 100 µs       (cùng datacenter)
+  Network cross-region ~ 50 ms  (500 000× chậm hơn RAM)
+  HDD seek       ~ 10 ms        (cổ điển)</div>
+
+        <p>Đọc Postgres qua mạng đã ~1ms (network + parse + plan + exec). Cùng query cache vào Redis: ~50µs. Cache vào RAM app (in-memory): ~10ns.</p>
+
+        <p>Cache giảm latency và <strong>giảm tải DB</strong> — nếu cache hit 95%, DB chỉ phải xử lý 5% traffic.</p>
+
+        <h3>1.1. Cache đặt ở đâu?</h3>
+
+        <div class="ascii">  Browser ──► CDN ──► Reverse Proxy ──► App ──► Redis ──► DB
+            HTTP    nginx          local cache  remote
+            cache   cache          (LRU map)    cache</div>
+
+        <p>Mỗi tầng đều có cache: browser HTTP cache (Cache-Control), CDN edge cache, reverse proxy cache (nginx <code>proxy_cache</code>), app in-memory (Map/LRU), distributed cache (Redis/Memcached).</p>
+      </section>
+
+      <section id="patterns">
+        <h2>2. Cache Patterns — 4 chiến lược</h2>
+
+        <h3>2.1. Cache-Aside (Lazy Loading)</h3>
+        <p>Phổ biến nhất. App quản lý cache, DB không biết về cache.</p>
+
+        <div class="ascii">  READ:
+    1. App đọc cache
+    2. Hit → trả ngay
+    3. Miss → đọc DB → set cache → trả
+
+  WRITE:
+    1. Ghi DB
+    2. Invalidate cache (DEL key) hoặc set lại</div>
+
+<pre><code class="language-typescript">async function getUser(id: number) {
+  const key = `user:${id}`;
+  const cached = await redis.get(key);
+  if (cached) return JSON.parse(cached);
+
+  const user = await db.query('SELECT * FROM users WHERE id=$1', [id]);
+  await redis.set(key, JSON.stringify(user), 'EX', 600);  // TTL 10 phút
+  return user;
+}
+
+async function updateUser(id: number, data: any) {
+  await db.query('UPDATE users SET ... WHERE id=$1', [id]);
+  await redis.del(`user:${id}`);   // invalidate
+}</code></pre>
+
+        <p><strong>Ưu</strong>: đơn giản, fail-open (cache chết app vẫn chạy). <strong>Nhược</strong>: data có thể stale (giữa write và invalidate).</p>
+
+        <h3>2.2. Write-Through</h3>
+        <p>Cache là "front" của DB. App ghi cache, cache ghi DB đồng bộ.</p>
+
+        <div class="ascii">  WRITE:
+    1. App ghi cache
+    2. Cache ghi DB ngay
+    3. Trả ack khi DB ghi xong
+
+  READ: từ cache (luôn fresh nếu hit).</div>
+
+        <p><strong>Ưu</strong>: read luôn fresh. <strong>Nhược</strong>: latency write tăng (chờ cả 2 ghi). Cache miss đầu vẫn phải đọc DB.</p>
+
+        <h3>2.3. Write-Behind (Write-Back)</h3>
+        <p>App ghi cache, cache async flush DB sau.</p>
+
+        <p><strong>Ưu</strong>: write rất nhanh. <strong>Nhược</strong>: nguy cơ mất data nếu cache crash trước khi flush. Phức tạp với consistency.</p>
+
+        <p>Dùng cho counter, log, analytics — chấp nhận mất 1-vài giây cuối.</p>
+
+        <h3>2.4. Refresh-Ahead</h3>
+        <p>Trước khi key sắp expire, cache tự refresh từ DB. Người dùng không bao giờ thấy cache miss.</p>
+
+        <p>Phức tạp triển khai, ít dùng. Cloudflare và một số CDN làm dạng này.</p>
+      </section>
+
+      <section id="invalidation">
+        <h2>3. Cache Invalidation — vấn đề khó nhất</h2>
+        <p><em>"There are only two hard things in Computer Science: cache invalidation and naming things." — Phil Karlton</em></p>
+
+        <h3>3.1. Khi nào invalidate?</h3>
+        <ul>
+          <li><strong>TTL (Time-to-Live)</strong> — set TTL khi cache, key tự xóa. Đơn giản nhất, an toàn nhất. Nhược: data có thể stale đến TTL.</li>
+          <li><strong>Event-based</strong> — khi UPDATE/DELETE → DEL key. Cần biết tất cả key liên quan.</li>
+          <li><strong>Versioning</strong> — key có version: <code>user:5:v123</code>. Update → tăng version → key cũ bị orphan, tự expire qua TTL.</li>
+        </ul>
+
+        <h3>3.2. Cascade invalidation</h3>
+        <p>1 record có thể được cache ở nhiều key/view:</p>
+<pre><code>user:5
+user:5:profile
+home_feed:user:5
+search_result:term:"alice"   ← chứa user 5
+team:42:members              ← chứa user 5</code></pre>
+
+        <p>Update user 5 → phải invalidate cả 5 key. Cách:</p>
+        <ul>
+          <li>Set TTL ngắn (chấp nhận stale).</li>
+          <li>Pattern key + scan + del (chậm).</li>
+          <li>Tag system (Redis 7+ hash tags) hoặc Memcached "cache groups".</li>
+          <li>Pub/Sub event → mọi cache subscriber tự invalidate.</li>
+        </ul>
+
+        <h3>3.3. Stale-while-revalidate</h3>
+        <p>Khi cache miss, trả ngay <em>stale value</em>, đồng thời trigger background refresh. User không phải chờ.</p>
+<pre><code class="language-typescript">async function get(key: string) {
+  const cached = await redis.get(key);
+  if (cached) {
+    const { value, expires_at } = JSON.parse(cached);
+    if (Date.now() &gt; expires_at - 30_000) {
+      // sắp hết hạn, trigger refresh background:
+      void refresh(key);
+    }
+    return value;
+  }
+  return await refresh(key);  // miss thật, blocking
+}</code></pre>
+      </section>
+
+      <section id="stampede">
+        <h2>4. Cache Stampede / Thundering Herd</h2>
+        <p>Khi 1 hot key expire cùng lúc 1000 request đến → 1000 request đồng thời đập vào DB.</p>
+
+        <div class="ascii">  t=0:  cache key="hot" hết hạn
+  t=0:  ┌──── 1000 concurrent requests ────┐
+        ▼          ▼          ▼          ▼
+       miss      miss       miss       miss
+        │          │          │          │
+        ▼          ▼          ▼          ▼
+       DB query  DB query   DB query   DB query   ← DB bị 1000 query đồng thời
+        ↓ ↓ ↓ ↓ ↓ ↓ ↓ ↓ ↓ ↓ ↓ ↓ ↓
+        DB chết!</div>
+
+        <h3>4.1. Giải pháp</h3>
+        <ul>
+          <li><strong>Lock / single-flight</strong> — chỉ 1 request rebuild cache, các request khác chờ kết quả.</li>
+          <li><strong>Stale-while-revalidate</strong> — trả stale, background refresh.</li>
+          <li><strong>Probabilistic early expiration</strong> — refresh trước khi expire, theo xác suất tăng dần khi gần expire.</li>
+          <li><strong>TTL jitter</strong> — TTL không phải con số cố định mà ± 10% random → tránh expire đồng loạt.</li>
+        </ul>
+
+<pre><code class="language-typescript">// Single-flight pattern với Redis SETNX:
+async function get(key: string) {
+  const cached = await redis.get(key);
+  if (cached) return cached;
+
+  const lockKey = `lock:${key}`;
+  const acquired = await redis.set(lockKey, '1', 'NX', 'EX', 5);
+  if (!acquired) {
+    await sleep(50);
+    return get(key);  // request khác đang rebuild, chờ rồi đọc
+  }
+
+  try {
+    const value = await fetchFromDb();
+    await redis.set(key, value, 'EX', 600);
+    return value;
+  } finally {
+    await redis.del(lockKey);
+  }
+}</code></pre>
+      </section>
+
+      <section id="redis-cache">
+        <h2>5. Redis làm cache — best practice</h2>
+
+        <h3>5.1. TTL chiến lược</h3>
+<pre><code class="language-bash"># Hot data, đổi nhanh: 1-5 phút
+SET user:5:online 1 EX 300
+
+# Static-ish: 1 giờ
+SET product:1 "{...}" EX 3600
+
+# Reference data hiếm đổi: 1 ngày
+SET country:VN "Việt Nam" EX 86400</code></pre>
+
+        <h3>5.2. Eviction policies</h3>
+        <p>Khi Redis hết RAM (vượt <code>maxmemory</code>), eviction policy quyết định xóa key nào:</p>
+        <ul>
+          <li><strong>noeviction</strong> — báo lỗi khi full (default).</li>
+          <li><strong>allkeys-lru</strong> — least recently used trên mọi key. Phổ biến nhất cho cache.</li>
+          <li><strong>allkeys-lfu</strong> — least frequently used.</li>
+          <li><strong>volatile-lru</strong> — LRU chỉ trên key có TTL.</li>
+          <li><strong>allkeys-random</strong> — xóa ngẫu nhiên.</li>
+        </ul>
+
+<pre><code class="language-bash"># redis.conf:
+maxmemory 4gb
+maxmemory-policy allkeys-lru</code></pre>
+
+        <h3>5.3. Cache key naming</h3>
+<pre><code>{namespace}:{type}:{id}:{detail}
+
+user:profile:5
+user:settings:5
+post:42:comments:page:1
+search:result:hash(query)
+session:abc123</code></pre>
+
+        <h3>5.4. Pipeline & batch</h3>
+<pre><code class="language-typescript">// ❌ N round-trip:
+for (const id of ids) {
+  await redis.get(`user:${id}`);
+}
+
+// ✓ 1 round-trip với MGET:
+const values = await redis.mget(ids.map(id =&gt; `user:${id}`));
+
+// ✓ Pipeline cho mixed commands:
+const pipe = redis.pipeline();
+for (const id of ids) pipe.get(`user:${id}`);
+const results = await pipe.exec();</code></pre>
+      </section>
+
+      <section id="search">
+        <h2>6. Search & Inverted Index</h2>
+        <p>"Tìm bài viết có từ <em>'database'</em>" — không thể quét toàn bộ với <code>LIKE '%database%'</code> trên TB content.</p>
+
+        <h3>6.1. Inverted Index</h3>
+        <p>"Inverted" = ngược: từ → các document chứa từ đó (như index sách giáo khoa).</p>
+
+        <div class="ascii">  Documents:
+    doc1: "Postgres database engine"
+    doc2: "MySQL database tutorial"
+    doc3: "MongoDB document store"
+
+  Inverted index:
+    "postgres"  → [doc1]
+    "database"  → [doc1, doc2]
+    "engine"    → [doc1]
+    "mysql"     → [doc2]
+    "tutorial"  → [doc2]
+    "mongodb"   → [doc3]
+    "document"  → [doc3]
+    "store"     → [doc3]
+
+  Query "database" → lookup → [doc1, doc2] → trả nhanh</div>
+
+        <h3>6.2. Pipeline xử lý text</h3>
+        <ol>
+          <li><strong>Tokenization</strong> — chia chuỗi thành từ.</li>
+          <li><strong>Lowercasing</strong> — "Database" = "database".</li>
+          <li><strong>Stop words removal</strong> — bỏ "the", "is", "a"...</li>
+          <li><strong>Stemming / Lemmatization</strong> — "running" → "run", "ran" → "run".</li>
+          <li><strong>Synonyms</strong> — "PG" = "Postgres".</li>
+          <li><strong>N-gram</strong> — cho fuzzy / typo (xem 6.3).</li>
+        </ol>
+
+        <h3>6.3. Fuzzy / typo search — Trigram</h3>
+        <p>Chia từ thành n-gram (vd: 3-gram):</p>
+<pre><code>"database" → "dat", "ata", "tab", "aba", "bas", "ase"
+"databse"  → "dat", "ata", "tab", "abs", "bse"
+                ↑↑↑   ↑↑↑   ↑↑↑    chung 3 trigram → similar</code></pre>
+
+        <p>Postgres extension <code>pg_trgm</code> dùng trigram cho fuzzy search.</p>
+
+        <h3>6.4. Ranking — TF-IDF, BM25</h3>
+        <p>Khi 1 query match nhiều document, làm sao xếp hạng độ liên quan?</p>
+        <ul>
+          <li><strong>TF (Term Frequency)</strong> — từ xuất hiện nhiều = liên quan hơn.</li>
+          <li><strong>IDF (Inverse Document Frequency)</strong> — từ ở ít doc = mang nhiều thông tin hơn.</li>
+          <li><strong>TF-IDF</strong> = TF × IDF.</li>
+          <li><strong>BM25</strong> — cải tiến TF-IDF, mặc định ở Elasticsearch.</li>
+        </ul>
+      </section>
+
+      <section id="elastic">
+        <h2>7. Elasticsearch / OpenSearch</h2>
+        <p>Search engine mặc định cho web modern. Built trên Apache Lucene (Java). Distributed bằng cách shard inverted index.</p>
+
+        <h3>7.1. Cấu trúc cơ bản</h3>
+        <ul>
+          <li><strong>Index</strong> — tương đương "table" — lưu một loại document.</li>
+          <li><strong>Document</strong> — JSON.</li>
+          <li><strong>Field</strong> — column trong document, có type (text, keyword, date, geo, ...).</li>
+          <li><strong>Mapping</strong> — schema cho field (kiểu, analyzer).</li>
+          <li><strong>Shard</strong> — index chia thành shard, replicate.</li>
+        </ul>
+
+        <h3>7.2. text vs keyword</h3>
+<pre><code class="language-json">{
+  "mappings": {
+    "properties": {
+      "title": { "type": "text" },         // analyze → tokens, dùng full-text search
+      "tags":  { "type": "keyword" },      // không analyze, exact match (filter)
+      "name":  {
+        "type": "text",
+        "fields": { "raw": { "type": "keyword" } }   // dual: search + sort
+      }
+    }
+  }
+}</code></pre>
+
+        <h3>7.3. Query DSL</h3>
+<pre><code class="language-json">// Index document:
+PUT /posts/_doc/1
+{ "title": "Postgres database tutorial", "tags": ["sql","db"] }
+
+// Full-text:
+POST /posts/_search
+{
+  "query": {
+    "match": { "title": "database" }
+  }
+}
+
+// Multi-field + filter:
+POST /posts/_search
+{
+  "query": {
+    "bool": {
+      "must":   [{ "match": { "title": "tutorial" }}],
+      "filter": [{ "term":  { "tags": "sql" }}]
+    }
+  },
+  "sort": [{ "_score": "desc" }],
+  "from": 0, "size": 20
+}</code></pre>
+
+        <h3>7.4. Khi nào dùng Elasticsearch?</h3>
+        <ul>
+          <li>Full-text search yêu cầu cao (relevance, ranking, highlighting).</li>
+          <li>Log aggregation (Elastic Stack: Logstash, Kibana).</li>
+          <li>Geo search.</li>
+          <li>Analytics realtime.</li>
+        </ul>
+
+        <p>Sync với primary DB qua <strong>CDC</strong> (Debezium đọc Postgres WAL → Kafka → Elastic) hoặc app tự index khi write.</p>
+      </section>
+
+      <section id="pg-search">
+        <h2>8. Postgres tsvector + GIN — search nhẹ</h2>
+        <p>Khi search là feature phụ, không cần Elastic riêng:</p>
+
+<pre><code class="language-sql">-- Cột generated tự cập nhật search vector:
+ALTER TABLE posts ADD COLUMN search tsvector
+  GENERATED ALWAYS AS (
+    setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('simple', coalesce(body,  '')), 'B')
+  ) STORED;
+
+CREATE INDEX idx_posts_search ON posts USING GIN(search);
+
+-- Query:
+SELECT id, title, ts_rank(search, query) AS rank
+FROM posts, to_tsquery('simple', 'postgres &amp; tutorial') AS query
+WHERE search @@ query
+ORDER BY rank DESC LIMIT 20;
+
+-- Highlight:
+SELECT ts_headline('simple', body, query) FROM posts ...;
+
+-- Trigram fuzzy:
+CREATE EXTENSION pg_trgm;
+CREATE INDEX idx_posts_title_trgm ON posts USING GIN(title gin_trgm_ops);
+SELECT * FROM posts WHERE title % 'databse'   -- typo OK
+ORDER BY similarity(title, 'databse') DESC;</code></pre>
+
+        <p><strong>Ưu</strong>: cùng DB, không cần sync. <strong>Nhược</strong>: ít feature hơn Elastic (synonyms, multi-language pluggable, advanced ranking).</p>
+        <p><strong>Quy tắc thực dụng</strong>: search là feature phụ → Postgres tsvector. Search là core (e-commerce, content site) → Elastic.</p>
+      </section>
+
+      <section id="oltp-olap">
+        <h2>9. OLTP vs OLAP — hai thế giới khác nhau</h2>
+
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>OLTP</th><th>OLAP</th></tr></thead>
+          <tbody>
+            <tr><td>Tên đầy đủ</td><td>Online Transaction Processing</td><td>Online Analytical Processing</td></tr>
+            <tr><td>Workload</td><td>Read/Write nhỏ, nhiều, nhanh</td><td>Aggregate trên hàng tỷ dòng</td></tr>
+            <tr><td>Latency</td><td>&lt;100ms</td><td>Vài giây — vài phút OK</td></tr>
+            <tr><td>Throughput</td><td>10k–100k QPS</td><td>1–100 query/giờ</td></tr>
+            <tr><td>Schema</td><td>Normalized (3NF)</td><td>Star / Snowflake (denormalized)</td></tr>
+            <tr><td>Storage</td><td>Row-oriented</td><td>Column-oriented</td></tr>
+            <tr><td>Compression</td><td>Trung bình</td><td>Cực cao (10–50×)</td></tr>
+            <tr><td>Update</td><td>UPDATE in-place phổ biến</td><td>Append-only, ít UPDATE</td></tr>
+            <tr><td>Concurrent users</td><td>1000+ end-user</td><td>Vài chục data analyst</td></tr>
+            <tr><td>DBs</td><td>Postgres, MySQL, SQL Server, Oracle</td><td>BigQuery, Snowflake, Redshift, ClickHouse, DuckDB</td></tr>
+            <tr><td>Use case</td><td>App backend, e-commerce</td><td>BI, dashboard, ML, ad-hoc analysis</td></tr>
+          </tbody>
+        </table>
+
+        <h3>9.1. Row vs Column storage</h3>
+
+        <div class="ascii">  ROW (OLTP): mỗi row lưu liên tục
+  ┌───┬──────────────┬─────┬─────┐
+  │ 1 │ alice@x.com  │ Alice│ 30 │ ← row 1 trên disk
+  ├───┼──────────────┼─────┼─────┤
+  │ 2 │ bob@x.com    │ Bob │ 25 │ ← row 2
+  └───┴──────────────┴─────┴─────┘
+
+  COLUMN (OLAP): mỗi column lưu liên tục
+  email:    alice@x.com, bob@x.com, carol@x.com, ...
+  name:     Alice, Bob, Carol, ...
+  age:      30, 25, 35, ...
+
+  Query: "AVG(age)" trong OLAP chỉ đọc cột age, bỏ qua email/name → 50× nhanh hơn.
+  Query: "SELECT * WHERE id=5" trong OLTP chỉ đọc 1 row liên tục.</div>
+
+        <h3>9.2. Vì sao columnar nén tốt?</h3>
+        <p>Cùng cột → giá trị tương tự (toàn bộ là email format, age từ 18-100, ...). Run-length encoding, dictionary encoding, delta encoding đạt 10-50× compression. Disk đọc ít → query nhanh.</p>
+      </section>
+
+      <section id="warehouse">
+        <h2>10. Data Warehouse vs Data Lake vs Lakehouse</h2>
+
+        <h3>10.1. Data Warehouse</h3>
+        <p>DB chuyên cho analytics. Schema chặt, ETL trước khi load.</p>
+        <ul>
+          <li><strong>BigQuery</strong> (GCP) — serverless, columnar, query-as-a-service.</li>
+          <li><strong>Snowflake</strong> — multi-cloud, separation of compute and storage.</li>
+          <li><strong>Redshift</strong> (AWS) — cluster-based.</li>
+          <li><strong>ClickHouse</strong> — open-source, cực nhanh, dùng nội bộ Yandex.</li>
+          <li><strong>DuckDB</strong> — embedded OLAP "SQLite cho analytics".</li>
+        </ul>
+
+        <h3>10.2. Data Lake</h3>
+        <p>Lưu raw file (CSV, JSON, Parquet) trên S3/GCS. Query qua Spark, Trino, Athena. Linh hoạt nhưng query không nhanh bằng warehouse.</p>
+
+        <h3>10.3. Lakehouse</h3>
+        <p>Kết hợp: lưu Parquet trên object storage + thêm metadata layer (Delta Lake, Apache Iceberg, Hudi) để có ACID, schema, time-travel.</p>
+
+        <p>Databricks, Snowflake Iceberg là các sản phẩm Lakehouse phổ biến.</p>
+      </section>
+
+      <section id="star">
+        <h2>11. Star Schema & Snowflake Schema</h2>
+
+        <h3>11.1. Fact table & Dimension table</h3>
+        <p>OLAP schema có 2 loại bảng:</p>
+        <ul>
+          <li><strong>Fact table</strong> — sự kiện đo được. Mỗi row = 1 sự kiện. Cột = (foreign keys to dimensions, measures).</li>
+          <li><strong>Dimension table</strong> — đối tượng mô tả: thời gian, khách hàng, sản phẩm, địa lý.</li>
+        </ul>
+
+        <div class="ascii">                         ┌────────────────┐
+                         │  dim_time       │
+                         │  date_id (PK)   │
+                         │  date, month,   │
+                         │  quarter, year  │
+                         └────────┬────────┘
+                                  │
+   ┌─────────────────┐    ┌───────▼───────┐    ┌──────────────────┐
+   │ dim_customer    │    │  fact_sales   │    │ dim_product       │
+   │ customer_id (PK)├────│ customer_id FK │────┤ product_id (PK)  │
+   │ name, segment,  │    │ product_id FK  │    │ name, category,   │
+   │ country         │    │ store_id FK    │    │ brand, price      │
+   └─────────────────┘    │ date_id FK     │    └──────────────────┘
+                          │ qty, revenue,  │
+                          │ profit         │    ┌──────────────────┐
+                          └───────┬───────┘    │ dim_store         │
+                                  │            │ store_id (PK)     │
+                                  └────────────┤ name, city, region │
+                                               └──────────────────┘</div>
+
+        <p>Hình như ngôi sao → "Star schema". Fact ở giữa, dimension xung quanh.</p>
+
+        <h3>11.2. Star vs Snowflake</h3>
+        <ul>
+          <li><strong>Star</strong> — dimension flat (denormalized). Đơn giản, query nhanh.</li>
+          <li><strong>Snowflake</strong> — dimension được normalize tiếp (vd: city là bảng riêng, FK tới dim_geography). Đỡ trùng nhưng query chậm hơn.</li>
+        </ul>
+
+        <p>Đa số chọn Star — vì OLAP thiên về read, denormalized OK.</p>
+
+        <h3>11.3. Slowly Changing Dimensions (SCD)</h3>
+        <p>Thuộc tính dimension thay đổi theo thời gian (customer đổi địa chỉ). Cách handle:</p>
+        <ul>
+          <li><strong>SCD Type 1</strong> — overwrite, mất history.</li>
+          <li><strong>SCD Type 2</strong> — thêm row mới với valid_from/valid_to. Giữ history đầy đủ.</li>
+          <li><strong>SCD Type 3</strong> — thêm cột "previous_value".</li>
+        </ul>
+
+        <p>SCD Type 2 phổ biến nhất cho fact-based analytics — báo cáo phải reflect state tại thời điểm sự kiện.</p>
+      </section>
+
+      <section id="etl">
+        <h2>12. ETL vs ELT — đưa data vào warehouse</h2>
+
+        <div class="compare">
+          <div>
+            <h4>ETL — Extract, Transform, Load</h4>
+            <ol>
+              <li>Extract từ nguồn (Postgres, API, file).</li>
+              <li>Transform ở staging server (clean, join, aggregate).</li>
+              <li>Load vào warehouse.</li>
+            </ol>
+            <p>Tools: Airflow, dbt, Talend.</p>
+          </div>
+          <div>
+            <h4>ELT — Extract, Load, Transform</h4>
+            <ol>
+              <li>Extract.</li>
+              <li>Load raw vào warehouse.</li>
+              <li>Transform <em>trong</em> warehouse (SQL).</li>
+            </ol>
+            <p>Tools: dbt + warehouse SQL. Tận dụng compute warehouse.</p>
+          </div>
+        </div>
+
+        <p>ELT hiện đại hơn — warehouse như BigQuery, Snowflake compute mạnh, transform bằng SQL dễ debug, version qua git.</p>
+
+        <h3>12.1. CDC — Change Data Capture</h3>
+        <p>Streaming thay batch. Đọc Postgres WAL (logical replication) → Kafka → consumer (Elastic, Snowflake, Redshift).</p>
+        <ul>
+          <li><strong>Debezium</strong> — open-source CDC từ Postgres/MySQL/Oracle.</li>
+          <li><strong>AWS DMS</strong> — managed.</li>
+          <li><strong>Fivetran, Airbyte</strong> — SaaS connector.</li>
+        </ul>
+
+        <p>Pattern hiện đại: source DB (Postgres OLTP) → CDC → Kafka → analytics warehouse + search engine + cache. Cùng 1 source-of-truth, nhiều consumer.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>13. Bài tập</h2>
+
+        <ol>
+          <li>Implement cache-aside cho endpoint <code>GET /user/:id</code> với Redis. Đo cache hit rate và latency.</li>
+          <li>Mô phỏng cache stampede: tắt key hot, gửi 1000 request đồng thời. Quan sát DB. Áp dụng single-flight, đo lại.</li>
+          <li>Tạo bảng posts trong Postgres + tsvector + GIN. Test full-text search vs LIKE '%term%' trên 1M dòng.</li>
+          <li>Thiết kế star schema cho analytics e-commerce: fact_orders + dim_customer + dim_product + dim_date.</li>
+          <li>Phân biệt: khi nào dùng Postgres tsvector, khi nào cần Elasticsearch riêng?</li>
+          <li>So sánh row vs column storage qua ví dụ <code>SELECT AVG(price) FROM products</code> với 100M dòng — tại sao columnar nhanh hơn 50×?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>14. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 11</h3>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Cache-aside pattern:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">App đọc cache trước; miss → đọc DB → set cache; write → ghi DB → invalidate cache</li>
+              <li class="quiz-option">Cache tự ghi DB</li>
+              <li class="quiz-option">DB ghi cache</li>
+              <li class="quiz-option">Không có cache</li>
+            </ul>
+            <div class="quiz-explain">Cache-aside (lazy loading) phổ biến nhất — app chủ động quản lý cache. Đơn giản, fail-open. Nhược: data có thể stale giữa lúc DB write và cache invalidate.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Cache stampede xảy ra khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cache đầy</li>
+              <li class="quiz-option">Network slow</li>
+              <li class="quiz-option">DB chết</li>
+              <li class="quiz-option">Hot key expire đồng loạt → 1000 request miss đồng thời đập vào DB</li>
+            </ul>
+            <div class="quiz-explain">Khi key nóng (homepage, top product) hết hạn, mọi request đến cùng lúc đều miss → DB nhận N query đồng thời. Giải: single-flight (chỉ 1 request rebuild), TTL jitter, stale-while-revalidate.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Inverted index lưu:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Document → từ chứa trong document</li>
+              <li class="quiz-option">User → permissions</li>
+              <li class="quiz-option">Từ → list document chứa từ đó (giống index sách)</li>
+              <li class="quiz-option">Bảng phân vùng</li>
+            </ul>
+            <div class="quiz-explain">"Inverted" so với "forward" (doc → words). Lookup từ → doc cực nhanh. Cơ sở của full-text search. Postgres GIN dùng cấu trúc này cho tsvector.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Column-oriented storage tốt cho:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SELECT * WHERE id=5</li>
+              <li class="quiz-option">SELECT AVG(price), SUM(qty) — chỉ đọc vài cột trên hàng tỷ row</li>
+              <li class="quiz-option">UPDATE 1 row</li>
+              <li class="quiz-option">INSERT 1 row</li>
+            </ul>
+            <div class="quiz-explain">Columnar lưu mỗi column liên tục → query aggregate chỉ cần đọc các cột liên quan, bỏ qua cột khác. Compression cao. Tệ cho row-based access (UPDATE/INSERT 1 row).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Star schema:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Fact table ở giữa + dimension tables xung quanh</li>
+              <li class="quiz-option">Cây phân cấp</li>
+              <li class="quiz-option">Bảng nối many-to-many</li>
+              <li class="quiz-option">Bảng đệ quy</li>
+            </ul>
+            <div class="quiz-explain">Fact (sự kiện đo được) + dimension (mô tả). Hình ngôi sao. Đặc trưng OLAP/data warehouse. Snowflake schema = Star + dimension được normalize tiếp.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">ELT hiện đại được ưa chuộng hơn ETL vì:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">ELT mới hơn nên hot</li>
+              <li class="quiz-option">ELT đơn giản hơn</li>
+              <li class="quiz-option">Warehouse hiện đại (BigQuery/Snowflake) compute mạnh, transform bằng SQL dễ debug + version git</li>
+              <li class="quiz-option">ELT bảo mật hơn</li>
+            </ul>
+            <div class="quiz-explain">ELT load raw vào warehouse trước, transform bằng SQL trong warehouse (dùng dbt). Lợi: SQL dễ debug, version qua git, transform ở compute mạnh. ETL truyền thống dùng staging Python/Java khó maintain hơn.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">CDC (Change Data Capture) trong Postgres dùng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Trigger AFTER UPDATE</li>
+              <li class="quiz-option">Cron job SELECT WHERE updated_at &gt; last</li>
+              <li class="quiz-option">Long polling</li>
+              <li class="quiz-option">Logical replication / WAL stream — đọc thay đổi gần real-time qua Debezium hoặc tương tự</li>
+            </ul>
+            <div class="quiz-explain">CDC tận dụng WAL/binlog. Postgres logical replication tạo "publication" và replication slot, consumer subscribe nhận change real-time. Debezium là implementation phổ biến → Kafka → downstream (Elastic, warehouse).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Khi nào nên dùng Postgres tsvector thay vì Elasticsearch?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Khi search là feature core của app (e-commerce, content site)</li>
+              <li class="quiz-option">Khi search là feature phụ, cùng DB tránh sync, đủ cho moderate scale</li>
+              <li class="quiz-option">Khi data &gt; 10TB</li>
+              <li class="quiz-option">Khi cần log aggregation</li>
+            </ul>
+            <div class="quiz-explain">Postgres tsvector + GIN đủ cho moderate search (post tìm kiếm trong app, comment search). Tránh thêm dependency. Khi search là core (Algolia-level relevance, multi-language, log/metric analytics) → Elastic riêng.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 11. Tiếp theo: <a href="chuong12.html"><strong>Chương 12 — Backup, Recovery & Online Migrations →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 11 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

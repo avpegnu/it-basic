@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 8 — Async Python · Python Sub-pillar</title>
+  <meta name="description" content="Async Python: concurrency vs parallelism, GIL, asyncio event loop, async/await, coroutine, gather, create_task, wait_for, Queue, async with, async for, executor, ecosystem aiohttp/httpx/asyncpg." />
+  <meta name="theme-color" content="#306998" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Diagram event loop asyncio */
+    .asyncio-loop {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      margin: 24px 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+    .asyncio-loop .loop-title {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--ink);
+      margin: 0 0 16px;
+      text-align: center;
+      font-weight: 700;
+    }
+    .asyncio-loop .loop-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .asyncio-loop .loop-box {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .asyncio-loop .loop-box h5 {
+      margin: 0 0 8px;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+    .asyncio-loop .loop-flow {
+      margin: 16px 0 0;
+      padding: 12px 14px;
+      background: var(--accent-soft);
+      border-radius: 8px;
+      color: var(--accent-deep);
+    }
+    .asyncio-loop .loop-flow ol { margin: 4px 0 0 18px; padding: 0; }
+    .asyncio-loop .loop-flow li { margin: 4px 0; }
+
+    /* GIL block diagram */
+    .gil-diagram {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin: 22px 0;
+    }
+    .gil-diagram .gil-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      color: var(--ink);
+      margin: 0 0 12px;
+    }
+    .gil-diagram .gil-track {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin: 6px 0;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+    }
+    .gil-diagram .gil-track .label {
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+    .gil-diagram .gil-track .bar {
+      display: flex;
+      height: 22px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border-soft);
+    }
+    .gil-diagram .seg-run { background: var(--accent); color: white; padding: 2px 8px; }
+    .gil-diagram .seg-wait { background: var(--bg-alt); color: var(--text-muted); padding: 2px 8px; }
+    .gil-diagram .seg-io { background: var(--py-yellow-soft); color: var(--py-yellow-deep); padding: 2px 8px; }
+    .gil-diagram .seg-block { background: #c95a2c; color: white; padding: 2px 8px; }
+    .gil-diagram .gil-legend {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-top: 10px;
+    }
+    .gil-diagram .gil-legend span {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-py">Py</span>
+        Python · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../index.html" class="active">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Python</a><span class="sep">/</span>
+        <span>Chương 8</span>
+      </div>
+      <div class="chapter-num">Chương 08 · Async Python</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Async Python: <em>asyncio</em>, async/await
+      </h1>
+      <p class="lead">
+        Python được sinh ra trong thời đại <strong>blocking I/O là chuẩn mực</strong>. Nhưng web hiện đại đòi hỏi
+        một server xử lý <strong>hàng ngàn kết nối đồng thời</strong>. Module <code>asyncio</code> (Python 3.4+, hoàn
+        thiện ở 3.7+ với <code>async/await</code>) mang đến giải pháp: <em>concurrency với một thread duy nhất</em>,
+        rất giống mô hình event loop của JavaScript — nhưng phải hiểu rõ <strong>GIL</strong>, <strong>coroutine</strong>,
+        và sự khác biệt với threading/multiprocessing.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1100 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-7</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phân biệt rõ ràng <strong>concurrency</strong> và <strong>parallelism</strong>.</li>
+            <li>Hiểu <strong>GIL</strong> (Global Interpreter Lock) và ảnh hưởng đến threading.</li>
+            <li>So sánh 4 mô hình: <strong>sync / threading / multiprocessing / asyncio</strong>.</li>
+            <li>Định nghĩa <strong>coroutine</strong> với <code>async def</code> và schedule chúng vào event loop.</li>
+            <li>Master <code>await</code>, <code>asyncio.run</code>, <code>gather</code>, <code>create_task</code>, <code>wait_for</code>.</li>
+            <li>Dùng <code>asyncio.Queue</code> cho pattern producer–consumer.</li>
+            <li>Sử dụng <code>async with</code>, <code>async for</code> đúng ngữ cảnh.</li>
+            <li>Tránh bẫy "block event loop" khi trộn sync vào async; dùng <code>run_in_executor</code>.</li>
+            <li>Biết hệ sinh thái async: <code>aiohttp</code>, <code>httpx</code>, <code>aiofiles</code>, <code>asyncpg</code>, <code>motor</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="concurrency-vs-parallel">1. Concurrency vs Parallelism</h2>
+
+        <p>
+          Hai khái niệm này thường bị nhầm lẫn vì cùng gợi ý "làm nhiều thứ một lúc". Nhưng ở mức kỹ thuật, chúng
+          <strong>không giống nhau</strong>:
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — đầu bếp và bếp</div>
+          <p>
+            Một đầu bếp đứng nấu 3 món cùng lúc: nồi súp đang sôi (để đó), món xào đang đảo, lò nướng đang nướng.
+            Anh ta <strong>không nướng và xào đồng thời</strong> — anh ta <em>chuyển qua chuyển lại</em> giữa các
+            việc. Đây là <strong>concurrency</strong>: nhiều task xen kẽ trên một resource duy nhất.
+          </p>
+          <p style="margin-top: 10px;">
+            Một nhà hàng có 3 đầu bếp, mỗi người một món. Cả 3 nấu thật sự <em>cùng một lúc</em> — đây mới là
+            <strong>parallelism</strong>: cần nhiều resource (nhiều CPU core).
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Khái niệm</th>
+                <th>Định nghĩa</th>
+                <th>Yêu cầu phần cứng</th>
+                <th>Ví dụ Python</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Concurrency</strong></td>
+                <td>Nhiều task được <em>interleave</em> trên cùng một resource. Cảm giác "chạy cùng lúc" nhưng thực ra chuyển qua lại.</td>
+                <td>1 CPU core là đủ.</td>
+                <td><code>asyncio</code>, threading (CPython).</td>
+              </tr>
+              <tr>
+                <td><strong>Parallelism</strong></td>
+                <td>Nhiều task chạy <em>thật sự cùng lúc</em> trên các CPU core khác nhau.</td>
+                <td>Cần nhiều CPU core / nhiều máy.</td>
+                <td><code>multiprocessing</code>, <code>concurrent.futures.ProcessPoolExecutor</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Một chương trình có thể là (concurrent + không parallel) — ví dụ asyncio chạy 1000 coroutine trên 1 thread.
+          Có thể là (parallel + không concurrent) — ví dụ 4 tiến trình hoàn toàn độc lập, không phối hợp gì. Có thể
+          <em>vừa concurrent vừa parallel</em> — web server thực tế: nhiều worker process, mỗi process chạy event loop
+          với nhiều coroutine.
+        </p>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Câu nói nổi tiếng của Rob Pike</div>
+          <p>
+            <em>"Concurrency is about dealing with lots of things at once. Parallelism is about doing lots of things at once."</em>
+            Concurrency là <strong>tổ chức code</strong>; parallelism là <strong>thực thi vật lý</strong>.
+          </p>
+        </div>
+
+        <h2 id="gil">2. GIL — Global Interpreter Lock</h2>
+
+        <p>
+          GIL là một mutex toàn cục trong <strong>CPython</strong> (bản tham chiếu của Python). Quy tắc: tại bất kỳ
+          thời điểm nào, <strong>chỉ duy nhất một thread được phép thực thi Python bytecode</strong>. Các thread khác
+          phải chờ.
+        </p>
+
+        <p>Hệ quả nghe có vẻ "tiêu cực" nhưng cần hiểu chính xác:</p>
+
+        <ul>
+          <li>Threading <strong>không giúp tăng tốc CPU-bound</strong> trong Python thuần. Hai thread cùng tính toán pi — vẫn chỉ một CPU làm việc.</li>
+          <li>Nhưng threading <strong>vẫn lợi cho I/O-bound</strong>: khi một thread block I/O (đọc socket, đọc file), nó <em>giải phóng GIL</em> cho thread khác chạy.</li>
+          <li>Các thư viện C (NumPy, SciPy, Pillow) thường <em>release GIL</em> trong vòng tính toán C, nên threading có thể song song hoá những phần đó.</li>
+          <li>Để parallel CPU-bound trong Python thuần, dùng <code>multiprocessing</code> — mỗi process có GIL riêng.</li>
+          <li>Python 3.13 đã có chế độ thử nghiệm "no-GIL" (PEP 703 / free-threaded build), nhưng chưa phổ biến trong production năm 2026.</li>
+        </ul>
+
+        <div class="gil-diagram">
+          <div class="gil-title">Threading + GIL — CPU-bound thuần Python</div>
+          <div class="gil-track">
+            <span class="label">Thread A</span>
+            <div class="bar">
+              <span class="seg-run" style="width:25%">RUN</span>
+              <span class="seg-wait" style="width:25%">WAIT GIL</span>
+              <span class="seg-run" style="width:25%">RUN</span>
+              <span class="seg-wait" style="width:25%">WAIT GIL</span>
+            </div>
+          </div>
+          <div class="gil-track">
+            <span class="label">Thread B</span>
+            <div class="bar">
+              <span class="seg-wait" style="width:25%">WAIT GIL</span>
+              <span class="seg-run" style="width:25%">RUN</span>
+              <span class="seg-wait" style="width:25%">WAIT GIL</span>
+              <span class="seg-run" style="width:25%">RUN</span>
+            </div>
+          </div>
+          <div class="gil-legend">
+            <span class="seg-run">RUN</span> đang thực thi Python bytecode (giữ GIL)
+            <span class="seg-wait">WAIT GIL</span> đang chờ GIL
+          </div>
+          <p style="margin: 12px 0 0; font-size: 0.9rem; color: var(--text-soft);">
+            Tổng thời gian ≈ tổng thời gian chạy 1 thread tuần tự. Tốc độ thậm chí <em>chậm hơn</em> vì context-switch.
+          </p>
+        </div>
+
+        <div class="gil-diagram">
+          <div class="gil-title">Threading + GIL — I/O-bound (network/file)</div>
+          <div class="gil-track">
+            <span class="label">Thread A</span>
+            <div class="bar">
+              <span class="seg-run" style="width:15%">RUN</span>
+              <span class="seg-io" style="width:55%">I/O wait (release GIL)</span>
+              <span class="seg-run" style="width:30%">RUN</span>
+            </div>
+          </div>
+          <div class="gil-track">
+            <span class="label">Thread B</span>
+            <div class="bar">
+              <span class="seg-wait" style="width:15%">WAIT</span>
+              <span class="seg-run" style="width:25%">RUN</span>
+              <span class="seg-io" style="width:60%">I/O wait</span>
+            </div>
+          </div>
+          <div class="gil-legend">
+            <span class="seg-io">I/O</span> đang chờ I/O — Python release GIL, thread khác tận dụng.
+          </div>
+          <p style="margin: 12px 0 0; font-size: 0.9rem; color: var(--text-soft);">
+            Hai thread overlap được trong khoảng I/O. Tổng thời gian giảm đáng kể. Đây là lý do threading vẫn hữu ích
+            cho I/O-bound dù có GIL.
+          </p>
+        </div>
+
+        <h2 id="comparison">3. So sánh 4 mô hình</h2>
+
+        <p>Bảng so sánh tổng quan giúp chọn đúng công cụ cho đúng workload:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mô hình</th>
+                <th>Concurrency</th>
+                <th>Parallelism</th>
+                <th>Ảnh hưởng GIL</th>
+                <th>Shared state</th>
+                <th>Overhead</th>
+                <th>Use case</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Sync</strong></td>
+                <td>Không</td>
+                <td>Không</td>
+                <td>—</td>
+                <td>Trực tiếp</td>
+                <td>Rất thấp</td>
+                <td>Script đơn giản, CLI tool, batch nhỏ.</td>
+              </tr>
+              <tr>
+                <td><strong>Threading</strong></td>
+                <td>Có</td>
+                <td>Không cho CPU-bound (Python thuần)</td>
+                <td>Bị giới hạn</td>
+                <td>Trực tiếp (cần <code>Lock</code>)</td>
+                <td>Vừa (KB/thread)</td>
+                <td>I/O-bound, GUI, mix với thư viện C release GIL.</td>
+              </tr>
+              <tr>
+                <td><strong>Multiprocessing</strong></td>
+                <td>Có</td>
+                <td>Có thật sự</td>
+                <td>Không (mỗi process 1 GIL riêng)</td>
+                <td>Phải IPC (Queue/Pipe/shared mem)</td>
+                <td>Cao (MB/process, startup chậm)</td>
+                <td>CPU-bound: tính toán số, xử lý ảnh, ML batch.</td>
+              </tr>
+              <tr>
+                <td><strong>Asyncio</strong></td>
+                <td>Có</td>
+                <td>Không (single-threaded)</td>
+                <td>Không (chỉ 1 thread)</td>
+                <td>Trực tiếp (không lock vì single-threaded)</td>
+                <td>Rất thấp (KB/coroutine)</td>
+                <td>I/O-bound quy mô lớn: web server, scraper, chatbot, hàng ngàn kết nối.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Cây quyết định nhanh</div>
+          <ol>
+            <li>Code là <strong>CPU-bound</strong>? → <code>multiprocessing</code> hoặc thư viện C (NumPy).</li>
+            <li>Code <strong>I/O-bound nhẹ</strong> (vài chục connection)? → threading (đơn giản hơn) hoặc asyncio.</li>
+            <li>Code <strong>I/O-bound nặng</strong> (hàng trăm/ngàn connection đồng thời)? → <code>asyncio</code>.</li>
+            <li>Cần cả I/O + CPU? → asyncio + <code>loop.run_in_executor(ProcessPoolExecutor(), cpu_func)</code>.</li>
+          </ol>
+        </div>
+
+        <h2 id="coroutine">4. Coroutine — đơn vị async cơ bản</h2>
+
+        <p>
+          Trong Python, <strong>coroutine</strong> là một function được khai báo bằng <code>async def</code>. Khi gọi
+          coroutine function, bạn <strong>không chạy nó</strong> — bạn nhận được một <em>coroutine object</em> sẵn sàng
+          được schedule.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Coroutine cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch</span>(url):
+    <span class="tok-com"># giả lập I/O</span>
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(<span class="tok-num">1</span>)
+    <span class="tok-kw">return</span> <span class="tok-str">f"data from {url}"</span>
+
+<span class="tok-com"># Gọi fetch(...) KHÔNG chạy code bên trong:</span>
+coro = <span class="tok-fn">fetch</span>(<span class="tok-str">"https://example.com"</span>)
+<span class="tok-fn">print</span>(coro)
+<span class="tok-com"># &lt;coroutine object fetch at 0x...&gt;</span>
+<span class="tok-com"># Phải schedule bằng await, asyncio.run, hoặc create_task</span>
+
+result = asyncio.<span class="tok-fn">run</span>(coro)
+<span class="tok-fn">print</span>(result)  <span class="tok-com"># 'data from https://example.com'</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gọi coroutine mà không await</div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">work</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">"đang làm"</span>)
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    <span class="tok-fn">work</span>()           <span class="tok-com"># SAI — chỉ tạo coro, không chạy</span>
+    <span class="tok-kw">await</span> <span class="tok-fn">work</span>()     <span class="tok-com"># ĐÚNG — schedule và đợi</span></code></pre>
+          <p style="margin-top: 8px;">
+            Python 3.8+ sẽ warning: <code>RuntimeWarning: coroutine 'work' was never awaited</code>. Đây là một trong
+            những bug phổ biến nhất với người mới — luôn kiểm tra mọi <code>async def</code> đều có một <code>await</code>
+            tương ứng đâu đó.
+          </p>
+        </div>
+
+        <h2 id="await">5. <code>await</code> — tạm dừng và nhường quyền</h2>
+
+        <p>
+          <code>await &lt;awaitable&gt;</code> là biểu thức làm 3 việc:
+        </p>
+
+        <ol>
+          <li><strong>Tạm dừng</strong> coroutine hiện tại.</li>
+          <li><strong>Nhường quyền điều khiển</strong> về event loop để task khác có cơ hội chạy.</li>
+          <li>Khi awaitable hoàn thành, <strong>tiếp tục</strong> coroutine từ chỗ tạm dừng với giá trị trả về.</li>
+        </ol>
+
+        <p><code>await</code> chỉ được phép dùng <em>bên trong <code>async def</code></em>. Trong sync function thông thường sẽ là <code>SyntaxError</code>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>await trace</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio, time
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">say</span>(name, delay):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} bắt đầu"</span>)
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(delay)
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} xong"</span>)
+    <span class="tok-kw">return</span> name
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    t0 = time.<span class="tok-fn">perf_counter</span>()
+    a = <span class="tok-kw">await</span> <span class="tok-fn">say</span>(<span class="tok-str">"A"</span>, <span class="tok-num">1</span>)   <span class="tok-com"># dừng 1s, sau đó chạy tiếp</span>
+    b = <span class="tok-kw">await</span> <span class="tok-fn">say</span>(<span class="tok-str">"B"</span>, <span class="tok-num">2</span>)   <span class="tok-com"># dừng 2s nữa</span>
+    <span class="tok-fn">print</span>(<span class="tok-str">f"Tổng: {time.perf_counter()-t0:.1f}s"</span>)
+
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())
+<span class="tok-com">"""
+A bắt đầu
+A xong
+B bắt đầu
+B xong
+Tổng: 3.0s   # tuần tự
+"""</span></code></pre>
+        </div>
+
+        <p>Ở ví dụ trên, A và B chạy <strong>tuần tự</strong> vì mỗi <code>await</code> chờ xong mới chuyển sang dòng tiếp theo. Muốn song song phải dùng <code>gather</code> hoặc <code>create_task</code> — sẽ trình bày bên dưới.</p>
+
+        <h2 id="asyncio-run">6. <code>asyncio.run</code> — entry point</h2>
+
+        <p>
+          <code>asyncio.run(coro)</code> là cách khuyến nghị để khởi động ứng dụng asyncio ở top-level (script, file
+          <code>__main__</code>). Nó:
+        </p>
+
+        <ul>
+          <li>Tạo một <strong>event loop mới</strong>.</li>
+          <li>Chạy <code>coro</code> cho đến khi xong.</li>
+          <li>Đóng tất cả async generator, shutdown executor, đóng loop.</li>
+          <li>Trả về kết quả của <code>coro</code>.</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pattern top-level</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    <span class="tok-com"># Toàn bộ code async sống ở đây</span>
+    <span class="tok-fn">print</span>(<span class="tok-str">"hello async"</span>)
+
+<span class="tok-kw">if</span> __name__ == <span class="tok-str">"__main__"</span>:
+    asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Không gọi <code>asyncio.run</code> từ trong coroutine</div>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">other</span>())   <span class="tok-com"># SAI — RuntimeError</span></code></pre>
+          <p style="margin-top: 8px;">
+            <code>asyncio.run</code> tự tạo loop mới. Nếu bạn đang ở trong coroutine nghĩa là đã có loop chạy — gọi
+            <code>asyncio.run</code> sẽ raise <em>"asyncio.run() cannot be called from a running event loop"</em>. Trong
+            coroutine, dùng <code>await</code> hoặc <code>create_task</code> để chạy coro khác.
+          </p>
+        </div>
+
+        <p>
+          Trong các framework tích hợp sẵn loop (FastAPI, aiohttp.web, Jupyter, Django async views), bạn <em>không</em>
+          gọi <code>asyncio.run</code> — framework đã quản lý loop. Chỉ dùng nó cho script/CLI tự viết.
+        </p>
+
+        <h2 id="gather">7. <code>asyncio.gather</code> — chạy song song</h2>
+
+        <p>
+          <code>asyncio.gather(*aws)</code> nhận nhiều awaitable và schedule chúng <strong>cùng lúc</strong>, trả về
+          một awaitable mới. Khi <code>await</code> nó, bạn nhận được danh sách kết quả theo đúng thứ tự đầu vào.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>gather — song song</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio, time
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch</span>(name, delay):
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(delay)
+    <span class="tok-kw">return</span> <span class="tok-str">f"&lt;{name}&gt;"</span>
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    t0 = time.<span class="tok-fn">perf_counter</span>()
+    results = <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(
+        <span class="tok-fn">fetch</span>(<span class="tok-str">"A"</span>, <span class="tok-num">1</span>),
+        <span class="tok-fn">fetch</span>(<span class="tok-str">"B"</span>, <span class="tok-num">2</span>),
+        <span class="tok-fn">fetch</span>(<span class="tok-str">"C"</span>, <span class="tok-num">3</span>),
+    )
+    <span class="tok-fn">print</span>(results, <span class="tok-str">f"{time.perf_counter()-t0:.1f}s"</span>)
+    <span class="tok-com"># ['&lt;A&gt;', '&lt;B&gt;', '&lt;C&gt;'] 3.0s  (chứ không phải 6.0s)</span>
+
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())</code></pre>
+        </div>
+
+        <p>
+          Lưu ý: <code>gather</code> nhận awaitable <em>trực tiếp</em> làm tham số, không nhận list.
+          <code>gather([c1, c2])</code> sẽ <strong>không chạy</strong> mà raise lỗi. Muốn unpack list dùng dấu sao:
+          <code>gather(*[c1, c2])</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Unpack list coroutine</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>urls = [<span class="tok-str">"u1"</span>, <span class="tok-str">"u2"</span>, <span class="tok-str">"u3"</span>]
+coros = [<span class="tok-fn">fetch</span>(u, <span class="tok-num">1</span>) <span class="tok-kw">for</span> u <span class="tok-kw">in</span> urls]
+results = <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(*coros)</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Xử lý lỗi trong <code>gather</code></div>
+          <p>Mặc định, nếu một awaitable raise exception, các awaitable khác <em>tiếp tục chạy</em> nhưng <code>gather</code> sẽ raise exception đó ngay khi được await. Hai tham số quan trọng:</p>
+          <ul>
+            <li><code>return_exceptions=True</code>: thay vì raise, exception sẽ được trả về như một phần tử của list kết quả (giống <code>Promise.allSettled</code> của JS).</li>
+            <li>Cancel hành vi: trong Python 3.11+, có <code>asyncio.TaskGroup</code> với <em>structured concurrency</em> — khi một task fail, các task anh em sẽ được cancel tự động.</li>
+          </ul>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">might_fail</span>(x):
+    <span class="tok-kw">if</span> x &lt; <span class="tok-num">0</span>: <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"âm"</span>)
+    <span class="tok-kw">return</span> x * <span class="tok-num">2</span>
+
+results = <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(
+    <span class="tok-fn">might_fail</span>(<span class="tok-num">1</span>), <span class="tok-fn">might_fail</span>(-<span class="tok-num">1</span>), <span class="tok-fn">might_fail</span>(<span class="tok-num">3</span>),
+    return_exceptions=<span class="tok-kw">True</span>,
+)
+<span class="tok-com"># [2, ValueError('âm'), 6]</span></code></pre>
+        </div>
+
+        <h2 id="create-task">8. <code>asyncio.create_task</code> — fire-and-forget</h2>
+
+        <p>
+          <code>gather</code> tốt khi bạn biết trước danh sách coroutine cần đợi. Khi muốn <strong>schedule một
+          coroutine chạy nền</strong> mà <em>không chờ ngay</em>, dùng <code>asyncio.create_task(coro)</code>:
+        </p>
+
+        <ul>
+          <li>Trả về một <code>Task</code> object (subclass của <code>Future</code>).</li>
+          <li>Task bắt đầu chạy <em>ở lần await tiếp theo</em> của coroutine hiện tại.</li>
+          <li>Có thể <code>await task</code> sau để lấy kết quả, hoặc <code>task.cancel()</code> để huỷ.</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>create_task — chạy nền</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">heartbeat</span>():
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"ping"</span>)
+        <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(<span class="tok-num">1</span>)
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    bg = asyncio.<span class="tok-fn">create_task</span>(<span class="tok-fn">heartbeat</span>())   <span class="tok-com"># start nền</span>
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">await</span> <span class="tok-fn">do_work</span>()                          <span class="tok-com"># làm việc chính</span>
+    <span class="tok-kw">finally</span>:
+        bg.<span class="tok-fn">cancel</span>()                                <span class="tok-com"># dọn task nền</span>
+        <span class="tok-kw">try</span>:
+            <span class="tok-kw">await</span> bg
+        <span class="tok-kw">except</span> asyncio.<span class="tok-cls">CancelledError</span>:
+            <span class="tok-kw">pass</span></code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 <code>create_task</code> vs <code>await coro</code> trực tiếp</div>
+          <ul>
+            <li><code>await coro</code>: chạy <em>ngay</em>, block coroutine cha đến khi xong. Tuần tự với code phía trước/sau.</li>
+            <li><code>task = asyncio.create_task(coro)</code>: schedule chạy nền, <em>không block</em>. Sau đó có thể <code>await task</code> để chờ, hoặc bỏ qua.</li>
+            <li><code>asyncio.gather(c1, c2)</code>: schedule cả hai chạy song song <em>và</em> chờ luôn — tương đương <code>create_task</code> mỗi cái rồi await từng cái.</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Đừng tạo task rồi vứt reference</div>
+<pre><code><span class="tok-com"># SAI — Python có thể GC task chưa xong</span>
+asyncio.<span class="tok-fn">create_task</span>(<span class="tok-fn">background_job</span>())
+
+<span class="tok-com"># ĐÚNG — giữ tham chiếu</span>
+task = asyncio.<span class="tok-fn">create_task</span>(<span class="tok-fn">background_job</span>())
+<span class="tok-com"># hoặc lưu vào set:</span>
+_bg_tasks: <span class="tok-type">set</span> = <span class="tok-fn">set</span>()
+t = asyncio.<span class="tok-fn">create_task</span>(<span class="tok-fn">background_job</span>())
+_bg_tasks.<span class="tok-fn">add</span>(t)
+t.<span class="tok-fn">add_done_callback</span>(_bg_tasks.discard)</code></pre>
+          <p style="margin-top: 8px;">
+            Python warning: <em>"Task was destroyed but it is pending!"</em>. Lý do: event loop chỉ giữ
+            <code>weakref</code> tới task, nếu user không giữ reference mạnh, garbage collector có thể thu hồi giữa chừng.
+          </p>
+        </div>
+
+        <h2 id="wait-for">9. <code>asyncio.wait_for</code> — timeout</h2>
+
+        <p>
+          Cuộc sống async đầy rủi ro: một request HTTP có thể treo mãi, một database query có thể tắc. Để áp dụng
+          <strong>timeout</strong> cho một coroutine, dùng <code>asyncio.wait_for(aw, timeout)</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>wait_for — timeout coroutine</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">slow</span>():
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(<span class="tok-num">10</span>)
+    <span class="tok-kw">return</span> <span class="tok-str">"done"</span>
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    <span class="tok-kw">try</span>:
+        result = <span class="tok-kw">await</span> asyncio.<span class="tok-fn">wait_for</span>(<span class="tok-fn">slow</span>(), timeout=<span class="tok-num">2</span>)
+    <span class="tok-kw">except</span> asyncio.<span class="tok-cls">TimeoutError</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"quá hạn 2s"</span>)
+        result = <span class="tok-kw">None</span>
+    <span class="tok-kw">return</span> result
+
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())</code></pre>
+        </div>
+
+        <p>
+          Khi hết thời gian, <code>wait_for</code> sẽ <strong>cancel coroutine bên trong</strong> rồi raise
+          <code>TimeoutError</code>. Quan trọng: coroutine bên trong phải "co-operative" — nó cần đến điểm <code>await</code>
+          để nhận tín hiệu cancel. Nếu nó đang block CPU (vòng for tính toán nặng) thì timeout không tới được.
+        </p>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Python 3.11+ — <code>asyncio.timeout</code></div>
+<pre><code><span class="tok-kw">async with</span> asyncio.<span class="tok-fn">timeout</span>(<span class="tok-num">2</span>):
+    result = <span class="tok-kw">await</span> <span class="tok-fn">slow</span>()
+<span class="tok-com"># Pythonic hơn, có thể bao nhiều await</span></code></pre>
+          <p style="margin-top: 8px;">
+            Cú pháp context manager đẹp hơn, có thể wrap nhiều dòng await trong cùng một timeout, và chuyển đổi giữa
+            "extend timeout" / "fast cancel" dễ hơn.
+          </p>
+        </div>
+
+        <h2 id="queue">10. <code>asyncio.Queue</code> — Producer–Consumer</h2>
+
+        <p>
+          <code>asyncio.Queue</code> là FIFO queue an toàn cho coroutine, không cần lock (vì single-threaded). Đây là
+          cách kinh điển để tách <strong>producer</strong> (đẩy việc) và <strong>consumer</strong> (xử lý):
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Producer–Consumer</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio, random
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">producer</span>(q: asyncio.<span class="tok-cls">Queue</span>):
+    <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>):
+        item = <span class="tok-str">f"item-{i}"</span>
+        <span class="tok-kw">await</span> q.<span class="tok-fn">put</span>(item)
+        <span class="tok-fn">print</span>(<span class="tok-str">f"đẩy {item}"</span>)
+        <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(random.<span class="tok-fn">uniform</span>(<span class="tok-num">0.1</span>, <span class="tok-num">0.3</span>))
+    <span class="tok-kw">await</span> q.<span class="tok-fn">put</span>(<span class="tok-kw">None</span>)  <span class="tok-com"># sentinel báo hết</span>
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">consumer</span>(q: asyncio.<span class="tok-cls">Queue</span>, name: <span class="tok-type">str</span>):
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        item = <span class="tok-kw">await</span> q.<span class="tok-fn">get</span>()
+        <span class="tok-kw">if</span> item <span class="tok-kw">is</span> <span class="tok-kw">None</span>:
+            <span class="tok-kw">await</span> q.<span class="tok-fn">put</span>(<span class="tok-kw">None</span>)  <span class="tok-com"># forward cho consumer khác</span>
+            <span class="tok-kw">break</span>
+        <span class="tok-fn">print</span>(<span class="tok-str">f"{name} xử lý {item}"</span>)
+        <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(<span class="tok-num">0.5</span>)
+        q.<span class="tok-fn">task_done</span>()
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    q = asyncio.<span class="tok-cls">Queue</span>(maxsize=<span class="tok-num">5</span>)
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(
+        <span class="tok-fn">producer</span>(q),
+        <span class="tok-fn">consumer</span>(q, <span class="tok-str">"c1"</span>),
+        <span class="tok-fn">consumer</span>(q, <span class="tok-str">"c2"</span>),
+    )
+
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())</code></pre>
+        </div>
+
+        <p>API quan trọng của <code>Queue</code>:</p>
+
+        <ul>
+          <li><code>await q.put(item)</code> — đẩy, block nếu đầy (khi có <code>maxsize</code>).</li>
+          <li><code>await q.get()</code> — lấy, block nếu rỗng.</li>
+          <li><code>q.put_nowait(item)</code>, <code>q.get_nowait()</code> — bản non-blocking, raise nếu không thể.</li>
+          <li><code>q.task_done()</code> kết hợp với <code>await q.join()</code> — pattern "đợi tất cả item được xử lý xong".</li>
+          <li><code>asyncio.PriorityQueue</code>, <code>asyncio.LifoQueue</code> — biến thể.</li>
+        </ul>
+
+        <h2 id="async-with-for">11. <code>async with</code> và <code>async for</code></h2>
+
+        <p>
+          Hai cú pháp hỗ trợ context manager và iterator <em>có chứa code async</em>:
+        </p>
+
+        <h3 id="async-with">11.1. <code>async with</code> — async context manager</h3>
+
+        <p>
+          Tương tự <code>with</code>, nhưng <code>__enter__</code>/<code>__exit__</code> được thay bằng phiên bản async
+          <code>__aenter__</code>/<code>__aexit__</code>. Phổ biến nhất: HTTP session, DB connection, file async.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>async with</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> aiohttp
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch_json</span>(url):
+    <span class="tok-kw">async with</span> aiohttp.<span class="tok-cls">ClientSession</span>() <span class="tok-kw">as</span> session:
+        <span class="tok-kw">async with</span> session.<span class="tok-fn">get</span>(url) <span class="tok-kw">as</span> response:
+            <span class="tok-kw">return</span> <span class="tok-kw">await</span> response.<span class="tok-fn">json</span>()
+<span class="tok-com"># Session auto-close (close socket pool) khi rời block.</span></code></pre>
+        </div>
+
+        <p>Tự định nghĩa async context manager với <code>contextlib.asynccontextmanager</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>asynccontextmanager</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> asynccontextmanager
+
+<span class="tok-dec">@asynccontextmanager</span>
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">db_connection</span>(dsn):
+    conn = <span class="tok-kw">await</span> <span class="tok-fn">connect</span>(dsn)
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">yield</span> conn
+    <span class="tok-kw">finally</span>:
+        <span class="tok-kw">await</span> conn.<span class="tok-fn">close</span>()
+
+<span class="tok-kw">async with</span> <span class="tok-fn">db_connection</span>(<span class="tok-str">"postgres://..."</span>) <span class="tok-kw">as</span> db:
+    rows = <span class="tok-kw">await</span> db.<span class="tok-fn">fetch</span>(<span class="tok-str">"SELECT 1"</span>)</code></pre>
+        </div>
+
+        <h3 id="async-for">11.2. <code>async for</code> — async iterator</h3>
+
+        <p>
+          Iterator có <code>__aiter__</code> trả về self, <code>__anext__</code> là coroutine trả về phần tử kế (hoặc
+          raise <code>StopAsyncIteration</code>). Một <strong>async generator</strong> (function vừa có <code>async def</code>
+          vừa có <code>yield</code>) là cách dễ nhất để tạo:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Async generator + async for</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">stream_lines</span>(file):
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        line = <span class="tok-kw">await</span> file.<span class="tok-fn">readline</span>()
+        <span class="tok-kw">if</span> <span class="tok-kw">not</span> line: <span class="tok-kw">break</span>
+        <span class="tok-kw">yield</span> line.<span class="tok-fn">decode</span>().<span class="tok-fn">strip</span>()
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    <span class="tok-kw">async for</span> line <span class="tok-kw">in</span> <span class="tok-fn">stream_lines</span>(open_socket):
+        <span class="tok-fn">print</span>(line)</code></pre>
+        </div>
+
+        <p>
+          Async iterator thực sự toả sáng khi nguồn dữ liệu <em>tới dần</em>: HTTP streaming, websocket, Kafka consumer,
+          DB cursor.
+        </p>
+
+        <h2 id="event-loop">12. Event Loop của asyncio</h2>
+
+        <p>
+          Event loop của Python rất giống event loop của JS: <strong>single-threaded</strong>, chạy task đến khi gặp
+          <code>await</code>, yield, sau đó pick task tiếp theo.
+        </p>
+
+        <div class="asyncio-loop">
+          <div class="loop-title">Asyncio event loop — vòng lặp đơn</div>
+          <div class="loop-grid">
+            <div class="loop-box">
+              <h5>Ready Queue</h5>
+              <p>FIFO các task sẵn sàng chạy (vừa được tạo, hoặc vừa được "resume" vì I/O xong).</p>
+            </div>
+            <div class="loop-box">
+              <h5>Waiting Set</h5>
+              <p>Các task đang chờ I/O (selector poll: socket, file descriptor) hoặc đang sleep.</p>
+            </div>
+            <div class="loop-box">
+              <h5>Selector</h5>
+              <p><code>epoll</code> (Linux), <code>kqueue</code> (macOS), <code>IOCP</code> (Windows). Báo loop biết I/O nào sẵn sàng.</p>
+            </div>
+            <div class="loop-box">
+              <h5>Time wheel</h5>
+              <p>Heap các deadline cho <code>asyncio.sleep</code>, <code>wait_for</code>, <code>call_later</code>.</p>
+            </div>
+          </div>
+          <div class="loop-flow">
+            <strong>Mỗi tick:</strong>
+            <ol>
+              <li>Tính thời gian đến deadline gần nhất trong time wheel.</li>
+              <li>Selector poll I/O với timeout = thời gian đó.</li>
+              <li>Đẩy mọi I/O ready callback vào ready queue.</li>
+              <li>Đẩy mọi deadline đến hạn vào ready queue.</li>
+              <li>Drain ready queue: chạy tuần tự từng task đến khi nó <code>await</code> hoặc kết thúc.</li>
+              <li>Quay lại bước 1.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So với JS event loop</div>
+          <ul>
+            <li><strong>Giống</strong>: single-threaded, không block, I/O delegate ra OS, callback-driven.</li>
+            <li><strong>Khác</strong>: JS có 2 queue (macrotask + microtask) với rule drain micro trước; asyncio đơn giản hơn — chỉ 1 ready queue.</li>
+            <li><strong>Khác</strong>: JS event loop "auto-start" ở browser/Node; Python phải gọi <code>asyncio.run</code> tường minh.</li>
+            <li><strong>Khác</strong>: Python <code>asyncio.create_task</code> ~ JS <code>Promise.resolve().then</code> ở chỗ schedule không block, nhưng chỉ "thật sự chạy" khi event loop có cơ hội.</li>
+          </ul>
+        </div>
+
+        <h2 id="sync-vs-async">13. Sync vs Async — không trộn lung tung</h2>
+
+        <p>
+          Quy tắc vàng: <strong>code sync nặng KHÔNG được phép chạy trong coroutine</strong>. Vì asyncio chỉ có một
+          thread, một dòng <code>time.sleep(5)</code> sẽ <em>đóng băng toàn bộ event loop</em> — mọi connection khác
+          phải chờ.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Anti-pattern — block event loop</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio, time
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">bad</span>():
+    time.<span class="tok-fn">sleep</span>(<span class="tok-num">5</span>)         <span class="tok-com"># SAI — block toàn loop 5 giây</span>
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">good</span>():
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(<span class="tok-num">5</span>) <span class="tok-com"># ĐÚNG — yield, các task khác tự do chạy</span></code></pre>
+        </div>
+
+        <p>
+          Vấn đề là không phải lúc nào cũng có "phiên bản async" tương ứng. Khi buộc phải gọi function sync nặng (CPU
+          hoặc I/O không có phiên bản async), dùng <code>loop.run_in_executor</code> để đẩy ra thread pool:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>run_in_executor</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio
+<span class="tok-kw">from</span> concurrent.futures <span class="tok-kw">import</span> <span class="tok-cls">ThreadPoolExecutor</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">sync_cpu</span>(n):
+    <span class="tok-com"># tính toán nặng, không có phiên bản async</span>
+    <span class="tok-kw">return</span> <span class="tok-fn">sum</span>(i * i <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(n))
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    loop = asyncio.<span class="tok-fn">get_running_loop</span>()
+    <span class="tok-com"># None = dùng default executor (ThreadPoolExecutor)</span>
+    result = <span class="tok-kw">await</span> loop.<span class="tok-fn">run_in_executor</span>(<span class="tok-kw">None</span>, sync_cpu, <span class="tok-num">10_000_000</span>)
+    <span class="tok-fn">print</span>(result)
+
+    <span class="tok-com"># Python 3.9+: shortcut</span>
+    result = <span class="tok-kw">await</span> asyncio.<span class="tok-fn">to_thread</span>(sync_cpu, <span class="tok-num">10_000_000</span>)</code></pre>
+        </div>
+
+        <ul>
+          <li><strong>ThreadPoolExecutor</strong> phù hợp khi sync function là <em>I/O-bound</em> (network legacy lib, disk).</li>
+          <li><strong>ProcessPoolExecutor</strong> phù hợp khi sync function là <em>CPU-bound thuần Python</em> (vì GIL).</li>
+          <li><code>asyncio.to_thread(fn, *args)</code> là wrapper gọn cho ThreadPool default — dùng từ Python 3.9.</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Tự đo "loop lag"</div>
+          <p>
+            Một mẹo phổ biến để phát hiện block: chạy một coroutine "heartbeat" đo độ trễ giữa 2 lần
+            <code>asyncio.sleep(0.1)</code>. Nếu khoảng cách đột nhiên thành 5 giây thay vì 0.1 → có ai đó block loop.
+            Thư viện như <code>aiomonitor</code>, <code>blockbuster</code> tự động hoá việc này.
+          </p>
+        </div>
+
+        <h2 id="ecosystem">14. Hệ sinh thái async</h2>
+
+        <p>
+          asyncio chỉ là <em>core</em>. Sức mạnh thực sự đến từ thư viện async-aware. Một số tên quan trọng năm 2026:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Thư viện</th><th>Lĩnh vực</th><th>Ghi chú</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>aiohttp</code></td>
+                <td>HTTP client + server</td>
+                <td>Server framework đầy đủ, client với <code>ClientSession</code> reuse connection pool.</td>
+              </tr>
+              <tr>
+                <td><code>httpx</code></td>
+                <td>HTTP client (sync + async)</td>
+                <td>API thân thiện giống <code>requests</code>; cùng class hỗ trợ cả sync và async — phổ biến nhất 2026.</td>
+              </tr>
+              <tr>
+                <td><code>aiofiles</code></td>
+                <td>File I/O async</td>
+                <td>Wrap file thường vào thread pool — không phải "true async" nhưng đủ dùng.</td>
+              </tr>
+              <tr>
+                <td><code>asyncpg</code></td>
+                <td>PostgreSQL</td>
+                <td>Driver async thuần — nhanh hơn psycopg2 đáng kể, không thông qua libpq.</td>
+              </tr>
+              <tr>
+                <td><code>aiomysql</code> / <code>asyncmy</code></td>
+                <td>MySQL</td>
+                <td>Tương tự cho MySQL/MariaDB.</td>
+              </tr>
+              <tr>
+                <td><code>motor</code></td>
+                <td>MongoDB</td>
+                <td>Bản async chính thức của <code>pymongo</code>.</td>
+              </tr>
+              <tr>
+                <td><code>redis.asyncio</code></td>
+                <td>Redis</td>
+                <td>Đi kèm <code>redis-py</code> >= 4.2, không cần <code>aioredis</code> riêng nữa.</td>
+              </tr>
+              <tr>
+                <td><code>FastAPI</code></td>
+                <td>Web framework</td>
+                <td>Async-first, dựa trên <code>starlette</code> + <code>uvicorn</code>; type hint + Pydantic.</td>
+              </tr>
+              <tr>
+                <td><code>anyio</code> / <code>trio</code></td>
+                <td>Concurrency layer thay thế</td>
+                <td><code>anyio</code> chạy trên cả asyncio và trio; có <code>TaskGroup</code> mạnh mẽ và structured concurrency.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>httpx — fetch nhiều URL song song</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> asyncio, httpx
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch</span>(client, url):
+    r = <span class="tok-kw">await</span> client.<span class="tok-fn">get</span>(url)
+    <span class="tok-kw">return</span> r.status_code, <span class="tok-fn">len</span>(r.content)
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>(urls):
+    <span class="tok-kw">async with</span> httpx.<span class="tok-cls">AsyncClient</span>(timeout=<span class="tok-num">5</span>) <span class="tok-kw">as</span> c:
+        results = <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(
+            *[<span class="tok-fn">fetch</span>(c, u) <span class="tok-kw">for</span> u <span class="tok-kw">in</span> urls],
+            return_exceptions=<span class="tok-kw">True</span>,
+        )
+    <span class="tok-kw">return</span> results
+
+urls = [<span class="tok-str">f"https://httpbin.org/delay/{i}"</span> <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>)]
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>(urls))</code></pre>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — Fetch song song so với tuần tự</h4>
+            <div class="exercise-body">
+              <p>
+                Cài <code>httpx</code>. Viết <code>fetch(url, session)</code> trả về <code>(url, status_code, len(body))</code>.
+                Viết 2 phiên bản:
+              </p>
+              <ul>
+                <li><code>fetch_sequential(urls)</code> — for loop, <code>await</code> từng cái.</li>
+                <li><code>fetch_parallel(urls)</code> — dùng <code>asyncio.gather</code>.</li>
+              </ul>
+              <p>Đo thời gian với 10 URL <code>https://httpbin.org/delay/1</code>. So sánh.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> asyncio, time, httpx
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch</span>(url, session):
+    r = <span class="tok-kw">await</span> session.<span class="tok-fn">get</span>(url)
+    <span class="tok-kw">return</span> url, r.status_code, <span class="tok-fn">len</span>(r.content)
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch_sequential</span>(urls):
+    <span class="tok-kw">async with</span> httpx.<span class="tok-cls">AsyncClient</span>(timeout=<span class="tok-num">5</span>) <span class="tok-kw">as</span> s:
+        out = []
+        <span class="tok-kw">for</span> u <span class="tok-kw">in</span> urls:
+            out.<span class="tok-fn">append</span>(<span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(u, s))
+        <span class="tok-kw">return</span> out
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">fetch_parallel</span>(urls):
+    <span class="tok-kw">async with</span> httpx.<span class="tok-cls">AsyncClient</span>(timeout=<span class="tok-num">5</span>) <span class="tok-kw">as</span> s:
+        <span class="tok-kw">return</span> <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(*[<span class="tok-fn">fetch</span>(u, s) <span class="tok-kw">for</span> u <span class="tok-kw">in</span> urls])
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    urls = [<span class="tok-str">"https://httpbin.org/delay/1"</span>] * <span class="tok-num">10</span>
+    <span class="tok-kw">for</span> name, fn <span class="tok-kw">in</span> [(<span class="tok-str">"seq"</span>, fetch_sequential), (<span class="tok-str">"par"</span>, fetch_parallel)]:
+        t = time.<span class="tok-fn">perf_counter</span>()
+        <span class="tok-kw">await</span> <span class="tok-fn">fn</span>(urls)
+        <span class="tok-fn">print</span>(name, time.<span class="tok-fn">perf_counter</span>() - t)
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())</code></pre>
+                  <p>Sequential ≈ 10 giây (1s × 10). Parallel ≈ 1 giây — chỉ chậm bằng request lâu nhất. Tỉ lệ tăng tốc tuyến tính theo số request đến khi đụng connection pool / OS limit.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — <code>download_all(urls, concurrency=5)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Cho 100 URL nhưng chỉ muốn tối đa <code>concurrency</code> request đồng thời (tránh ban từ server,
+                tránh exhausted file descriptor). Viết function dùng <code>asyncio.Semaphore</code>.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> asyncio, httpx
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">download_all</span>(urls, concurrency=<span class="tok-num">5</span>):
+    sem = asyncio.<span class="tok-cls">Semaphore</span>(concurrency)
+    <span class="tok-kw">async with</span> httpx.<span class="tok-cls">AsyncClient</span>(timeout=<span class="tok-num">10</span>) <span class="tok-kw">as</span> s:
+        <span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">one</span>(u):
+            <span class="tok-kw">async with</span> sem:
+                r = <span class="tok-kw">await</span> s.<span class="tok-fn">get</span>(u)
+                <span class="tok-kw">return</span> u, r.status_code
+
+        <span class="tok-kw">return</span> <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(*[<span class="tok-fn">one</span>(u) <span class="tok-kw">for</span> u <span class="tok-kw">in</span> urls])</code></pre>
+                  <p>
+                    Pattern: <code>Semaphore(N)</code> cho tối đa N task vào <em>section critical</em> đồng thời. Các task
+                    khác await ở <code>async with sem</code> cho đến khi có "vé" rỗi. Cách này đơn giản hơn nhiều so với
+                    tự viết worker pool.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — <code>with_timeout(coro, seconds)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết wrapper <code>with_timeout(coro, seconds)</code>: chạy coroutine với giới hạn thời gian, trả về
+                kết quả nếu kịp, hoặc <code>None</code> nếu hết hạn (không raise exception ra ngoài). So sánh với
+                <code>asyncio.wait_for</code> trực tiếp.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> asyncio
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">with_timeout</span>(coro, seconds):
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">return</span> <span class="tok-kw">await</span> asyncio.<span class="tok-fn">wait_for</span>(coro, timeout=seconds)
+    <span class="tok-kw">except</span> asyncio.<span class="tok-cls">TimeoutError</span>:
+        <span class="tok-kw">return</span> <span class="tok-kw">None</span>
+
+<span class="tok-com"># So sánh:</span>
+<span class="tok-com"># asyncio.wait_for RAISE TimeoutError → caller phải try/except.</span>
+<span class="tok-com"># with_timeout swallows → caller chỉ check None.</span>
+<span class="tok-com">#</span>
+<span class="tok-com"># Trade-off: gọn cho caller nhưng mất thông tin (None vs giá trị bình</span>
+<span class="tok-com"># thường có thể cũng là None). Cách an toàn hơn:</span>
+
+<span class="tok-cls">_SENTINEL</span> = <span class="tok-fn">object</span>()
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">with_timeout</span>(coro, seconds, default=<span class="tok-cls">_SENTINEL</span>):
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">return</span> <span class="tok-kw">await</span> asyncio.<span class="tok-fn">wait_for</span>(coro, seconds)
+    <span class="tok-kw">except</span> asyncio.<span class="tok-cls">TimeoutError</span>:
+        <span class="tok-kw">if</span> default <span class="tok-kw">is</span> <span class="tok-cls">_SENTINEL</span>: <span class="tok-kw">raise</span>
+        <span class="tok-kw">return</span> default</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Worker pool với <code>asyncio.Queue</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết hệ thống: 1 producer push URL vào queue, 5 consumer worker lấy URL ra <code>httpx</code> fetch
+                rồi in status. Khi producer hết URL, gửi sentinel <code>None</code> để consumer dừng. Đảm bảo
+                <code>main</code> chỉ kết thúc khi mọi việc xong.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> asyncio, httpx
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">producer</span>(q, urls):
+    <span class="tok-kw">for</span> u <span class="tok-kw">in</span> urls:
+        <span class="tok-kw">await</span> q.<span class="tok-fn">put</span>(u)
+    <span class="tok-kw">for</span> _ <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>):
+        <span class="tok-kw">await</span> q.<span class="tok-fn">put</span>(<span class="tok-kw">None</span>)  <span class="tok-com"># 1 sentinel/worker</span>
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">worker</span>(name, q, client):
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        url = <span class="tok-kw">await</span> q.<span class="tok-fn">get</span>()
+        <span class="tok-kw">if</span> url <span class="tok-kw">is</span> <span class="tok-kw">None</span>:
+            <span class="tok-kw">break</span>
+        <span class="tok-kw">try</span>:
+            r = <span class="tok-kw">await</span> client.<span class="tok-fn">get</span>(url, timeout=<span class="tok-num">5</span>)
+            <span class="tok-fn">print</span>(name, url, r.status_code)
+        <span class="tok-kw">except</span> <span class="tok-cls">Exception</span> <span class="tok-kw">as</span> e:
+            <span class="tok-fn">print</span>(name, url, <span class="tok-str">"ERR"</span>, e)
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>(urls):
+    q = asyncio.<span class="tok-cls">Queue</span>(maxsize=<span class="tok-num">20</span>)
+    <span class="tok-kw">async with</span> httpx.<span class="tok-cls">AsyncClient</span>() <span class="tok-kw">as</span> client:
+        workers = [
+            asyncio.<span class="tok-fn">create_task</span>(<span class="tok-fn">worker</span>(<span class="tok-str">f"w{i}"</span>, q, client))
+            <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>)
+        ]
+        <span class="tok-kw">await</span> <span class="tok-fn">producer</span>(q, urls)
+        <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(*workers)
+
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>([<span class="tok-str">"https://httpbin.org/get"</span>] * <span class="tok-num">20</span>))</code></pre>
+                  <p>
+                    Lưu ý 2 điều: (1) Cần <em>5 sentinel</em> để dừng <em>5 worker</em>, không phải 1; (2) <code>gather(*workers)</code>
+                    đảm bảo <code>main</code> chỉ thoát sau khi mọi worker đã kết thúc — quan trọng để session
+                    <code>AsyncClient</code> không bị close sớm.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Bug check: <code>time.sleep</code> trong coroutine</h4>
+            <div class="exercise-body">
+              <p>Đoạn code sau "chạy" mất bao lâu? Có gì sai? Fix.</p>
+<pre><code><span class="tok-kw">import</span> asyncio, time
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">slow_task</span>(name):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} start"</span>)
+    time.<span class="tok-fn">sleep</span>(<span class="tok-num">2</span>)
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} done"</span>)
+
+<span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">main</span>():
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(<span class="tok-fn">slow_task</span>(<span class="tok-str">"A"</span>), <span class="tok-fn">slow_task</span>(<span class="tok-str">"B"</span>), <span class="tok-fn">slow_task</span>(<span class="tok-str">"C"</span>))
+
+asyncio.<span class="tok-fn">run</span>(<span class="tok-fn">main</span>())</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+                  <p>
+                    Mất <strong>6 giây</strong>, không phải 2. Vì <code>time.sleep(2)</code> là <em>blocking sync</em> —
+                    đóng băng cả event loop. Output: "A start, A done, B start, B done, C start, C done" — hoàn toàn
+                    tuần tự, không có concurrency nào cả.
+                  </p>
+                  <p>Fix bằng <code>asyncio.sleep</code> (có <code>await</code>):</p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">slow_task</span>(name):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} start"</span>)
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">sleep</span>(<span class="tok-num">2</span>)
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} done"</span>)</code></pre>
+                  <p>
+                    Output mới: 3 lần "start" gần như cùng lúc, 2 giây sau là 3 lần "done". Tổng ≈ 2 giây.
+                  </p>
+                  <p>
+                    Nếu <em>buộc</em> phải gọi sync (vd. library chỉ có sync API), dùng <code>asyncio.to_thread</code>:
+                  </p>
+<pre><code><span class="tok-kw">async</span> <span class="tok-kw">def</span> <span class="tok-fn">slow_task</span>(name):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} start"</span>)
+    <span class="tok-kw">await</span> asyncio.<span class="tok-fn">to_thread</span>(time.sleep, <span class="tok-num">2</span>)
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{name} done"</span>)</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text">
+              <p>Cho <code>async def f(): return 1</code>. Gọi <code>f()</code> trả về gì?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Một <strong>coroutine object</strong> (<code>&lt;coroutine object f at 0x...&gt;</code>), KHÔNG phải
+                <code>1</code>. Code bên trong chưa chạy. Để lấy giá trị: <code>await f()</code> (trong async context)
+                hoặc <code>asyncio.run(f())</code> (ở top-level).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text">
+              <p>Đúng/sai: "GIL khiến <code>threading</code> hoàn toàn vô dụng cho mọi loại CPU-bound."</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không hoàn toàn đúng</strong>. Đúng với CPU-bound <em>Python thuần</em>. Nhưng nhiều thư viện C
+                (NumPy, SciPy, Pillow, regex của <code>re2</code>...) <em>release GIL</em> trong vòng tính toán C —
+                threading vẫn có thể song song hoá phần đó. Cũng có chế độ free-threaded build (PEP 703) từ Python 3.13,
+                nhưng chưa phổ biến.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text">
+              <p>Đoạn <code>asyncio.gather([coro1, coro2, coro3])</code> có chạy đúng không?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. <code>gather</code> nhận awaitable <em>trực tiếp</em> làm tham số, không nhận một
+                list. Truyền list sẽ raise <code>TypeError</code> (vì list không phải awaitable). Phải unpack:
+                <code>asyncio.gather(*[coro1, coro2, coro3])</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text">
+              <p>Một coroutine object được tạo ra khi nào thì <em>thật sự</em> bắt đầu chạy code bên trong?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Khi nó được <strong>schedule vào event loop</strong>. Ba cách:
+              </p>
+              <ul>
+                <li><code>asyncio.run(coro)</code> — top-level, blocking.</li>
+                <li><code>await coro</code> — chạy ngay, đợi xong.</li>
+                <li><code>asyncio.create_task(coro)</code> — schedule chạy nền, không đợi.</li>
+              </ul>
+              <p>Tự thân <code>f()</code> không chạy gì — đó là điểm khác lớn so với function bình thường.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text">
+              <p>Có gì khác giữa hai đoạn sau (mỗi <code>fetch_x()</code> mất 1 giây)?</p>
+<pre><code><span class="tok-com"># A</span>
+<span class="tok-kw">await</span> <span class="tok-fn">fetch_a</span>()
+<span class="tok-kw">await</span> <span class="tok-fn">fetch_b</span>()
+
+<span class="tok-com"># B</span>
+<span class="tok-kw">await</span> asyncio.<span class="tok-fn">gather</span>(<span class="tok-fn">fetch_a</span>(), <span class="tok-fn">fetch_b</span>())</code></pre>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                (A) <strong>tuần tự</strong>: <code>fetch_a</code> phải xong rồi mới khởi tạo <code>fetch_b</code>. Tổng
+                ≈ 2 giây.
+              </p>
+              <p>
+                (B) <strong>song song</strong>: cả hai coroutine được schedule cùng lúc, mỗi cái <code>await sleep</code>
+                yield cho event loop xử lý cái kia. Tổng ≈ 1 giây.
+              </p>
+              <p>Đây là bẫy phổ biến nhất với người mới dùng <code>async/await</code> — "tôi viết async rồi sao vẫn chậm?".</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text">
+              <p>Có thể dùng <code>await</code> trong một function sync (<code>def</code> bình thường) không?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. <code>SyntaxError: 'await' outside async function</code>. <code>await</code> chỉ
+                dùng được trong <code>async def</code>. Khi code sync cần chờ một coroutine, phải dùng
+                <code>asyncio.run(coro())</code> (chỉ ở entry-point) hoặc cấu trúc lại để gọi từ bên trong async context.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text">
+              <p>So sánh <code>asyncio.create_task(coro)</code> với <code>await coro</code>.</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ul>
+                <li><code>await coro</code> — schedule và đợi xong ngay trong cùng dòng. Mọi code phía sau sẽ chạy <em>sau khi</em> coro xong. Tuần tự.</li>
+                <li><code>asyncio.create_task(coro)</code> — schedule chạy nền, trả về <code>Task</code>. Code phía sau chạy <em>song song</em> với task. Có thể <code>await task</code> sau để lấy kết quả, hoặc <code>task.cancel()</code> để huỷ.</li>
+              </ul>
+              <p>Quy tắc: cần kết quả ngay → <code>await</code>. Cần fire-and-forget hoặc song song với việc khác → <code>create_task</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text">
+              <p>Một async function gọi <code>time.sleep(1)</code> giữa hai dòng <code>await</code> — gây hậu quả gì?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Đóng băng toàn bộ event loop trong 1 giây</strong>. Vì <code>time.sleep</code> là sync blocking
+                — nó không yield cho event loop. Mọi coroutine khác (kể cả hàng ngàn client connection đang chờ) đều
+                phải đợi. Ở web server, người dùng sẽ thấy latency tăng vọt.
+              </p>
+              <p>
+                Fix: dùng <code>await asyncio.sleep(1)</code> (yield cho loop). Nếu code sync nặng không tránh được,
+                đẩy ra thread pool: <code>await asyncio.to_thread(blocking_fn, ...)</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 8, bạn nên đã master:</p>
+        <ul>
+          <li><strong>Concurrency vs Parallelism</strong>: concurrency = interleave (1 CPU đủ), parallelism = chạy thật cùng lúc (nhiều CPU).</li>
+          <li><strong>GIL</strong>: rào cản threading CPU-bound trong CPython, nhưng I/O-bound vẫn dùng threading tốt.</li>
+          <li><strong>4 mô hình</strong>: sync (đơn giản), threading (I/O nhẹ), multiprocessing (CPU thật), asyncio (I/O nặng).</li>
+          <li><strong>Coroutine</strong>: <code>async def</code> tạo coroutine; gọi không chạy, phải schedule.</li>
+          <li><strong>await</strong>: tạm dừng, yield cho event loop, tiếp tục khi awaitable xong. Chỉ trong async function.</li>
+          <li><strong>asyncio.run</strong>: entry-point top-level, không gọi từ trong coroutine.</li>
+          <li><strong>gather</strong>: chạy nhiều awaitable song song, trả list kết quả theo thứ tự.</li>
+          <li><strong>create_task</strong>: schedule nền, trả Task object. Nhớ giữ reference.</li>
+          <li><strong>wait_for</strong> / <strong>asyncio.timeout</strong>: áp dụng timeout, cancel nếu quá hạn.</li>
+          <li><strong>Queue</strong>: producer-consumer không cần lock vì single-threaded.</li>
+          <li><strong>async with / async for</strong>: context manager + iterator async — cho session, stream, cursor.</li>
+          <li><strong>Event loop asyncio</strong>: single-threaded, selector-based, giống JS event loop về tinh thần nhưng đơn giản hơn (1 queue).</li>
+          <li><strong>Sync vs async</strong>: KHÔNG block event loop. Sync nặng → <code>run_in_executor</code> / <code>to_thread</code>.</li>
+          <li><strong>Ecosystem</strong>: aiohttp, httpx, aiofiles, asyncpg, motor, redis.asyncio, FastAPI, anyio.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 6 (Generator)</strong> — async generator là sự kết hợp generator + coroutine; <code>async for</code> hoạt động trên async iterator.</li>
+          <li><strong>Chương 7 (Decorators)</strong> — decorator có thể wrap coroutine; nhớ check <code>asyncio.iscoroutinefunction</code> để xử lý đúng.</li>
+          <li><strong>Chương 9 (Typing)</strong> — type hint cho async: <code>Awaitable[T]</code>, <code>Coroutine[Any, Any, T]</code>, <code>AsyncIterator[T]</code>.</li>
+          <li><strong>Chương 10 (Testing)</strong> — test async với <code>pytest-asyncio</code>: marker <code>@pytest.mark.asyncio</code>, fixture async.</li>
+          <li><strong>JavaScript Chương 6 (Async)</strong> — đối chiếu event loop JS với asyncio: cùng mental model, nhưng JS có micro/macro queue rõ ràng, JS auto-start loop còn Python cần <code>asyncio.run</code>.</li>
+          <li><strong>Dart Chương 7 (async/await)</strong> — Dart có cú pháp <code>async</code>/<code>await</code> rất giống Python; <code>Future</code> ~ Python coroutine; <code>Stream</code> ~ async iterator.</li>
+          <li><strong>Networking (Pillar 4)</strong> — asyncio dùng OS selector (epoll/kqueue/IOCP); hiểu TCP/HTTP giúp debug socket leak, connection pool.</li>
+          <li><strong>System Design (Pillar 7)</strong> — async I/O là nền tảng cho high-concurrency server (10K+ connection), pattern phổ biến trong microservice và real-time system.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong7.html" class="prev">
+            <div class="dir">← Chương 7</div>
+            <div class="label">Decorators &amp; Metaprogramming</div>
+          </a>
+          <a href="chuong9.html" class="next">
+            <div class="dir">Chương 9 →</div>
+            <div class="label">Type Hints &amp; mypy</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#concurrency-vs-parallel">1. Concurrency vs Parallelism</a></li>
+          <li><a href="#gil">2. GIL — Global Interpreter Lock</a></li>
+          <li><a href="#comparison">3. So sánh 4 mô hình</a></li>
+          <li><a href="#coroutine">4. Coroutine</a></li>
+          <li><a href="#await">5. await</a></li>
+          <li><a href="#asyncio-run">6. asyncio.run</a></li>
+          <li><a href="#gather">7. asyncio.gather</a></li>
+          <li><a href="#create-task">8. asyncio.create_task</a></li>
+          <li><a href="#wait-for">9. asyncio.wait_for</a></li>
+          <li><a href="#queue">10. asyncio.Queue</a></li>
+          <li><a href="#async-with-for">11. async with / async for</a></li>
+          <li class="level-3"><a href="#async-with">11.1. async with</a></li>
+          <li class="level-3"><a href="#async-for">11.2. async for</a></li>
+          <li><a href="#event-loop">12. Event Loop asyncio</a></li>
+          <li><a href="#sync-vs-async">13. Sync vs Async</a></li>
+          <li><a href="#ecosystem">14. Hệ sinh thái async</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 8 — Async Python · Python sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong7.html">← Chương 7</a> · <a href="../index.html">Python TOC</a> · <a href="chuong9.html">Chương 9 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

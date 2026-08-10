@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2 — SQL Cơ Bản (DDL/DML/DQL/DCL/TCL)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 02 · Core SQL</div>
+      <h1>SQL Cơ Bản — DDL / DML / DQL / DCL / TCL</h1>
+      <p class="subtitle">Năm nhóm câu lệnh SQL với mọi cú pháp bạn dùng hàng ngày. Tập trung Postgres, có note khác biệt MySQL/SQL Server khi cần.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#overview">1. Tổng quan 5 nhóm</a></li>
+        <li><a href="#ddl">2. DDL — Định nghĩa</a></li>
+        <li><a href="#dml">3. DML — Dữ liệu</a></li>
+        <li><a href="#dql">4. DQL — Truy vấn</a></li>
+        <li><a href="#dcl">5. DCL — Quyền</a></li>
+        <li><a href="#tcl">6. TCL — Transaction</a></li>
+        <li><a href="#operators">7. Operators & Functions</a></li>
+        <li><a href="#case">8. CASE expression</a></li>
+        <li><a href="#aggregates">9. Aggregate & GROUP BY</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="overview">
+        <h2>1. Tổng quan 5 nhóm câu lệnh SQL</h2>
+        <p>SQL chia thành 5 nhóm theo mục đích sử dụng:</p>
+
+        <table>
+          <thead>
+            <tr><th>Nhóm</th><th>Tên đầy đủ</th><th>Mục đích</th><th>Câu lệnh tiêu biểu</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>DDL</strong></td><td>Data Definition Language</td><td>Định nghĩa cấu trúc — schema, table, index</td><td><code>CREATE</code>, <code>ALTER</code>, <code>DROP</code>, <code>TRUNCATE</code></td></tr>
+            <tr><td><strong>DML</strong></td><td>Data Manipulation Language</td><td>Thao tác dữ liệu — thêm/sửa/xóa</td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>MERGE</code></td></tr>
+            <tr><td><strong>DQL</strong></td><td>Data Query Language</td><td>Truy vấn dữ liệu</td><td><code>SELECT</code></td></tr>
+            <tr><td><strong>DCL</strong></td><td>Data Control Language</td><td>Quản lý quyền truy cập</td><td><code>GRANT</code>, <code>REVOKE</code></td></tr>
+            <tr><td><strong>TCL</strong></td><td>Transaction Control Language</td><td>Quản lý transaction</td><td><code>BEGIN</code>, <code>COMMIT</code>, <code>ROLLBACK</code>, <code>SAVEPOINT</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-note">
+          <span class="callout-title">Lưu ý</span>
+          Một số tài liệu gộp DQL vào DML (vì SELECT cũng "thao tác" dữ liệu). Cách phân loại chính xác không quan trọng bằng việc bạn nhớ <em>câu lệnh nào làm gì</em>.
+        </div>
+      </section>
+
+      <section id="ddl">
+        <h2>2. DDL — Data Definition Language</h2>
+        <p>DDL định nghĩa <strong>cấu trúc</strong> của database: schema, table, index, constraint, view, trigger, procedure.</p>
+
+        <h3>2.1. CREATE</h3>
+
+<pre><code class="language-sql">-- Tạo database (Postgres):
+CREATE DATABASE shop;
+
+-- Tạo schema (namespace trong DB):
+CREATE SCHEMA inventory;
+
+-- Tạo bảng:
+CREATE TABLE users (
+  id          BIGSERIAL PRIMARY KEY,
+  email       VARCHAR(255) NOT NULL UNIQUE,
+  name        VARCHAR(100),
+  role        VARCHAR(20) NOT NULL DEFAULT 'user',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT  valid_role CHECK (role IN ('user','admin','moderator'))
+);
+
+-- Tạo index:
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_created ON users(created_at DESC);
+CREATE UNIQUE INDEX idx_users_email_uniq ON users(LOWER(email));  -- functional index
+
+-- Tạo view:
+CREATE VIEW active_users AS
+SELECT id, email, name FROM users WHERE deleted_at IS NULL;
+
+-- Tạo materialized view (cache, refresh thủ công):
+CREATE MATERIALIZED VIEW user_stats AS
+SELECT user_id, COUNT(*) AS order_count, SUM(total) AS total_spent
+FROM orders GROUP BY user_id;
+
+REFRESH MATERIALIZED VIEW user_stats;</code></pre>
+
+        <h3>2.2. ALTER</h3>
+
+<pre><code class="language-sql">-- Thêm cột:
+ALTER TABLE users ADD COLUMN phone VARCHAR(20);
+
+-- Thêm cột với default — Postgres 11+ làm rất nhanh, không rewrite table:
+ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active';
+
+-- Đổi tên cột:
+ALTER TABLE users RENAME COLUMN name TO full_name;
+
+-- Đổi kiểu dữ liệu (cẩn thận, có thể rewrite cả bảng):
+ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(30);
+
+-- Thêm constraint:
+ALTER TABLE orders ADD CONSTRAINT positive_total CHECK (total &gt; 0);
+ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Bỏ constraint:
+ALTER TABLE orders DROP CONSTRAINT positive_total;
+
+-- Đổi tên bảng:
+ALTER TABLE users RENAME TO accounts;
+
+-- Bỏ cột (nguy hiểm — mất dữ liệu):
+ALTER TABLE users DROP COLUMN deprecated_field;</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">ALTER trên bảng lớn</span>
+          Một số ALTER cần <strong>rewrite toàn bộ bảng</strong> (đổi type, thêm cột với default phức tạp ở DB cũ) — sẽ lock bảng phút/giờ. Trong production, dùng tool như <code>pg_repack</code>, <code>pt-online-schema-change</code> (xem Ch12). Postgres 11+ đỡ hơn, nhưng vẫn check trước khi chạy.
+        </div>
+
+        <h3>2.3. DROP</h3>
+
+<pre><code class="language-sql">DROP INDEX idx_users_email;
+DROP VIEW active_users;
+DROP TABLE users;            -- ❌ lỗi nếu có FK trỏ tới
+DROP TABLE users CASCADE;    -- ⚠ xóa luôn FK, view phụ thuộc
+DROP DATABASE shop;          -- ⚠ KHÔNG hoàn tác được</code></pre>
+
+        <h3>2.4. TRUNCATE</h3>
+<pre><code class="language-sql">-- Xóa toàn bộ dữ liệu nhưng GIỮ schema:
+TRUNCATE TABLE logs;
+
+-- Reset cả sequence (id trở về 1):
+TRUNCATE TABLE logs RESTART IDENTITY;
+
+-- Cascade (xóa luôn dữ liệu các bảng FK):
+TRUNCATE TABLE users CASCADE;</code></pre>
+
+        <p><strong>TRUNCATE vs DELETE:</strong></p>
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>DELETE</th><th>TRUNCATE</th></tr></thead>
+          <tbody>
+            <tr><td>Tốc độ trên bảng lớn</td><td>Chậm (xử lý từng dòng, ghi WAL)</td><td>Cực nhanh (drop file)</td></tr>
+            <tr><td>Triggers</td><td>Có chạy trigger</td><td>Không chạy</td></tr>
+            <tr><td>WHERE</td><td>Có thể lọc</td><td>Không — xóa hết</td></tr>
+            <tr><td>Trigger AUTO_INCREMENT</td><td>Không reset</td><td>Có thể reset (RESTART IDENTITY)</td></tr>
+            <tr><td>Rollback (trong transaction)</td><td>Có thể</td><td>Có thể (Postgres) — không (MySQL)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="dml">
+        <h2>3. DML — Data Manipulation Language</h2>
+
+        <h3>3.1. INSERT</h3>
+
+<pre><code class="language-sql">-- Insert 1 dòng đầy đủ:
+INSERT INTO users (email, name, role)
+VALUES ('alice@x.com', 'Alice', 'admin');
+
+-- Insert nhiều dòng cùng lúc (NHANH HƠN nhiều insert riêng):
+INSERT INTO users (email, name) VALUES
+  ('bob@x.com',   'Bob'),
+  ('carol@x.com', 'Carol'),
+  ('dave@x.com',  'Dave');
+
+-- Insert kết quả từ SELECT:
+INSERT INTO users_archive (id, email, archived_at)
+SELECT id, email, NOW() FROM users WHERE deleted_at IS NOT NULL;
+
+-- RETURNING — lấy lại id vừa insert (Postgres):
+INSERT INTO users (email, name) VALUES ('eve@x.com', 'Eve')
+RETURNING id, created_at;</code></pre>
+
+        <h3>3.2. UPSERT (INSERT … ON CONFLICT)</h3>
+
+<pre><code class="language-sql">-- "Insert hoặc update nếu trùng key":
+INSERT INTO users (email, name)
+VALUES ('alice@x.com', 'Alice Updated')
+ON CONFLICT (email) DO UPDATE
+  SET name = EXCLUDED.name,
+      updated_at = NOW();
+
+-- Insert hoặc bỏ qua nếu trùng:
+INSERT INTO users (email, name) VALUES ('alice@x.com', 'Alice')
+ON CONFLICT (email) DO NOTHING;</code></pre>
+
+        <p><code>EXCLUDED</code> tham chiếu đến dòng <em>định</em> insert (bị conflict). Cú pháp này thay thế cho <code>REPLACE INTO</code> (MySQL) hay <code>MERGE</code>.</p>
+
+        <h3>3.3. UPDATE</h3>
+
+<pre><code class="language-sql">-- Update 1 cột:
+UPDATE users SET name = 'Alice Smith' WHERE id = 1;
+
+-- Update nhiều cột:
+UPDATE users
+SET name = 'Alice Smith', updated_at = NOW()
+WHERE id = 1;
+
+-- Update tất cả dòng (CỰC NGUY HIỂM nếu quên WHERE):
+UPDATE users SET status = 'active';
+
+-- Update có điều kiện phức tạp:
+UPDATE products
+SET price = price * 1.1                  -- tăng 10%
+WHERE category = 'electronics' AND stock &gt; 0;
+
+-- Update từ JOIN khác (Postgres):
+UPDATE orders
+SET status = 'cancelled'
+FROM users u
+WHERE orders.user_id = u.id AND u.deleted_at IS NOT NULL;
+
+-- Update với RETURNING:
+UPDATE users SET role = 'admin' WHERE id = 1
+RETURNING id, email, role;</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Quy tắc ngón tay cái</span>
+          Trước khi <code>UPDATE</code> hay <code>DELETE</code> production, luôn chạy <code>SELECT</code> với cùng <code>WHERE</code> clause để xem chính xác dòng nào bị ảnh hưởng. Tốt hơn nữa: chạy trong transaction <code>BEGIN ... ROLLBACK</code> để xem trước.
+        </div>
+
+        <h3>3.4. DELETE</h3>
+
+<pre><code class="language-sql">-- Xóa theo điều kiện:
+DELETE FROM users WHERE id = 5;
+DELETE FROM logs WHERE created_at &lt; NOW() - INTERVAL '90 days';
+
+-- Xóa tất cả (giữ schema):
+DELETE FROM users;     -- chậm, nên dùng TRUNCATE
+
+-- Xóa với JOIN (Postgres):
+DELETE FROM orders o
+USING users u
+WHERE o.user_id = u.id AND u.email LIKE '%@spam.com';
+
+-- Soft delete (KHUYẾN NGHỊ ở app prod):
+UPDATE users SET deleted_at = NOW() WHERE id = 5;
+-- App luôn query: WHERE deleted_at IS NULL</code></pre>
+
+        <h3>3.5. MERGE (SQL:2003 — Postgres 15+)</h3>
+<pre><code class="language-sql">MERGE INTO accounts a
+USING new_data n ON a.id = n.id
+WHEN MATCHED THEN UPDATE SET balance = n.balance
+WHEN NOT MATCHED THEN INSERT (id, balance) VALUES (n.id, n.balance);</code></pre>
+        <p>MERGE phức tạp hơn UPSERT, hữu ích khi cần "if-else" theo trạng thái dòng.</p>
+      </section>
+
+      <section id="dql">
+        <h2>4. DQL — SELECT, trái tim của SQL</h2>
+
+        <h3>4.1. Cấu trúc đầy đủ của SELECT</h3>
+
+<pre><code class="language-sql">SELECT [DISTINCT] cols
+FROM tables
+[JOIN ... ON ...]
+WHERE row_filter
+GROUP BY cols
+HAVING group_filter
+ORDER BY cols [ASC|DESC]
+LIMIT n OFFSET m;</code></pre>
+
+        <p><strong>Thứ tự VIẾT</strong> (cú pháp) khác <strong>thứ tự THỰC THI</strong> (logic):</p>
+
+        <div class="ascii">  Viết:                         Thực thi:
+  1. SELECT                     1. FROM        (lấy bảng)
+  2. FROM                       2. JOIN        (kết hợp)
+  3. JOIN                       3. WHERE       (lọc dòng)
+  4. WHERE                      4. GROUP BY    (gom nhóm)
+  5. GROUP BY                   5. HAVING      (lọc nhóm)
+  6. HAVING                     6. SELECT      (chọn cột)
+  7. SELECT                     7. DISTINCT
+  8. ORDER BY                   8. ORDER BY    (sắp xếp)
+  9. LIMIT                      9. LIMIT       (cắt)</div>
+
+        <p>Hệ quả: alias định nghĩa trong SELECT <em>không dùng được</em> ở WHERE/GROUP BY (chưa thực thi đến SELECT). Nhưng có thể dùng ở ORDER BY (đã thực thi sau SELECT).</p>
+
+<pre><code class="language-sql">-- ❌ Lỗi: alias chưa tồn tại khi WHERE chạy
+SELECT total * 0.1 AS tax FROM orders WHERE tax &gt; 5;
+
+-- ✓ Hoạt động:
+SELECT total * 0.1 AS tax FROM orders ORDER BY tax DESC;</code></pre>
+
+        <h3>4.2. SELECT cơ bản</h3>
+
+<pre><code class="language-sql">-- Tất cả cột:
+SELECT * FROM users;
+
+-- Cột cụ thể:
+SELECT id, email FROM users;
+
+-- Alias:
+SELECT id, email AS contact, name AS display_name FROM users;
+
+-- Hằng và biểu thức:
+SELECT id, email, CURRENT_DATE AS today, 'active' AS status FROM users;
+
+-- DISTINCT (loại trùng):
+SELECT DISTINCT country FROM addresses;
+SELECT DISTINCT ON (user_id) user_id, created_at  -- Postgres-only
+FROM orders ORDER BY user_id, created_at DESC;    -- last order per user</code></pre>
+
+        <h3>4.3. WHERE — lọc dòng</h3>
+
+<pre><code class="language-sql">-- So sánh:
+WHERE age = 25
+WHERE age &lt;&gt; 25      -- != cũng được
+WHERE age BETWEEN 18 AND 65    -- inclusive
+
+-- Logic:
+WHERE age &gt; 18 AND status = 'active'
+WHERE role = 'admin' OR role = 'moderator'
+WHERE NOT deleted
+
+-- Tập:
+WHERE country IN ('VN','TH','SG')
+WHERE country NOT IN ('US','UK')
+WHERE id = ANY(ARRAY[1,2,3])         -- Postgres array
+
+-- Pattern:
+WHERE email LIKE '%@gmail.com'       -- _ = 1 ký tự, % = nhiều
+WHERE email ILIKE '%@GMAIL%'         -- case-insensitive (Postgres)
+WHERE email ~ '^[a-z]+@'             -- regex (Postgres)
+WHERE name SIMILAR TO '(Anh|Bình|Cường)%'
+
+-- NULL:
+WHERE deleted_at IS NULL
+WHERE deleted_at IS NOT NULL</code></pre>
+
+        <h3>4.4. ORDER BY</h3>
+<pre><code class="language-sql">SELECT * FROM users ORDER BY created_at DESC;
+SELECT * FROM users ORDER BY role ASC, created_at DESC;  -- 2 cấp
+SELECT * FROM users ORDER BY 2 DESC;                     -- theo cột thứ 2 (tránh)
+
+-- NULLS FIRST/LAST (Postgres):
+SELECT * FROM users ORDER BY name ASC NULLS LAST;</code></pre>
+
+        <h3>4.5. LIMIT / OFFSET — phân trang</h3>
+<pre><code class="language-sql">-- Trang 1, 20 dòng:
+SELECT * FROM users ORDER BY id LIMIT 20;
+
+-- Trang 3 (skip 40 dòng đầu):
+SELECT * FROM users ORDER BY id LIMIT 20 OFFSET 40;
+
+-- Postgres standard:
+SELECT * FROM users ORDER BY id FETCH FIRST 20 ROWS ONLY;</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">OFFSET trên bảng lớn</span>
+          <code>OFFSET 1000000</code> bắt DB scan + bỏ qua 1 triệu dòng — cực chậm. Dùng <strong>keyset pagination</strong>:<br>
+          <code>WHERE id &gt; last_seen_id ORDER BY id LIMIT 20</code>. Sẽ học sâu ở Ch5 (Index) và Ch8 (Optimization).
+        </div>
+      </section>
+
+      <section id="dcl">
+        <h2>5. DCL — Data Control Language (quyền)</h2>
+
+<pre><code class="language-sql">-- Tạo user (role) trong Postgres:
+CREATE ROLE app_user WITH LOGIN PASSWORD 'secret';
+
+-- Cấp quyền:
+GRANT SELECT, INSERT, UPDATE ON users TO app_user;
+GRANT ALL PRIVILEGES ON DATABASE shop TO app_user;
+GRANT USAGE ON SCHEMA inventory TO app_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA inventory TO app_user;
+
+-- Default privileges (cho table tạo TƯƠNG LAI):
+ALTER DEFAULT PRIVILEGES IN SCHEMA inventory
+GRANT SELECT ON TABLES TO app_user;
+
+-- Thu hồi quyền:
+REVOKE INSERT ON users FROM app_user;
+
+-- Role-based (gán role này cho role khác):
+CREATE ROLE readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly;
+GRANT readonly TO app_user;   -- app_user "kế thừa" quyền của readonly</code></pre>
+
+        <p><strong>Khuyến nghị production:</strong></p>
+        <ul>
+          <li>App connect bằng user RIÊNG, KHÔNG superuser.</li>
+          <li>App user chỉ có quyền tối thiểu (SELECT/INSERT/UPDATE — không DROP/TRUNCATE).</li>
+          <li>User cho migration (CI/CD) khác user cho runtime.</li>
+          <li>Không lưu password trong code → dùng env, secret manager.</li>
+        </ul>
+      </section>
+
+      <section id="tcl">
+        <h2>6. TCL — Transaction Control Language</h2>
+        <p>Transaction là <em>đơn vị làm việc nguyên tử</em>. Hoặc tất cả thành công, hoặc tất cả rollback. Đây là "T trong ACID" mà ta sẽ đào sâu ở Ch6.</p>
+
+        <h3>6.1. BEGIN / COMMIT / ROLLBACK</h3>
+<pre><code class="language-sql">BEGIN;  -- hoặc START TRANSACTION;
+
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;  -- trừ A
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;  -- cộng B
+
+-- Xác nhận:
+COMMIT;
+
+-- HOẶC nếu sai gì đó:
+ROLLBACK;</code></pre>
+
+        <p>Khi có ROLLBACK, DB hoàn tác cả 2 UPDATE, balance trở về như cũ. Đây là tính <strong>Atomicity</strong> của ACID.</p>
+
+        <h3>6.2. SAVEPOINT — rollback một phần</h3>
+<pre><code class="language-sql">BEGIN;
+INSERT INTO orders (user_id, total) VALUES (1, 100);
+SAVEPOINT after_order;
+
+INSERT INTO order_items (order_id, product_id, qty) VALUES (last_order_id(), 99, 1);
+-- Lỗi: product 99 không tồn tại
+
+ROLLBACK TO SAVEPOINT after_order;  -- chỉ undo INSERT order_items
+-- order vẫn còn
+
+COMMIT;  -- chỉ commit phần order</code></pre>
+
+        <h3>6.3. Auto-commit</h3>
+        <p>Mặc định, mọi câu SQL đơn lẻ ngoài <code>BEGIN</code> đều tự commit ngay. Nghĩa là:</p>
+<pre><code class="language-sql">UPDATE users SET name = 'X' WHERE id = 1;
+-- Tự động COMMIT, không thể undo</code></pre>
+        <p>Nếu muốn an toàn, luôn bọc trong <code>BEGIN ... COMMIT</code>.</p>
+
+        <h3>6.4. Read-only transaction</h3>
+<pre><code class="language-sql">BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY;
+-- Tối ưu hơn, không cần MVCC overhead cho ghi
+SELECT ...;
+COMMIT;</code></pre>
+
+        <p>Isolation level (READ COMMITTED, REPEATABLE READ, SERIALIZABLE) là chủ đề lớn — Ch6 sẽ đi sâu.</p>
+      </section>
+
+      <section id="operators">
+        <h2>7. Operators & Functions thường dùng</h2>
+
+        <h3>7.1. Toán tử số học</h3>
+<pre><code class="language-sql">SELECT 5 + 3, 10 - 2, 4 * 7, 20 / 3, 20 % 3, 2 ^ 10;
+-- 8, 8, 28, 6 (integer division!), 2, 1024
+SELECT 20.0 / 3;  -- 6.66666... (cast một bên thành float)</code></pre>
+
+        <h3>7.2. Hàm string</h3>
+<pre><code class="language-sql">SELECT
+  LENGTH('hello'),                  -- 5
+  UPPER('hello'),                   -- HELLO
+  LOWER('HELLO'),                   -- hello
+  TRIM('  hi  '),                   -- 'hi'
+  LTRIM('  hi'), RTRIM('hi  '),
+  SUBSTRING('hello world' FROM 7 FOR 5),  -- 'world'
+  POSITION('lo' IN 'hello'),        -- 4
+  REPLACE('hello world', 'world', 'SQL'),
+  CONCAT('a', 'b', 'c'),            -- 'abc'
+  'a' || 'b' || 'c',                -- 'abc' (Postgres ||)
+  REPEAT('ab', 3),                  -- 'ababab'
+  REVERSE('hello'),                 -- 'olleh'
+  SPLIT_PART('a,b,c', ',', 2);      -- 'b'</code></pre>
+
+        <h3>7.3. Hàm số</h3>
+<pre><code class="language-sql">SELECT
+  ABS(-5),           -- 5
+  ROUND(3.456, 1),   -- 3.5
+  CEIL(3.2),         -- 4
+  FLOOR(3.8),        -- 3
+  POWER(2, 10),      -- 1024
+  SQRT(16),          -- 4
+  MOD(10, 3),        -- 1
+  RANDOM();          -- số ngẫu nhiên 0..1</code></pre>
+
+        <h3>7.4. Hàm thời gian</h3>
+<pre><code class="language-sql">SELECT
+  NOW(),                              -- 2026-05-09 10:30:00+07
+  CURRENT_DATE,                       -- 2026-05-09
+  CURRENT_TIME,                       -- 10:30:00+07
+  EXTRACT(YEAR FROM NOW()),           -- 2026
+  EXTRACT(DOW FROM NOW()),            -- day-of-week
+  AGE(NOW(), '2000-01-01'),           -- '26 years 4 mons ...'
+  NOW() - INTERVAL '7 days',          -- 7 ngày trước
+  NOW() + INTERVAL '1 month 2 days',
+  DATE_TRUNC('month', NOW()),         -- 2026-05-01 00:00:00
+  TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI');</code></pre>
+
+        <h3>7.5. Hàm conversion</h3>
+<pre><code class="language-sql">SELECT
+  CAST('123' AS INTEGER),             -- 123
+  '123'::INTEGER,                     -- 123 (Postgres shortcut)
+  CAST(NOW() AS DATE),                -- chỉ ngày
+  TO_NUMBER('123.45', '999.99'),      -- 123.45
+  TO_DATE('2026-05-09', 'YYYY-MM-DD');</code></pre>
+      </section>
+
+      <section id="case">
+        <h2>8. CASE expression — if-else trong SQL</h2>
+
+        <h3>8.1. Searched CASE</h3>
+<pre><code class="language-sql">SELECT
+  email,
+  CASE
+    WHEN age &lt; 18 THEN 'minor'
+    WHEN age &lt; 65 THEN 'adult'
+    ELSE 'senior'
+  END AS age_group
+FROM users;</code></pre>
+
+        <h3>8.2. Simple CASE</h3>
+<pre><code class="language-sql">SELECT
+  email,
+  CASE role
+    WHEN 'admin' THEN 1
+    WHEN 'moderator' THEN 2
+    ELSE 3
+  END AS role_priority
+FROM users
+ORDER BY role_priority;</code></pre>
+
+        <h3>8.3. CASE trong UPDATE</h3>
+<pre><code class="language-sql">UPDATE products SET price =
+  CASE
+    WHEN category = 'electronics' THEN price * 0.9
+    WHEN category = 'clothing'    THEN price * 0.8
+    ELSE price
+  END;</code></pre>
+
+        <h3>8.4. CASE trong COUNT — đếm theo điều kiện</h3>
+<pre><code class="language-sql">SELECT
+  COUNT(*) AS total_users,
+  COUNT(CASE WHEN role = 'admin' THEN 1 END) AS admins,
+  COUNT(CASE WHEN created_at &gt; NOW() - INTERVAL '30 days' THEN 1 END) AS recent
+FROM users;
+
+-- Ngắn hơn (Postgres):
+SELECT
+  COUNT(*) FILTER (WHERE role = 'admin') AS admins,
+  COUNT(*) FILTER (WHERE created_at &gt; NOW() - INTERVAL '30 days') AS recent
+FROM users;</code></pre>
+      </section>
+
+      <section id="aggregates">
+        <h2>9. Aggregate functions & GROUP BY</h2>
+
+        <h3>9.1. Aggregate cơ bản</h3>
+<pre><code class="language-sql">SELECT
+  COUNT(*),                  -- số dòng
+  COUNT(email),              -- số dòng có email NOT NULL
+  COUNT(DISTINCT email),     -- số email khác nhau
+  SUM(total),                -- tổng
+  AVG(total),                -- trung bình
+  MIN(total), MAX(total),
+  STRING_AGG(email, ', '),   -- nối thành chuỗi (Postgres)
+  ARRAY_AGG(email)           -- gom thành array (Postgres)
+FROM orders;</code></pre>
+
+        <h3>9.2. GROUP BY</h3>
+<pre><code class="language-sql">-- Đếm order theo user:
+SELECT user_id, COUNT(*) AS order_count, SUM(total) AS total_spent
+FROM orders
+GROUP BY user_id;
+
+-- Group nhiều cột:
+SELECT country, role, COUNT(*) FROM users
+GROUP BY country, role
+ORDER BY country, role;
+
+-- Group theo expression:
+SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*) AS new_users
+FROM users
+GROUP BY DATE_TRUNC('month', created_at)
+ORDER BY month;</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Quy tắc GROUP BY</span>
+          Mọi cột ở SELECT mà <em>không</em> nằm trong aggregate phải có trong GROUP BY. Nếu không, ANSI SQL báo lỗi (Postgres strict, MySQL có thể nuốt — nguy hiểm vì giá trị trả về không xác định).
+        </div>
+
+        <h3>9.3. HAVING — lọc sau khi group</h3>
+<pre><code class="language-sql">-- Lấy user có nhiều hơn 5 đơn hàng:
+SELECT user_id, COUNT(*) AS order_count
+FROM orders
+GROUP BY user_id
+HAVING COUNT(*) &gt; 5;
+
+-- WHERE vs HAVING:
+-- WHERE lọc DÒNG trước khi gom nhóm
+-- HAVING lọc NHÓM sau khi gom nhóm
+
+SELECT category, AVG(price) AS avg_price
+FROM products
+WHERE stock &gt; 0           -- chỉ tính sản phẩm còn hàng
+GROUP BY category
+HAVING AVG(price) &gt; 100;  -- chỉ trả category trung bình &gt; 100</code></pre>
+
+        <h3>9.4. GROUP BY ROLLUP / CUBE / GROUPING SETS</h3>
+<pre><code class="language-sql">-- ROLLUP: tạo subtotal theo từng bậc
+SELECT country, role, COUNT(*) FROM users
+GROUP BY ROLLUP(country, role);
+
+-- Output:
+-- VN, admin, 5
+-- VN, user,  100
+-- VN, NULL,  105      ← subtotal VN
+-- US, admin, 2
+-- US, user,  50
+-- US, NULL,  52       ← subtotal US
+-- NULL, NULL, 157     ← grand total</code></pre>
+
+        <p>Hữu ích cho báo cáo BI. Sẽ gặp lại ở Ch11 (OLAP).</p>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+        <p><strong>Bài 1.</strong> Cho schema:</p>
+<pre><code class="language-sql">CREATE TABLE products (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(255), category VARCHAR(50),
+  price DECIMAL(10,2), stock INT
+);
+CREATE TABLE orders (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT, total DECIMAL(10,2),
+  status VARCHAR(20), created_at TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+
+        <ol>
+          <li>Lấy 10 sản phẩm đắt nhất.</li>
+          <li>Lấy số lượng sản phẩm theo category.</li>
+          <li>Lấy category có giá trung bình &gt; 200.</li>
+          <li>Đếm số order theo từng status.</li>
+          <li>Lấy user có nhiều hơn 5 order với tổng giá trị &gt; 1000$.</li>
+          <li>Top 5 user chi nhiều tiền nhất.</li>
+          <li>Số order mỗi tháng trong năm 2026.</li>
+        </ol>
+
+        <p><strong>Bài 2.</strong> Viết câu UPSERT: insert hoặc update bảng <code>user_settings(user_id, key, value)</code>. PK là <code>(user_id, key)</code>. Nếu trùng thì update value và set updated_at = NOW().</p>
+
+        <p><strong>Bài 3.</strong> Viết transaction chuyển 100$ từ account A sang account B, đảm bảo atomic.</p>
+
+        <p><strong>Bài 4.</strong> Trong câu sau, vì sao alias không dùng được ở WHERE nhưng dùng được ở ORDER BY?</p>
+<pre><code class="language-sql">SELECT total * 0.1 AS tax FROM orders WHERE tax &gt; 5;  -- ❌
+SELECT total * 0.1 AS tax FROM orders ORDER BY tax;  -- ✓</code></pre>
+
+        <p><strong>Bài 5.</strong> Phân biệt khi nào dùng:</p>
+        <ul>
+          <li>DELETE vs TRUNCATE</li>
+          <li>UNIQUE INDEX vs UNIQUE CONSTRAINT</li>
+          <li>WHERE vs HAVING</li>
+        </ul>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 2</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Câu lệnh nào KHÔNG thuộc DDL?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">CREATE TABLE</li>
+              <li class="quiz-option">ALTER TABLE</li>
+              <li class="quiz-option">INSERT INTO</li>
+              <li class="quiz-option">DROP INDEX</li>
+            </ul>
+            <div class="quiz-explain">INSERT thuộc DML (Data Manipulation Language) — thao tác dữ liệu. CREATE/ALTER/DROP/TRUNCATE là DDL.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Thứ tự THỰC THI logic của các mệnh đề trong SELECT là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SELECT → FROM → WHERE → ORDER BY</li>
+              <li class="quiz-option">FROM → SELECT → WHERE → GROUP BY → ORDER BY</li>
+              <li class="quiz-option">FROM → WHERE → SELECT → GROUP BY → ORDER BY</li>
+              <li class="quiz-option">FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT</li>
+            </ul>
+            <div class="quiz-explain">Thứ tự logic: lấy bảng (FROM), lọc dòng (WHERE), gom nhóm (GROUP BY), lọc nhóm (HAVING), chọn cột (SELECT), sắp xếp (ORDER BY), cắt (LIMIT). Đó là lý do alias định nghĩa ở SELECT chỉ dùng được ở ORDER BY/LIMIT, không dùng ở WHERE.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">DELETE vs TRUNCATE: phát biểu nào ĐÚNG?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">TRUNCATE có thể có WHERE</li>
+              <li class="quiz-option">TRUNCATE nhanh hơn DELETE rất nhiều trên bảng lớn</li>
+              <li class="quiz-option">DELETE không kích hoạt trigger</li>
+              <li class="quiz-option">TRUNCATE giữ lại trigger AFTER DELETE</li>
+            </ul>
+            <div class="quiz-explain">TRUNCATE drop file thẳng — cực nhanh, không lọc theo điều kiện được. DELETE xử lý từng dòng, ghi WAL, kích hoạt trigger DELETE — chậm hơn nhiều. TRUNCATE không kích hoạt trigger DELETE.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">UPSERT trong Postgres dùng cú pháp nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">INSERT … ON CONFLICT … DO UPDATE</li>
+              <li class="quiz-option">REPLACE INTO</li>
+              <li class="quiz-option">INSERT OR UPDATE</li>
+              <li class="quiz-option">UPDATE OR INSERT</li>
+            </ul>
+            <div class="quiz-explain">Postgres dùng <code>INSERT … ON CONFLICT (cols) DO UPDATE SET …</code> hoặc <code>DO NOTHING</code>. <code>REPLACE INTO</code> là MySQL syntax — không nên dùng vì nó DELETE rồi INSERT (mất ID, kích hoạt trigger 2 lần).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">WHERE vs HAVING khác nhau ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">WHERE chậm hơn HAVING</li>
+              <li class="quiz-option">HAVING chỉ dùng cho ORDER BY</li>
+              <li class="quiz-option">WHERE lọc DÒNG trước khi GROUP, HAVING lọc NHÓM sau khi GROUP</li>
+              <li class="quiz-option">Hai cái thay thế cho nhau</li>
+            </ul>
+            <div class="quiz-explain">WHERE filter row trước GROUP BY → có thể dùng cột thường. HAVING filter group sau GROUP BY → có thể dùng aggregate (COUNT, SUM…). Trong nhiều trường hợp WHERE hiệu quả hơn vì giảm dòng trước khi gom.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">SAVEPOINT dùng để:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Lưu file backup</li>
+              <li class="quiz-option">Đánh dấu commit thành công</li>
+              <li class="quiz-option">Lưu position trong cursor</li>
+              <li class="quiz-option">Đánh dấu mốc trong transaction để có thể rollback một phần</li>
+            </ul>
+            <div class="quiz-explain">SAVEPOINT đặt mốc trong transaction. <code>ROLLBACK TO SAVEPOINT name</code> hoàn tác mọi thao tác sau mốc đó nhưng giữ lại mốc trở về trước. Hữu ích khi muốn thử-sai trong transaction lớn.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Giả sử có bảng users với 100 dòng, 30 dòng email NULL. Câu nào đúng?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SELECT COUNT(email) FROM users → 100</li>
+              <li class="quiz-option">SELECT COUNT(email) FROM users → 70</li>
+              <li class="quiz-option">SELECT COUNT(*) FROM users → 70</li>
+              <li class="quiz-option">SELECT SUM(email) FROM users → 100</li>
+            </ul>
+            <div class="quiz-explain">COUNT(*) đếm tất cả dòng = 100. COUNT(email) chỉ đếm dòng có email NOT NULL = 70. SUM trên text không hợp lệ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Mệnh đề <code>COUNT(*) FILTER (WHERE role = 'admin')</code>:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Đếm chỉ những dòng admin trong cùng câu SELECT có nhiều aggregate khác (Postgres)</li>
+              <li class="quiz-option">Là alias của WHERE thông thường</li>
+              <li class="quiz-option">Không có trong SQL</li>
+              <li class="quiz-option">Tương đương GROUP BY role</li>
+            </ul>
+            <div class="quiz-explain">FILTER là cú pháp SQL chuẩn (Postgres hỗ trợ) — cho phép aggregate có điều kiện riêng. Tương đương <code>COUNT(CASE WHEN role='admin' THEN 1 END)</code> nhưng rõ và nhanh hơn.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 2. Tiếp theo: <a href="chuong3.html"><strong>Chương 3 — Advanced SQL: JOIN, Subquery, CTE, Window Functions →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 2 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

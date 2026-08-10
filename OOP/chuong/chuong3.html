@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3 — Class Design Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 03 · Class Design</div>
+      <h1>Class Design Mastery</h1>
+      <p class="subtitle">Composition over Inheritance, immutability, equals/hashCode, interface tối thiểu, Dependency Injection, Law of Demeter, Rich domain model — kỹ năng "pre-pattern" tách junior với senior.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#composition">1. Composition over Inheritance</a></li>
+        <li><a href="#immutable">2. Immutability</a></li>
+        <li><a href="#vo">3. Value vs Reference</a></li>
+        <li><a href="#equals">4. equals & hashCode</a></li>
+        <li><a href="#interface-design">5. Interface design</a></li>
+        <li><a href="#di">6. Dependency Injection</a></li>
+        <li><a href="#demeter">7. Law of Demeter</a></li>
+        <li><a href="#anemic">8. Anemic vs Rich Model</a></li>
+        <li><a href="#naming">9. Naming & Cohesion</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="composition">
+        <h2>1. Composition over Inheritance</h2>
+
+        <blockquote>
+          "Favor object composition over class inheritance." — Gang of Four (1994), Effective Java Item 18 (Bloch)
+        </blockquote>
+
+        <p>
+          Inheritance ("is-a") là công cụ mạnh nhưng dễ tạo coupling chặt và hierarchy fragile. Composition ("has-a") — class chứa
+          object khác như field — linh hoạt hơn, dễ thay runtime, không có vấn đề diamond.
+        </p>
+
+        <h3>1.1. Vấn đề với inheritance — Bird/Penguin</h3>
+
+<pre><code class="language-typescript">// ❌ Inheritance — hierarchy ép buộc
+class Bird {
+  fly() {} eat() {} layEgg() {}
+}
+class Eagle extends Bird {}     // OK
+class Sparrow extends Bird {}   // OK
+class Penguin extends Bird {
+  fly() { throw new Error('Penguins do not fly'); }   // ❌ vi phạm LSP
+}
+class Kiwi extends Bird {
+  fly() { throw new Error('Kiwis do not fly'); }      // ❌ tương tự
+}</code></pre>
+
+        <p>Cây phân loại sinh học không khớp behavioral classification. Mở rộng: Duck — bay, bơi, đi bộ — phải kế thừa từ đâu?</p>
+
+        <h3>1.2. Composition — gắn behavior</h3>
+
+<pre><code class="language-typescript">// ✓ Composition — bird có behavior, không "là" behavior
+interface FlyBehavior   { fly(): void; }
+interface SwimBehavior  { swim(): void; }
+interface QuackBehavior { quack(): void; }
+
+class FlyWithWings  implements FlyBehavior   { fly()   { console.log('flying'); } }
+class CannotFly     implements FlyBehavior   { fly()   { /* nothing */ } }
+class SwimNormal    implements SwimBehavior  { swim()  { console.log('swimming'); } }
+class CannotSwim    implements SwimBehavior  { swim()  { /* nothing */ } }
+
+class Bird {
+  constructor(
+    private flyBehavior: FlyBehavior,
+    private swimBehavior: SwimBehavior
+  ) {}
+
+  fly()  { this.flyBehavior.fly(); }
+  swim() { this.swimBehavior.swim(); }
+
+  // Có thể đổi behavior runtime:
+  setFlyBehavior(b: FlyBehavior) { this.flyBehavior = b; }
+}
+
+// Tạo bird đa dạng:
+const eagle   = new Bird(new FlyWithWings(), new CannotSwim());
+const penguin = new Bird(new CannotFly(),    new SwimNormal());
+const duck    = new Bird(new FlyWithWings(), new SwimNormal());
+
+// Penguin gãy cánh? Đổi behavior:
+penguin.setFlyBehavior(new CannotFly());   // không cần subclass mới</code></pre>
+
+        <p>Đây chính là <strong>Strategy Pattern</strong> (Ch7) — composition là nền cho rất nhiều pattern.</p>
+
+        <h3>1.3. Khi NÀO inheritance vẫn đúng</h3>
+        <ul>
+          <li>Thực sự "is-a" và <strong>hành vi</strong> phù hợp (không chỉ tên).</li>
+          <li>Subclass mở rộng, không hạn chế hành vi parent.</li>
+          <li>Hierarchy không sâu (≤ 2 cấp thường an toàn).</li>
+          <li>Parent là abstract/interface, không phải concrete với state.</li>
+        </ul>
+
+        <p>Ví dụ tốt: <code>UnsupportedOperationException extends RuntimeException extends Exception</code> — tăng dần specificity.</p>
+
+        <h3>1.4. Quy tắc "kế thừa từ class bạn không kiểm soát"</h3>
+        <p>
+          Tránh extend class third-party. Joshua Bloch: <em>"Inheritance is only safe within a package."</em>
+          Class bạn không kiểm soát có thể đổi behavior parent ở version sau, gãy subclass của bạn.
+          Thay vì extend, dùng <strong>composition + delegation</strong> (Decorator pattern).
+        </p>
+      </section>
+
+      <section id="immutable">
+        <h2>2. Immutability — bất biến</h2>
+
+        <p>
+          Object <strong>immutable</strong> không thể thay đổi sau khi tạo. Mọi "thay đổi" trả về object MỚI.
+          Lợi ích: thread-safe miễn phí, không cần defensive copy, dễ reasoning, không bug "ai đó sửa state của tôi".
+        </p>
+
+        <h3>2.1. Cách tạo immutable class</h3>
+
+<pre><code class="language-typescript">class Money {
+  constructor(
+    public readonly amount: number,    // readonly = chỉ gán 1 lần
+    public readonly currency: string
+  ) {
+    if (amount &lt; 0) throw new Error('amount must be non-negative');
+    Object.freeze(this);   // runtime ngăn mọi sửa đổi
+  }
+
+  // Mọi "thay đổi" trả Money mới:
+  add(other: Money): Money {
+    if (this.currency !== other.currency) throw new Error('currency mismatch');
+    return new Money(this.amount + other.amount, this.currency);
+  }
+
+  multiply(factor: number): Money {
+    return new Money(this.amount * factor, this.currency);
+  }
+
+  toString() { return `${this.amount} ${this.currency}`; }
+}
+
+const a = new Money(100, 'USD');
+const b = a.add(new Money(50, 'USD'));   // b mới, a vẫn là 100 USD
+console.log(a.toString());   // "100 USD"
+console.log(b.toString());   // "150 USD"</code></pre>
+
+        <h3>2.2. Defensive copy với mutable input</h3>
+        <p>Nếu constructor nhận mutable object (array, Date), copy để bảo vệ:</p>
+
+<pre><code class="language-typescript">class Period {
+  private readonly _start: Date;
+  private readonly _end: Date;
+
+  constructor(start: Date, end: Date) {
+    // Defensive copy — caller có thể sửa Date của họ về sau
+    this._start = new Date(start);
+    this._end = new Date(end);
+    if (this._start &gt; this._end) throw new Error('invalid range');
+  }
+
+  // Trả copy, không trả tham chiếu nội bộ
+  get start() { return new Date(this._start); }
+  get end()   { return new Date(this._end); }
+}</code></pre>
+
+        <h3>2.3. Cost của immutability</h3>
+        <ul>
+          <li>Tạo object mới mỗi lần "thay đổi" → memory + GC pressure.</li>
+          <li>Hot loop với immutable object có thể chậm.</li>
+        </ul>
+
+        <p>Trade-off: với value object nhỏ và domain entity, immutability đáng giá. Với buffer/big array, mutable phù hợp hơn.</p>
+
+        <p>Persistent data structure (Immutable.js, Immer) giúp "structural sharing" — tạo "phiên bản" mới chỉ copy diff, đỡ overhead.</p>
+
+        <h3>2.4. <code>readonly</code> không phải <code>immutable</code></h3>
+<pre><code class="language-typescript">class Foo {
+  readonly tags: string[] = [];   // readonly field, KHÔNG immutable
+}
+const f = new Foo();
+f.tags = [];        // ❌ readonly
+f.tags.push('a');   // ✓ array bên trong vẫn mutable!
+
+// Sửa: ReadonlyArray + freeze
+class Bar {
+  readonly tags: ReadonlyArray&lt;string&gt;;
+  constructor(tags: string[]) {
+    this.tags = Object.freeze([...tags]);
+  }
+}</code></pre>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Quy tắc thực dụng</span>
+          Mặc định immutable cho Value Object (Money, Address, Email). Mutable cho Entity (User, Order) nhưng <em>chỉ</em> thay đổi qua method, không bao giờ qua field setter trực tiếp.
+        </div>
+      </section>
+
+      <section id="vo">
+        <h2>3. Value vs Reference Semantics</h2>
+
+        <h3>3.1. Phân biệt</h3>
+        <p>Hai object có thể "bằng nhau" theo 2 nghĩa:</p>
+
+        <table>
+          <thead><tr><th></th><th>Reference equality</th><th>Value equality</th></tr></thead>
+          <tbody>
+            <tr><td>So sánh</td><td><code>a === b</code> (cùng object trong RAM)</td><td>cùng giá trị thuộc tính</td></tr>
+            <tr><td>Phù hợp với</td><td>Entity (User, Order — định danh qua ID)</td><td>Value Object (Money, Email)</td></tr>
+            <tr><td>Mutable?</td><td>Thường có thể</td><td>Luôn immutable</td></tr>
+          </tbody>
+        </table>
+
+<pre><code class="language-typescript">const a = new Money(100, 'USD');
+const b = new Money(100, 'USD');
+
+a === b;          // false — 2 object khác nhau trong RAM
+a.equals(b);      // true — cùng giá trị, nếu định nghĩa equals đúng</code></pre>
+
+        <h3>3.2. Value Object — quy tắc</h3>
+        <ul>
+          <li>Immutable.</li>
+          <li>Định danh bởi giá trị thuộc tính (không có ID).</li>
+          <li>Có method <code>equals()</code> + <code>hashCode()</code> dựa trên thuộc tính.</li>
+          <li>Có <code>toString()</code> hữu ích.</li>
+          <li>Tự validate ở constructor.</li>
+        </ul>
+
+<pre><code class="language-typescript">class Email {
+  private static REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  constructor(public readonly value: string) {
+    if (!Email.REGEX.test(value)) throw new Error('invalid email');
+  }
+
+  get domain() { return this.value.split('@')[1]; }
+
+  equals(other: Email): boolean {
+    return this.value.toLowerCase() === other.value.toLowerCase();
+  }
+
+  toString() { return this.value; }
+}
+
+// Dùng:
+const e1 = new Email('alice@x.com');
+const e2 = new Email('ALICE@X.COM');
+e1.equals(e2);   // true (case-insensitive)</code></pre>
+
+        <h3>3.3. Primitive Obsession — antipattern</h3>
+        <p>
+          Lưu email, money, address dưới dạng <code>string</code>/<code>number</code> raw. Vấn đề:
+        </p>
+        <ul>
+          <li>Validate scattered ở mọi nơi dùng.</li>
+          <li>Lẫn lộn: <code>function transfer(from: string, to: string, amount: number)</code> — dễ swap params.</li>
+          <li>Type system không bảo vệ — <code>userId</code> và <code>orderId</code> đều <code>string</code>, hoán đổi nhầm không bị catch.</li>
+        </ul>
+
+<pre><code class="language-typescript">// ❌ Primitive obsession:
+function transfer(fromAccount: string, toAccount: string, amount: number) {}
+
+// ✓ Branded types — Type-safe primitive:
+type AccountId = string &amp; { readonly __brand: 'AccountId' };
+type UserId    = string &amp; { readonly __brand: 'UserId' };
+
+function transfer(from: AccountId, to: AccountId, amount: Money) {}
+
+const userId = 'u_123' as UserId;
+const accId  = 'a_456' as AccountId;
+transfer(userId, accId, ...);   // ❌ Compile error — kiểu không khớp</code></pre>
+      </section>
+
+      <section id="equals">
+        <h2>4. equals & hashCode contract</h2>
+
+        <p>Trong Java, mọi class kế thừa <code>Object.equals()</code> và <code>Object.hashCode()</code>. Override phải tuân contract:</p>
+
+        <h3>4.1. Contract của equals</h3>
+        <ol>
+          <li><strong>Reflexive</strong>: <code>x.equals(x)</code> = true.</li>
+          <li><strong>Symmetric</strong>: <code>x.equals(y)</code> ⟺ <code>y.equals(x)</code>.</li>
+          <li><strong>Transitive</strong>: <code>x.equals(y) &amp;&amp; y.equals(z)</code> → <code>x.equals(z)</code>.</li>
+          <li><strong>Consistent</strong>: gọi nhiều lần kết quả như nhau (nếu state không đổi).</li>
+          <li><code>x.equals(null)</code> = false.</li>
+        </ol>
+
+        <h3>4.2. Contract của hashCode</h3>
+        <ul>
+          <li>Nếu <code>x.equals(y)</code> = true, BẮT BUỘC <code>x.hashCode() == y.hashCode()</code>.</li>
+          <li>Ngược lại: <code>x.hashCode() == y.hashCode()</code> KHÔNG bắt buộc <code>equals</code>.</li>
+        </ul>
+
+        <p>Vi phạm contract → <code>HashMap</code>, <code>HashSet</code> hoạt động sai (object "biến mất" khỏi set).</p>
+
+        <h3>4.3. Implement đúng (Java)</h3>
+<pre><code class="language-java">public final class Money {
+    private final long cents;
+    private final String currency;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Money)) return false;
+        Money m = (Money) o;
+        return cents == m.cents &amp;&amp; currency.equals(m.currency);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(cents, currency);   // dùng helper
+    }
+}</code></pre>
+
+        <h3>4.4. JavaScript / TypeScript</h3>
+        <p>JS không có equals tự động — <code>===</code> chỉ là reference. Tự định nghĩa:</p>
+
+<pre><code class="language-typescript">class Money {
+  constructor(public readonly cents: number, public readonly currency: string) {}
+
+  equals(other: unknown): boolean {
+    if (!(other instanceof Money)) return false;
+    return this.cents === other.cents &amp;&amp; this.currency === other.currency;
+  }
+}
+
+// Set/Map dùng reference equality → không tự dùng được:
+const set = new Set();
+set.add(new Money(100, 'USD'));
+set.has(new Money(100, 'USD'));   // false — 2 object khác
+
+// Workaround: serialize key
+const map = new Map();
+map.set('100|USD', new Money(100, 'USD'));</code></pre>
+
+        <p>Hoặc dùng thư viện <code>immutable.js</code> với value-equality built-in.</p>
+      </section>
+
+      <section id="interface-design">
+        <h2>5. Interface design — minimal API surface</h2>
+
+        <p>Quy tắc Joshua Bloch:</p>
+        <blockquote>
+          "When in doubt, leave it out. APIs, like organisms, evolve. It's easy to add a method later — impossible to remove."
+        </blockquote>
+
+        <h3>5.1. Quy tắc</h3>
+        <ul>
+          <li><strong>Public ít nhất có thể</strong> — private mặc định, public khi cần thiết.</li>
+          <li><strong>Tham số ít</strong> — &gt; 4 tham số là code smell, gom thành object.</li>
+          <li><strong>Tên method rõ nghĩa</strong> — <code>order.markPaid()</code> rõ hơn <code>order.update(2)</code>.</li>
+          <li><strong>Một method một việc</strong> — không có flag <code>doSomething(force: boolean)</code> điều khiển 2 hành vi khác nhau.</li>
+          <li><strong>Tránh primitive obsession</strong> — dùng VO thay raw string.</li>
+        </ul>
+
+        <h3>5.2. Boolean parameter — code smell</h3>
+<pre><code class="language-typescript">// ❌ Khó đọc, dễ swap
+file.copy('a.txt', 'b.txt', true, false);   // true là gì?
+
+// ✓ Tách method
+file.copyOverwriting('a.txt', 'b.txt');
+file.copyPreservingTimestamp('a.txt', 'b.txt');
+
+// HOẶC named parameter object:
+file.copy({ src: 'a.txt', dst: 'b.txt', overwrite: true, preserveTimestamp: false });</code></pre>
+
+        <h3>5.3. Method chaining (fluent interface)</h3>
+<pre><code class="language-typescript">class QueryBuilder {
+  private filters: Filter[] = [];
+  private sortBy: string | null = null;
+  private limitN = 100;
+
+  where(f: Filter): this { this.filters.push(f); return this; }
+  orderBy(col: string): this { this.sortBy = col; return this; }
+  limit(n: number): this { this.limitN = n; return this; }
+
+  build(): Query { /* ... */ }
+}
+
+const q = new QueryBuilder()
+  .where({ col: 'active', op: '=', val: true })
+  .orderBy('created_at')
+  .limit(20)
+  .build();</code></pre>
+      </section>
+
+      <section id="di">
+        <h2>6. Dependency Injection</h2>
+
+        <p>Đã đề cập DIP ở Ch2. Đây ta đi sâu cách thực thi.</p>
+
+        <h3>6.1. Constructor injection (khuyên dùng)</h3>
+<pre><code class="language-typescript">class OrderService {
+  constructor(
+    private orders: OrderRepository,
+    private mailer: NotificationSender,
+    private clock: Clock = new SystemClock()   // có default
+  ) {}
+
+  async checkout(order: Order) { /* ... */ }
+}
+
+// Wire ở composition root:
+const service = new OrderService(
+  new PostgresOrderRepo(db),
+  new SendgridSender(apiKey),
+);</code></pre>
+
+        <p>Lợi: dependency rõ trong signature, immutable sau khi tạo, dễ test.</p>
+
+        <h3>6.2. Setter injection</h3>
+<pre><code class="language-typescript">class OrderService {
+  private mailer?: NotificationSender;
+  setMailer(m: NotificationSender) { this.mailer = m; }
+}</code></pre>
+
+        <p>Phù hợp khi dependency thực sự optional. Nhược: object có thể "chưa hoàn chỉnh" khi sử dụng.</p>
+
+        <h3>6.3. Method injection</h3>
+<pre><code class="language-typescript">class ReportGenerator {
+  generate(orders: Order[], formatter: Formatter): string {
+    return orders.map(o =&gt; formatter.format(o)).join('\n');
+  }
+}</code></pre>
+
+        <p>Phù hợp khi dependency dùng 1 lần cho 1 method, không phải state lâu dài.</p>
+
+        <h3>6.4. DI Container</h3>
+        <p>Khi app lớn, manual wiring trở nên rườm rà. DI container (NestJS, Spring, .NET DI) tự động wire qua decorator/annotation:</p>
+
+<pre><code class="language-typescript">// NestJS style:
+@Injectable()
+class OrderService {
+  constructor(
+    private readonly orders: OrderRepository,
+    private readonly mailer: NotificationSender,
+  ) {}
+}
+
+@Module({
+  providers: [
+    OrderService,
+    { provide: OrderRepository, useClass: PostgresOrderRepository },
+    { provide: NotificationSender, useClass: SendgridSender },
+  ],
+})
+class AppModule {}</code></pre>
+
+        <h3>6.5. Khi DI quá tay</h3>
+        <ul>
+          <li>App nhỏ &lt; 10 service: manual wiring đủ rõ.</li>
+          <li>"Inject" stateless utility (Math, Date.now) — thường overkill.</li>
+          <li>Tạo interface chỉ để có thể inject, dù chỉ 1 implementation: trừ khi cho test, là wasted.</li>
+        </ul>
+      </section>
+
+      <section id="demeter">
+        <h2>7. Law of Demeter — "Don't talk to strangers"</h2>
+
+        <p>Method M của class C chỉ nên gọi method của:</p>
+        <ol>
+          <li>Chính C.</li>
+          <li>Object được tạo trong M.</li>
+          <li>Tham số truyền vào M.</li>
+          <li>Field của C.</li>
+        </ol>
+
+        <p><strong>Không nên</strong> gọi method của object trả về từ method khác (chuỗi <code>a.b().c().d()</code>).</p>
+
+<pre><code class="language-typescript">// ❌ Vi phạm — "train wreck"
+const country = order.getCustomer().getAddress().getCountry().getCode();
+
+// Vi phạm vì:
+// 1. order biết Customer (OK — field)
+// 2. order biết về Address (CHỈ qua Customer — không nên)
+// 3. order biết về Country (càng tệ)
+// Nếu Customer đổi cấu trúc, order code phải sửa.
+
+// ✓ Encapsulate trên Customer:
+class Customer {
+  private address: Address;
+  getCountryCode(): string { return this.address.getCountryCode(); }
+}
+
+class Address {
+  private country: Country;
+  getCountryCode(): string { return this.country.code; }
+}
+
+const country = order.getCustomer().getCountryCode();
+// HOẶC tốt hơn:
+const country = order.getCustomerCountryCode();</code></pre>
+
+        <h3>7.1. Khi vi phạm OK</h3>
+        <p>Fluent builder, jQuery, query builder — chuỗi method là <em>chính API</em>:</p>
+<pre><code class="language-typescript">const q = qb.where(...).orderBy(...).limit(20);   // không vi phạm Demeter — đây là DSL</code></pre>
+        <p>Demeter cảnh báo về <em>chuỗi navigation qua đối tượng khác</em>, không phải fluent API trên cùng builder.</p>
+
+        <h3>7.2. Tinh thần</h3>
+        <p>Demeter giúp giảm coupling. Class A biết quá nhiều về cấu trúc của Class B → A vỡ khi B đổi. Encapsulate "navigation path" vào method công khai.</p>
+      </section>
+
+      <section id="anemic">
+        <h2>8. Anemic vs Rich Domain Model</h2>
+
+        <h3>8.1. Anemic — "OOP thiếu máu"</h3>
+<pre><code class="language-typescript">// ❌ Class chỉ chứa data, getter/setter
+class Order {
+  id: string = '';
+  items: LineItem[] = [];
+  status: string = 'pending';
+  total: number = 0;
+  // chỉ getter/setter
+}
+
+// Logic ở "service" bên ngoài
+class OrderService {
+  addItem(order: Order, item: LineItem) {
+    order.items.push(item);
+    order.total += item.price * item.qty;
+  }
+
+  cancel(order: Order) {
+    if (order.status === 'shipped') throw new Error('cannot cancel shipped');
+    order.status = 'cancelled';
+  }
+}</code></pre>
+
+        <p>Vấn đề:</p>
+        <ul>
+          <li>Logic scatter ở service bên ngoài.</li>
+          <li>Có thể bypass: <code>order.status = 'cancelled'</code> trực tiếp.</li>
+          <li>Encapsulation = 0. Mọi field public hoặc có setter.</li>
+          <li>Nhiều service operate trên cùng entity → khó trace.</li>
+        </ul>
+
+        <h3>8.2. Rich Domain Model</h3>
+<pre><code class="language-typescript">// ✓ Class có behavior, bảo vệ invariant
+class Order {
+  private constructor(
+    public readonly id: OrderId,
+    private _items: LineItem[],
+    private _status: OrderStatus
+  ) {}
+
+  static create(id: OrderId): Order {
+    return new Order(id, [], 'pending');
+  }
+
+  // Method bảo vệ invariant
+  addItem(item: LineItem): void {
+    if (this._status !== 'pending') {
+      throw new Error('Cannot add to non-pending order');
+    }
+    this._items = [...this._items, item];
+  }
+
+  cancel(): void {
+    if (this._status === 'shipped') {
+      throw new Error('Cannot cancel shipped order');
+    }
+    this._status = 'cancelled';
+  }
+
+  total(): Money {
+    return this._items
+      .map(i =&gt; i.subtotal())
+      .reduce((s, m) =&gt; s.add(m), Money.zero());
+  }
+
+  get status() { return this._status; }
+  get items(): ReadonlyArray&lt;LineItem&gt; { return this._items; }
+}
+
+// Service mỏng — chỉ điều phối:
+class OrderService {
+  constructor(private orders: OrderRepository) {}
+
+  async cancelOrder(id: OrderId) {
+    const order = await this.orders.findById(id);
+    if (!order) throw new NotFound();
+    order.cancel();   // logic trong Order, không trong service
+    await this.orders.save(order);
+  }
+}</code></pre>
+
+        <p>Lợi:</p>
+        <ul>
+          <li>Invariant đảm bảo — không thể bypass.</li>
+          <li>Logic tập trung — đọc Order là hiểu Order làm gì.</li>
+          <li>Service mỏng, dễ refactor.</li>
+        </ul>
+
+        <h3>8.3. Khi anemic OK</h3>
+        <ul>
+          <li>DTO (Data Transfer Object) — class chỉ để serialize/deserialize, không có business logic.</li>
+          <li>Read model trong CQRS — chỉ projection cho hiển thị.</li>
+          <li>Form / view model — chỉ binding với UI.</li>
+        </ul>
+
+        <p>Nhưng đừng nhầm DTO với Domain Entity — chúng là 2 khái niệm khác nhau.</p>
+      </section>
+
+      <section id="naming">
+        <h2>9. Naming & Cohesion</h2>
+
+        <h3>9.1. Class names — danh từ cụ thể</h3>
+        <ul>
+          <li>✓ <code>OrderRepository</code>, <code>EmailValidator</code>, <code>PaymentProcessor</code></li>
+          <li>✗ <code>Manager</code>, <code>Helper</code>, <code>Utility</code> — quá generic, code smell</li>
+          <li>✗ <code>OrderManager</code> — class này thực sự làm gì? Quá rộng. Tên cụ thể hơn: <code>OrderRefundProcessor</code>.</li>
+        </ul>
+
+        <h3>9.2. Method names — verb cụ thể</h3>
+        <ul>
+          <li>✓ <code>order.cancel()</code>, <code>user.activate()</code>, <code>cart.checkout()</code></li>
+          <li>✗ <code>process()</code>, <code>handle()</code>, <code>execute()</code> — vague</li>
+          <li>✗ <code>doIt()</code>, <code>run()</code> — vague</li>
+        </ul>
+
+        <h3>9.3. Cohesion — class "đồng nhất"</h3>
+        <p>Class có cohesion cao = mọi method dùng <em>cùng các field</em>. Cohesion thấp → nhiều "subgroup" method, dấu hiệu nên tách class.</p>
+
+<pre><code class="language-typescript">// ❌ Cohesion thấp — 2 nhóm method độc lập
+class UserStuff {
+  // Group 1: dùng email, name
+  validateEmail() { /* dùng this.email */ }
+  formatDisplayName() { /* dùng this.name */ }
+
+  // Group 2: dùng password, lastLogin
+  hashPassword() { /* dùng this.password */ }
+  recordLogin() { /* dùng this.lastLogin */ }
+}
+// → Tách thành Profile và Credential</code></pre>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <ol>
+          <li>Refactor đoạn code sau từ inheritance sang composition. Bird, Penguin, Duck. Cho phép mỗi loài có hành vi fly/swim/quack tổ hợp tự do.</li>
+
+          <li>Tạo Value Object <code>EmailAddress</code> immutable: validate format, equals case-insensitive, toString. Implement đầy đủ.</li>
+
+          <li>Tạo Value Object <code>Money</code> với <code>add</code>, <code>subtract</code>, <code>multiply</code>, <code>equals</code>, throw error khi cộng/trừ tiền tệ khác nhau.</li>
+
+          <li>Branded type cho TypeScript: tạo <code>UserId</code> và <code>OrderId</code> branded types. Demo type safety: function nhận UserId không nhận OrderId.</li>
+
+          <li>Refactor Anemic sang Rich:
+<pre><code class="language-typescript">class Cart {
+  items: any[] = [];
+  total: number = 0;
+}
+class CartService {
+  add(cart, item) { cart.items.push(item); cart.total += item.price; }
+  remove(cart, idx) { cart.total -= cart.items[idx].price; cart.items.splice(idx, 1); }
+  checkout(cart) { if (cart.items.length === 0) throw; }
+}</code></pre>
+          </li>
+
+          <li>Đoạn code vi phạm Law of Demeter. Tìm và sửa:
+<pre><code class="language-typescript">if (order.getCustomer().getMembership().getTier() === 'GOLD') {
+  applyDiscount();
+}</code></pre>
+          </li>
+
+          <li>Khi nào constructor injection vs setter injection? Cho 2 ví dụ thực tế của mỗi loại.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 3</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">"Composition over Inheritance" có nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không bao giờ dùng inheritance</li>
+              <li class="quiz-option">Khi nghi ngờ, dùng "has-a" (chứa object khác như field) thay vì "is-a" (kế thừa)</li>
+              <li class="quiz-option">Composition luôn nhanh hơn</li>
+              <li class="quiz-option">Inheritance đã lỗi thời</li>
+            </ul>
+            <div class="quiz-explain">Inheritance tạo coupling chặt giữa parent-child, fragile với thay đổi parent. Composition linh hoạt hơn — đổi behavior runtime, dễ test, không vấn đề diamond. Vẫn dùng inheritance khi có "is-a" thực sự + behavior phù hợp.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Value Object KHÔNG có đặc điểm:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Immutable</li>
+              <li class="quiz-option">Định danh qua giá trị thuộc tính</li>
+              <li class="quiz-option">Có ID duy nhất phân biệt</li>
+              <li class="quiz-option">Có equals dựa trên thuộc tính</li>
+            </ul>
+            <div class="quiz-explain">Value Object KHÔNG có ID — đó là đặc điểm của Entity. Money 100 USD = Money 100 USD bất kể "instance nào". Money/Email/Address/Coordinate là VO. User/Order/Account là Entity (có ID).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Contract của <code>equals</code>:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Reflexive only</li>
+              <li class="quiz-option">Symmetric only</li>
+              <li class="quiz-option">Transitive only</li>
+              <li class="quiz-option">Reflexive + symmetric + transitive + consistent + null-safe</li>
+            </ul>
+            <div class="quiz-explain">5 luật. Vi phạm bất kỳ luật nào → HashMap/HashSet hoạt động sai. Đặc biệt: nếu equals(y), thì BẮT BUỘC hashCode bằng nhau (contract giữa 2 method).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Anemic Domain Model:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Class chỉ chứa data + getter/setter, mọi logic ở service bên ngoài → mất encapsulation</li>
+              <li class="quiz-option">Class quá nhỏ</li>
+              <li class="quiz-option">Class không có inheritance</li>
+              <li class="quiz-option">Class chỉ có method static</li>
+            </ul>
+            <div class="quiz-explain">Anti-pattern phổ biến với ORM/Spring style. Order chỉ có id/items/total + setters; OrderService.cancel(order) làm logic. Mất encapsulation: ai cũng có thể <code>order.status='shipped'</code> bypass mọi rule. Rich Model: logic trong class, service mỏng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Law of Demeter cảnh báo về:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Inheritance đa cấp</li>
+              <li class="quiz-option">Quá nhiều generic</li>
+              <li class="quiz-option">Chuỗi method navigation kiểu <code>a.b().c().d()</code> — tạo coupling chặt với cấu trúc nội bộ</li>
+              <li class="quiz-option">Chỉ dùng trong Java</li>
+            </ul>
+            <div class="quiz-explain">"Talk to friends, not strangers". Class A gọi a.b().c() = A biết về cấu trúc của B. B đổi → A gãy. Encapsulate qua method trên A hoặc B. Lưu ý: fluent API (builder) trên cùng object KHÔNG vi phạm.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Constructor Injection so với Setter Injection:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Setter dễ dùng hơn</li>
+              <li class="quiz-option">Constructor: dependency rõ trong signature, immutable sau tạo, dễ test — khuyến nghị mặc định</li>
+              <li class="quiz-option">Setter cần ít code hơn</li>
+              <li class="quiz-option">Hai cách giống nhau</li>
+            </ul>
+            <div class="quiz-explain">Constructor injection là pattern khuyến nghị: object hoàn chỉnh ngay sau new, dependency thấy rõ trong constructor signature, có thể đặt private final. Setter injection dùng khi dependency thực sự optional.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Primitive Obsession là khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Dùng quá nhiều if/else</li>
+              <li class="quiz-option">Code không có constant</li>
+              <li class="quiz-option">Class không có method</li>
+              <li class="quiz-option">Lưu domain concept (email, money, id) dưới dạng string/number raw thay vì tạo Value Object riêng</li>
+            </ul>
+            <div class="quiz-explain">Hệ quả: validate scattered, swap params không bị catch, type system không bảo vệ. Sửa: tạo Email/Money/UserId class hoặc branded type. Lợi: validate 1 chỗ, type-safe, behavior gắn liền (Email có domain, Money có add).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text"><code>readonly</code> field array trong TypeScript:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Field tham chiếu không đổi, nhưng array bên trong VẪN có thể push/splice — phải dùng ReadonlyArray + Object.freeze để thực sự immutable</li>
+              <li class="quiz-option">Array tự động immutable</li>
+              <li class="quiz-option">Cấm dùng push</li>
+              <li class="quiz-option">Compile error</li>
+            </ul>
+            <div class="quiz-explain"><code>readonly tags: string[]</code> = không thể gán <code>tags = []</code>, nhưng <code>tags.push('x')</code> vẫn được. Để immutable thực sự: <code>readonly tags: ReadonlyArray&lt;string&gt;</code> + freeze ở constructor.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 3. Tiếp theo: <a href="chuong4.html"><strong>Chương 4 — Creational Patterns (5 mẫu) →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 3 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

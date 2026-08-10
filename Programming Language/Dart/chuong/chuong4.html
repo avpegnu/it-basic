@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 4 — Classes &amp; Inheritance · Dart Sub-pillar</title>
+  <meta name="description" content="Constructor 5 loại, factory, getter/setter, abstract, implicit interface, mixin, class modifier Dart 3 (sealed/base/final/interface), copyWith." />
+  <meta name="theme-color" content="#0568b9" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Crimson+Pro:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-dart">D</span>
+        Dart · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Dart</a></li>
+          <li><a href="../../Flutter/index.html">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Dart</a><span class="sep">/</span>
+        <span>Chương 4</span>
+      </div>
+      <div class="chapter-num">Chương 04 · Classes &amp; Inheritance</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Classes &amp; Inheritance
+      </h1>
+      <p class="lead">
+        Mọi <code>Widget</code> Flutter là <code>class extends StatelessWidget</code> hoặc <code>StatefulWidget</code>.
+        Mọi state management Bloc/Cubit dùng inheritance. Pattern <code>copyWith</code> xuất hiện ở mọi immutable state class.
+        Class modifier Dart 3 (<code>sealed</code>) là nền tảng cho exhaustive pattern matching ở chương 8.
+      </p>
+      <p class="lead" style="font-size: 1.04rem;">
+        Bạn đã học OOP ở <strong>trụ cột OOP &amp; Design Patterns</strong> (8 chương) — chương này không dạy lại OOP từ đầu,
+        mà <strong>map kiến thức OOP sang cú pháp Dart</strong>, nhấn mạnh điểm khác biệt (implicit interface, mixin, factory constructor, class modifier).
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1050 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 2, 3 + OOP pillar</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Khai báo class với field, method, constructor.</li>
+            <li>Sử dụng đủ 5 loại constructor: default, named, initializer list, redirecting, factory.</li>
+            <li>Hiểu getter/setter (computed property).</li>
+            <li>Phân biệt instance member vs static member.</li>
+            <li>Inheritance: <code>extends</code>, <code>@override</code>, <code>super</code>, abstract class/method.</li>
+            <li>Interface (<em>implicit interface</em>) và <code>implements</code>.</li>
+            <li>Mixin: <code>mixin</code>, <code>with</code>, <code>on</code> constraint.</li>
+            <li>Class modifier Dart 3: <code>base</code>, <code>final</code>, <code>sealed</code>, <code>interface</code>, <code>mixin class</code>.</li>
+            <li>Override <code>toString</code>, <code>==</code>, <code>hashCode</code> + pattern <code>copyWith</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="class-anatomy">1. Class anatomy</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Point</span> {
+  <span class="tok-com">// Fields</span>
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> x;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> y;
+
+  <span class="tok-com">// Constructor</span>
+  <span class="tok-fn">Point</span>(<span class="tok-kw">this</span>.x, <span class="tok-kw">this</span>.y);
+
+  <span class="tok-com">// Method</span>
+  <span class="tok-type">double</span> <span class="tok-fn">distanceTo</span>(<span class="tok-cls">Point</span> other) {
+    <span class="tok-kw">final</span> dx = x - other.x;
+    <span class="tok-kw">final</span> dy = y - other.y;
+    <span class="tok-kw">return</span> (dx * dx + dy * dy).<span class="tok-fn">toDouble</span>().<span class="tok-fn">sqrt</span>();
+  }
+}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-kw">final</span> p = <span class="tok-fn">Point</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>);
+  <span class="tok-fn">print</span>(p.x);                       <span class="tok-com">// 3</span>
+  <span class="tok-fn">print</span>(p.<span class="tok-fn">distanceTo</span>(<span class="tok-fn">Point</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>))); <span class="tok-com">// 5</span>
+}</code></pre>
+
+        <p>Naming conventions:</p>
+        <ul>
+          <li><strong>Class:</strong> PascalCase (<code>Point</code>, <code>HttpClient</code>).</li>
+          <li><strong>Field, method, variable:</strong> camelCase.</li>
+          <li><strong>Private:</strong> prefix <code>_</code> (library-private, không class-private).</li>
+        </ul>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 <code>new</code> keyword? Không cần</div>
+          <p>
+            Dart 2+ <code>new</code> là optional. Idiomatic không dùng:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-kw">final</span> p1 = <span class="tok-kw">new</span> <span class="tok-fn">Point</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>);   <span class="tok-com">// OK nhưng lỗi thời</span>
+<span class="tok-kw">final</span> p2 = <span class="tok-fn">Point</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>);       <span class="tok-com">// idiomatic Dart</span></code></pre>
+        </div>
+
+        <h2 id="constructor">2. Constructor — 5 loại</h2>
+
+        <h3 id="ctor-default">2.1 Default constructor</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Point</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> x;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> y;
+
+  <span class="tok-com">// Cách dài</span>
+  <span class="tok-fn">Point</span>(<span class="tok-type">int</span> x, <span class="tok-type">int</span> y)
+      : x = x,
+        y = y;
+
+  <span class="tok-com">// Cách ngắn — shorthand "this.x"</span>
+  <span class="tok-fn">Point</span>(<span class="tok-kw">this</span>.x, <span class="tok-kw">this</span>.y);
+}</code></pre>
+
+        <p><code>this.x</code> shorthand tự gán param vào field tương ứng — tránh boilerplate.</p>
+
+        <h3 id="ctor-named">2.2 Named constructor — nhiều cách tạo instance</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Point</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> x;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> y;
+
+  <span class="tok-com">// Default</span>
+  <span class="tok-fn">Point</span>(<span class="tok-kw">this</span>.x, <span class="tok-kw">this</span>.y);
+
+  <span class="tok-com">// Named</span>
+  <span class="tok-fn">Point.origin</span>() : x = <span class="tok-num">0</span>, y = <span class="tok-num">0</span>;
+  <span class="tok-fn">Point.fromMap</span>(<span class="tok-type">Map</span>&lt;<span class="tok-type">String</span>, <span class="tok-type">int</span>&gt; m) : x = m[<span class="tok-str">'x'</span>]!, y = m[<span class="tok-str">'y'</span>]!;
+}
+
+<span class="tok-kw">final</span> a = <span class="tok-fn">Point</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>);
+<span class="tok-kw">final</span> b = <span class="tok-fn">Point.origin</span>();
+<span class="tok-kw">final</span> c = <span class="tok-fn">Point.fromMap</span>({<span class="tok-str">'x'</span>: <span class="tok-num">1</span>, <span class="tok-str">'y'</span>: <span class="tok-num">2</span>});</code></pre>
+
+        <h3 id="ctor-initializer">2.3 Initializer list — chạy trước body</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Rectangle</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> width;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> height;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> area;     <span class="tok-com">// final phải gán ở initializer list</span>
+
+  <span class="tok-fn">Rectangle</span>(<span class="tok-kw">this</span>.width, <span class="tok-kw">this</span>.height)
+      : area = width * height,
+        <span class="tok-fn">assert</span>(width &gt; <span class="tok-num">0</span>),
+        <span class="tok-fn">assert</span>(height &gt; <span class="tok-num">0</span>) {
+    <span class="tok-fn">print</span>(<span class="tok-str">'Constructed: $width × $height'</span>);
+  }
+}</code></pre>
+
+        <p>Initializer list chạy <strong>trước body</strong>. Dùng cho:</p>
+        <ul>
+          <li>Gán final field từ expression dùng param.</li>
+          <li><code>assert</code> sanity check.</li>
+          <li>Gọi <code>super(...)</code> với arg.</li>
+        </ul>
+
+        <h3 id="ctor-const">2.4 Const constructor</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Point</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> x;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> y;
+
+  <span class="tok-kw">const</span> <span class="tok-fn">Point</span>(<span class="tok-kw">this</span>.x, <span class="tok-kw">this</span>.y);   <span class="tok-com">// const constructor — yêu cầu mọi field final</span>
+}
+
+<span class="tok-kw">const</span> a = <span class="tok-cls">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>);
+<span class="tok-kw">const</span> b = <span class="tok-cls">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>);
+<span class="tok-fn">print</span>(<span class="tok-fn">identical</span>(a, b));  <span class="tok-com">// true — canonicalized!</span></code></pre>
+
+        <p>
+          Class có const constructor → 2 instance const cùng arg dùng cùng memory. Cực kỳ quan trọng cho Flutter performance (widget không rebuild khi const).
+        </p>
+
+        <h3 id="ctor-redirect">2.5 Redirecting constructor</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Point</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> x, y;
+
+  <span class="tok-fn">Point</span>(<span class="tok-kw">this</span>.x, <span class="tok-kw">this</span>.y);
+  <span class="tok-fn">Point.zero</span>() : <span class="tok-kw">this</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>);              <span class="tok-com">// redirect tới default</span>
+  <span class="tok-fn">Point.diag</span>(<span class="tok-type">int</span> v) : <span class="tok-kw">this</span>(v, v);
+}</code></pre>
+
+        <h3 id="ctor-factory">2.6 Factory constructor — không bắt buộc trả instance mới</h3>
+        <p>
+          Đây là loại constructor <strong>đặc biệt</strong> của Dart. <code>factory</code> không bắt buộc trả instance mới — có thể cache, return subclass, hoặc null (nullable type).
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Logger</span> {
+  <span class="tok-kw">static</span> <span class="tok-kw">final</span> _instances = &lt;<span class="tok-type">String</span>, <span class="tok-cls">Logger</span>&gt;{};
+  <span class="tok-kw">final</span> <span class="tok-type">String</span> name;
+
+  <span class="tok-fn">Logger._internal</span>(<span class="tok-kw">this</span>.name);  <span class="tok-com">// private constructor</span>
+
+  <span class="tok-kw">factory</span> <span class="tok-fn">Logger</span>(<span class="tok-type">String</span> name) {
+    <span class="tok-kw">return</span> _instances.<span class="tok-fn">putIfAbsent</span>(name, () =&gt; <span class="tok-fn">Logger._internal</span>(name));
+  }
+
+  <span class="tok-kw">void</span> <span class="tok-fn">log</span>(<span class="tok-type">String</span> msg) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'[$name] $msg'</span>);
+}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-kw">final</span> a = <span class="tok-fn">Logger</span>(<span class="tok-str">'http'</span>);
+  <span class="tok-kw">final</span> b = <span class="tok-fn">Logger</span>(<span class="tok-str">'http'</span>);
+  <span class="tok-fn">print</span>(<span class="tok-fn">identical</span>(a, b));   <span class="tok-com">// true — same instance, cache hit</span>
+
+  <span class="tok-kw">final</span> c = <span class="tok-fn">Logger</span>(<span class="tok-str">'db'</span>);
+  <span class="tok-fn">print</span>(<span class="tok-fn">identical</span>(a, c));   <span class="tok-com">// false — khác name, instance khác</span>
+}</code></pre>
+
+        <p>Use cases factory:</p>
+        <ul>
+          <li><strong>Singleton</strong> per key (như Logger trên).</li>
+          <li>Parse JSON: <code>factory User.fromJson(Map json) =&gt; User(...)</code>.</li>
+          <li>Return subclass: <code>factory Shape.from(String type) =&gt; type == 'circle' ? Circle() : Square();</code>.</li>
+          <li>Cache expensive object.</li>
+        </ul>
+
+        <h2 id="getter-setter">3. Getter / Setter — computed property</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Rectangle</span> {
+  <span class="tok-type">int</span> width, height;
+
+  <span class="tok-fn">Rectangle</span>(<span class="tok-kw">this</span>.width, <span class="tok-kw">this</span>.height);
+
+  <span class="tok-com">// Getter — không có ()</span>
+  <span class="tok-type">int</span> <span class="tok-kw">get</span> area =&gt; width * height;
+  <span class="tok-type">int</span> <span class="tok-kw">get</span> perimeter =&gt; <span class="tok-num">2</span> * (width + height);
+
+  <span class="tok-com">// Setter</span>
+  <span class="tok-kw">set</span> dimensions(<span class="tok-type">List</span>&lt;<span class="tok-type">int</span>&gt; xy) {
+    width = xy[<span class="tok-num">0</span>];
+    height = xy[<span class="tok-num">1</span>];
+  }
+}
+
+<span class="tok-kw">final</span> r = <span class="tok-fn">Rectangle</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>);
+<span class="tok-fn">print</span>(r.area);          <span class="tok-com">// 12 — gọi như field, không có ()</span>
+r.dimensions = [<span class="tok-num">5</span>, <span class="tok-num">6</span>]; <span class="tok-com">// gọi setter</span></code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Dart không phân biệt field access vs getter call</div>
+          <p>
+            Từ caller, <code>r.area</code> trông giống <code>r.width</code> (field). Đây là feature: bạn có thể <em>refactor field thành getter</em>
+            mà không breaking caller code.
+          </p>
+        </div>
+
+        <h2 id="static">4. Static member</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">MathHelper</span> {
+  <span class="tok-kw">static</span> <span class="tok-kw">const</span> pi = <span class="tok-num">3.14159</span>;
+
+  <span class="tok-kw">static</span> <span class="tok-type">int</span> <span class="tok-fn">square</span>(<span class="tok-type">int</span> x) =&gt; x * x;
+  <span class="tok-kw">static</span> <span class="tok-type">int</span> <span class="tok-fn">cube</span>(<span class="tok-type">int</span> x) =&gt; x * x * x;
+}
+
+<span class="tok-fn">print</span>(<span class="tok-cls">MathHelper</span>.pi);          <span class="tok-com">// 3.14159</span>
+<span class="tok-fn">print</span>(<span class="tok-cls">MathHelper</span>.<span class="tok-fn">square</span>(<span class="tok-num">5</span>));   <span class="tok-com">// 25</span>
+
+<span class="tok-com">// Không gọi từ instance</span>
+<span class="tok-kw">final</span> h = <span class="tok-fn">MathHelper</span>();
+<span class="tok-com">// h.square(5);   // ❌ Lỗi</span></code></pre>
+
+        <h2 id="private">5. Private — prefix <code>_</code></h2>
+        <p>
+          Dart <strong>không có</strong> <code>private</code> keyword. Convention: prefix <code>_</code> = private.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// File: user.dart</span>
+<span class="tok-kw">class</span> <span class="tok-cls">User</span> {
+  <span class="tok-type">String</span> name;            <span class="tok-com">// public</span>
+  <span class="tok-type">String</span> _passwordHash;   <span class="tok-com">// private — chỉ accessible trong cùng file/library</span>
+
+  <span class="tok-fn">User</span>(<span class="tok-kw">this</span>.name, <span class="tok-kw">this</span>._passwordHash);
+}
+
+<span class="tok-com">// File: main.dart</span>
+<span class="tok-kw">import</span> <span class="tok-str">'user.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-kw">final</span> u = <span class="tok-fn">User</span>(<span class="tok-str">'Việt'</span>, <span class="tok-str">'abc123'</span>);
+  <span class="tok-fn">print</span>(u.name);            <span class="tok-com">// OK</span>
+  <span class="tok-com">// print(u._passwordHash); // ❌ Lỗi — private khác file</span>
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Private = library scope, không phải class scope</div>
+          <p>
+            Khác Java/C# (private = class scope). Dart private = <em>library</em> scope — mọi file trong cùng library access được.
+            Đa số case: 1 file = 1 library, nên ≈ file scope.
+          </p>
+        </div>
+
+        <h2 id="extends">6. Inheritance — <code>extends</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Animal</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">String</span> name;
+  <span class="tok-fn">Animal</span>(<span class="tok-kw">this</span>.name);
+
+  <span class="tok-kw">void</span> <span class="tok-fn">speak</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'$name làm âm thanh chung'</span>);
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">Dog</span> <span class="tok-kw">extends</span> <span class="tok-cls">Animal</span> {
+  <span class="tok-fn">Dog</span>(<span class="tok-type">String</span> name) : <span class="tok-kw">super</span>(name);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">speak</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'$name gâu gâu'</span>);
+}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-cls">Animal</span> a = <span class="tok-fn">Dog</span>(<span class="tok-str">'Mực'</span>);
+  a.<span class="tok-fn">speak</span>();           <span class="tok-com">// Mực gâu gâu (polymorphism)</span>
+}</code></pre>
+
+        <p>Quy tắc:</p>
+        <ul>
+          <li>Dart <strong>single inheritance</strong> — chỉ 1 parent. Multi-inheritance qua mixin.</li>
+          <li><code>@override</code> annotation — không bắt buộc nhưng analyzer recommend (catch typo).</li>
+          <li><code>super(args)</code> trong initializer list gọi constructor parent.</li>
+          <li>Mọi class implicit extends <code>Object</code>.</li>
+        </ul>
+
+        <h2 id="abstract">7. Abstract class &amp; method</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">abstract</span> <span class="tok-kw">class</span> <span class="tok-cls">Shape</span> {
+  <span class="tok-type">double</span> <span class="tok-fn">area</span>();           <span class="tok-com">// abstract method — không body</span>
+  <span class="tok-type">double</span> <span class="tok-fn">perimeter</span>();
+
+  <span class="tok-com">// Concrete method — có body, mọi subclass thừa kế</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">describe</span>() {
+    <span class="tok-fn">print</span>(<span class="tok-str">'Area: $</span>{<span class="tok-fn">area</span>()}<span class="tok-str">, Perimeter: $</span>{<span class="tok-fn">perimeter</span>()}<span class="tok-str">'</span>);
+  }
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">Circle</span> <span class="tok-kw">extends</span> <span class="tok-cls">Shape</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">double</span> radius;
+  <span class="tok-fn">Circle</span>(<span class="tok-kw">this</span>.radius);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">double</span> <span class="tok-fn">area</span>() =&gt; <span class="tok-num">3.14</span> * radius * radius;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">double</span> <span class="tok-fn">perimeter</span>() =&gt; <span class="tok-num">2</span> * <span class="tok-num">3.14</span> * radius;
+}
+
+<span class="tok-com">// Shape s = Shape();   // ❌ Lỗi — không instantiate abstract</span>
+<span class="tok-cls">Shape</span> s = <span class="tok-fn">Circle</span>(<span class="tok-num">5</span>);
+s.<span class="tok-fn">describe</span>();</code></pre>
+
+        <h2 id="implements">8. Implicit interface — <code>implements</code></h2>
+        <p>
+          <strong>Mọi class Dart là interface ngầm của chính nó.</strong> Không cần định nghĩa <code>interface</code> riêng.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Animal</span> {
+  <span class="tok-kw">void</span> <span class="tok-fn">eat</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'ăn'</span>);
+  <span class="tok-kw">void</span> <span class="tok-fn">sleep</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'ngủ'</span>);
+}
+
+<span class="tok-com">// Implements — chỉ commit signature, KHÔNG kế thừa code</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Robot</span> <span class="tok-kw">implements</span> <span class="tok-cls">Animal</span> {
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">eat</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'nạp pin'</span>);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">sleep</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'standby'</span>);
+}
+
+<span class="tok-cls">Animal</span> r = <span class="tok-fn">Robot</span>();
+r.<span class="tok-fn">eat</span>();   <span class="tok-com">// nạp pin</span></code></pre>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 <code>extends</code> vs <code>implements</code> vs <code>with</code></div>
+          <div class="table-wrap" style="margin-top: 8px;">
+            <table>
+              <thead>
+                <tr><th>Quan hệ</th><th>Kế thừa code?</th><th>Phải override method?</th><th>Use case</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>extends A</code></td><td>Có</td><td>Chỉ method abstract</td><td>"Is-a" relationship, share code</td></tr>
+                <tr><td><code>implements A</code></td><td>Không</td><td>Tất cả</td><td>"Behaves like" — commit signature only</td></tr>
+                <tr><td><code>with M</code></td><td>Có</td><td>Không</td><td>Compose behavior từ mixin</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h2 id="mixin">9. Mixin — share code không qua inheritance</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">mixin</span> <span class="tok-cls">Walker</span> {
+  <span class="tok-kw">void</span> <span class="tok-fn">walk</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'đi bộ'</span>);
+}
+
+<span class="tok-kw">mixin</span> <span class="tok-cls">Swimmer</span> {
+  <span class="tok-kw">void</span> <span class="tok-fn">swim</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'bơi'</span>);
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">Duck</span> <span class="tok-kw">with</span> <span class="tok-cls">Walker</span>, <span class="tok-cls">Swimmer</span> {}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-kw">final</span> d = <span class="tok-fn">Duck</span>();
+  d.<span class="tok-fn">walk</span>();  <span class="tok-com">// đi bộ</span>
+  d.<span class="tok-fn">swim</span>();  <span class="tok-com">// bơi</span>
+}</code></pre>
+
+        <p>Mixin với constraint <code>on</code> — chỉ áp dụng được cho class kế thừa class cụ thể:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Animal</span> {}
+
+<span class="tok-kw">mixin</span> <span class="tok-cls">Flyer</span> <span class="tok-kw">on</span> <span class="tok-cls">Animal</span> {     <span class="tok-com">// chỉ class extends Animal mới dùng được</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">fly</span>() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'bay'</span>);
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">Bird</span> <span class="tok-kw">extends</span> <span class="tok-cls">Animal</span> <span class="tok-kw">with</span> <span class="tok-cls">Flyer</span> {}  <span class="tok-com">// OK</span>
+<span class="tok-com">// class Plane with Flyer {}            // ❌ — Plane không extends Animal</span></code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mixin ≠ multiple inheritance</div>
+          <p>
+            Mixin <em>compose</em> code vào class — không phải parent. Một class có thể có nhiều mixin (vd <code>with M1, M2, M3</code>).
+            Method resolution order: A → M3 → M2 → M1 → ParentOfA → Object. Đây gọi là <em>linearization</em>.
+          </p>
+        </div>
+
+        <h2 id="class-modifier">10. Class modifier Dart 3</h2>
+        <p>
+          Dart 3 thêm 5 keyword <strong>class modifier</strong> để kiểm soát ai được <code>extends</code>/<code>implements</code> class của bạn.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Modifier</th><th>Cho phép extends?</th><th>Cho phép implements?</th><th>Cho phép as mixin?</th><th>Use case</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><em>(none)</em></td><td>Cùng/khác library</td><td>Cùng/khác library</td><td>Không</td><td>Default open</td></tr>
+              <tr><td><code>base</code></td><td>Cùng/khác library</td><td>Chỉ cùng library</td><td>Không</td><td>Force extends — chống abuse implements</td></tr>
+              <tr><td><code>final</code></td><td>Chỉ cùng library</td><td>Chỉ cùng library</td><td>Không</td><td>Khoá hierarchy — không cho subtype ở library khác</td></tr>
+              <tr><td><code>sealed</code></td><td>Chỉ cùng library</td><td>Chỉ cùng library</td><td>Không</td><td>Exhaustive switch + chỉ subclass trong file</td></tr>
+              <tr><td><code>interface</code></td><td>Chỉ cùng library</td><td>Cùng/khác library</td><td>Không</td><td>"Pure interface" — không cho extends ngoài lib</td></tr>
+              <tr><td><code>mixin class</code></td><td>Có</td><td>Có</td><td>Có</td><td>Class dùng được như mixin (legacy support)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// File a.dart</span>
+<span class="tok-kw">sealed</span> <span class="tok-kw">class</span> <span class="tok-cls">Result</span> {}
+<span class="tok-kw">class</span> <span class="tok-cls">Success</span> <span class="tok-kw">extends</span> <span class="tok-cls">Result</span> {}
+<span class="tok-kw">class</span> <span class="tok-cls">Failure</span> <span class="tok-kw">extends</span> <span class="tok-cls">Result</span> {}
+
+<span class="tok-com">// File b.dart</span>
+<span class="tok-kw">import</span> <span class="tok-str">'a.dart'</span>;
+<span class="tok-com">// class Other extends Result {}  // ❌ — sealed không cho extends ngoài library</span>
+
+<span class="tok-com">// Nhưng switch trên Result là EXHAUSTIVE — compiler enforce</span>
+<span class="tok-type">String</span> <span class="tok-fn">describe</span>(<span class="tok-cls">Result</span> r) {
+  <span class="tok-kw">return</span> <span class="tok-kw">switch</span> (r) {
+    <span class="tok-cls">Success</span>() =&gt; <span class="tok-str">'ok'</span>,
+    <span class="tok-cls">Failure</span>() =&gt; <span class="tok-str">'fail'</span>,
+    <span class="tok-com">// Không cần default — compiler biết chỉ 2 case</span>
+  };
+}</code></pre>
+
+        <h2 id="equals-hashcode">11. <code>toString</code>, <code>==</code>, <code>hashCode</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Point</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> x, y;
+  <span class="tok-kw">const</span> <span class="tok-fn">Point</span>(<span class="tok-kw">this</span>.x, <span class="tok-kw">this</span>.y);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">String</span> <span class="tok-fn">toString</span>() =&gt; <span class="tok-str">'Point($x, $y)'</span>;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">bool</span> <span class="tok-kw">operator</span> ==(<span class="tok-type">Object</span> other) =&gt;
+      identical(<span class="tok-kw">this</span>, other) ||
+      (other <span class="tok-kw">is</span> <span class="tok-cls">Point</span> &amp;&amp; other.x == x &amp;&amp; other.y == y);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-type">int</span> <span class="tok-kw">get</span> hashCode =&gt; <span class="tok-type">Object</span>.<span class="tok-fn">hash</span>(x, y);
+}
+
+<span class="tok-kw">final</span> a = <span class="tok-cls">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>);
+<span class="tok-kw">final</span> b = <span class="tok-cls">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>);
+<span class="tok-fn">print</span>(a == b);            <span class="tok-com">// true</span>
+<span class="tok-fn">print</span>(a.hashCode == b.hashCode); <span class="tok-com">// true</span>
+<span class="tok-fn">print</span>(a);                 <span class="tok-com">// Point(1, 2)</span></code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Override <code>==</code> phải override <code>hashCode</code></div>
+          <p>
+            Quy tắc: nếu <code>a == b</code> thì <code>a.hashCode == b.hashCode</code>. Vi phạm → hash-based collection (<code>Set</code>, <code>Map</code>) vỡ.
+            Analyzer cảnh báo. Trong thực tế dùng package <strong>equatable</strong> hoặc <strong>freezed</strong> để auto-gen — sẽ thấy ở Flutter.
+          </p>
+        </div>
+
+        <h2 id="copywith">12. Pattern <code>copyWith</code></h2>
+        <p>
+          Pattern chuẩn cho immutable model — Flutter dùng khắp nơi (Bloc state, theme config, etc).
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">User</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">String</span> name;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> age;
+  <span class="tok-kw">final</span> <span class="tok-type">bool</span> premium;
+
+  <span class="tok-kw">const</span> <span class="tok-fn">User</span>({<span class="tok-kw">required</span> <span class="tok-kw">this</span>.name, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.age, <span class="tok-kw">this</span>.premium = <span class="tok-kw">false</span>});
+
+  <span class="tok-cls">User</span> <span class="tok-fn">copyWith</span>({<span class="tok-type">String</span>? name, <span class="tok-type">int</span>? age, <span class="tok-type">bool</span>? premium}) {
+    <span class="tok-kw">return</span> <span class="tok-fn">User</span>(
+      name: name ?? <span class="tok-kw">this</span>.name,
+      age: age ?? <span class="tok-kw">this</span>.age,
+      premium: premium ?? <span class="tok-kw">this</span>.premium,
+    );
+  }
+}
+
+<span class="tok-kw">final</span> u1 = <span class="tok-cls">User</span>(name: <span class="tok-str">'Việt'</span>, age: <span class="tok-num">25</span>);
+<span class="tok-kw">final</span> u2 = u1.<span class="tok-fn">copyWith</span>(age: <span class="tok-num">26</span>);    <span class="tok-com">// User(Việt, 26, false)</span>
+<span class="tok-kw">final</span> u3 = u1.<span class="tok-fn">copyWith</span>(premium: <span class="tok-kw">true</span>); <span class="tok-com">// User(Việt, 25, true)</span></code></pre>
+
+        <h2 id="enum-advanced">13. Enum nâng cao (Dart 2.17+)</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">enum</span> <span class="tok-cls">Priority</span> {
+  low(<span class="tok-num">0</span>),
+  medium(<span class="tok-num">1</span>),
+  high(<span class="tok-num">2</span>),
+  critical(<span class="tok-num">3</span>);
+
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> weight;
+  <span class="tok-kw">const</span> <span class="tok-fn">Priority</span>(<span class="tok-kw">this</span>.weight);
+
+  <span class="tok-type">bool</span> <span class="tok-fn">isHigherThan</span>(<span class="tok-cls">Priority</span> other) =&gt; weight &gt; other.weight;
+
+  <span class="tok-type">String</span> <span class="tok-kw">get</span> label =&gt; <span class="tok-kw">switch</span> (<span class="tok-kw">this</span>) {
+    <span class="tok-cls">Priority</span>.low =&gt; <span class="tok-str">'Thấp'</span>,
+    <span class="tok-cls">Priority</span>.medium =&gt; <span class="tok-str">'Trung bình'</span>,
+    <span class="tok-cls">Priority</span>.high =&gt; <span class="tok-str">'Cao'</span>,
+    <span class="tok-cls">Priority</span>.critical =&gt; <span class="tok-str">'Cực cao'</span>,
+  };
+}
+
+<span class="tok-fn">print</span>(<span class="tok-cls">Priority</span>.high.label);                          <span class="tok-com">// Cao</span>
+<span class="tok-fn">print</span>(<span class="tok-cls">Priority</span>.high.<span class="tok-fn">isHigherThan</span>(<span class="tok-cls">Priority</span>.low));  <span class="tok-com">// true</span></code></pre>
+
+        <h2 id="bai-tap" class="exercises">14. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Money class với ==, hashCode, copyWith</h4>
+          <div class="exercise-body">
+            <p>
+              Implement <code>class Money</code> với field <code>amount: int</code> (cents) và <code>currency: String</code>.
+              Override <code>==</code>, <code>hashCode</code>, <code>toString</code>. Thêm <code>copyWith</code>.
+              Test: 2 instance cùng amount + currency → <code>==</code> trả true.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">class Money {
+  final int amount;
+  final String currency;
+
+  const Money(this.amount, this.currency);
+
+  Money copyWith({int? amount, String? currency}) =&gt;
+      Money(amount ?? this.amount, currency ?? this.currency);
+
+  @override
+  String toString() =&gt; '${amount / 100} $currency';
+
+  @override
+  bool operator ==(Object o) =&gt;
+      identical(this, o) ||
+      (o is Money &amp;&amp; o.amount == amount &amp;&amp; o.currency == currency);
+
+  @override
+  int get hashCode =&gt; Object.hash(amount, currency);
+}
+
+void main() {
+  final a = Money(100, 'USD');
+  final b = Money(100, 'USD');
+  print(a == b);          // true
+  print(a.copyWith(amount: 200));  // 2.0 USD
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Shape hierarchy</h4>
+          <div class="exercise-body">
+            <p>
+              Tạo <code>abstract class Shape</code> với <code>double area()</code>. Implement 3 subclass: <code>Circle</code>,
+              <code>Rectangle</code>, <code>Triangle</code>. Viết function <code>Shape biggest(List&lt;Shape&gt; shapes)</code>
+              trả về Shape lớn nhất.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">import 'dart:math';
+
+abstract class Shape {
+  double area();
+}
+
+class Circle extends Shape {
+  final double r;
+  Circle(this.r);
+  @override double area() =&gt; pi * r * r;
+}
+
+class Rectangle extends Shape {
+  final double w, h;
+  Rectangle(this.w, this.h);
+  @override double area() =&gt; w * h;
+}
+
+class Triangle extends Shape {
+  final double base, height;
+  Triangle(this.base, this.height);
+  @override double area() =&gt; 0.5 * base * height;
+}
+
+Shape biggest(List&lt;Shape&gt; shapes) =&gt;
+    shapes.reduce((a, b) =&gt; a.area() &gt; b.area() ? a : b);
+
+void main() {
+  final s = biggest([Circle(5), Rectangle(4, 8), Triangle(6, 10)]);
+  print('${s.runtimeType}: ${s.area()}');
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Logger mixin</h4>
+          <div class="exercise-body">
+            <p>
+              Viết <code>mixin Logger</code> thêm method <code>void log(String msg)</code> in ra với timestamp prefix.
+              Apply vào 2 class khác nhau (vd <code>HttpClient</code>, <code>DbClient</code>) và demo.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">mixin Logger {
+  void log(String msg) {
+    print('[${DateTime.now().toIso8601String()}] $msg');
+  }
+}
+
+class HttpClient with Logger {
+  void get(String url) {
+    log('GET $url');
+  }
+}
+
+class DbClient with Logger {
+  void query(String sql) {
+    log('SQL: $sql');
+  }
+}
+
+void main() {
+  HttpClient().get('/users');     // [2026-...] GET /users
+  DbClient().query('SELECT *');   // [2026-...] SQL: SELECT *
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Singleton qua factory</h4>
+          <div class="exercise-body">
+            <p>
+              Refactor pattern Singleton manual (private static + private constructor) sang dùng <code>factory</code> constructor.
+              So sánh code length + clarity.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">// Manual singleton (verbose)
+class AppManualSingleton {
+  static AppManualSingleton? _instance;
+  static AppManualSingleton get instance =&gt; _instance ??= AppManualSingleton._();
+  AppManualSingleton._();
+}
+
+// Factory singleton — gọi như constructor bình thường
+class App {
+  static final App _instance = App._internal();
+  factory App() =&gt; _instance;
+  App._internal();
+}
+
+void main() {
+  print(identical(App(), App()));  // true — cùng instance
+}</code></pre>
+              <p>Factory singleton: caller gọi <code>App()</code> tự nhiên — không cần biết internal. Manual: caller phải gọi <code>.instance</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Sealed Result&lt;T&gt; chuẩn bị cho chương 8</h4>
+          <div class="exercise-body">
+            <p>
+              Tạo <code>sealed class Result&lt;T&gt;</code> với 2 subclass: <code>Success&lt;T&gt;(T data)</code> và <code>Failure(String error)</code>.
+              Demo create + dùng cơ bản (chưa cần switch — sẽ học ở chương 8).
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">sealed class Result&lt;T&gt; {
+  const Result();
+}
+
+class Success&lt;T&gt; extends Result&lt;T&gt; {
+  final T data;
+  const Success(this.data);
+}
+
+class Failure extends Result&lt;Never&gt; {
+  final String error;
+  const Failure(this.error);
+}
+
+Result&lt;int&gt; divide(int a, int b) {
+  if (b == 0) return Failure('chia 0');
+  return Success(a ~/ b);
+}
+
+void main() {
+  final r = divide(10, 2);
+  if (r is Success&lt;int&gt;) print(r.data);     // 5
+  if (r is Failure) print(r.error);
+}</code></pre>
+              <p>Chương 8 sẽ học <code>switch (r) { case Success(:var data): ...; case Failure(:var error): ... }</code> đẹp hơn.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">15. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q1</div>
+            <div class="quiz-q-text"><p>Constructor <code>Point.origin()</code> gọi từ ngoài bằng cách nào?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Point.origin()</code> — gọi với cú pháp <em>tên class.tên constructor()</em>. Không phải <code>Point().origin()</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q2</div>
+            <div class="quiz-q-text"><p><code>factory</code> constructor có bắt buộc trả về instance mới không?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Đây là điểm đặc biệt. Có thể trả cached instance, instance subclass, hoặc null (nếu return type nullable). Tự do hơn constructor thường.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q3</div>
+            <div class="quiz-q-text"><p>Dart có keyword <code>interface</code> không?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Có ở Dart 3 (class modifier). Nhưng từ Dart 2, mọi class đã là implicit interface — <code>implements AnyClass</code> luôn work mà không cần interface keyword.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q4</div>
+            <div class="quiz-q-text"><p>Sau <code>class A extends B with M1, M2</code>, method resolution order là gì?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> A → M2 → M1 → B → Object. Đọc từ trái sang phải mixin, sau cùng đến parent. Gọi là linearization.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q5</div>
+            <div class="quiz-q-text"><p>Override <code>==</code> mà không override <code>hashCode</code> — chuyện gì?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Analyzer cảnh báo (<code>hash_and_equals</code> lint). Hash-based collection (Set, Map) sẽ behave sai — vì hashCode mặc định là identity, không match logic ==.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q6</div>
+            <div class="quiz-q-text"><p><code>sealed</code> class Dart 3 dùng để làm gì?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Giới hạn subclass trong cùng library (file), enable <strong>exhaustive switch</strong> — compiler đảm bảo mọi subclass được handle. Pattern phổ biến cho state machine, Result type.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q7</div>
+            <div class="quiz-q-text"><p><code>_name</code> field — private ở scope nào?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Library scope (file scope nếu không export). Khác Java/C# class-scope. Đa số case 1 file = 1 library, nên ≈ file scope.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q8</div>
+            <div class="quiz-q-text"><p><code>static</code> method gọi từ instance được không?</p></div>
+          </div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Chỉ qua tên class: <code>User.all()</code>, không <code>user.all()</code>. Khác JavaScript class.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">16. Tổng kết</h2>
+        <ul>
+          <li>✅ Class anatomy: field, method, constructor.</li>
+          <li>✅ 5 loại constructor: default, named, initializer list, redirecting, factory.</li>
+          <li>✅ Getter/setter — computed property, gọi như field.</li>
+          <li>✅ <code>static</code> member — gọi qua tên class.</li>
+          <li>✅ <code>_</code> prefix — library-private, không class-private.</li>
+          <li>✅ <code>extends</code> single inheritance + <code>@override</code> + <code>super</code>.</li>
+          <li>✅ <code>abstract</code> class — không instantiate được.</li>
+          <li>✅ <code>implements</code> — implicit interface, mọi class auto là interface.</li>
+          <li>✅ <code>mixin</code> + <code>with</code> + <code>on</code> constraint.</li>
+          <li>✅ Class modifier Dart 3: <code>base</code>, <code>final</code>, <code>sealed</code>, <code>interface</code>, <code>mixin class</code>.</li>
+          <li>✅ Pattern: <code>==</code> + <code>hashCode</code> + <code>copyWith</code>.</li>
+          <li>✅ Enum nâng cao với field + method (Dart 2.17+).</li>
+        </ul>
+
+        <h2 id="ket-noi">17. Kết nối tới các chương khác</h2>
+        <ul>
+          <li><a href="chuong5.html"><strong>Chương 5 — Null Safety:</strong></a> field <code>late</code> cho lazy init.</li>
+          <li><strong>Chương 8 — Patterns:</strong> sealed class + exhaustive switch deep dive.</li>
+          <li><strong>Flutter chương 2:</strong> mọi widget là <code>class extends StatelessWidget</code> / <code>StatefulWidget</code>.</li>
+          <li><strong>Flutter chương 7:</strong> Bloc/Cubit dựa class hierarchy.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong3.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">03 · Functions &amp; Control Flow</div>
+          </a>
+          <a href="chuong5.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">05 · Null Safety &amp; Error Handling</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#class-anatomy">1. Class anatomy</a></li>
+          <li><a href="#constructor">2. Constructor 5 loại</a></li>
+          <li><a href="#getter-setter">3. Getter / setter</a></li>
+          <li><a href="#static">4. Static</a></li>
+          <li><a href="#private">5. Private _</a></li>
+          <li><a href="#extends">6. extends</a></li>
+          <li><a href="#abstract">7. Abstract</a></li>
+          <li><a href="#implements">8. implements</a></li>
+          <li><a href="#mixin">9. Mixin</a></li>
+          <li><a href="#class-modifier">10. Class modifier Dart 3</a></li>
+          <li><a href="#equals-hashcode">11. == + hashCode</a></li>
+          <li><a href="#copywith">12. copyWith</a></li>
+          <li><a href="#enum-advanced">13. Enum nâng cao</a></li>
+          <li><a href="#bai-tap">14. Bài tập</a></li>
+          <li><a href="#quiz">15. Quiz</a></li>
+          <li><a href="#tong-ket">16. Tổng kết</a></li>
+          <li><a href="#ket-noi">17. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Dart Chương 4 · Pillar 9 — IT Basic<br/>
+        <a href="chuong3.html">← Chương 3</a> · <a href="../index.html">Dart sub-pillar</a> · <a href="chuong5.html">Chương 5 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

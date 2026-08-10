@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2 — Widget Tree &amp; First App · Flutter Sub-pillar</title>
+  <meta name="description" content="Mental model 'everything is a Widget', StatelessWidget vs StatefulWidget, setState, MaterialApp, Scaffold, 3 cây Widget/Element/RenderObject." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 2</span>
+      </div>
+      <div class="chapter-num">Chương 02 · Widget Tree &amp; First App</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Widget Tree &amp; First App
+      </h1>
+      <p class="lead">
+        Đây là chương <strong>mental model cốt lõi nhất</strong> của Flutter. Hiểu sai chỗ này thì 13 chương sau lệch hết.
+        <em>"Everything is a Widget"</em> không phải slogan — phải nội hóa: padding là widget, margin là widget, even visibility là widget.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1050 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 1 + Dart class/function</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu mental model "everything is a Widget" — kể cả padding, margin, alignment.</li>
+            <li>Phân biệt StatelessWidget vs StatefulWidget — khi nào dùng cái nào.</li>
+            <li>Hiểu vòng đời <code>build()</code> method và rebuild trigger.</li>
+            <li>Sử dụng <code>MaterialApp</code>, <code>Scaffold</code>, <code>AppBar</code>, <code>Text</code>, <code>Container</code>, <code>Center</code> cơ bản.</li>
+            <li>Hiểu Widget Tree, Element Tree, RenderObject Tree (3 cây).</li>
+            <li>Sử dụng <code>setState</code> cho local state.</li>
+            <li>Biết widget thường dùng: Image, Icon, ElevatedButton, Card, ListTile.</li>
+          </ul>
+        </div>
+
+        <h2 id="everything-widget">1. Mental model — Everything is a Widget</h2>
+
+        <p>
+          Câu mantra của Flutter. Nó nghĩa là gì trong thực tế?
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">Padding</span>(
+  padding: <span class="tok-kw">const</span> <span class="tok-cls">EdgeInsets</span>.<span class="tok-fn">all</span>(<span class="tok-num">16</span>),       <span class="tok-com">// padding là widget?</span>
+  child: <span class="tok-fn">Center</span>(                       <span class="tok-com">// căn giữa là widget</span>
+    child: <span class="tok-fn">Container</span>(                   <span class="tok-com">// box decoration là widget</span>
+      width: <span class="tok-num">100</span>,
+      height: <span class="tok-num">100</span>,
+      color: <span class="tok-cls">Colors</span>.blue,
+      child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Hello'</span>),   <span class="tok-com">// text là widget</span>
+    ),
+  ),
+)</code></pre>
+
+        <p>
+          So với HTML/CSS, mỗi thuộc tính style là một attribute. Flutter thì <strong>style là widget</strong>:
+        </p>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So với HTML/CSS, SwiftUI</div>
+          <pre data-lang="html" style="margin-top: 8px;"><code class="language-html">&lt;!-- HTML/CSS: style là attribute --&gt;
+&lt;div style="padding: 16px; display: flex; align-items: center;"&gt;
+  &lt;div style="width: 100px; height: 100px; background: blue;"&gt;Hello&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+          <pre data-lang="swift" style="margin-top: 8px;"><code class="language-swift">// SwiftUI: style là modifier
+Text("Hello")
+  .frame(width: 100, height: 100)
+  .background(Color.blue)
+  .padding(16)</code></pre>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart">// Flutter: style là widget wrap quanh child
+Padding(
+  padding: EdgeInsets.all(16),
+  child: Container(
+    width: 100, height: 100, color: Colors.blue,
+    child: const Text('Hello'),
+  ),
+)</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Tại sao Flutter chọn cách này?</div>
+          <ul>
+            <li><strong>Composition mạnh</strong> — combine widget tự do, không bị giới hạn modifier có sẵn.</li>
+            <li><strong>Uniform API</strong> — không có phân biệt "container element" vs "style attribute". Mọi thứ build qua constructor.</li>
+            <li><strong>Tree là everything</strong> — debug bằng Flutter Inspector cực dễ vì tree đầy đủ.</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            <strong>Tradeoff:</strong> code dài hơn (nesting nhiều). Có shortcut với extension (Dart chương 8) hoặc helper widget custom.
+          </p>
+        </div>
+
+        <h2 id="widget-tree">2. Widget Tree</h2>
+        <p>
+          UI là <strong>một function của state</strong>: <code>UI = f(state)</code>. <code>runApp(root)</code> đẩy widget root vào engine.
+          Engine render widget tree mỗi frame (60-120 FPS).
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:flutter/material.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">runApp</span>(<span class="tok-kw">const</span> <span class="tok-cls">MyApp</span>());
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">MyApp</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatelessWidget</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">MyApp</span>({<span class="tok-kw">super</span>.key});
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">MaterialApp</span>(
+      title: <span class="tok-str">'Demo'</span>,
+      home: <span class="tok-fn">Scaffold</span>(
+        appBar: <span class="tok-fn">AppBar</span>(title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'IT Basic Demo'</span>)),
+        body: <span class="tok-kw">const</span> <span class="tok-cls">Center</span>(child: <span class="tok-cls">Text</span>(<span class="tok-str">'Hello Flutter'</span>)),
+      ),
+    );
+  }
+}</code></pre>
+
+        <figure>
+          <svg viewBox="0 0 500 320" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .wt { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+              .wt-acc { font-family: var(--font-mono); font-size: 12px; fill: var(--accent); font-weight: 700; }
+              .bx { fill: var(--cyan-soft); stroke: var(--accent); rx: 5; ry: 5; }
+              .ln { stroke: var(--text-muted); stroke-width: 1.2; fill: none; }
+            </style>
+            <text class="wt-acc" x="250" y="22" text-anchor="middle">Widget Tree của Counter App</text>
+
+            <rect class="bx" x="180" y="40" width="140" height="28" />
+            <text class="wt" x="250" y="59" text-anchor="middle">MaterialApp</text>
+
+            <line class="ln" x1="250" y1="68" x2="250" y2="90" />
+            <rect class="bx" x="180" y="90" width="140" height="28" />
+            <text class="wt" x="250" y="109" text-anchor="middle">Scaffold</text>
+
+            <line class="ln" x1="250" y1="118" x2="120" y2="150" />
+            <line class="ln" x1="250" y1="118" x2="380" y2="150" />
+            <rect class="bx" x="60" y="150" width="120" height="28" />
+            <text class="wt" x="120" y="169" text-anchor="middle">AppBar</text>
+            <rect class="bx" x="320" y="150" width="120" height="28" />
+            <text class="wt" x="380" y="169" text-anchor="middle">Center (body)</text>
+
+            <line class="ln" x1="120" y1="178" x2="120" y2="200" />
+            <line class="ln" x1="380" y1="178" x2="380" y2="200" />
+            <rect class="bx" x="60" y="200" width="120" height="28" />
+            <text class="wt" x="120" y="219" text-anchor="middle">Text "IT Basic"</text>
+            <rect class="bx" x="320" y="200" width="120" height="28" />
+            <text class="wt" x="380" y="219" text-anchor="middle">Text "Hello"</text>
+
+            <text class="wt" x="250" y="280" text-anchor="middle" font-size="11">Root widget root → tree expand → leaf widget (Text, Icon, ...)</text>
+          </svg>
+          <figcaption>Widget tree của Counter app — 5 widget nested.</figcaption>
+        </figure>
+
+        <h2 id="three-trees">3. Ba cây của Flutter</h2>
+        <p>
+          Khi <code>runApp</code> chạy, Flutter tạo và quản lý <strong>3 cây song song</strong>:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Cây</th><th>Vai trò</th><th>Mutable?</th><th>Tương ứng</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Widget Tree</strong></td><td>Configuration / blueprint</td><td>Immutable — tái tạo mỗi build</td><td>Class bạn viết</td></tr>
+              <tr><td><strong>Element Tree</strong></td><td>Instance trong tree, giữ state, lifecycle</td><td>Mutable</td><td>BuildContext = Element</td></tr>
+              <tr><td><strong>RenderObject Tree</strong></td><td>Layout + paint thực sự lên canvas</td><td>Mutable</td><td>Chương 13 deep dive</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao cần 3 cây?</div>
+          <ul>
+            <li><strong>Widget</strong> immutable → cheap to create/recreate mỗi build. Hot reload work được nhờ vậy.</li>
+            <li><strong>Element</strong> giữ state + identity → state không mất khi parent rebuild (nếu type widget giữ nguyên).</li>
+            <li><strong>RenderObject</strong> heavy (layout, paint, hit test) → reuse giữa builds để performance.</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            Hiểu sơ thôi ở chương này. Chương 13 sẽ đào sâu khi cần debug performance hoặc custom RenderObject.
+          </p>
+        </div>
+
+        <h2 id="stateless">4. StatelessWidget</h2>
+        <p>
+          Widget không có state nội bộ — UI chỉ phụ thuộc constructor parameter (immutable config).
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Greeting</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatelessWidget</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">String</span> name;
+  <span class="tok-kw">final</span> <span class="tok-type">int</span>? age;
+
+  <span class="tok-kw">const</span> <span class="tok-fn">Greeting</span>({<span class="tok-kw">super</span>.key, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.name, <span class="tok-kw">this</span>.age});
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Text</span>(<span class="tok-str">'Xin chào $name, $</span>{age ?? <span class="tok-num">0</span>}<span class="tok-str"> tuổi'</span>);
+  }
+}
+
+<span class="tok-com">// Use</span>
+<span class="tok-kw">const</span> <span class="tok-cls">Greeting</span>(name: <span class="tok-str">'Việt'</span>, age: <span class="tok-num">25</span>);</code></pre>
+
+        <p>Khi nào dùng StatelessWidget:</p>
+        <ul>
+          <li>UI thuần — chỉ render dựa input từ constructor.</li>
+          <li>Reusable component không có local state.</li>
+          <li>Wrap component có state khác (lift state up).</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 <code>const</code> constructor là performance hint</div>
+          <p>
+            Stateless widget nên có <code>const</code> constructor khi mọi field là <code>final</code> + giá trị compile-time.
+            Caller gọi <code>const Greeting(name: 'Việt')</code> → Flutter biết widget không đổi, skip rebuild luôn.
+          </p>
+        </div>
+
+        <h2 id="stateful">5. StatefulWidget</h2>
+        <p>
+          Widget có state nội bộ thay đổi theo thời gian (counter, toggle, input controller, animation).
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">Counter</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatefulWidget</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">Counter</span>({<span class="tok-kw">super</span>.key, <span class="tok-kw">this</span>.initialValue = <span class="tok-num">0</span>});
+
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> initialValue;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">State</span>&lt;<span class="tok-cls">Counter</span>&gt; <span class="tok-fn">createState</span>() =&gt; <span class="tok-fn">_CounterState</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_CounterState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">Counter</span>&gt; {
+  <span class="tok-kw">late</span> <span class="tok-type">int</span> _count;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">initState</span>() {
+    <span class="tok-kw">super</span>.<span class="tok-fn">initState</span>();
+    _count = widget.initialValue;
+  }
+
+  <span class="tok-kw">void</span> <span class="tok-fn">_increment</span>() {
+    <span class="tok-fn">setState</span>(() {
+      _count++;
+    });
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Column</span>(
+      mainAxisAlignment: <span class="tok-cls">MainAxisAlignment</span>.center,
+      children: [
+        <span class="tok-fn">Text</span>(<span class="tok-str">'Count: $_count'</span>, style: <span class="tok-cls">Theme</span>.<span class="tok-fn">of</span>(context).textTheme.headlineMedium),
+        <span class="tok-fn">ElevatedButton</span>(onPressed: _increment, child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'+1'</span>)),
+      ],
+    );
+  }
+}</code></pre>
+
+        <h3 id="stateful-two-classes">Tại sao StatefulWidget cần 2 class?</h3>
+        <p>
+          <code>StatefulWidget</code> là <em>config</em> immutable (có thể <code>const</code>). <code>State</code> là instance mutable, giữ field, có lifecycle.
+          Tách 2 class → framework swap state khi widget rebuild mà state vẫn nguyên.
+        </p>
+
+        <h3 id="state-lifecycle">State lifecycle</h3>
+        <figure>
+          <svg viewBox="0 0 540 220" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .sl { font-family: var(--font-mono); font-size: 11px; fill: var(--ink); }
+              .sl-acc { font-family: var(--font-mono); font-size: 12px; fill: var(--accent); font-weight: 700; }
+              .bx { fill: var(--cyan-soft); stroke: var(--accent); rx: 4; ry: 4; }
+              .arr { stroke: var(--text-muted); stroke-width: 1.2; fill: none; marker-end: url(#a); }
+            </style>
+            <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--text-muted)"/></marker></defs>
+            <text class="sl-acc" x="270" y="22" text-anchor="middle">Vòng đời State&lt;T&gt;</text>
+
+            <rect class="bx" x="20" y="50" width="100" height="28"/>
+            <text class="sl" x="70" y="68" text-anchor="middle">createState()</text>
+            <rect class="bx" x="140" y="50" width="100" height="28"/>
+            <text class="sl" x="190" y="68" text-anchor="middle">initState()</text>
+            <rect class="bx" x="260" y="50" width="100" height="28"/>
+            <text class="sl" x="310" y="68" text-anchor="middle">build()</text>
+            <rect class="bx" x="380" y="50" width="140" height="28"/>
+            <text class="sl" x="450" y="68" text-anchor="middle">didChangeDependencies</text>
+
+            <line class="arr" x1="120" y1="64" x2="140" y2="64"/>
+            <line class="arr" x1="240" y1="64" x2="260" y2="64"/>
+            <line class="arr" x1="360" y1="64" x2="380" y2="64"/>
+
+            <rect class="bx" x="100" y="120" width="100" height="28"/>
+            <text class="sl" x="150" y="138" text-anchor="middle">setState()</text>
+            <rect class="bx" x="220" y="120" width="100" height="28"/>
+            <text class="sl" x="270" y="138" text-anchor="middle">build()</text>
+            <rect class="bx" x="340" y="120" width="120" height="28"/>
+            <text class="sl" x="400" y="138" text-anchor="middle">didUpdateWidget</text>
+
+            <line class="arr" x1="200" y1="134" x2="220" y2="134"/>
+            <line class="arr" x1="320" y1="134" x2="340" y2="134"/>
+
+            <rect class="bx" x="220" y="180" width="100" height="28"/>
+            <text class="sl" x="270" y="198" text-anchor="middle">dispose()</text>
+
+            <line class="arr" x1="270" y1="148" x2="270" y2="180" stroke-dasharray="3,3"/>
+          </svg>
+          <figcaption>Vòng đời <code>State</code>: tạo → init → build lặp → dispose khi unmount.</figcaption>
+        </figure>
+
+        <p>Method chính:</p>
+        <ul>
+          <li><strong><code>createState()</code></strong> — gọi 1 lần khi widget được mount.</li>
+          <li><strong><code>initState()</code></strong> — gọi 1 lần sau create. Subscribe stream, fetch initial data ở đây.</li>
+          <li><strong><code>build()</code></strong> — gọi nhiều lần. Phải <em>pure</em> — không side effect.</li>
+          <li><strong><code>didUpdateWidget()</code></strong> — gọi khi widget parent rebuild với config mới.</li>
+          <li><strong><code>dispose()</code></strong> — cleanup: cancel stream, dispose controller, etc.</li>
+        </ul>
+
+        <h2 id="setstate">6. <code>setState()</code></h2>
+        <p>
+          Khi state thay đổi, gọi <code>setState(callback)</code> để báo Flutter "rebuild đi". Callback đổi field state.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ✅ Đúng</span>
+<span class="tok-fn">setState</span>(() {
+  _count++;
+  _label = <span class="tok-str">'Updated'</span>;
+});
+
+<span class="tok-com">// ❌ Sai — đổi field nhưng không gọi setState</span>
+_count++;  <span class="tok-com">// UI không refresh</span>
+
+<span class="tok-com">// ❌ Sai — gọi async logic trong setState callback</span>
+<span class="tok-fn">setState</span>(() {
+  <span class="tok-kw">final</span> data = <span class="tok-kw">await</span> <span class="tok-fn">fetchData</span>();  <span class="tok-com">// callback không được async</span>
+});
+
+<span class="tok-com">// ✅ Đúng — async ngoài, setState sau khi có data</span>
+<span class="tok-kw">final</span> data = <span class="tok-kw">await</span> <span class="tok-fn">fetchData</span>();
+<span class="tok-kw">if</span> (!mounted) <span class="tok-kw">return</span>;        <span class="tok-com">// kiểm tra widget còn alive</span>
+<span class="tok-fn">setState</span>(() {
+  _data = data;
+});</code></pre>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>mounted</code> check sau async</div>
+          <p>
+            Nếu user nav away khi đang <code>await</code>, widget dispose. Gọi <code>setState</code> sau đó → exception
+            <em>"setState() called after dispose()"</em>.
+          </p>
+          <p style="margin-top: 8px;">
+            Pattern: <code>if (!mounted) return;</code> trước <code>setState</code> async. Đặc biệt sau <code>await</code>.
+          </p>
+        </div>
+
+        <h2 id="material-scaffold">7. MaterialApp &amp; Scaffold</h2>
+
+        <h3 id="material-app"><code>MaterialApp</code></h3>
+        <p>
+          Wrap root app với Material Design (Google's design system). Provide theme, navigator, localization.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">MaterialApp</span>(
+  title: <span class="tok-str">'My App'</span>,
+  theme: <span class="tok-fn">ThemeData</span>(
+    colorScheme: <span class="tok-cls">ColorScheme</span>.<span class="tok-fn">fromSeed</span>(seedColor: <span class="tok-cls">Colors</span>.blue),
+    useMaterial3: <span class="tok-kw">true</span>,
+  ),
+  home: <span class="tok-kw">const</span> <span class="tok-cls">HomePage</span>(),
+  routes: {
+    <span class="tok-str">'/details'</span>: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">DetailsPage</span>(),
+  },
+  debugShowCheckedModeBanner: <span class="tok-kw">false</span>,  <span class="tok-com">// ẩn banner DEBUG góc phải</span>
+)</code></pre>
+
+        <h3 id="scaffold"><code>Scaffold</code></h3>
+        <p>
+          Skeleton của 1 page với các slot: appBar, body, FAB, drawer, bottomNavigationBar, snackBar.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">Scaffold</span>(
+  appBar: <span class="tok-fn">AppBar</span>(
+    title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'My Page'</span>),
+    actions: [
+      <span class="tok-fn">IconButton</span>(icon: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.search), onPressed: () {}),
+    ],
+  ),
+  body: <span class="tok-kw">const</span> <span class="tok-cls">Center</span>(child: <span class="tok-cls">Text</span>(<span class="tok-str">'Body content'</span>)),
+  floatingActionButton: <span class="tok-fn">FloatingActionButton</span>(
+    onPressed: () {},
+    child: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.add),
+  ),
+  drawer: <span class="tok-kw">const</span> <span class="tok-cls">Drawer</span>(<span class="tok-com">/* ... */</span>),
+  bottomNavigationBar: <span class="tok-fn">BottomNavigationBar</span>(items: [<span class="tok-com">/*...*/</span>]),
+)</code></pre>
+
+        <h2 id="basic-widgets">8. Widget cơ bản — hiển thị</h2>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Text</span>
+<span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Hello'</span>)
+<span class="tok-cls">Text</span>(<span class="tok-str">'Hello'</span>, style: <span class="tok-cls">TextStyle</span>(fontSize: <span class="tok-num">24</span>, fontWeight: <span class="tok-cls">FontWeight</span>.bold))
+
+<span class="tok-com">// Icon</span>
+<span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.favorite, color: <span class="tok-cls">Colors</span>.red, size: <span class="tok-num">32</span>)
+
+<span class="tok-com">// Image</span>
+<span class="tok-fn">Image.network</span>(<span class="tok-str">'https://example.com/cat.jpg'</span>)
+<span class="tok-fn">Image.asset</span>(<span class="tok-str">'assets/images/logo.png'</span>)
+
+<span class="tok-com">// Container — kitchen sink widget</span>
+<span class="tok-fn">Container</span>(
+  width: <span class="tok-num">200</span>,
+  height: <span class="tok-num">100</span>,
+  padding: <span class="tok-kw">const</span> <span class="tok-cls">EdgeInsets</span>.<span class="tok-fn">all</span>(<span class="tok-num">16</span>),
+  decoration: <span class="tok-fn">BoxDecoration</span>(
+    color: <span class="tok-cls">Colors</span>.amber,
+    borderRadius: <span class="tok-cls">BorderRadius</span>.<span class="tok-fn">circular</span>(<span class="tok-num">12</span>),
+    boxShadow: [<span class="tok-fn">BoxShadow</span>(color: <span class="tok-cls">Colors</span>.black26, blurRadius: <span class="tok-num">8</span>)],
+  ),
+  child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Card'</span>),
+)
+
+<span class="tok-com">// SizedBox — kích thước cố định, hay dùng cho spacing</span>
+<span class="tok-kw">const</span> <span class="tok-cls">SizedBox</span>(height: <span class="tok-num">16</span>),   <span class="tok-com">// space dọc 16px</span>
+<span class="tok-kw">const</span> <span class="tok-cls">SizedBox</span>(width: <span class="tok-num">8</span>),     <span class="tok-com">// space ngang 8px</span>
+
+<span class="tok-com">// Padding</span>
+<span class="tok-kw">const</span> <span class="tok-fn">Padding</span>(
+  padding: <span class="tok-cls">EdgeInsets</span>.symmetric(horizontal: <span class="tok-num">16</span>, vertical: <span class="tok-num">8</span>),
+  child: <span class="tok-cls">Text</span>(<span class="tok-str">'Padded text'</span>),
+)
+
+<span class="tok-com">// Center — wrap child căn giữa parent</span>
+<span class="tok-kw">const</span> <span class="tok-cls">Center</span>(child: <span class="tok-cls">Text</span>(<span class="tok-str">'Centered'</span>))</code></pre>
+
+        <h2 id="interactive-widgets">9. Widget interactive cơ bản</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ElevatedButton — primary action</span>
+<span class="tok-fn">ElevatedButton</span>(
+  onPressed: () =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'tap'</span>),
+  child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Submit'</span>),
+)
+
+<span class="tok-com">// onPressed: null → button disabled (mờ + không tap)</span>
+<span class="tok-kw">const</span> <span class="tok-fn">ElevatedButton</span>(
+  onPressed: <span class="tok-kw">null</span>,
+  child: <span class="tok-cls">Text</span>(<span class="tok-str">'Disabled'</span>),
+)
+
+<span class="tok-com">// TextButton — secondary, không elevation</span>
+<span class="tok-fn">TextButton</span>(onPressed: () {}, child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Cancel'</span>))
+
+<span class="tok-com">// OutlinedButton — viền</span>
+<span class="tok-fn">OutlinedButton</span>(onPressed: () {}, child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Learn more'</span>))
+
+<span class="tok-com">// IconButton</span>
+<span class="tok-fn">IconButton</span>(
+  icon: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.favorite),
+  onPressed: () {},
+)
+
+<span class="tok-com">// Card — Material card với elevation, rounded corner</span>
+<span class="tok-fn">Card</span>(
+  child: <span class="tok-fn">ListTile</span>(
+    leading: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.person),
+    title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Việt'</span>),
+    subtitle: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Software engineer'</span>),
+    trailing: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.arrow_forward_ios),
+    onTap: () {},
+  ),
+)</code></pre>
+
+        <h2 id="buildcontext">10. <code>BuildContext</code></h2>
+        <p>
+          <code>BuildContext</code> là handle vào Element Tree. Mỗi widget có một <code>BuildContext</code> riêng tại vị trí của nó.
+        </p>
+
+        <p>Dùng để:</p>
+        <ul>
+          <li><strong>Lookup ancestor</strong> — <code>Theme.of(context)</code>, <code>MediaQuery.of(context)</code>.</li>
+          <li><strong>Navigation</strong> — <code>Navigator.of(context).push(...)</code>.</li>
+          <li><strong>Show overlay</strong> — <code>ScaffoldMessenger.of(context).showSnackBar(...)</code>.</li>
+          <li><strong>Read state</strong> — <code>context.read&lt;Bloc&gt;()</code> (chương 7).</li>
+        </ul>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">@override</span>
+<span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+  <span class="tok-kw">final</span> theme = <span class="tok-cls">Theme</span>.<span class="tok-fn">of</span>(context);
+  <span class="tok-kw">final</span> screenWidth = <span class="tok-cls">MediaQuery</span>.<span class="tok-fn">of</span>(context).size.width;
+
+  <span class="tok-kw">return</span> <span class="tok-fn">Text</span>(
+    <span class="tok-str">'Width: $screenWidth'</span>,
+    style: theme.textTheme.bodyLarge,
+  );
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ BuildContext sau <code>await</code></div>
+          <p>
+            Nếu lưu <code>context</code> vào biến rồi <code>await</code>, sau đó dùng — context có thể không còn hợp lệ (widget unmount).
+            Cần check <code>mounted</code> trước khi dùng context async:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-kw">onPressed</span>: () <span class="tok-kw">async</span> {
+  <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> <span class="tok-fn">_loadData</span>();
+  <span class="tok-kw">if</span> (!<span class="tok-kw">context</span>.<span class="tok-kw">mounted</span>) <span class="tok-kw">return</span>;
+  <span class="tok-cls">Navigator</span>.<span class="tok-fn">of</span>(context).<span class="tok-fn">push</span>(<span class="tok-cls">MaterialPageRoute</span>(...));
+}</code></pre>
+        </div>
+
+        <h2 id="const-widget">11. <code>const</code> widget — performance hint chính</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Không const — tạo widget mới mỗi build</span>
+<span class="tok-cls">Text</span>(<span class="tok-str">'Hello'</span>)
+
+<span class="tok-com">// Const — canonical, share instance, không rebuild</span>
+<span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Hello'</span>)
+
+<span class="tok-com">// Tận dụng const cho mọi widget có thể</span>
+<span class="tok-kw">return</span> <span class="tok-kw">const</span> <span class="tok-fn">Padding</span>(
+  padding: <span class="tok-cls">EdgeInsets</span>.<span class="tok-fn">all</span>(<span class="tok-num">16</span>),
+  child: <span class="tok-cls">Text</span>(<span class="tok-str">'Hello'</span>),
+);
+
+<span class="tok-com">// Chỉ const được khi mọi nested widget là const + mọi field final + const constructor</span></code></pre>
+
+        <p>
+          Lint <code>prefer_const_constructors</code> + <code>prefer_const_literals_to_create_immutables</code> highlight chỗ có thể <code>const</code>.
+          Sử dụng tối đa cho perf.
+        </p>
+
+        <h2 id="counter-app">12. Counter app — từ <code>flutter create</code></h2>
+        <p>Mở <code>lib/main.dart</code> sau khi <code>flutter create</code>:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:flutter/material.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() =&gt; <span class="tok-fn">runApp</span>(<span class="tok-kw">const</span> <span class="tok-cls">MyApp</span>());
+
+<span class="tok-kw">class</span> <span class="tok-cls">MyApp</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatelessWidget</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">MyApp</span>({<span class="tok-kw">super</span>.key});
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">MaterialApp</span>(
+      title: <span class="tok-str">'Counter'</span>,
+      theme: <span class="tok-fn">ThemeData</span>(useMaterial3: <span class="tok-kw">true</span>),
+      home: <span class="tok-kw">const</span> <span class="tok-cls">CounterPage</span>(),
+    );
+  }
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">CounterPage</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatefulWidget</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">CounterPage</span>({<span class="tok-kw">super</span>.key});
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">State</span>&lt;<span class="tok-cls">CounterPage</span>&gt; <span class="tok-fn">createState</span>() =&gt; <span class="tok-fn">_CounterPageState</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_CounterPageState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">CounterPage</span>&gt; {
+  <span class="tok-type">int</span> _count = <span class="tok-num">0</span>;
+
+  <span class="tok-kw">void</span> <span class="tok-fn">_increment</span>() =&gt; <span class="tok-fn">setState</span>(() =&gt; _count++);
+  <span class="tok-kw">void</span> <span class="tok-fn">_decrement</span>() =&gt; <span class="tok-fn">setState</span>(() =&gt; _count--);
+  <span class="tok-kw">void</span> <span class="tok-fn">_reset</span>() =&gt; <span class="tok-fn">setState</span>(() =&gt; _count = <span class="tok-num">0</span>);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Scaffold</span>(
+      appBar: <span class="tok-fn">AppBar</span>(title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Counter'</span>)),
+      body: <span class="tok-fn">Center</span>(
+        child: <span class="tok-fn">Column</span>(
+          mainAxisAlignment: <span class="tok-cls">MainAxisAlignment</span>.center,
+          children: [
+            <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Số đếm:'</span>),
+            <span class="tok-fn">Text</span>(<span class="tok-str">'$_count'</span>, style: <span class="tok-cls">Theme</span>.<span class="tok-fn">of</span>(context).textTheme.displayMedium),
+            <span class="tok-kw">const</span> <span class="tok-cls">SizedBox</span>(height: <span class="tok-num">24</span>),
+            <span class="tok-fn">Row</span>(
+              mainAxisAlignment: <span class="tok-cls">MainAxisAlignment</span>.spaceEvenly,
+              children: [
+                <span class="tok-fn">ElevatedButton</span>(onPressed: _decrement, child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'-1'</span>)),
+                <span class="tok-fn">OutlinedButton</span>(onPressed: _reset, child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Reset'</span>)),
+                <span class="tok-fn">ElevatedButton</span>(onPressed: _increment, child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'+1'</span>)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}</code></pre>
+
+        <h2 id="bai-tap" class="exercises">13. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Profile screen Stateless</h4>
+          <div class="exercise-body">
+            <p>
+              Recreate màn hình profile đơn giản: avatar tròn + name + email + 3 stat (posts/followers/following).
+              Chỉ widget cơ bản, không cần state. Tận dụng <code>const</code> tối đa.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">class ProfilePage extends StatelessWidget {
+  const ProfilePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile')),
+      body: Column(
+        children: [
+          const SizedBox(height: 24),
+          const CircleAvatar(
+            radius: 50,
+            backgroundImage: NetworkImage('https://i.pravatar.cc/200'),
+          ),
+          const SizedBox(height: 16),
+          const Text('Việt Nguyễn', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const Text('viet@example.com'),
+          const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: const [
+              _Stat(label: 'Posts', value: '42'),
+              _Stat(label: 'Followers', value: '1.2k'),
+              _Stat(label: 'Following', value: '200'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Stat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) =&gt; Column(
+    children: [
+      Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Text(label),
+    ],
+  );
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Counter với 3 button</h4>
+          <div class="exercise-body">
+            <p>
+              Viết <code>Counter</code> widget với 3 button: +1, -1, reset. Hiển thị value với <code>Text</code> lớn.
+              Style theo Material 3 default.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 12 ("Counter app"). Hoặc thử variation: thêm <code>step</code> param cho phép +N/-N.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Const audit</h4>
+          <div class="exercise-body">
+            <p>
+              Mở counter app sau <code>flutter create</code>. Audit toàn file <code>lib/main.dart</code>: bao nhiêu widget có thể convert sang <code>const</code>?
+              Bao nhiêu không thể (vì có biến runtime)?
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>
+                <code>const Text('Counter')</code> được — string literal. <code>Text('$_count')</code> không — vì <code>_count</code> runtime.
+                <code>const Icon(Icons.add)</code> được. <code>ElevatedButton(onPressed: _increment, child: ...)</code> không — vì <code>_increment</code> là tear-off của instance method.
+              </p>
+              <p>Lint <code>prefer_const_constructors</code> highlight chỗ thiếu — bật trong <code>analysis_options.yaml</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Clock với Timer</h4>
+          <div class="exercise-body">
+            <p>
+              Viết Stateful <code>Clock</code> hiển thị thời gian hiện tại (giờ:phút:giây). Dùng <code>Timer.periodic</code> trong <code>initState</code>,
+              cancel ở <code>dispose</code>. Cập nhật mỗi giây.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">import 'dart:async';
+
+class Clock extends StatefulWidget {
+  const Clock({super.key});
+  @override
+  State&lt;Clock&gt; createState() =&gt; _ClockState();
+}
+
+class _ClockState extends State&lt;Clock&gt; {
+  late Timer _timer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() =&gt; _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();   // CRITICAL: nếu không, leak + setState sau dispose
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _now;
+    return Text(
+      '${t.hour.toString().padLeft(2, '0')}:'
+      '${t.minute.toString().padLeft(2, '0')}:'
+      '${t.second.toString().padLeft(2, '0')}',
+      style: Theme.of(context).textTheme.displayLarge,
+    );
+  }
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>WelcomeCard Stateless</h4>
+          <div class="exercise-body">
+            <p>
+              Tạo widget <code>WelcomeCard(name, role)</code> Stateless với <code>Card</code> chứa avatar tròn + 2 text.
+              Sử dụng <code>BoxDecoration</code> cho avatar tròn nếu cần. Demo với 3 instance khác nhau.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">class WelcomeCard extends StatelessWidget {
+  final String name;
+  final String role;
+  const WelcomeCard({super.key, required this.name, required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircleAvatar(child: Text(name[0])),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(role),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">14. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p>Stateful widget cần 2 class — vì sao?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Để widget config immutable (có thể <code>const</code>), state mutable riêng. Framework swap state khi widget tree thay đổi, instance state vẫn giữ field nguyên.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p><code>build()</code> gọi nhiều lần — có ổn không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Có, build PHẢI pure — không side effect (không fetch HTTP, không setState, không Future.delayed). Framework tự optimize qua const + Element diff.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>setState(() { fetch(); })</code> — bug ở đâu?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> setState callback chỉ để đổi state field, không phải gọi async. Fetch nên gọi ngoài, sau đó <code>setState(() =&gt; _data = result)</code> với kết quả.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p><code>const SizedBox(height: 16)</code> vs <code>SizedBox(height: 16)</code> — runtime khác gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>const</code> canonicalize — 2 lần dùng cùng instance memory. Không trigger rebuild khi parent rebuild. <code>const</code> > không const luôn nếu có thể.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>BuildContext</code> truyền vào async function rồi dùng sau <code>await</code> — vấn đề?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Context có thể invalid (widget unmount). Check <code>if (!context.mounted) return;</code> trước khi dùng. Hoặc lint <code>use_build_context_synchronously</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>Widget có Key — vai trò chính là gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Giúp Flutter reconcile (match widget mới với element cũ) khi tree đổi shape — đặc biệt list reorder. 99% case không cần dùng explicit Key.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p><code>Scaffold</code> cần thiết cho mọi page không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không bắt buộc. Scaffold cung cấp skeleton (AppBar, body, FAB, drawer, SnackBar host). Bỏ qua được — dùng <code>Container</code> thuần hoặc <code>SafeArea</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>Khác biệt <code>Image.network</code> và <code>Image.asset</code>?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Network = fetch từ URL runtime (cần internet permission, có placeholder/error builder). Asset = file local declare trong <code>pubspec.yaml</code> <code>assets:</code>, bundle vào app.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">15. Tổng kết</h2>
+        <ul>
+          <li>✅ Mental model "everything is a Widget" — padding, alignment, decoration đều là widget.</li>
+          <li>✅ <code>UI = f(state)</code> declarative model.</li>
+          <li>✅ 3 cây: Widget (immutable spec) / Element (instance + state) / RenderObject (layout + paint).</li>
+          <li>✅ StatelessWidget — UI thuần từ constructor.</li>
+          <li>✅ StatefulWidget — 2 class, lifecycle initState → build → didUpdateWidget → dispose.</li>
+          <li>✅ <code>setState</code> schedule rebuild, không sync.</li>
+          <li>✅ <code>mounted</code> check sau async.</li>
+          <li>✅ MaterialApp + Scaffold = skeleton chuẩn.</li>
+          <li>✅ Widget cơ bản: Text, Icon, Image, Container, SizedBox, Padding, Center, Button family, Card, ListTile.</li>
+          <li>✅ BuildContext = handle Element, lookup ancestor.</li>
+          <li>✅ <code>const</code> constructor = perf hint chính.</li>
+        </ul>
+
+        <h2 id="ket-noi">16. Kết nối</h2>
+        <ul>
+          <li><a href="chuong3.html"><strong>Chương 3 — Layout:</strong></a> constraints flow down, Row/Column/Stack/Expanded.</li>
+          <li><strong>Chương 6 — State management cơ bản:</strong> lifting state up, InheritedWidget.</li>
+          <li><strong>Chương 13 — Custom Paint:</strong> 3 cây deep dive.</li>
+          <li>Dart chương 3 — named param + <code>required</code> là pattern của mọi widget constructor.</li>
+          <li>Dart chương 4 — class extends StatelessWidget / StatefulWidget.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong1.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">01 · Flutter Setup</div>
+          </a>
+          <a href="chuong3.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">03 · Layout System</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#everything-widget">1. Everything is Widget</a></li>
+          <li><a href="#widget-tree">2. Widget Tree</a></li>
+          <li><a href="#three-trees">3. 3 cây</a></li>
+          <li><a href="#stateless">4. StatelessWidget</a></li>
+          <li><a href="#stateful">5. StatefulWidget</a></li>
+          <li><a href="#setstate">6. setState</a></li>
+          <li><a href="#material-scaffold">7. MaterialApp + Scaffold</a></li>
+          <li><a href="#basic-widgets">8. Widget hiển thị</a></li>
+          <li><a href="#interactive-widgets">9. Widget interactive</a></li>
+          <li><a href="#buildcontext">10. BuildContext</a></li>
+          <li><a href="#const-widget">11. const widget</a></li>
+          <li><a href="#counter-app">12. Counter app</a></li>
+          <li><a href="#bai-tap">13. Bài tập</a></li>
+          <li><a href="#quiz">14. Quiz</a></li>
+          <li><a href="#tong-ket">15. Tổng kết</a></li>
+          <li><a href="#ket-noi">16. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 2 · Pillar 9 — IT Basic<br/>
+        <a href="chuong1.html">← Chương 1</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong3.html">Chương 3 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

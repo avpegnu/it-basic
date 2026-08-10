@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 15 — Performance, Build &amp; Deploy · Flutter Sub-pillar</title>
+  <meta name="description" content="DevTools, Performance Overlay, build APK/AAB/IPA, signing, flavor, TestFlight, Play Console, web hosting, CI/CD." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 15</span>
+      </div>
+      <div class="chapter-num">Chương 15 · Performance, Build &amp; Deploy</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Performance, Build &amp; Deploy
+      </h1>
+      <p class="lead">
+        Chương cuối — đưa app từ <em>"chạy trên máy mình"</em> → <strong>"ship cho user"</strong>.
+        Đây là phần thường bị bỏ qua hoặc làm vội. Chương dài + nhiều technical detail iOS/Android.
+      </p>
+      <p class="lead" style="font-size: 1.04rem;">
+        <strong>Chương kết Flutter</strong> — hoàn thành Pillar 9 Programming Language.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1280 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Tất cả chương trước + DevOps pillar</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Sử dụng Flutter DevTools toàn diện: Inspector, Performance, Memory, Network, Logging.</li>
+            <li>Hiểu Performance Overlay (GPU + UI thread).</li>
+            <li>Tối ưu rebuild: <code>const</code>, <code>RepaintBoundary</code>, selector pattern.</li>
+            <li>Build release: APK, App Bundle, IPA, macOS app, web.</li>
+            <li>Sign Android (keystore) + iOS (cert + provisioning).</li>
+            <li>Deploy: Google Play, App Store, Firebase App Distribution, TestFlight.</li>
+            <li>Web deploy: Firebase Hosting, Cloudflare Pages.</li>
+            <li>Flavor: dev/staging/prod build.</li>
+            <li>Crash reporting + Analytics.</li>
+            <li>App size optimization.</li>
+          </ul>
+        </div>
+
+        <h2 id="performance-overlay">1. Performance Overlay</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">MaterialApp</span>(
+  showPerformanceOverlay: <span class="tok-kw">true</span>,    <span class="tok-com">// 2 bar overlay góc phải</span>
+)</code></pre>
+
+        <p>Output 2 bar:</p>
+        <ul>
+          <li><strong>UI thread (Dart)</strong> — build/layout time. Code Dart bạn viết chạy ở đây.</li>
+          <li><strong>Raster thread (GPU)</strong> — paint time. Skia/Impeller render lên screen.</li>
+        </ul>
+
+        <p>Mỗi vạch = 1 frame (16.67ms ở 60Hz, 8.33ms ở 120Hz). <strong>Đỏ = vượt budget → jank</strong>.</p>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Đo perf trên Profile/Release, không Debug</div>
+          <p>
+            Debug mode chậm hơn release 10-100x do JIT + debug overhead. <strong>Đo perf phải dùng Profile mode</strong>:
+          </p>
+          <pre data-lang="bash" style="margin-top: 8px;"><code class="language-bash">flutter run --profile</code></pre>
+        </div>
+
+        <h2 id="devtools">2. Flutter DevTools — 6 panel chính</h2>
+
+        <h3 id="widget-inspector">2.1 Widget Inspector</h3>
+        <ul>
+          <li>Xem widget tree đầy đủ, click widget trên app → highlight trong tree.</li>
+          <li>Property inspect: size, position, style.</li>
+          <li>Toggle "Select Widget Mode" — tap app để select.</li>
+          <li>Show layout guideline (border + padding) — debug layout phức tạp.</li>
+        </ul>
+
+        <h3 id="performance-panel">2.2 Performance</h3>
+        <ul>
+          <li>Record CPU trace.</li>
+          <li>Flame chart hiển thị thời gian mỗi function call.</li>
+          <li>Identify slow widget build.</li>
+          <li>Frame chart: mỗi frame một bar màu — đỏ = jank.</li>
+        </ul>
+
+        <h3 id="cpu-profiler">2.3 CPU Profiler</h3>
+        <ul>
+          <li>Sampling profiler — đếm function chiếm CPU nhiều nhất.</li>
+          <li>Bottom-up / top-down view.</li>
+        </ul>
+
+        <h3 id="memory-panel">2.4 Memory</h3>
+        <ul>
+          <li>Heap snapshot.</li>
+          <li>Allocation timeline.</li>
+          <li>Detect leak: object không được GC sau khi widget unmount.</li>
+        </ul>
+
+        <h3 id="network-panel">2.5 Network</h3>
+        <ul>
+          <li>Log HTTP request, response, timing.</li>
+          <li>Filter URL, status code.</li>
+          <li>Inspect headers + body.</li>
+        </ul>
+
+        <h3 id="logging-panel">2.6 Logging</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'dart:developer'</span>;
+
+<span class="tok-fn">log</span>(<span class="tok-str">'fetched user'</span>, name: <span class="tok-str">'api'</span>, level: <span class="tok-num">800</span>);
+<span class="tok-fn">log</span>(<span class="tok-str">'error'</span>, name: <span class="tok-str">'api'</span>, level: <span class="tok-num">1000</span>, error: e, stackTrace: st);
+
+<span class="tok-com">// debugPrint tránh truncate Android log</span>
+<span class="tok-fn">debugPrint</span>(<span class="tok-str">'long output...'</span>);</code></pre>
+
+        <h2 id="common-perf-issues">3. 6 lỗi perf phổ biến + fix</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Issue</th><th>Fix</th></tr></thead>
+            <tbody>
+              <tr><td>Rebuild quá nhiều (widget không thay đổi vẫn rebuild)</td><td><code>const</code> constructor + tách widget thành class riêng, BlocSelector / Provider.select</td></tr>
+              <tr><td><code>Opacity</code> widget expensive (offscreen layer)</td><td>Dùng <code>AnimatedOpacity</code> hoặc <code>Color.withOpacity</code> background</td></tr>
+              <tr><td><code>ClipPath</code> repaint mỗi frame</td><td>Wrap với <code>RepaintBoundary</code></td></tr>
+              <tr><td>Long list không lazy</td><td><code>ListView.builder</code> thay <code>ListView(children: [...])</code></td></tr>
+              <tr><td>Image lớn không resize</td><td><code>Image.network(..., cacheWidth: 200, cacheHeight: 200)</code> hoặc <code>ResizeImage</code></td></tr>
+              <tr><td>State update granular thiếu</td><td><code>Selector</code> / <code>BlocSelector</code> rebuild chỉ subset</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="const-optimize"><code>const</code> constructor — perf hint chính</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌</span>
+<span class="tok-fn">Text</span>(<span class="tok-str">'Hello'</span>)
+
+<span class="tok-com">// ✅ — không rebuild khi parent rebuild</span>
+<span class="tok-kw">const</span> <span class="tok-fn">Text</span>(<span class="tok-str">'Hello'</span>)
+
+<span class="tok-com">// Bật lint</span>
+<span class="tok-com">// analysis_options.yaml</span>
+linter:
+  rules:
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - prefer_const_declarations</code></pre>
+
+        <h3 id="list-builder"><code>ListView.builder</code> lazy</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ — build 1000 widget ngay từ đầu</span>
+<span class="tok-fn">ListView</span>(children: items.<span class="tok-fn">map</span>((i) =&gt; <span class="tok-fn">ItemTile</span>(i)).<span class="tok-fn">toList</span>())
+
+<span class="tok-com">// ✅ — chỉ build widget visible</span>
+<span class="tok-fn">ListView.builder</span>(
+  itemCount: items.length,
+  itemBuilder: (ctx, i) =&gt; <span class="tok-fn">ItemTile</span>(items[i]),
+)</code></pre>
+
+        <h3 id="image-cache">Image cacheWidth</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ — load full size 4000x4000</span>
+<span class="tok-fn">Image.network</span>(url)
+
+<span class="tok-com">// ✅ — resize ở memory, hiển thị 200x200</span>
+<span class="tok-fn">Image.network</span>(url, cacheWidth: <span class="tok-num">200</span>, cacheHeight: <span class="tok-num">200</span>)</code></pre>
+
+        <h2 id="build-mode">4. Build mode — Debug / Profile / Release</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Debug</th><th>Profile</th><th>Release</th></tr></thead>
+            <tbody>
+              <tr><td>Compile</td><td>JIT</td><td>AOT</td><td>AOT</td></tr>
+              <tr><td>Hot reload</td><td>Có</td><td>Không</td><td>Không</td></tr>
+              <tr><td>Assertion</td><td>Bật</td><td>Bật</td><td>Tắt</td></tr>
+              <tr><td>DevTools</td><td>Full</td><td>Performance only</td><td>Không</td></tr>
+              <tr><td>Perf</td><td>Chậm</td><td>Gần production</td><td>Production</td></tr>
+              <tr><td>Lệnh</td><td><code>flutter run</code></td><td><code>flutter run --profile</code></td><td><code>flutter build apk --release</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="build-android-apk">5. Build Android APK</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter build apk --release
+# Output: build/app/outputs/flutter-apk/app-release.apk
+
+# Split per ABI (giảm 50% size — mỗi ABI 1 APK)
+flutter build apk --release --split-per-abi
+# Output:
+#   app-arm64-v8a-release.apk
+#   app-armeabi-v7a-release.apk
+#   app-x86_64-release.apk</code></pre>
+
+        <h2 id="build-android-aab">6. Android App Bundle (AAB)</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter build appbundle --release
+# Output: build/app/outputs/bundle/release/app-release.aab</code></pre>
+
+        <p>
+          <strong>Google Play khuyến nghị AAB</strong>. Google Play split per-device download — user tải nhỏ hơn.
+        </p>
+
+        <h2 id="android-signing">7. Android signing</h2>
+
+        <h3 id="generate-keystore">Generate keystore</h3>
+        <pre data-lang="bash"><code class="language-bash">keytool -genkey -v -keystore ~/upload-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+
+# Nhập password + thông tin (CN, OU, O, City, State, Country)
+# OUTPUT: upload-keystore.jks</code></pre>
+
+        <h3 id="key-properties"><code>android/key.properties</code></h3>
+        <pre data-lang="properties"><code>storePassword=your_store_password
+keyPassword=your_key_password
+keyAlias=upload
+storeFile=/Users/yourname/upload-keystore.jks</code></pre>
+
+        <p><strong>KHÔNG commit file này</strong> — add vào <code>.gitignore</code>.</p>
+
+        <h3 id="build-gradle">Update <code>android/app/build.gradle</code></h3>
+        <pre data-lang="groovy"><code class="language-groovy">def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Backup keystore!</div>
+          <p>
+            Mất keystore = không update app trên Play được. Backup multiple location (Google Drive, USB, password manager).
+            Mất keystore phải release app mới với package name khác → mất user, review.
+          </p>
+        </div>
+
+        <h2 id="build-ios">8. Build iOS IPA</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter build ipa --release
+# Output: build/ios/ipa/Runner.ipa</code></pre>
+
+        <h2 id="ios-signing">9. iOS signing</h2>
+        <p>
+          iOS signing là pain point. Cần:
+        </p>
+        <ol>
+          <li><strong>Apple Developer account</strong> ($99/năm).</li>
+          <li><strong>App ID</strong> — register Bundle ID trên Apple Developer Portal.</li>
+          <li><strong>Certificate</strong> — Development + Distribution (.p12).</li>
+          <li><strong>Provisioning Profile</strong> — link App ID + Certificate.</li>
+          <li><strong>Team</strong> — Xcode Signing &amp; Capabilities.</li>
+        </ol>
+
+        <h3 id="auto-vs-manual">Automatic vs Manual signing</h3>
+        <ul>
+          <li><strong>Automatic</strong>: Xcode tự handle. Pros: dễ. Cons: đôi khi vẽ cert sai, đặc biệt với CI.</li>
+          <li><strong>Manual</strong>: control đầy đủ. Pros: reliable cho CI. Cons: setup phức tạp.</li>
+        </ul>
+
+        <p>Production team thường dùng <strong>fastlane match</strong> để sync cert + profile qua git encrypted.</p>
+
+        <h2 id="build-macos">10. macOS app</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter build macos --release
+# Output: build/macos/Build/Products/Release/MyApp.app
+
+# Notarize cho distribute outside App Store
+xcrun notarytool submit MyApp.app.zip --keychain-profile "AC_PASSWORD" --wait
+xcrun stapler staple MyApp.app</code></pre>
+
+        <h2 id="build-web">11. Build Web</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter build web --release
+# Output: build/web/</code></pre>
+
+        <h3 id="web-renderers">CanvasKit vs HTML renderer</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>CanvasKit</th><th>HTML</th></tr></thead>
+            <tbody>
+              <tr><td>Render</td><td>WebAssembly + Skia</td><td>HTML/CSS + Canvas</td></tr>
+              <tr><td>Size</td><td>~2MB lib</td><td>Nhẹ hơn</td></tr>
+              <tr><td>Consistency</td><td>Pixel-perfect with mobile</td><td>Browser-native, có thể khác</td></tr>
+              <tr><td>SEO</td><td>Kém (canvas)</td><td>Tốt hơn</td></tr>
+              <tr><td>Use case</td><td>App giống mobile, animation phức tạp</td><td>App content-heavy, SEO matter</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre data-lang="bash"><code class="language-bash"># Force HTML renderer
+flutter build web --web-renderer html --release
+
+# Force CanvasKit
+flutter build web --web-renderer canvaskit --release
+
+# Auto (default): CanvasKit trên desktop, HTML trên mobile</code></pre>
+
+        <h2 id="web-hosting">12. Web hosting</h2>
+
+        <h3 id="firebase-hosting">Firebase Hosting</h3>
+        <pre data-lang="bash"><code class="language-bash">npm install -g firebase-tools
+firebase login
+firebase init hosting
+# Choose: build/web as public, configure as SPA → yes
+
+flutter build web --release
+firebase deploy --only hosting
+
+# URL: https://your-project.web.app</code></pre>
+
+        <h3 id="cloudflare-pages">Alternatives</h3>
+        <ul>
+          <li><strong>Cloudflare Pages</strong> — free, custom domain, CDN edge.</li>
+          <li><strong>Netlify / Vercel</strong> — same idea, drag-drop hoặc git integration.</li>
+          <li><strong>GitHub Pages</strong> — free, push <code>build/web</code> lên gh-pages branch.</li>
+        </ul>
+
+        <h2 id="firebase-app-dist">13. Firebase App Distribution</h2>
+        <p>Internal testing — upload AAB/IPA, invite tester qua email.</p>
+
+        <pre data-lang="bash"><code class="language-bash">npm install -g firebase-tools
+firebase login
+
+# Upload Android AAB
+firebase appdistribution:distribute build/app/outputs/bundle/release/app-release.aab \
+  --app YOUR_FIREBASE_APP_ID \
+  --groups testers
+
+# Upload iOS IPA
+firebase appdistribution:distribute build/ios/ipa/Runner.ipa \
+  --app YOUR_FIREBASE_APP_ID \
+  --groups testers</code></pre>
+
+        <h2 id="testflight">14. TestFlight (iOS beta)</h2>
+        <ol>
+          <li>Build IPA: <code>flutter build ipa --release</code>.</li>
+          <li>Upload qua Xcode Organizer hoặc Transporter app.</li>
+          <li>App Store Connect → TestFlight → External Testing → add tester.</li>
+          <li>Tester nhận email + cài qua TestFlight app.</li>
+          <li>External tester cần Apple review (~1 ngày), internal không.</li>
+        </ol>
+
+        <h2 id="play-console">15. Google Play Console</h2>
+        <p>4 testing track:</p>
+        <ul>
+          <li><strong>Internal testing</strong> — instant, max 100 tester.</li>
+          <li><strong>Closed testing</strong> — invite, Google review ~1h.</li>
+          <li><strong>Open testing</strong> — public beta link.</li>
+          <li><strong>Production</strong> — live trên Play Store.</li>
+        </ul>
+
+        <pre data-lang="bash"><code class="language-bash">flutter build appbundle --release
+# Upload manually qua Play Console UI
+# Hoặc tự động: fastlane supply</code></pre>
+
+        <h2 id="flavor">16. Flavor — multi env</h2>
+        <p>Build dev/staging/prod với config khác (bundle id, app name, API endpoint, Firebase project).</p>
+
+        <h3 id="flavor-android">Android — productFlavors</h3>
+        <pre data-lang="groovy"><code class="language-groovy">// android/app/build.gradle
+android {
+    flavorDimensions "env"
+    productFlavors {
+        dev {
+            dimension "env"
+            applicationIdSuffix ".dev"
+            resValue "string", "app_name", "MyApp Dev"
+        }
+        staging {
+            dimension "env"
+            applicationIdSuffix ".staging"
+            resValue "string", "app_name", "MyApp Staging"
+        }
+        prod {
+            dimension "env"
+            resValue "string", "app_name", "MyApp"
+        }
+    }
+}</code></pre>
+
+        <h3 id="flavor-ios">iOS — Xcode schemes</h3>
+        <p>
+          iOS không có productFlavor như Android — cần tạo Xcode schemes thủ công.
+          Steps: Product → Scheme → New Scheme → Duplicate "Runner" cho mỗi env.
+        </p>
+
+        <h3 id="flavor-dart">Dart — entry point per flavor</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// lib/main_dev.dart</span>
+<span class="tok-kw">import</span> <span class="tok-str">'app.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() =&gt; <span class="tok-fn">runApp</span>(<span class="tok-cls">App</span>(env: <span class="tok-str">'dev'</span>, apiUrl: <span class="tok-str">'https://api-dev.example.com'</span>));
+
+<span class="tok-com">// lib/main_staging.dart</span>
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() =&gt; <span class="tok-fn">runApp</span>(<span class="tok-cls">App</span>(env: <span class="tok-str">'staging'</span>, apiUrl: <span class="tok-str">'https://api-staging.example.com'</span>));
+
+<span class="tok-com">// lib/main_prod.dart</span>
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() =&gt; <span class="tok-fn">runApp</span>(<span class="tok-cls">App</span>(env: <span class="tok-str">'prod'</span>, apiUrl: <span class="tok-str">'https://api.example.com'</span>));</code></pre>
+
+        <pre data-lang="bash"><code class="language-bash"># Run
+flutter run --flavor dev -t lib/main_dev.dart
+flutter run --flavor staging -t lib/main_staging.dart
+
+# Build
+flutter build apk --flavor prod --release -t lib/main_prod.dart</code></pre>
+
+        <h2 id="cicd">17. CI/CD intro</h2>
+        <h3 id="cicd-options">Options</h3>
+        <ul>
+          <li><strong>fastlane</strong> — Ruby tool, mạnh nhất cho mobile. Match (signing), Pilot (TestFlight), Supply (Play).</li>
+          <li><strong>Codemagic</strong> — Flutter-first CI, dễ setup.</li>
+          <li><strong>Bitrise</strong> — mobile-focused CI.</li>
+          <li><strong>GitHub Actions</strong> — free for open source, free tier limit.</li>
+        </ul>
+
+        <h3 id="github-actions-deploy">GitHub Actions example</h3>
+        <pre data-lang="yaml"><code class="language-yaml"># .github/workflows/deploy.yml
+name: Deploy
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.22.0', channel: stable }
+
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build appbundle --release --flavor prod -t lib/main_prod.dart
+        env:
+          # decode keystore từ secret
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aab
+          path: build/app/outputs/bundle/prodRelease/app-prod-release.aab
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+      - run: flutter build ipa --release
+      # Upload via fastlane pilot...</code></pre>
+
+        <h2 id="crash-reporting">18. Crash reporting</h2>
+        <p>Capture exception runtime production. 2 options chính:</p>
+        <ul>
+          <li><strong>Firebase Crashlytics</strong> — free, tích hợp Firebase.</li>
+          <li><strong>Sentry</strong> — feature richer, có self-host option.</li>
+        </ul>
+
+        <pre data-lang="bash"><code class="language-bash">flutter pub add firebase_core firebase_crashlytics</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:firebase_core/firebase_core.dart'</span>;
+<span class="tok-kw">import</span> <span class="tok-str">'package:firebase_crashlytics/firebase_crashlytics.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() <span class="tok-kw">async</span> {
+  <span class="tok-cls">WidgetsFlutterBinding</span>.<span class="tok-fn">ensureInitialized</span>();
+  <span class="tok-kw">await</span> <span class="tok-cls">Firebase</span>.<span class="tok-fn">initializeApp</span>();
+
+  <span class="tok-com">// Catch Flutter framework error</span>
+  <span class="tok-cls">FlutterError</span>.onError = <span class="tok-cls">FirebaseCrashlytics</span>.instance.recordFlutterFatalError;
+
+  <span class="tok-com">// Catch async / platform error</span>
+  <span class="tok-cls">PlatformDispatcher</span>.instance.onError = (e, st) {
+    <span class="tok-cls">FirebaseCrashlytics</span>.instance.<span class="tok-fn">recordError</span>(e, st, fatal: <span class="tok-kw">true</span>);
+    <span class="tok-kw">return</span> <span class="tok-kw">true</span>;
+  };
+
+  <span class="tok-fn">runApp</span>(<span class="tok-kw">const</span> <span class="tok-cls">MyApp</span>());
+}
+
+<span class="tok-com">// Manual log</span>
+<span class="tok-cls">FirebaseCrashlytics</span>.instance.<span class="tok-fn">log</span>(<span class="tok-str">'user clicked checkout'</span>);
+<span class="tok-cls">FirebaseCrashlytics</span>.instance.<span class="tok-fn">setUserIdentifier</span>(user.id);</code></pre>
+
+        <h2 id="analytics">19. Analytics</h2>
+        <ul>
+          <li><strong>Firebase Analytics</strong> — free, integration với Firebase suite.</li>
+          <li><strong>Mixpanel</strong> — event-based, free tier.</li>
+          <li><strong>Amplitude</strong> — product analytics.</li>
+          <li><strong>PostHog</strong> — open source, self-host được.</li>
+        </ul>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">await</span> <span class="tok-cls">FirebaseAnalytics</span>.instance.<span class="tok-fn">logEvent</span>(
+  name: <span class="tok-str">'purchase'</span>,
+  parameters: {<span class="tok-str">'item_id'</span>: <span class="tok-str">'sku123'</span>, <span class="tok-str">'value'</span>: <span class="tok-num">99.99</span>},
+);</code></pre>
+
+        <h2 id="app-size">20. App size optimization</h2>
+        <pre data-lang="bash"><code class="language-bash"># Phân tích size
+flutter build apk --analyze-size
+flutter build appbundle --analyze-size
+
+# Output: bảng size component, font, asset, code</code></pre>
+
+        <h3 id="size-tips">Tips giảm size</h3>
+        <ul>
+          <li><code>--split-per-abi</code> Android — 50% nhỏ hơn.</li>
+          <li><code>--tree-shake-icons</code> — chỉ include Material icon dùng.</li>
+          <li>Compress image: WebP thay PNG, JPEG quality 70-80%.</li>
+          <li>Remove unused asset trong <code>pubspec.yaml</code>.</li>
+          <li>Font subset — chỉ ship glyph dùng (vd Vietnamese subset).</li>
+          <li>Audit dependencies — bỏ package nặng không dùng.</li>
+        </ul>
+
+        <h2 id="launcher-icons">21. Launcher icons + splash</h2>
+
+        <h3 id="flutter-launcher-icons">flutter_launcher_icons</h3>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add --dev flutter_launcher_icons</code></pre>
+
+        <pre data-lang="yaml"><code class="language-yaml"># pubspec.yaml
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"   # 1024x1024 PNG
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/foreground.png"
+  web:
+    generate: true
+  macos:
+    generate: true</code></pre>
+
+        <pre data-lang="bash"><code class="language-bash">dart run flutter_launcher_icons
+# Sinh icon cho tất cả platform</code></pre>
+
+        <h3 id="flutter-native-splash">flutter_native_splash</h3>
+        <pre data-lang="yaml"><code class="language-yaml">flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/splash.png
+  android_12:
+    image: assets/splash_android12.png
+    color: "#FFFFFF"</code></pre>
+
+        <pre data-lang="bash"><code class="language-bash">dart run flutter_native_splash:create</code></pre>
+
+        <h2 id="bai-tap" class="exercises">22. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Perf optimize ListView 1000 item</h4>
+          <div class="exercise-body">
+            <p>
+              Bật Performance Overlay. Scroll ListView 1000 item — UI bar đỏ.
+              Optimize bằng <code>ListView.builder</code> + <code>const</code> + RepaintBoundary.
+              Đo lại, đỏ → xanh.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>3 step: (1) ListView → ListView.builder, (2) const cho item widget, (3) RepaintBoundary wrap item heavy paint.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Build signed APK</h4>
+          <div class="exercise-body">
+            <p>Build release APK signed với keystore tự sinh. Cài lên Android device thực tế.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 5-7. <code>keytool</code> → <code>key.properties</code> → <code>build.gradle</code> signingConfigs → <code>flutter build apk --release</code> → adb install.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>TestFlight upload</h4>
+          <div class="exercise-body">
+            <p>Build IPA, upload TestFlight, gửi cho 1 tester thật.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Cần Apple Developer account ($99/năm). flutter build ipa → upload via Xcode Organizer → TestFlight UI invite tester email.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Setup 3 flavor</h4>
+          <div class="exercise-body">
+            <p>
+              Setup 3 flavor (dev/staging/prod) với 3 API endpoint khác. Run + build từng flavor.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 16. Android productFlavors + iOS schemes + 3 entry point Dart.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>GitHub Actions CI</h4>
+          <div class="exercise-body">
+            <p>
+              CI GitHub Actions: trigger merge to main → build APK + web → upload Firebase App Distribution.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Workflow file (section 17). Secret keystore (base64 encode). firebase-cli action cho App Distribution.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">23. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p>APK vs AAB — Google Play khuyến nghị?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> AAB (App Bundle). Google split per-device, download nhỏ hơn 50%+.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>Profile mode khác Release?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Profile = AOT + profile flag (cho DevTools track). Slight slower than Release. Dùng để đo perf gần production. Không hot reload.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p>Web CanvasKit vs HTML — chọn nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> CanvasKit feature đầy đủ, giống mobile (~2MB). HTML nhẹ, SEO tốt, một số widget không support hoàn hảo. Default: Flutter pick auto.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>iOS auto signing — vấn đề?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Cần đăng nhập Apple Developer, đôi khi vẽ cert sai. Manual signing đáng tin cho CI. fastlane match là solution mature.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p>App size lớn — trick giảm?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>--split-per-abi</code>, <code>--tree-shake-icons</code>, remove unused asset, dùng WebP, font subset, audit deps.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>Flavor Android setup file nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>android/app/build.gradle</code> trong <code>android { flavorDimensions ... productFlavors { dev {}, staging {}, prod {} } }</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Firebase Crashlytics capture exception nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Native crash + Dart uncaught. Cần setup <code>FlutterError.onError</code> + <code>PlatformDispatcher.instance.onError</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>Hot reload hoạt động mode nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Chỉ Debug (JIT). Profile/Release là AOT — code đã native binary.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">24. Tổng kết</h2>
+        <ul>
+          <li>✅ Performance Overlay 2 bar (UI + Raster), 16ms threshold.</li>
+          <li>✅ DevTools 6 panel: Inspector, Performance, CPU, Memory, Network, Logging.</li>
+          <li>✅ 6 lỗi perf phổ biến + fix.</li>
+          <li>✅ Build mode: Debug (JIT, dev) / Profile (AOT, đo) / Release (AOT, ship).</li>
+          <li>✅ Android: APK + AAB. AAB chuẩn cho Play.</li>
+          <li>✅ Signing Android: keystore + key.properties + build.gradle signingConfigs.</li>
+          <li>✅ iOS: IPA + Xcode signing (cert + provisioning).</li>
+          <li>✅ Web: CanvasKit vs HTML renderer.</li>
+          <li>✅ Deploy: Firebase Hosting / TestFlight / Play Console.</li>
+          <li>✅ Flavor multi-env: Android productFlavors + iOS schemes.</li>
+          <li>✅ CI/CD: fastlane, GitHub Actions, Codemagic.</li>
+          <li>✅ Crash report: Crashlytics. Analytics: Firebase.</li>
+          <li>✅ App size: split-per-abi, tree-shake-icons, WebP.</li>
+          <li>✅ Launcher icons + splash via package.</li>
+        </ul>
+
+        <h2 id="tong-ket-flutter">25. Tổng kết Flutter curriculum</h2>
+        <p>Bạn vừa hoàn thành 15 chương Flutter. Chương trình bao gồm:</p>
+        <ol>
+          <li>Setup, FVM, toolchain.</li>
+          <li>Widget Tree mental model.</li>
+          <li>Layout system, constraints.</li>
+          <li>Material 3, theming, dark mode.</li>
+          <li>Navigation, go_router, deep link.</li>
+          <li>State foundation: setState + InheritedWidget.</li>
+          <li>flutter_bloc deep dive.</li>
+          <li>Provider / Riverpod / GetX comparison.</li>
+          <li>Forms &amp; input.</li>
+          <li>Network: HTTP, Dio, Retrofit, repository pattern.</li>
+          <li>Local storage: SharedPreferences → Drift, Hive, Isar.</li>
+          <li>Animation: implicit / explicit / Hero / Lottie.</li>
+          <li>Custom Paint &amp; 3 cây render.</li>
+          <li>Testing 4 level + CI.</li>
+          <li>Performance + Deploy production.</li>
+        </ol>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Bước tiếp theo</div>
+          <p>
+            Bạn đã có nền tảng để build production Flutter app. Bước tiếp theo:
+          </p>
+          <ul>
+            <li>Build <strong>side project</strong> end-to-end — apply 15 chương vào 1 app thật.</li>
+            <li>Đọc <strong>code mở</strong> các Flutter app lớn (Wonderous, Reflectly, FlutterFire samples).</li>
+            <li>Theo dõi <strong>Flutter team channel</strong>: YouTube, blog medium, Flutter Forward conference.</li>
+            <li>Đóng góp package mở trên pub.dev khi feel comfortable.</li>
+          </ul>
+          <p style="margin-top: 12px;">
+            <strong>Hoàn thành Pillar 9 Programming Language</strong> — kết thúc 9 trụ cột IT Basic.
+            Chúc bạn ship được app đầu tiên!
+          </p>
+        </div>
+
+        <nav class="chapter-nav">
+          <a href="chuong14.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">14 · Testing</div>
+          </a>
+          <a href="../index.html" class="next">
+            <div class="dir">Hoàn thành →</div>
+            <div class="label">Flutter sub-pillar TOC</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#performance-overlay">1. Performance Overlay</a></li>
+          <li><a href="#devtools">2. DevTools 6 panel</a></li>
+          <li><a href="#common-perf-issues">3. 6 lỗi perf phổ biến</a></li>
+          <li><a href="#build-mode">4. Build mode</a></li>
+          <li><a href="#build-android-apk">5. Android APK</a></li>
+          <li><a href="#build-android-aab">6. Android AAB</a></li>
+          <li><a href="#android-signing">7. Android signing</a></li>
+          <li><a href="#build-ios">8. iOS IPA</a></li>
+          <li><a href="#ios-signing">9. iOS signing</a></li>
+          <li><a href="#build-macos">10. macOS</a></li>
+          <li><a href="#build-web">11. Web</a></li>
+          <li><a href="#web-hosting">12. Web hosting</a></li>
+          <li><a href="#firebase-app-dist">13. Firebase App Distribution</a></li>
+          <li><a href="#testflight">14. TestFlight</a></li>
+          <li><a href="#play-console">15. Play Console</a></li>
+          <li><a href="#flavor">16. Flavor multi env</a></li>
+          <li><a href="#cicd">17. CI/CD</a></li>
+          <li><a href="#crash-reporting">18. Crash reporting</a></li>
+          <li><a href="#analytics">19. Analytics</a></li>
+          <li><a href="#app-size">20. App size</a></li>
+          <li><a href="#launcher-icons">21. Launcher + splash</a></li>
+          <li><a href="#bai-tap">22. Bài tập</a></li>
+          <li><a href="#quiz">23. Quiz</a></li>
+          <li><a href="#tong-ket">24. Tổng kết</a></li>
+          <li><a href="#tong-ket-flutter">25. Tổng kết Flutter</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 15 · Pillar 9 — IT Basic (KẾT FLUTTER)<br/>
+        <a href="chuong14.html">← Chương 14</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="../../index.html">Pillar 9 overview</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

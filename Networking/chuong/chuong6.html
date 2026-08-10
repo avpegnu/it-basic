@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 06 — HTTPS, TLS, Certificates · Networking Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">net-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong5.html">← Ch.05</a></li>
+        <li><a href="chuong6.html" class="active">Ch.06</a></li>
+        <li><a href="chuong7.html">Ch.07 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 06 · SECURITY · ~120 phút</div>
+      <h1>HTTPS, TLS,<br/><span class="text-accent">Certificates</span></h1>
+      <p class="lead">
+        Mã hoá &amp; xác thực HTTP. Hiểu chương này, bạn sẽ trả lời được câu phỏng vấn kinh điển:
+        <em>"Khi gõ https://google.com, có chuyện gì xảy ra?"</em>. Học TLS handshake, asymmetric vs symmetric encryption,
+        certificate chain, Let's Encrypt, và tại sao có HTTPS thì attacker vẫn nhìn được domain.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#why">6.1 Tại sao cần HTTPS?</a></li>
+          <li><a href="#crypto">6.2 Symmetric vs Asymmetric</a></li>
+          <li><a href="#tls12">6.3 TLS 1.2 Handshake</a></li>
+          <li><a href="#tls13">6.4 TLS 1.3 — 1-RTT &amp; 0-RTT</a></li>
+          <li><a href="#cert">6.5 Certificate &amp; PKI</a></li>
+          <li><a href="#letsencrypt">6.6 Let's Encrypt</a></li>
+          <li><a href="#sni">6.7 SNI — nhiều cert 1 IP</a></li>
+          <li><a href="#cipher">6.8 Cipher suite &amp; PFS</a></li>
+          <li><a href="#tools">6.9 Tools thực tế</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 6.1 -->
+        <section id="why">
+          <h2>6.1 Tại sao cần HTTPS?</h2>
+
+          <p>HTTP plain có 3 vấn đề bảo mật:</p>
+
+          <ol>
+            <li><strong>Sniffing</strong> (eavesdropping): bất kỳ ai trên đường truyền (Wi-Fi cùng quán cà phê, ISP) đều đọc được password, cookie</li>
+            <li><strong>Tampering</strong>: attacker chèn quảng cáo, JavaScript độc vào response (xảy ra với ISP một số nước)</li>
+            <li><strong>Impersonation</strong>: attacker giả mạo server (DNS spoofing, ARP poisoning)</li>
+          </ol>
+
+          <p>HTTPS = HTTP + <strong>TLS</strong> (Transport Layer Security). Giải quyết cả 3:</p>
+          <ul>
+            <li><strong>Confidentiality</strong>: mã hoá → không sniff được</li>
+            <li><strong>Integrity</strong>: MAC (Message Authentication Code) → phát hiện tamper</li>
+            <li><strong>Authentication</strong>: certificate → xác thực server thật là server</li>
+          </ul>
+
+          <h3>HTTPS port</h3>
+          <p>Mặc định <code>443</code>. HTTP plain: <code>80</code>.</p>
+        </section>
+
+        <!-- 6.2 -->
+        <section id="crypto">
+          <h2>6.2 Symmetric vs Asymmetric Encryption</h2>
+
+          <h3>Symmetric — 1 key cho cả encrypt và decrypt</h3>
+          <ul>
+            <li>Vd: AES, ChaCha20</li>
+            <li>Cực nhanh — hardware AES-NI có thể đạt nhiều GB/s</li>
+            <li>Vấn đề: làm sao 2 bên có cùng key mà không bị lộ qua network?</li>
+          </ul>
+
+          <h3>Asymmetric — 2 key (public + private)</h3>
+          <ul>
+            <li>Vd: RSA, ECDSA, EdDSA</li>
+            <li>Encrypt bằng public key → chỉ private key decrypt được</li>
+            <li>Sign bằng private key → bất kỳ ai có public key cũng verify được</li>
+            <li>Chậm hơn symmetric ~1000x</li>
+            <li>Giải quyết được vấn đề key exchange</li>
+          </ul>
+
+          <div class="ascii-art">
+   Symmetric (AES):                  Asymmetric (RSA):
+   ┌─────┐                            ┌─────────┐
+   │ key │   encrypt + decrypt        │ public  │   encrypt
+   │     │   (giống nhau)             │  key    │
+   └─────┘                            └─────────┘
+                                      ┌─────────┐
+                                      │ private │   decrypt
+                                      │  key    │
+                                      └─────────┘
+          </div>
+
+          <h3>TLS dùng cả hai</h3>
+          <ol>
+            <li><strong>Asymmetric</strong> chỉ dùng <em>1 lần</em> ở handshake để trao đổi 1 "session key" symmetric</li>
+            <li>Sau đó dùng <strong>symmetric</strong> để mã hoá data thực — nhanh</li>
+          </ol>
+          <p>Đây là <strong>hybrid encryption</strong> — kết hợp ưu điểm cả hai.</p>
+        </section>
+
+        <!-- 6.3 -->
+        <section id="tls12">
+          <h2>6.3 TLS 1.2 Handshake — phải vẽ được</h2>
+
+          <p>Đây là phần phỏng vấn hay yêu cầu vẽ. TLS 1.2 cần ~2 RTT.</p>
+
+          <div class="ascii-art">
+   Client                                  Server
+   ──────                                  ──────
+   1. Client Hello ─────────────▶
+      (TLS version, cipher suites,
+       client random)
+
+                        ◀───────── 2. Server Hello
+                                   (chosen cipher,
+                                    server random)
+
+                        ◀───────── 3. Certificate
+                                   (server's public key
+                                    + chain of CAs)
+
+                        ◀───────── 4. Server Key Exchange
+                                   (DH parameters cho PFS)
+
+                        ◀───────── 5. Server Hello Done
+
+   6. Verify certificate:
+      - Cert chain → trusted root CA?
+      - Hostname match?
+      - Not expired?
+
+   7. Client Key Exchange ────────▶
+      (encrypt pre-master secret
+       với server's public key)
+
+   8. Cả 2 bên derive session key
+      từ pre-master + 2 random.
+
+   9. Change Cipher Spec ─────────▶
+      Finished (encrypted)
+
+                        ◀───────── 10. Change Cipher Spec
+                                   Finished (encrypted)
+
+   ──────── Bắt đầu HTTPS data trên symmetric encryption ────────
+          </div>
+
+          <h3>Các bước key</h3>
+          <ol>
+            <li><strong>Client Hello</strong>: client báo TLS version + danh sách cipher mình support + client random</li>
+            <li><strong>Server Hello</strong>: server chọn cipher + gửi server random + certificate</li>
+            <li><strong>Verify cert</strong>: client check cert chain, hostname, expiry</li>
+            <li><strong>Key Exchange</strong>: client tạo pre-master secret, encrypt bằng server's public key, gửi</li>
+            <li><strong>Derive session key</strong>: 2 bên dùng pre-master + 2 random → derive cùng 1 session key (symmetric)</li>
+            <li><strong>Finished</strong>: 2 bên gửi message encrypted để confirm</li>
+          </ol>
+
+          <p><strong>2 RTT</strong> trước khi có thể gửi HTTP request. Cộng với 1.5 RTT của TCP = <strong>3.5 RTT</strong> tổng cho HTTPS qua HTTP/1.1.</p>
+        </section>
+
+        <!-- 6.4 -->
+        <section id="tls13">
+          <h2>6.4 TLS 1.3 (2018) — đơn giản hoá đáng kể</h2>
+
+          <p>TLS 1.3 cải tiến lớn:</p>
+
+          <h3>1. Handshake còn 1 RTT</h3>
+          <p>Client gửi key share luôn ở Client Hello — không đợi 1 round nữa.</p>
+
+          <div class="ascii-art">
+   Client                              Server
+   ──────                              ──────
+   ClientHello + key_share ─────────▶
+                                       Server xử lý:
+                                       - chọn cipher
+                                       - tính shared secret
+                                       - encrypt cert + ack
+   ◀────── ServerHello + key_share +
+            (encrypted) Cert + Finished
+
+   Verify cert, derive key
+   ── Finished ──▶                     Derive session key
+
+   ── HTTPS data ──▶
+   ◀── HTTPS data ──
+
+   Total: 1 RTT (vs 2 RTT của TLS 1.2)
+          </div>
+
+          <h3>2. 0-RTT với session resumption</h3>
+          <p>Nếu client đã connect server trước đây, có "PSK" (pre-shared key) → có thể gửi data <em>ngay trong</em> Client Hello đầu tiên. 0 RTT!</p>
+
+          <p>Trade-off: 0-RTT data có thể bị replay attack — chỉ dùng cho idempotent request.</p>
+
+          <h3>3. Forward secrecy bắt buộc</h3>
+          <p>Bỏ các cipher không có Perfect Forward Secrecy. Nếu private key server bị lộ trong tương lai, traffic cũ vẫn an toàn.</p>
+
+          <h3>4. Bỏ các thứ cũ kỹ</h3>
+          <ul>
+            <li>Bỏ RSA key exchange (chỉ dùng (EC)DHE)</li>
+            <li>Bỏ MD5, SHA-1, RC4, 3DES</li>
+            <li>Bỏ static DH</li>
+            <li>Bỏ compression (CRIME attack)</li>
+          </ul>
+        </section>
+
+        <!-- 6.5 -->
+        <section id="cert">
+          <h2>6.5 Certificate &amp; PKI — làm sao biết server là thật?</h2>
+
+          <p>
+            Vấn đề: client nhận được public key — làm sao biết key đó là của <em>google.com</em> thật, không phải của attacker?
+          </p>
+
+          <p>
+            <strong>Giải pháp:</strong> Public Key Infrastructure (PKI). Browser tin tưởng một danh sách <em>Root CA</em> (Certificate Authority).
+            Mỗi cert phải được sign bởi một CA trong chain dẫn về Root.
+          </p>
+
+          <h3>Certificate chain</h3>
+
+          <div class="ascii-art">
+   ┌──────────────────────────────────────┐
+   │  Root CA (vd DigiCert Global Root)   │   ← Browser/OS tin sẵn
+   │  Self-signed, public key in browser   │
+   └──────────────┬───────────────────────┘
+                  │ signs
+                  ▼
+   ┌──────────────────────────────────────┐
+   │  Intermediate CA (vd DigiCert TLS    │
+   │  RSA SHA256 2020 CA1)                │
+   └──────────────┬───────────────────────┘
+                  │ signs
+                  ▼
+   ┌──────────────────────────────────────┐
+   │  Leaf cert (vd google.com)           │
+   │  Public key của google.com           │
+   │  Domain: google.com (+ wildcards)    │
+   │  Validity: 2024-08-01 → 2024-10-30   │
+   └──────────────────────────────────────┘
+          </div>
+
+          <h3>Verify cert</h3>
+          <p>Client kiểm tra theo thứ tự:</p>
+          <ol>
+            <li><strong>Signature chain</strong>: leaf signed by intermediate, intermediate signed by root, root in trusted store</li>
+            <li><strong>Domain matches</strong>: cert có Subject Alternative Name (SAN) khớp domain đang truy cập</li>
+            <li><strong>Validity period</strong>: chưa expired, chưa "not yet valid"</li>
+            <li><strong>Revocation</strong>: chưa bị revoke (qua CRL hoặc OCSP)</li>
+          </ol>
+
+          <p>Một bước fail → browser hiển thị warning đỏ.</p>
+
+          <h3>Self-signed certificate</h3>
+          <p>Bạn có thể tự tạo cert mà không qua CA. Browser sẽ warning vì không trust. Dùng cho dev/test, không cho production public.</p>
+        </section>
+
+        <!-- 6.6 -->
+        <section id="letsencrypt">
+          <h2>6.6 Let's Encrypt — TLS miễn phí cho mọi người</h2>
+
+          <p>Trước 2015, mua cert từ DigiCert/Comodo tốn $50-500/năm. Let's Encrypt (2015) cấp free, automated qua giao thức ACME.</p>
+
+          <h3>Domain Validation (DV) flow</h3>
+          <ol>
+            <li>Server gọi Let's Encrypt: "Tôi muốn cert cho example.com"</li>
+            <li>LE: "Đặt file <code>/.well-known/acme-challenge/&lt;token&gt;</code> trên http://example.com với content X"</li>
+            <li>Server đặt file</li>
+            <li>LE truy cập <code>http://example.com/.well-known/acme-challenge/&lt;token&gt;</code> → đọc được X → <strong>chứng minh server kiểm soát domain</strong></li>
+            <li>LE cấp cert valid 90 ngày</li>
+          </ol>
+
+          <p>Tools: <code>certbot</code>, <code>caddy</code> (auto), <code>traefik</code> (auto).</p>
+
+          <pre data-lang="bash"><code># Certbot
+sudo certbot --nginx -d example.com -d www.example.com
+
+# Hoặc Caddy auto:
+# Caddyfile:
+example.com {
+  reverse_proxy localhost:3000
+}
+# Chạy caddy → tự xin cert + renew</code></pre>
+
+          <h3>Cert validity 90 ngày — vì sao ngắn?</h3>
+          <ul>
+            <li>Buộc auto-renew → nếu compromise, "blast radius" nhỏ</li>
+            <li>Khuyến khích automation — không ai nên renew tay mỗi năm</li>
+          </ul>
+        </section>
+
+        <!-- 6.7 -->
+        <section id="sni">
+          <h2>6.7 SNI — Server Name Indication</h2>
+
+          <p>
+            <strong>Vấn đề:</strong> 1 web server có IP duy nhất nhưng host nhiều domain (vd <code>siteA.com</code>, <code>siteB.com</code>). Khi TLS handshake bắt đầu, server <em>chưa biết</em> domain nào — chưa thể chọn đúng cert.
+          </p>
+
+          <p>
+            <strong>Giải pháp:</strong> SNI = client gửi domain trong Client Hello (plaintext). Server đọc, chọn đúng cert.
+          </p>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Privacy issue</div>
+            <p>SNI là <strong>plaintext</strong> → ISP/firewall biết bạn đang truy cập domain nào (mặc dù không thấy URL/data nhờ HTTPS).</p>
+            <p>Giải pháp: <strong>Encrypted Client Hello (ECH)</strong> — encrypt SNI bằng key của front server. Đang được Cloudflare push nhưng chưa universal.</p>
+          </div>
+        </section>
+
+        <!-- 6.8 -->
+        <section id="cipher">
+          <h2>6.8 Cipher Suite &amp; Perfect Forward Secrecy</h2>
+
+          <h3>Cipher suite</h3>
+          <p>Một cipher suite chỉ định 4 thuật toán:</p>
+          <pre data-lang="text"><code>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    │     │     │       │            │
+    │     │     │       │            └─ MAC: SHA-256
+    │     │     │       └────────────── Cipher: AES-128-GCM
+    │     │     └────────────────────── Auth: RSA cert
+    │     └──────────────────────────── Key Exchange: ECDHE (Elliptic Curve DH Ephemeral)
+    └────────────────────────────────── Protocol: TLS</code></pre>
+
+          <p>TLS 1.3 đơn giản hoá: chỉ chỉ định AEAD + hash, key exchange tách biệt:</p>
+          <pre data-lang="text"><code>TLS_AES_128_GCM_SHA256
+    │     │             │
+    │     │             └─ MAC/KDF: SHA-256
+    │     └─────────────── AEAD: AES-128-GCM
+    └─────────────────────── Protocol</code></pre>
+
+          <h3>Perfect Forward Secrecy (PFS)</h3>
+          <p>
+            <strong>Vấn đề:</strong> nếu attacker ghi lại traffic encrypted hôm nay, năm sau bằng cách nào đó có private key của server, có thể decrypt traffic cũ.
+          </p>
+          <p>
+            <strong>Giải pháp PFS:</strong> mỗi session dùng <em>ephemeral</em> key — sau session, key bị huỷ. Server private key chỉ dùng để authenticate, không trực tiếp encrypt data.
+          </p>
+          <p>(EC)DHE = (Elliptic Curve) Diffie-Hellman Ephemeral cho PFS. Static RSA không có PFS → TLS 1.3 bỏ.</p>
+        </section>
+
+        <!-- 6.9 -->
+        <section id="tools">
+          <h2>6.9 Tools thực tế</h2>
+
+          <h3>openssl — Swiss Army knife</h3>
+          <pre data-lang="bash"><code># Inspect cert của 1 server
+openssl s_client -connect example.com:443 -servername example.com
+# Show full handshake + cert chain
+
+# Chỉ lấy cert
+echo | openssl s_client -connect example.com:443 -servername example.com 2&gt;/dev/null \
+  | openssl x509 -noout -text
+
+# Check expiry
+echo | openssl s_client -connect example.com:443 2&gt;/dev/null \
+  | openssl x509 -noout -dates
+
+# Test specific TLS version
+openssl s_client -tls1_3 -connect example.com:443</code></pre>
+
+          <h3>curl</h3>
+          <pre data-lang="bash"><code>curl -v https://example.com 2&gt;&amp;1 | grep -E '(TLS|cert|CN)'
+# * TLSv1.3 (OUT), TLS handshake, Client hello (1)
+# * SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+# * Server certificate:
+# *  subject: CN=example.com
+# *  issuer: ...</code></pre>
+
+          <h3>SSL Labs — test online</h3>
+          <p><code>https://www.ssllabs.com/ssltest/</code> — chấm điểm A+ đến F cho cấu hình TLS server. Kiểm tra: weak ciphers, cert chain, HSTS, ...</p>
+
+          <h3>Chrome DevTools</h3>
+          <p>Browser → Padlock icon → Connection is secure → Certificate viewer. Show full chain, validity, fingerprints.</p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Inspect cert</div>
+            <p>Chạy <code>openssl s_client -connect github.com:443</code>. Tìm: TLS version, cipher, cert chain, expiry.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Self-signed cert dev</div>
+            <p>Tạo self-signed cho localhost: <code>openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 30 -subj "/CN=localhost"</code>. Dùng cho local HTTPS test.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Vẽ TLS 1.2 handshake</div>
+            <p>Trên giấy, vẽ đầy đủ TLS 1.2 handshake — labels mỗi message, ai gửi cho ai. Đếm số RTT.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Let's Encrypt thực hành</div>
+            <p>Thuê 1 VPS (DigitalOcean $5), trỏ subdomain về VPS. Cài Caddy, viết Caddyfile. Quan sát Caddy tự xin cert.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — SSL Labs</div>
+            <p>Test 3 site quen thuộc trên ssllabs.com (vd github.com, facebook.com, site cá nhân). So sánh điểm.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Suy ngược</div>
+            <p>Khi vào https://example.com, attacker trên cùng Wi-Fi có thể biết: (a) URL? (b) Domain? (c) Cookie? (d) Password gửi POST? (e) Kích thước response? Trả lời từng câu.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> HTTPS đảm bảo 3 tính chất?</p>
+              <ul class="quiz-options">
+                <li>Speed, Privacy, Cache</li>
+                <li>SEO, Auth, Performance</li>
+                <li>Confidentiality (encrypt), Integrity (MAC), Authentication (cert)</li>
+                <li>Encryption, Compression, Routing</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Confidentiality + Integrity + Authentication.</strong> 3 vấn đề HTTP plain không giải quyết được.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> TLS dùng cả symmetric và asymmetric vì?</p>
+              <ul class="quiz-options">
+                <li>Để phức tạp hoá</li>
+                <li>Asymmetric chậm nhưng giải quyết key exchange; Symmetric nhanh cho data — kết hợp ưu điểm</li>
+                <li>Vì backward compat</li>
+                <li>Vì spec yêu cầu</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: hybrid encryption.</strong> Asymmetric chỉ ở handshake; sau đó symmetric với session key.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> TLS 1.3 cần bao nhiêu RTT cho handshake?</p>
+              <ul class="quiz-options">
+                <li>1 RTT (hoặc 0-RTT với resumption)</li>
+                <li>2 RTT</li>
+                <li>3 RTT</li>
+                <li>4 RTT</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 1 RTT.</strong> Cải thiện đáng kể từ 2 RTT của TLS 1.2. Có thể 0-RTT với PSK resumption.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Browser verify certificate bằng cách?</p>
+              <ul class="quiz-options">
+                <li>Hỏi search engine</li>
+                <li>So sánh với password</li>
+                <li>Check signature chain dẫn về 1 trusted Root CA, hostname match, chưa expired, chưa revoked</li>
+                <li>Encrypt và decrypt thử</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: chain → root CA + hostname + expiry + revocation.</strong> Bất kỳ bước fail → warning đỏ.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Perfect Forward Secrecy (PFS) là?</p>
+              <ul class="quiz-options">
+                <li>Mã hoá double</li>
+                <li>Mỗi session dùng ephemeral key — leak server's private key sau này không decrypt được traffic cũ</li>
+                <li>Không bao giờ cho phép decrypt</li>
+                <li>Encryption đối xứng</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ephemeral session key.</strong> (EC)DHE cho PFS. Static RSA không có → TLS 1.3 bỏ.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Let's Encrypt cấp cert miễn phí bằng cách?</p>
+              <ul class="quiz-options">
+                <li>Trust mọi user</li>
+                <li>Free trial 90 ngày</li>
+                <li>Domain Validation tự động qua HTTP-01 challenge — verify server kiểm soát domain</li>
+                <li>Không cần verify</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: HTTP-01 challenge.</strong> Server đặt file đặc biệt → LE truy cập → confirm ownership → cấp cert.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> SNI dùng để?</p>
+              <ul class="quiz-options">
+                <li>Tăng tốc handshake</li>
+                <li>Client báo domain đang truy cập trong Client Hello → server chọn đúng cert (1 IP host nhiều domain)</li>
+                <li>Mã hoá DNS</li>
+                <li>Authentication user</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 1 IP host nhiều domain.</strong> Plaintext → privacy issue, ECH đang giải quyết.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> Khi attacker trên cùng Wi-Fi với bạn truy cập https://bank.com, attacker biết được gì?</p>
+              <ul class="quiz-options">
+                <li>Mọi thứ (URL, password)</li>
+                <li>Không gì cả</li>
+                <li>Chỉ thấy domain (qua SNI/DNS), IP, kích thước traffic — không thấy URL/cookie/body</li>
+                <li>Chỉ thấy IP</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: domain + IP + size.</strong> HTTPS bảo vệ content nhưng metadata vẫn lộ. ECH + DoH/DoT để giấu domain.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 6</h2>
+          <ul>
+            <li>✅ HTTPS = HTTP + TLS, cho 3 tính chất: Confidentiality + Integrity + Authentication</li>
+            <li>✅ Hybrid encryption: <strong>Asymmetric</strong> ở handshake → <strong>Symmetric</strong> cho data</li>
+            <li>✅ <strong>TLS 1.2 handshake</strong>: 2 RTT; <strong>TLS 1.3</strong>: 1 RTT (hoặc 0-RTT với PSK)</li>
+            <li>✅ <strong>Certificate chain</strong>: leaf → intermediate → root CA. Browser tin sẵn root CA</li>
+            <li>✅ Browser verify: chain + hostname + expiry + revocation</li>
+            <li>✅ <strong>Let's Encrypt</strong>: free, automated qua ACME, HTTP-01 challenge, valid 90 ngày</li>
+            <li>✅ <strong>SNI</strong>: 1 IP nhiều domain; SNI plaintext → ECH bắt đầu phổ biến</li>
+            <li>✅ <strong>PFS</strong>: ephemeral key mỗi session, lộ private key tương lai cũng an toàn traffic cũ</li>
+            <li>✅ Tools: <code>openssl s_client</code>, <code>curl -v</code>, SSL Labs, Chrome DevTools</li>
+            <li>✅ HTTPS bảo vệ content nhưng <strong>không hide</strong>: domain (SNI/DNS), IP, kích thước</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong5.html">
+        <span class="label">← Chương trước</span>
+        Chương 05: HTTP
+      </a>
+      <a href="chuong7.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 07: DNS →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◆</span> Networking Mastery · Chương 06 · HTTPS, TLS, Certificates
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

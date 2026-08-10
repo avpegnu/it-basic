@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — flutter_bloc Deep Dive · Flutter Sub-pillar</title>
+  <meta name="description" content="Cubit vs Bloc, BlocProvider, BlocBuilder, BlocListener, BlocSelector, sealed state, repository pattern, bloc_test." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 7</span>
+      </div>
+      <div class="chapter-num">Chương 07 · flutter_bloc Deep Dive</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        flutter_bloc Deep Dive
+      </h1>
+      <p class="lead">
+        <code>flutter_bloc</code> là 1 trong 3 thư viện state management lớn nhất ecosystem. Hợp cho app medium-large.
+        2 lý do chọn Bloc: <strong>(1) tách logic khỏi widget rõ ràng</strong>,
+        <strong>(2) test logic dễ vì là pure Dart function của event/state</strong>.
+      </p>
+      <p class="lead" style="font-size: 1.04rem;">
+        Opinion: dùng <strong>Cubit cho 90% case</strong>, Bloc khi cần event chain rõ ràng.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1230 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 6 + Dart Ch 7 (Stream)</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu mô hình BLoC: Event in, State out qua Stream.</li>
+            <li>Phân biệt Cubit vs Bloc — khi nào dùng cái nào.</li>
+            <li>Sử dụng <code>BlocProvider</code>, <code>BlocBuilder</code>, <code>BlocListener</code>, <code>BlocConsumer</code>.</li>
+            <li>Thiết kế State class theo pattern: sealed class với multiple state types.</li>
+            <li>Test Bloc/Cubit độc lập với widget.</li>
+            <li><code>MultiBlocProvider</code> cho nested provider.</li>
+            <li><code>BlocSelector</code> cho rebuild optimization.</li>
+            <li>Pattern repository → bloc → view.</li>
+          </ul>
+        </div>
+
+        <h2 id="bloc-pattern">1. Pattern BLoC là gì?</h2>
+        <p>
+          <strong>B</strong>usiness <strong>Lo</strong>gic <strong>C</strong>omponent. Tách logic ra khỏi UI:
+        </p>
+
+        <ul>
+          <li><strong>Input:</strong> Event (Stream input).</li>
+          <li><strong>Output:</strong> State (Stream output).</li>
+          <li><strong>UI:</strong> subscribe state stream + dispatch event.</li>
+        </ul>
+
+        <figure>
+          <svg viewBox="0 0 540 200" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .bt { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+              .bt-acc { font-family: var(--font-mono); font-size: 13px; fill: var(--accent); font-weight: 700; }
+              .bx { fill: var(--cyan-soft); stroke: var(--accent); rx: 6; ry: 6; }
+              .arr { stroke: var(--accent); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+            </style>
+            <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"/></marker></defs>
+            <text class="bt-acc" x="270" y="22" text-anchor="middle">Bloc Pattern</text>
+
+            <rect class="bx" x="40" y="60" width="120" height="60" />
+            <text class="bt" x="100" y="85" text-anchor="middle">UI</text>
+            <text class="bt" x="100" y="105" text-anchor="middle">(Widget)</text>
+
+            <rect class="bx" x="210" y="60" width="120" height="60" />
+            <text class="bt" x="270" y="85" text-anchor="middle">Bloc / Cubit</text>
+            <text class="bt" x="270" y="105" text-anchor="middle">(logic)</text>
+
+            <rect class="bx" x="380" y="60" width="120" height="60" />
+            <text class="bt" x="440" y="85" text-anchor="middle">Repository</text>
+            <text class="bt" x="440" y="105" text-anchor="middle">(data)</text>
+
+            <line class="arr" x1="160" y1="80" x2="208" y2="80"/>
+            <text class="bt" x="184" y="74" text-anchor="middle" font-size="10">event</text>
+
+            <line class="arr" x1="208" y1="105" x2="160" y2="105"/>
+            <text class="bt" x="184" y="118" text-anchor="middle" font-size="10">state</text>
+
+            <line class="arr" x1="330" y1="80" x2="378" y2="80"/>
+            <text class="bt" x="354" y="74" text-anchor="middle" font-size="10">fetch</text>
+
+            <line class="arr" x1="378" y1="105" x2="330" y2="105"/>
+            <text class="bt" x="354" y="118" text-anchor="middle" font-size="10">data</text>
+
+            <text class="bt" x="270" y="170" text-anchor="middle" font-size="11">UI dispatch event → Bloc process → emit new state → UI rebuild</text>
+          </svg>
+        </figure>
+
+        <h2 id="cubit-vs-bloc">2. Cubit vs Bloc</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Cubit</th><th>Bloc</th></tr></thead>
+            <tbody>
+              <tr><td>Input</td><td>Method call trực tiếp (<code>cubit.increment()</code>)</td><td>Event class (<code>add(IncrementPressed())</code>)</td></tr>
+              <tr><td>Output</td><td><code>emit(newState)</code></td><td><code>emit(newState)</code> trong handler <code>on&lt;E&gt;</code></td></tr>
+              <tr><td>Verbose?</td><td>Ít hơn</td><td>Nhiều hơn (event class)</td></tr>
+              <tr><td>Trace history</td><td>Không event log</td><td>Có (Bloc observer log event/state)</td></tr>
+              <tr><td>Khi dùng</td><td>90% case</td><td>Chain event phức tạp, analytics, time-travel debug</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="setup">3. Setup</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add flutter_bloc
+flutter pub add --dev bloc_test    # cho test chương 14</code></pre>
+
+        <h2 id="counter-cubit">4. Counter Cubit — đơn giản nhất</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:flutter_bloc/flutter_bloc.dart'</span>;
+
+<span class="tok-kw">class</span> <span class="tok-cls">CounterCubit</span> <span class="tok-kw">extends</span> <span class="tok-cls">Cubit</span>&lt;<span class="tok-type">int</span>&gt; {
+  <span class="tok-fn">CounterCubit</span>() : <span class="tok-kw">super</span>(<span class="tok-num">0</span>);   <span class="tok-com">// initial state = 0</span>
+
+  <span class="tok-kw">void</span> <span class="tok-fn">increment</span>() =&gt; <span class="tok-fn">emit</span>(state + <span class="tok-num">1</span>);
+  <span class="tok-kw">void</span> <span class="tok-fn">decrement</span>() =&gt; <span class="tok-fn">emit</span>(state - <span class="tok-num">1</span>);
+  <span class="tok-kw">void</span> <span class="tok-fn">reset</span>() =&gt; <span class="tok-fn">emit</span>(<span class="tok-num">0</span>);
+}</code></pre>
+
+        <p>Wire vào UI:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">BlocProvider</span>(
+  create: (_) =&gt; <span class="tok-fn">CounterCubit</span>(),
+  child: <span class="tok-cls">CounterPage</span>(),
+)
+
+<span class="tok-kw">class</span> <span class="tok-cls">CounterPage</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatelessWidget</span> {
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Scaffold</span>(
+      appBar: <span class="tok-fn">AppBar</span>(title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Counter'</span>)),
+      body: <span class="tok-fn">Center</span>(
+        child: <span class="tok-fn">BlocBuilder</span>&lt;<span class="tok-cls">CounterCubit</span>, <span class="tok-type">int</span>&gt;(
+          builder: (context, count) =&gt; <span class="tok-fn">Text</span>(<span class="tok-str">'$count'</span>, style: <span class="tok-cls">Theme</span>.<span class="tok-fn">of</span>(context).textTheme.displayLarge),
+        ),
+      ),
+      floatingActionButton: <span class="tok-fn">FloatingActionButton</span>(
+        onPressed: () =&gt; <span class="tok-cls">context</span>.<span class="tok-fn">read</span>&lt;<span class="tok-cls">CounterCubit</span>&gt;().<span class="tok-fn">increment</span>(),
+        child: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.add),
+      ),
+    );
+  }
+}</code></pre>
+
+        <h2 id="bloc-event">5. Bloc — variant đầy đủ với Event</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Events</span>
+<span class="tok-kw">sealed</span> <span class="tok-kw">class</span> <span class="tok-cls">CounterEvent</span> {}
+<span class="tok-kw">class</span> <span class="tok-cls">IncrementPressed</span> <span class="tok-kw">extends</span> <span class="tok-cls">CounterEvent</span> {}
+<span class="tok-kw">class</span> <span class="tok-cls">DecrementPressed</span> <span class="tok-kw">extends</span> <span class="tok-cls">CounterEvent</span> {}
+<span class="tok-kw">class</span> <span class="tok-cls">ResetPressed</span> <span class="tok-kw">extends</span> <span class="tok-cls">CounterEvent</span> {}
+
+<span class="tok-com">// Bloc</span>
+<span class="tok-kw">class</span> <span class="tok-cls">CounterBloc</span> <span class="tok-kw">extends</span> <span class="tok-cls">Bloc</span>&lt;<span class="tok-cls">CounterEvent</span>, <span class="tok-type">int</span>&gt; {
+  <span class="tok-fn">CounterBloc</span>() : <span class="tok-kw">super</span>(<span class="tok-num">0</span>) {
+    <span class="tok-fn">on</span>&lt;<span class="tok-cls">IncrementPressed</span>&gt;((event, emit) =&gt; <span class="tok-fn">emit</span>(state + <span class="tok-num">1</span>));
+    <span class="tok-fn">on</span>&lt;<span class="tok-cls">DecrementPressed</span>&gt;((event, emit) =&gt; <span class="tok-fn">emit</span>(state - <span class="tok-num">1</span>));
+    <span class="tok-fn">on</span>&lt;<span class="tok-cls">ResetPressed</span>&gt;((event, emit) =&gt; <span class="tok-fn">emit</span>(<span class="tok-num">0</span>));
+  }
+}
+
+<span class="tok-com">// Dispatch</span>
+<span class="tok-cls">context</span>.<span class="tok-fn">read</span>&lt;<span class="tok-cls">CounterBloc</span>&gt;().<span class="tok-fn">add</span>(<span class="tok-fn">IncrementPressed</span>());</code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Khi nào dùng Cubit vs Bloc?</div>
+          <ul>
+            <li><strong>Cubit</strong> — simple action: counter, toggle, form field. Method clear hơn event.</li>
+            <li><strong>Bloc</strong> — complex flow: auth (LoginPressed, LogoutPressed, TokenExpired, BiometricUnlocked), shopping (AddItem, RemoveItem, ApplyCoupon, Checkout).</li>
+            <li>Bloc cho time-travel debug + analytics — log mọi event.</li>
+          </ul>
+        </div>
+
+        <h2 id="bloc-builder">6. <code>BlocBuilder</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">BlocBuilder</span>&lt;<span class="tok-cls">CounterCubit</span>, <span class="tok-type">int</span>&gt;(
+  builder: (context, count) =&gt; <span class="tok-fn">Text</span>(<span class="tok-str">'$count'</span>),
+)
+
+<span class="tok-com">// Với buildWhen — control khi nào rebuild</span>
+<span class="tok-fn">BlocBuilder</span>&lt;<span class="tok-cls">CounterCubit</span>, <span class="tok-type">int</span>&gt;(
+  buildWhen: (prev, curr) =&gt; curr % <span class="tok-num">10</span> == <span class="tok-num">0</span>,   <span class="tok-com">// chỉ rebuild khi % 10</span>
+  builder: (context, count) =&gt; <span class="tok-fn">Text</span>(<span class="tok-str">'$count'</span>),
+)</code></pre>
+
+        <h2 id="bloc-listener">7. <code>BlocListener</code> — không rebuild, chỉ side effect</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">BlocListener</span>&lt;<span class="tok-cls">AuthCubit</span>, <span class="tok-cls">AuthState</span>&gt;(
+  listenWhen: (prev, curr) =&gt; curr <span class="tok-kw">is</span> <span class="tok-cls">Authenticated</span> &amp;&amp; prev <span class="tok-kw">is</span>! <span class="tok-cls">Authenticated</span>,
+  listener: (context, state) {
+    <span class="tok-cls">context</span>.<span class="tok-fn">go</span>(<span class="tok-str">'/home'</span>);   <span class="tok-com">// navigate</span>
+  },
+  child: <span class="tok-cls">LoginForm</span>(),
+)</code></pre>
+
+        <p>Khác BlocBuilder: <strong>không rebuild UI</strong>, chỉ trigger callback. Dùng cho:</p>
+        <ul>
+          <li>Navigate khi state đổi.</li>
+          <li>Show snackbar / dialog.</li>
+          <li>Trigger analytics event.</li>
+        </ul>
+
+        <h2 id="bloc-consumer">8. <code>BlocConsumer</code> — combine Builder + Listener</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">BlocConsumer</span>&lt;<span class="tok-cls">LoginCubit</span>, <span class="tok-cls">LoginState</span>&gt;(
+  listener: (context, state) {
+    <span class="tok-kw">if</span> (state <span class="tok-kw">is</span> <span class="tok-cls">LoginError</span>) {
+      <span class="tok-cls">ScaffoldMessenger</span>.<span class="tok-fn">of</span>(context).<span class="tok-fn">showSnackBar</span>(
+        <span class="tok-fn">SnackBar</span>(content: <span class="tok-fn">Text</span>(state.message)),
+      );
+    }
+    <span class="tok-kw">if</span> (state <span class="tok-kw">is</span> <span class="tok-cls">LoginSuccess</span>) <span class="tok-cls">context</span>.<span class="tok-fn">go</span>(<span class="tok-str">'/home'</span>);
+  },
+  builder: (context, state) =&gt; <span class="tok-kw">switch</span> (state) {
+    <span class="tok-cls">LoginInitial</span>() =&gt; <span class="tok-kw">const</span> <span class="tok-cls">LoginForm</span>(),
+    <span class="tok-cls">LoginLoading</span>() =&gt; <span class="tok-kw">const</span> <span class="tok-cls">CircularProgressIndicator</span>(),
+    <span class="tok-cls">LoginError</span>() =&gt; <span class="tok-fn">LoginForm</span>(error: state.message),
+    <span class="tok-cls">LoginSuccess</span>() =&gt; <span class="tok-kw">const</span> <span class="tok-cls">SizedBox</span>(),
+  },
+)</code></pre>
+
+        <h2 id="bloc-selector">9. <code>BlocSelector</code> — optimization</h2>
+        <p>Rebuild chỉ khi <em>subset state</em> đổi:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Cart có 10 field. UI chỉ care totalItems.</span>
+<span class="tok-fn">BlocSelector</span>&lt;<span class="tok-cls">CartBloc</span>, <span class="tok-cls">CartState</span>, <span class="tok-type">int</span>&gt;(
+  selector: (state) =&gt; state.totalItems,
+  builder: (context, totalItems) =&gt; <span class="tok-fn">Badge</span>(label: <span class="tok-fn">Text</span>(<span class="tok-str">'$totalItems'</span>)),
+)
+<span class="tok-com">// Rebuild chỉ khi totalItems thay đổi, không khi item detail / total price đổi.</span></code></pre>
+
+        <h2 id="read-watch">10. <code>read</code> vs <code>watch</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// read — lấy reference, KHÔNG subscribe rebuild</span>
+<span class="tok-fn">ElevatedButton</span>(
+  onPressed: () =&gt; <span class="tok-cls">context</span>.<span class="tok-fn">read</span>&lt;<span class="tok-cls">CounterCubit</span>&gt;().<span class="tok-fn">increment</span>(),
+  child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'+1'</span>),
+)
+
+<span class="tok-com">// watch — subscribe rebuild khi state đổi</span>
+<span class="tok-kw">@override</span>
+<span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+  <span class="tok-kw">final</span> count = <span class="tok-cls">context</span>.<span class="tok-fn">watch</span>&lt;<span class="tok-cls">CounterCubit</span>&gt;().state;
+  <span class="tok-kw">return</span> <span class="tok-fn">Text</span>(<span class="tok-str">'$count'</span>);
+}</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Rule of thumb</div>
+          <ul>
+            <li><strong>onPressed callback</strong>: <code>read</code> — không cần rebuild khi user tap.</li>
+            <li><strong>Trong build()</strong>: <code>watch</code> hoặc <code>BlocBuilder</code> — cần rebuild.</li>
+          </ul>
+        </div>
+
+        <h2 id="sealed-state">11. Sealed state class — pattern chuẩn</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">sealed</span> <span class="tok-kw">class</span> <span class="tok-cls">AuthState</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">AuthState</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">AuthInitial</span> <span class="tok-kw">extends</span> <span class="tok-cls">AuthState</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">AuthInitial</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">AuthLoading</span> <span class="tok-kw">extends</span> <span class="tok-cls">AuthState</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">AuthLoading</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">Authenticated</span> <span class="tok-kw">extends</span> <span class="tok-cls">AuthState</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">User</span> user;
+  <span class="tok-kw">const</span> <span class="tok-fn">Authenticated</span>(<span class="tok-kw">this</span>.user);
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">Unauthenticated</span> <span class="tok-kw">extends</span> <span class="tok-cls">AuthState</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span>? error;
+  <span class="tok-kw">const</span> <span class="tok-fn">Unauthenticated</span>({<span class="tok-kw">this</span>.error});
+}
+
+<span class="tok-com">// Trong BlocBuilder — switch exhaustive</span>
+<span class="tok-fn">BlocBuilder</span>&lt;<span class="tok-cls">AuthCubit</span>, <span class="tok-cls">AuthState</span>&gt;(
+  builder: (context, state) =&gt; <span class="tok-kw">switch</span> (state) {
+    <span class="tok-cls">AuthInitial</span>() =&gt; <span class="tok-kw">const</span> <span class="tok-cls">SplashScreen</span>(),
+    <span class="tok-cls">AuthLoading</span>() =&gt; <span class="tok-kw">const</span> <span class="tok-cls">LoadingScreen</span>(),
+    <span class="tok-cls">Authenticated</span>(:<span class="tok-kw">var</span> user) =&gt; <span class="tok-fn">HomeScreen</span>(user: user),
+    <span class="tok-cls">Unauthenticated</span>(:<span class="tok-kw">var</span> error) =&gt; <span class="tok-fn">LoginScreen</span>(error: error),
+  },
+)</code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Pattern này là gold standard</div>
+          <p>
+            Sealed class (Dart 3) + exhaustive switch → compiler ép cover hết case. Thêm state mới → quên handle UI → compile fail.
+            Đây là <strong>type-safety mạnh nhất</strong> bạn có cho state machine.
+          </p>
+        </div>
+
+        <h2 id="async-bloc">12. Async event trong Bloc</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">UserBloc</span> <span class="tok-kw">extends</span> <span class="tok-cls">Bloc</span>&lt;<span class="tok-cls">UserEvent</span>, <span class="tok-cls">UserState</span>&gt; {
+  <span class="tok-kw">final</span> <span class="tok-cls">UserRepository</span> _repo;
+
+  <span class="tok-fn">UserBloc</span>(<span class="tok-kw">this</span>._repo) : <span class="tok-kw">super</span>(<span class="tok-cls">UserInitial</span>()) {
+    <span class="tok-fn">on</span>&lt;<span class="tok-cls">LoadUser</span>&gt;(<span class="tok-fn">_onLoad</span>);
+  }
+
+  <span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">_onLoad</span>(<span class="tok-cls">LoadUser</span> event, <span class="tok-cls">Emitter</span>&lt;<span class="tok-cls">UserState</span>&gt; emit) <span class="tok-kw">async</span> {
+    <span class="tok-fn">emit</span>(<span class="tok-cls">UserLoading</span>());
+    <span class="tok-kw">try</span> {
+      <span class="tok-kw">final</span> user = <span class="tok-kw">await</span> _repo.<span class="tok-fn">fetchUser</span>(event.id);
+      <span class="tok-fn">emit</span>(<span class="tok-fn">UserLoaded</span>(user));
+    } <span class="tok-kw">on</span> <span class="tok-cls">ApiException</span> <span class="tok-kw">catch</span> (e) {
+      <span class="tok-fn">emit</span>(<span class="tok-fn">UserError</span>(e.message));
+    }
+  }
+}</code></pre>
+
+        <h2 id="multi-provider">13. <code>MultiBlocProvider</code> — nested</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">MultiBlocProvider</span>(
+  providers: [
+    <span class="tok-fn">BlocProvider</span>(create: (_) =&gt; <span class="tok-fn">AuthCubit</span>(<span class="tok-fn">AuthRepository</span>())),
+    <span class="tok-fn">BlocProvider</span>(create: (_) =&gt; <span class="tok-fn">CartBloc</span>()),
+    <span class="tok-fn">BlocProvider</span>(create: (_) =&gt; <span class="tok-fn">ThemeCubit</span>()),
+  ],
+  child: <span class="tok-cls">MyApp</span>(),
+)</code></pre>
+
+        <h2 id="repository-pattern">14. Repository pattern</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Interface</span>
+<span class="tok-kw">abstract</span> <span class="tok-kw">class</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">fetchUser</span>(<span class="tok-type">int</span> id);
+}
+
+<span class="tok-com">// Concrete impl</span>
+<span class="tok-kw">class</span> <span class="tok-cls">UserRepositoryImpl</span> <span class="tok-kw">implements</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Dio</span> _dio;
+  <span class="tok-fn">UserRepositoryImpl</span>(<span class="tok-kw">this</span>._dio);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">fetchUser</span>(<span class="tok-type">int</span> id) <span class="tok-kw">async</span> {
+    <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> _dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users/$id'</span>);
+    <span class="tok-kw">return</span> <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(r.data);
+  }
+}
+
+<span class="tok-com">// Inject vào Bloc</span>
+<span class="tok-fn">BlocProvider</span>&lt;<span class="tok-cls">UserBloc</span>&gt;(
+  create: (ctx) =&gt; <span class="tok-fn">UserBloc</span>(ctx.<span class="tok-fn">read</span>&lt;<span class="tok-cls">UserRepository</span>&gt;()),
+  child: <span class="tok-cls">UserPage</span>(),
+)
+
+<span class="tok-com">// Wrap với RepositoryProvider ở root</span>
+<span class="tok-fn">RepositoryProvider</span>&lt;<span class="tok-cls">UserRepository</span>&gt;(
+  create: (_) =&gt; <span class="tok-fn">UserRepositoryImpl</span>(<span class="tok-fn">Dio</span>()),
+  child: <span class="tok-cls">MyApp</span>(),
+)</code></pre>
+
+        <h2 id="bloc-test-basic">15. Test Bloc — basic</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:test/test.dart'</span>;
+<span class="tok-kw">import</span> <span class="tok-str">'package:bloc_test/bloc_test.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">group</span>(<span class="tok-str">'CounterCubit'</span>, () {
+    <span class="tok-fn">test</span>(<span class="tok-str">'initial state is 0'</span>, () {
+      <span class="tok-fn">expect</span>(<span class="tok-fn">CounterCubit</span>().state, <span class="tok-num">0</span>);
+    });
+
+    <span class="tok-fn">blocTest</span>&lt;<span class="tok-cls">CounterCubit</span>, <span class="tok-type">int</span>&gt;(
+      <span class="tok-str">'emits [1] when increment is called'</span>,
+      build: () =&gt; <span class="tok-fn">CounterCubit</span>(),
+      act: (cubit) =&gt; cubit.<span class="tok-fn">increment</span>(),
+      expect: () =&gt; [<span class="tok-num">1</span>],
+    );
+
+    <span class="tok-fn">blocTest</span>&lt;<span class="tok-cls">CounterCubit</span>, <span class="tok-type">int</span>&gt;(
+      <span class="tok-str">'emits [1, 2] when increment called twice'</span>,
+      build: () =&gt; <span class="tok-fn">CounterCubit</span>(),
+      act: (cubit) {
+        cubit.<span class="tok-fn">increment</span>();
+        cubit.<span class="tok-fn">increment</span>();
+      },
+      expect: () =&gt; [<span class="tok-num">1</span>, <span class="tok-num">2</span>],
+    );
+  });
+}</code></pre>
+
+        <p>Chương 14 (Testing) sẽ deep dive thêm.</p>
+
+        <h2 id="pitfall">16. Pitfall: closure capture stale state</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ Sai</span>
+<span class="tok-fn">on</span>&lt;<span class="tok-cls">IncrementPressed</span>&gt;((event, emit) <span class="tok-kw">async</span> {
+  <span class="tok-kw">final</span> current = state;   <span class="tok-com">// capture tại đây</span>
+  <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>));
+  <span class="tok-fn">emit</span>(current + <span class="tok-num">1</span>);  <span class="tok-com">// có thể stale nếu state đã đổi trong khi await</span>
+});
+
+<span class="tok-com">// ✅ Đúng — luôn read state mới qua getter</span>
+<span class="tok-fn">on</span>&lt;<span class="tok-cls">IncrementPressed</span>&gt;((event, emit) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>));
+  <span class="tok-fn">emit</span>(state + <span class="tok-num">1</span>);   <span class="tok-com">// state là getter, luôn current</span>
+});</code></pre>
+
+        <h2 id="bai-tap" class="exercises">17. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>CounterCubit + reset + test</h4>
+          <div class="exercise-body">
+            <p>
+              Counter app dùng Cubit. Add reset button. Test với <code>bloc_test</code> (3 case: initial, increment, reset).
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 4 (Counter Cubit) + section 15 (test). Test reset: <code>act: (c) { c.increment(); c.reset(); }, expect: () =&gt; [1, 0]</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>LoginCubit flow</h4>
+          <div class="exercise-body">
+            <p>
+              Login form 2 field (email, password) → Cubit emit Loading → mock delay 1s → emit Success hoặc Error.
+              UI show loading spinner, error snackbar, navigate khi success.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">sealed class LoginState { const LoginState(); }
+class LoginInitial extends LoginState { const LoginInitial(); }
+class LoginLoading extends LoginState { const LoginLoading(); }
+class LoginSuccess extends LoginState { const LoginSuccess(); }
+class LoginError extends LoginState {
+  final String message;
+  const LoginError(this.message);
+}
+
+class LoginCubit extends Cubit&lt;LoginState&gt; {
+  LoginCubit() : super(const LoginInitial());
+
+  Future&lt;void&gt; submit(String email, String password) async {
+    emit(const LoginLoading());
+    await Future.delayed(const Duration(seconds: 1));
+    if (email == 'admin' &amp;&amp; password == '1234') {
+      emit(const LoginSuccess());
+    } else {
+      emit(const LoginError('Sai email/password'));
+    }
+  }
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Refactor Cubit → Bloc</h4>
+          <div class="exercise-body">
+            <p>Refactor bài 2 từ Cubit sang Bloc (explicit Event class). So sánh code length + clarity.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">sealed class LoginEvent {}
+class LoginSubmitted extends LoginEvent {
+  final String email;
+  final String password;
+  LoginSubmitted(this.email, this.password);
+}
+
+class LoginBloc extends Bloc&lt;LoginEvent, LoginState&gt; {
+  LoginBloc() : super(const LoginInitial()) {
+    on&lt;LoginSubmitted&gt;((e, emit) async {
+      emit(const LoginLoading());
+      await Future.delayed(const Duration(seconds: 1));
+      if (e.email == 'admin' &amp;&amp; e.password == '1234') {
+        emit(const LoginSuccess());
+      } else {
+        emit(const LoginError('Sai'));
+      }
+    });
+  }
+}</code></pre>
+              <p>Bloc dài hơn nhưng explicit. Cubit ngắn hơn — recommend cho most case.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>CartBloc với 5 scenarios</h4>
+          <div class="exercise-body">
+            <p>
+              Cart Bloc với event AddItem/RemoveItem/Clear. State có items list + total. Test với 5 scenario.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>State class với <code>List&lt;Item&gt;</code> + computed <code>total</code> getter. Test: add 1 item, remove, clear, add same item twice, add+remove combo.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>AuthBloc với MultiBlocProvider</h4>
+          <div class="exercise-body">
+            <p>
+              Auth global: MultiBlocProvider wrap app. AuthBloc emit Authenticated/Unauthenticated.
+              BlocListener navigate khi state đổi. Logout button qua bất kỳ widget.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 11 (sealed AuthState) + section 7 (BlocListener navigate) + section 13 (MultiBlocProvider).</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">18. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p>Cubit và Bloc khác chính ở điểm?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Cubit emit trực tiếp qua method. Bloc qua event class + <code>on&lt;E&gt;</code> handler. Bloc verbose hơn nhưng explicit cho event chain.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p><code>context.read</code> rebuild widget không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Chỉ lấy reference. <code>watch</code> mới subscribe rebuild.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p>BlocSelector vs BlocBuilder?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Selector rebuild chỉ khi selector output (subset state) đổi. Builder rebuild mỗi state change. Selector cho perf optimization khi state class lớn.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>State class nên là immutable hay mutable?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Immutable. Bloc compare oldState vs newState qua == để decide rebuild. Mutable thì == always true → không rebuild.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>emit(state)</code> (same instance) có rebuild không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không, nếu <code>==</code> trả true. Bloc skip emit cùng giá trị (performance optimization).</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>Sealed state + switch exhaustive — analyzer guarantee gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Mọi state case có UI handle. Thêm state mới mà quên handle ở UI → compile lỗi. Type-safety mạnh nhất cho state machine.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Bloc nên dispose không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> BlocProvider tự <code>close()</code> Bloc khi unmount. Tự tạo qua <code>BlocProvider.value</code> phải close thủ công.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>Test Bloc cần Flutter context không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Bloc/Cubit pure Dart, test trong unit test thuần. Không cần widget tree, không cần WidgetTester.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">19. Tổng kết</h2>
+        <ul>
+          <li>✅ Pattern BLoC: Event in → Bloc process → State out.</li>
+          <li>✅ Cubit (simple) vs Bloc (event class).</li>
+          <li>✅ <code>BlocProvider</code>, <code>BlocBuilder</code>, <code>BlocListener</code>, <code>BlocConsumer</code>, <code>BlocSelector</code>.</li>
+          <li>✅ <code>context.read</code> (no rebuild) vs <code>watch</code> (rebuild).</li>
+          <li>✅ Sealed state + exhaustive switch = robust UI.</li>
+          <li>✅ Async event với <code>on&lt;E&gt;((e, emit) async {...})</code>.</li>
+          <li>✅ MultiBlocProvider, RepositoryProvider.</li>
+          <li>✅ Repository pattern: tách HTTP/DB khỏi Bloc.</li>
+          <li>✅ <code>bloc_test</code> — pure Dart test, không cần Flutter.</li>
+          <li>✅ Pitfall: state getter luôn current, không capture stale.</li>
+        </ul>
+
+        <h2 id="ket-noi">20. Kết nối</h2>
+        <ul>
+          <li><a href="chuong8.html"><strong>Chương 8:</strong></a> so sánh Bloc vs Provider/Riverpod/GetX.</li>
+          <li><strong>Chương 10 — Network:</strong> Bloc gọi repository → HTTP.</li>
+          <li><strong>Chương 14 — Testing:</strong> test Bloc + widget test.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong6.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">06 · setState &amp; InheritedWidget</div>
+          </a>
+          <a href="chuong8.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">08 · Provider · Riverpod · GetX</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#bloc-pattern">1. Pattern BLoC</a></li>
+          <li><a href="#cubit-vs-bloc">2. Cubit vs Bloc</a></li>
+          <li><a href="#setup">3. Setup</a></li>
+          <li><a href="#counter-cubit">4. Counter Cubit</a></li>
+          <li><a href="#bloc-event">5. Bloc với Event</a></li>
+          <li><a href="#bloc-builder">6. BlocBuilder</a></li>
+          <li><a href="#bloc-listener">7. BlocListener</a></li>
+          <li><a href="#bloc-consumer">8. BlocConsumer</a></li>
+          <li><a href="#bloc-selector">9. BlocSelector</a></li>
+          <li><a href="#read-watch">10. read vs watch</a></li>
+          <li><a href="#sealed-state">11. Sealed state</a></li>
+          <li><a href="#async-bloc">12. Async event</a></li>
+          <li><a href="#multi-provider">13. MultiBlocProvider</a></li>
+          <li><a href="#repository-pattern">14. Repository pattern</a></li>
+          <li><a href="#bloc-test-basic">15. Test Bloc</a></li>
+          <li><a href="#pitfall">16. Pitfall stale state</a></li>
+          <li><a href="#bai-tap">17. Bài tập</a></li>
+          <li><a href="#quiz">18. Quiz</a></li>
+          <li><a href="#tong-ket">19. Tổng kết</a></li>
+          <li><a href="#ket-noi">20. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 7 · Pillar 9 — IT Basic<br/>
+        <a href="chuong6.html">← Chương 6</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong8.html">Chương 8 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

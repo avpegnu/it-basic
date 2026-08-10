@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 14 — Production Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 14 · Master</div>
+      <h1>Production Mastery</h1>
+      <p class="subtitle">Cấp Senior/Staff. HA multi-region. Disaster Recovery (RTO/RPO, backup, failover). Deployment strategies (blue-green, canary, rolling). Feature flags + progressive delivery. A/B testing. Platform Engineering, Internal Developer Platform (IDP), Backstage. Đây là cách công ty world-class vận hành.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#ha">1. High Availability</a></li>
+        <li><a href="#multi-region">2. Multi-region Architecture</a></li>
+        <li><a href="#dr">3. Disaster Recovery</a></li>
+        <li><a href="#backup">4. Backup Strategy</a></li>
+        <li><a href="#deploy">5. Deployment Strategies</a></li>
+        <li><a href="#flag">6. Feature Flags</a></li>
+        <li><a href="#progressive">7. Progressive Delivery</a></li>
+        <li><a href="#ab">8. A/B Testing</a></li>
+        <li><a href="#platform">9. Platform Engineering</a></li>
+        <li><a href="#idp">10. Internal Developer Platform</a></li>
+        <li><a href="#mature">11. Maturity Roadmap</a></li>
+        <li><a href="#exercises">12. Bài tập</a></li>
+        <li><a href="#quiz">13. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="ha">
+        <h2>1. High Availability — HA Patterns</h2>
+
+        <h3>1.1. Định nghĩa HA</h3>
+
+        <p>HA = system tiếp tục operate khi component fail. Đo bằng <em>availability percentage</em>:</p>
+
+        <table>
+          <thead><tr><th>Availability</th><th>Downtime/year</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td>99% (2 nines)</td><td>3.65 days</td><td>Internal tool</td></tr>
+            <tr><td>99.9% (3 nines)</td><td>8.76 hours</td><td>Most B2B SaaS</td></tr>
+            <tr><td>99.99% (4 nines)</td><td>52.6 minutes</td><td>Banking, e-commerce</td></tr>
+            <tr><td>99.999% (5 nines)</td><td>5.26 minutes</td><td>Telco, payment</td></tr>
+          </tbody>
+        </table>
+
+        <h3>1.2. Availability math</h3>
+
+        <p>Sequential components (A → B → C): <em>tích availability từng cái</em>.</p>
+        <ul>
+          <li>Mỗi cái 99.9% × 3 = 99.7% — giảm.</li>
+        </ul>
+
+        <p>Parallel (redundant): <em>1 - (1 - a)^n</em>.</p>
+        <ul>
+          <li>2 instance 99.9% song song = 99.9999% — 6 nines!</li>
+        </ul>
+
+        <p>→ HA = redundancy + remove SPOF.</p>
+
+        <h3>1.3. SPOF — Single Points of Failure</h3>
+
+        <p>Audit checklist:</p>
+        <ul>
+          <li>Web tier: ≥ 2 instance behind LB?</li>
+          <li>App tier: stateless + multiple replica?</li>
+          <li>DB: primary + replica? Multi-AZ?</li>
+          <li>Cache: Redis cluster + Sentinel?</li>
+          <li>Queue: Kafka multi-broker?</li>
+          <li>Load balancer: cloud-managed (multi-AZ inherent)?</li>
+          <li>DNS: multiple authoritative nameservers?</li>
+          <li>External dependency: timeout + circuit breaker?</li>
+          <li>Single AZ deployment? → multi-AZ.</li>
+          <li>Single region? → multi-region cho mission critical.</li>
+        </ul>
+
+        <h3>1.4. Failure modes</h3>
+
+        <table>
+          <thead><tr><th>Failure</th><th>Mitigation</th></tr></thead>
+          <tbody>
+            <tr><td>Single instance crash</td><td>Multiple replicas, health check, auto-restart</td></tr>
+            <tr><td>AZ outage</td><td>Multi-AZ deployment</td></tr>
+            <tr><td>Region outage</td><td>Multi-region (active-active or active-passive)</td></tr>
+            <tr><td>DNS provider</td><td>Multi-DNS (Route53 + Cloudflare)</td></tr>
+            <tr><td>Bad deploy</td><td>Canary + auto rollback</td></tr>
+            <tr><td>Cascading failure</td><td>Circuit breaker, bulkhead, rate limit</td></tr>
+            <tr><td>Hot shard</td><td>Re-shard, consistent hashing</td></tr>
+            <tr><td>Cert expiry</td><td>cert-manager auto-renewal + alert &gt; 30 days</td></tr>
+            <tr><td>DDoS</td><td>CDN absorb, rate limit, AWS Shield</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="multi-region">
+        <h2>2. Multi-region Architecture</h2>
+
+        <h3>2.1. Active-Passive (Cold/Warm DR)</h3>
+
+        <div class="ascii">Region A (Primary)              Region B (Standby)
+─────────────                  ─────────────
+[App] [App] [App]              [App idle/scaled-down]
+[DB primary]  ──replicate→     [DB read-replica]
+[Cache]                        [Cache]
+
+Failover: promote DB B to primary, scale up apps, switch DNS</div>
+
+        <ul>
+          <li>Cost: low (B mostly idle).</li>
+          <li>RTO: minutes (manual or automated).</li>
+          <li>RPO: seconds (replication lag).</li>
+        </ul>
+
+        <h3>2.2. Active-Active (Hot)</h3>
+
+        <div class="ascii">Region A                       Region B
+[App] [App] (50% traffic)      [App] [App] (50% traffic)
+[DB master]   ←─multi-master─→ [DB master]
+                                       OR
+[DB primary] ──replicate──→     [DB replica]
+                                       (writes route to A)</div>
+
+        <ul>
+          <li>Cost: high (full capacity 2 region).</li>
+          <li>RTO: seconds (DNS/LB drain bad region).</li>
+          <li>RPO: ~0 (sync replication possible).</li>
+          <li>Complexity: cao (data consistency cross-region).</li>
+        </ul>
+
+        <h3>2.3. Pilot Light</h3>
+
+        <p>Region B có core infrastructure (DB) chạy nhưng app tier idle. Failover spin up apps.</p>
+
+        <ul>
+          <li>RTO: 10s of minutes.</li>
+          <li>RPO: seconds.</li>
+          <li>Cost: medium.</li>
+        </ul>
+
+        <h3>2.4. Backup &amp; Restore</h3>
+
+        <p>Region B chỉ có backup. Failover restore from snapshot.</p>
+
+        <ul>
+          <li>RTO: hours.</li>
+          <li>RPO: depend on backup frequency.</li>
+          <li>Cost: lowest.</li>
+        </ul>
+
+        <h3>2.5. Routing</h3>
+
+        <ul>
+          <li><strong>Active-Active</strong>: Route53 latency-based / geo routing → user closest region.</li>
+          <li><strong>Active-Passive</strong>: Route53 health check → primary fail → DNS switch B (TTL low cho fast cutover).</li>
+          <li><strong>Anycast IP</strong> (Cloudflare, AWS Global Accelerator) — single IP route closest data center.</li>
+        </ul>
+
+        <h3>2.6. Data consistency challenges</h3>
+
+        <ul>
+          <li><strong>Replication lag</strong> — async replica behind primary by ms-s.</li>
+          <li><strong>Split-brain</strong> — network partition, both region accept write → conflict.</li>
+          <li><strong>Distributed transactions</strong> — cross-region transaction expensive.</li>
+          <li><strong>Geographic regulation</strong> — GDPR data sovereignty (EU data stay EU).</li>
+        </ul>
+
+        <p>Tools handle: <strong>CockroachDB</strong>, <strong>Spanner</strong> (GCP) — distributed SQL global. <strong>DynamoDB Global Table</strong> — multi-region NoSQL với last-write-wins.</p>
+
+        <p>Pattern: most company chọn <em>multi-AZ within single region</em> + <em>multi-region active-passive với cold DB replica</em>. True active-active ít — complexity quá đắt.</p>
+      </section>
+
+      <section id="dr">
+        <h2>3. Disaster Recovery</h2>
+
+        <h3>3.1. RTO vs RPO</h3>
+
+        <table>
+          <thead><tr><th>Metric</th><th>Định nghĩa</th><th>Câu hỏi</th></tr></thead>
+          <tbody>
+            <tr><td><strong>RTO</strong> — Recovery Time Objective</td><td>Max acceptable time để recover</td><td>"Hệ thống được offline bao lâu?"</td></tr>
+            <tr><td><strong>RPO</strong> — Recovery Point Objective</td><td>Max acceptable data loss</td><td>"Mất bao nhiêu data acceptable?"</td></tr>
+          </tbody>
+        </table>
+
+        <p>Examples:</p>
+        <ul>
+          <li>Banking: RTO 15 min, RPO 0 (no data loss).</li>
+          <li>SaaS B2B: RTO 1h, RPO 5 min.</li>
+          <li>Marketing site: RTO 4h, RPO 1 day (daily backup).</li>
+        </ul>
+
+        <h3>3.2. RTO/RPO ↔ DR strategy</h3>
+
+        <table>
+          <thead><tr><th>Strategy</th><th>RTO</th><th>RPO</th><th>Cost</th></tr></thead>
+          <tbody>
+            <tr><td>Backup &amp; Restore</td><td>Hours</td><td>Hours</td><td>$</td></tr>
+            <tr><td>Pilot Light</td><td>10s of minutes</td><td>Seconds</td><td>$$</td></tr>
+            <tr><td>Warm Standby</td><td>Minutes</td><td>Seconds</td><td>$$$</td></tr>
+            <tr><td>Active-Active</td><td>Seconds</td><td>~0</td><td>$$$$</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3.3. Recovery testing — DiRT</h3>
+
+        <p>Disaster Recovery Testing (Google name): periodically simulate disaster để verify procedure works.</p>
+
+        <ul>
+          <li>Yearly: full region failover.</li>
+          <li>Quarterly: critical service failover.</li>
+          <li>Monthly: backup restore test.</li>
+        </ul>
+
+        <p>Quy tắc: untested backup = no backup. Khôi phục lần đầu thường fail (cert expired, dependency missing, runbook outdated).</p>
+
+        <h3>3.4. Runbook examples</h3>
+
+<pre><code># DR Runbook: Region us-east-1 outage
+
+## Detection
+- AWS Health Dashboard reports outage
+- Internal monitoring shows 100% requests failing in us-east-1
+- Cross-region monitoring (Route53 health check) confirms
+
+## Decision
+- IC declares DR mode
+- Communicate to: exec, customer support, status page
+
+## Failover Steps (RTO target: 15 min)
+
+1. Enable us-west-2 traffic via Route53:
+   ```
+   aws route53 change-resource-record-sets --change-batch file://failover.json
+   ```
+
+2. Promote us-west-2 RDS replica to primary:
+   ```
+   aws rds promote-read-replica --db-instance-identifier prod-db-uswest2
+   ```
+
+3. Scale up us-west-2 app deployments:
+   ```
+   kubectl --context=uswest2 scale deployment/web --replicas=20
+   ```
+
+4. Verify health:
+   - Check status page metric
+   - Smoke test critical endpoints
+   - Customer support sample tickets
+
+5. Update status page to "Degraded — failover complete"
+
+## Failback (when us-east-1 returns)
+[Detailed steps... ensure data sync direction reversed]
+</code></pre>
+      </section>
+
+      <section id="backup">
+        <h2>4. Backup Strategy</h2>
+
+        <h3>4.1. 3-2-1 Rule</h3>
+
+        <ul>
+          <li><strong>3</strong> copies of data.</li>
+          <li><strong>2</strong> different storage media.</li>
+          <li><strong>1</strong> off-site (cross-region or different cloud).</li>
+        </ul>
+
+        <h3>4.2. Backup types</h3>
+
+        <ul>
+          <li><strong>Full</strong> — toàn bộ data. Slow + expensive.</li>
+          <li><strong>Incremental</strong> — chỉ delta từ backup trước. Fast nhưng restore phải apply tất cả.</li>
+          <li><strong>Differential</strong> — delta từ full backup gần nhất. Compromise.</li>
+          <li><strong>Snapshot</strong> — point-in-time copy (cloud disk). Cheap, fast.</li>
+          <li><strong>Continuous (CDC)</strong> — every change stream to backup. RPO ~0.</li>
+        </ul>
+
+        <h3>4.3. PITR — Point-In-Time Recovery</h3>
+
+        <p>Modern managed DB (RDS, Cloud SQL) support PITR — restore tới timestamp cụ thể trong retention window. Combine: daily snapshot + WAL/binlog continuous archive.</p>
+
+        <p>Example: prod DB corrupt at 14:30 (bad migration). Restore tới 14:25 = lose 5 minute data, không 24h.</p>
+
+        <h3>4.4. Backup automation</h3>
+
+<pre><code class="language-yaml"># K8s CronJob backup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: postgres:15
+              command:
+                - sh
+                - -c
+                - |
+                  pg_dump -h $DB_HOST -U $DB_USER $DB_NAME | \
+                  gzip | \
+                  aws s3 cp - s3://backups/$(date +%Y%m%d).sql.gz \
+                    --storage-class STANDARD_IA \
+                    --sse aws:kms
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: password
+          restartPolicy: OnFailure
+</code></pre>
+
+        <h3>4.5. Backup security</h3>
+
+        <ul>
+          <li>Encrypt backup (KMS).</li>
+          <li>Cross-region replication.</li>
+          <li>Immutable storage (S3 Object Lock) — ransomware can't delete.</li>
+          <li>Separate AWS account cho backup (compromised primary account không destroy backup).</li>
+          <li>Audit access to backup (CloudTrail).</li>
+        </ul>
+
+        <h3>4.6. Restore drill</h3>
+
+        <p>Quy tắc số 1: <em>untested backup = no backup</em>. Quarterly: pick random backup, restore to staging, verify data integrity.</p>
+
+        <p>Common restore failures:</p>
+        <ul>
+          <li>Backup file corrupt (silent for years).</li>
+          <li>Schema mismatch (migration after backup).</li>
+          <li>Missing dependency (extension, function).</li>
+          <li>KMS key rotated, can't decrypt.</li>
+          <li>Permission missing.</li>
+        </ul>
+      </section>
+
+      <section id="deploy">
+        <h2>5. Deployment Strategies — Deep</h2>
+
+        <h3>5.1. Recap (chương 4)</h3>
+
+        <ul>
+          <li>Recreate — downtime, simple.</li>
+          <li>Rolling update — no downtime, default K8s.</li>
+          <li>Blue-Green — instant switch, 2× resource.</li>
+          <li>Canary — gradual rollout, low risk.</li>
+        </ul>
+
+        <h3>5.2. Canary với Argo Rollouts</h3>
+
+<pre><code class="language-yaml">apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: web
+spec:
+  replicas: 10
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/me/web:1.5.0
+  strategy:
+    canary:
+      canaryService: web-canary       # Service trỏ canary pods
+      stableService: web-stable        # Service trỏ stable pods
+      trafficRouting:
+        istio:
+          virtualService:
+            name: web-vs
+            routes: [primary]
+
+      steps:
+        - setWeight: 5                 # 5% traffic to canary
+        - pause: { duration: 10m }
+        - analysis:
+            templates:
+              - templateName: success-rate
+            args:
+              - name: service-name
+                value: web-canary
+        - setWeight: 25
+        - pause: { duration: 10m }
+        - analysis:
+            templates: [{ templateName: success-rate }]
+        - setWeight: 50
+        - pause: { duration: 10m }
+        - setWeight: 100               # full rollout
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+spec:
+  metrics:
+    - name: success-rate
+      interval: 30s
+      successCondition: result[0] &gt;= 0.99
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://prometheus:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service-name}}",status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="{{args.service-name}}"}[5m]))
+</code></pre>
+
+        <p>Argo Rollouts auto-promote nếu metric tốt; auto-rollback nếu fail.</p>
+
+        <h3>5.3. Flagger (Flux)</h3>
+
+        <p>Alternative cho Argo Rollouts. Tích hợp Flux + Prometheus + Istio/Linkerd.</p>
+
+        <h3>5.4. Database migration during deploy</h3>
+
+        <p>Schema thay đổi cùng deploy = nguy hiểm. Pattern <strong>expand-contract</strong>:</p>
+
+        <ol class="steps">
+          <li><strong>Expand</strong>: thêm column mới (nullable). Code v1 vẫn chạy (ignore column mới).</li>
+          <li><strong>Migrate</strong>: backfill data cho column mới.</li>
+          <li>Deploy code v2: write cả old + new column (dual write).</li>
+          <li>Backfill complete.</li>
+          <li>Deploy code v3: read new column only.</li>
+          <li><strong>Contract</strong>: drop old column.</li>
+        </ol>
+
+        <p>Mỗi step backward-compatible. Có thể rollback giữa step. Avoid "schema thay đổi cùng app deploy" antipattern.</p>
+
+        <h3>5.5. Zero-downtime deploy checklist</h3>
+
+        <ul>
+          <li>App stateless (state ở DB/cache).</li>
+          <li>Health check + readiness probe đúng.</li>
+          <li>Graceful shutdown (handle SIGTERM, drain connection).</li>
+          <li>preStop hook trong K8s — drain trước shutdown.</li>
+          <li>Database migration backward-compat.</li>
+          <li>API backward-compat (versioning, hoặc additive only).</li>
+          <li>Connection draining trên LB.</li>
+          <li>Resource budget cho 2× pod tạm thời (rolling).</li>
+        </ul>
+      </section>
+
+      <section id="flag">
+        <h2>6. Feature Flags — Decouple Deploy &amp; Release</h2>
+
+        <h3>6.1. Concept</h3>
+
+        <p>Deploy = code lên prod. Release = code accessible cho users. Feature flag tách 2:</p>
+
+<pre><code class="language-typescript">if (await flags.isEnabled('new-checkout', { userId, country })) {
+  return renderNewCheckout();
+} else {
+  return renderOldCheckout();
+}
+</code></pre>
+
+        <p>Flag controls runtime — không cần redeploy để bật/tắt.</p>
+
+        <h3>6.2. Flag types</h3>
+
+        <table>
+          <thead><tr><th>Type</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td>Release flags</td><td>Hide unfinished feature trong code merged main</td></tr>
+            <tr><td>Experiment flags</td><td>A/B test variants</td></tr>
+            <tr><td>Ops flags</td><td>Kill switch, enable maintenance mode</td></tr>
+            <tr><td>Permission flags</td><td>Premium tier feature gate</td></tr>
+          </tbody>
+        </table>
+
+        <h3>6.3. Targeting rules</h3>
+
+<pre><code class="language-json">{
+  "name": "new-checkout",
+  "rules": [
+    {
+      "if": { "userId": { "in": ["alice", "bob"] } },
+      "value": true
+    },
+    {
+      "if": { "country": "US", "userType": "beta_tester" },
+      "value": true
+    },
+    {
+      "rollout": {
+        "percentage": 10,
+        "byAttribute": "userId"
+      },
+      "value": true
+    }
+  ],
+  "default": false
+}
+</code></pre>
+
+        <h3>6.4. Tools</h3>
+
+        <ul>
+          <li><strong>LaunchDarkly</strong> — popular SaaS.</li>
+          <li><strong>Statsig</strong> — A/B + flags + analytics.</li>
+          <li><strong>Split.io</strong> — feature flag + experiment.</li>
+          <li><strong>Unleash</strong> — open source.</li>
+          <li><strong>Flagsmith</strong> — open source / SaaS.</li>
+          <li><strong>OpenFeature</strong> — vendor-neutral standard (CNCF).</li>
+        </ul>
+
+        <h3>6.5. Flag lifecycle hygiene</h3>
+
+        <p>Flag debt: flag không bao giờ được clean up → code branches forever.</p>
+
+        <p>Best practice:</p>
+        <ul>
+          <li>Tag flag với owner + planned removal date.</li>
+          <li>Quarterly review: flag &gt; 6 tháng = cleanup.</li>
+          <li>"Stale flag" alert.</li>
+          <li>Tools support flag lifecycle (LaunchDarkly Code References).</li>
+        </ul>
+      </section>
+
+      <section id="progressive">
+        <h2>7. Progressive Delivery</h2>
+
+        <p>Progressive Delivery (James Governor 2018): combine canary + feature flag + observability + auto rollback.</p>
+
+        <h3>7.1. Pattern</h3>
+
+        <ol class="steps">
+          <li>Deploy v2 với flag <code>new-feature</code> tắt 100% — code chạy nhưng không user nào thấy.</li>
+          <li>Bật flag cho 1% internal users (employee).</li>
+          <li>Bật cho 1% beta tester (opt-in).</li>
+          <li>Bật cho 5% general users (canary). Monitor SLI.</li>
+          <li>Bật 25%, 50%, 100% gradually.</li>
+          <li>Remove flag + old code.</li>
+        </ol>
+
+        <h3>7.2. Auto-promote / Auto-rollback</h3>
+
+        <p>Define metric SLO cho rollout. Tools (Flagger, Argo Rollouts) auto:</p>
+        <ul>
+          <li>Tăng % nếu metric OK.</li>
+          <li>Pause hoặc rollback nếu metric vi phạm.</li>
+        </ul>
+
+        <h3>7.3. Beyond canary: Dark launches</h3>
+
+        <p><strong>Dark launch</strong>: deploy code, gọi API mới, nhưng <em>không return result cho user</em>. Mục đích: load test với real traffic shape.</p>
+
+<pre><code class="language-typescript">async function search(query: string) {
+  const oldResult = await searchV1(query);
+
+  // Dark launch new search engine
+  if (await flags.isEnabled('search-shadow')) {
+    searchV2(query).catch(err =&gt; logger.warn('shadow err', err));
+    // Don't await, don't use result
+  }
+
+  return oldResult;
+}
+</code></pre>
+      </section>
+
+      <section id="ab">
+        <h2>8. A/B Testing</h2>
+
+        <h3>8.1. Vì sao A/B test?</h3>
+
+        <p>Believe vs measure. Designer "tin" button đỏ tốt hơn xanh? Test thực tế.</p>
+
+        <p>Common metrics: click-through rate, conversion, revenue, retention.</p>
+
+        <h3>8.2. Statistical foundation</h3>
+
+        <p>Cần đủ sample size cho statistical significance:</p>
+        <ul>
+          <li><strong>Effect size</strong> — minimum detectable difference (vd 1% conversion lift).</li>
+          <li><strong>Power</strong> — 80% standard.</li>
+          <li><strong>Significance level (α)</strong> — 5% standard (p &lt; 0.05).</li>
+        </ul>
+
+        <p>Sample calculator: <a href="https://www.evanmiller.org/ab-testing/sample-size.html">evanmiller.org</a>.</p>
+
+        <p>Quy tắc: 1% lift detect cần ~10k user/variant.</p>
+
+        <h3>8.3. Common pitfalls</h3>
+
+        <ul>
+          <li><strong>Peeking</strong> — kiểm tra kết quả mid-test → false positive.</li>
+          <li><strong>Sample ratio mismatch (SRM)</strong> — nếu A/B không 50/50 thực tế → bias.</li>
+          <li><strong>Novelty effect</strong> — feature mới có boost ngắn hạn.</li>
+          <li><strong>Multiple testing</strong> — test nhiều variant đồng thời → tăng false positive (Bonferroni correction).</li>
+          <li><strong>Network effects</strong> — variant ảnh hưởng nhau (social network).</li>
+        </ul>
+
+        <h3>8.4. Tools</h3>
+
+        <ul>
+          <li>Statsig, Eppo (modern stats).</li>
+          <li>Optimizely (enterprise).</li>
+          <li>LaunchDarkly Experiments.</li>
+          <li>Google Optimize (deprecated 2023, GA4 has).</li>
+          <li>VWO.</li>
+        </ul>
+
+        <h3>8.5. Beyond A/B: Bandit algorithms</h3>
+
+        <p>Multi-armed bandit dynamically allocate traffic tới winning variant trong test → tốt cho cost-sensitive (minimize regret).</p>
+
+        <p>Use case: recommendation, ranking, ad. Pure A/B vẫn standard cho strategic decision.</p>
+      </section>
+
+      <section id="platform">
+        <h2>9. Platform Engineering</h2>
+
+        <h3>9.1. Vì sao Platform Engineering?</h3>
+
+        <p>Modern app stack quá phức tạp: K8s + Terraform + 20 cloud services + 10 SaaS tools. Mỗi dev không thể master tất cả → friction.</p>
+
+        <p>Solution: Platform team build internal abstraction layer cho dev tự service:</p>
+        <ul>
+          <li>Self-service deploy.</li>
+          <li>Self-service infra provision.</li>
+          <li>Standard observability built-in.</li>
+          <li>Compliance built-in.</li>
+          <li>Golden paths.</li>
+        </ul>
+
+        <h3>9.2. Team Topologies (Skelton 2019)</h3>
+
+        <p>4 fundamental team types:</p>
+
+        <table>
+          <thead><tr><th>Team</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Stream-aligned</strong></td><td>Build product features (most engineers)</td></tr>
+            <tr><td><strong>Platform</strong></td><td>Provide internal services to stream-aligned teams</td></tr>
+            <tr><td><strong>Enabling</strong></td><td>Help stream-aligned teams (consultancy, training)</td></tr>
+            <tr><td><strong>Complicated subsystem</strong></td><td>Specialized expertise (ML, video codec)</td></tr>
+          </tbody>
+        </table>
+
+        <p>Platform team treats stream-aligned teams như <em>customers</em> — collect feedback, ship features, measure satisfaction (Developer Experience).</p>
+
+        <h3>9.3. "Platform as a Product"</h3>
+
+        <ul>
+          <li>PM cho platform team.</li>
+          <li>Roadmap based on dev pain points.</li>
+          <li>Adoption metrics (% teams onboarded).</li>
+          <li>SLO cho platform itself (uptime, support response time).</li>
+          <li>Documentation as priority.</li>
+          <li>Office hours / Slack support.</li>
+        </ul>
+
+        <h3>9.4. Golden Path</h3>
+
+        <p>"Cách đúng" được khuyến nghị mặc định. Vd:</p>
+        <ul>
+          <li>Tạo new service: template Backstage → CI/CD + monitoring + alerting + logging tự setup.</li>
+          <li>Add new microservice: 1 PR change vs 10 PRs setup.</li>
+        </ul>
+
+        <p>Dev có thể đi off-path nếu cần, nhưng default = paved road, fast.</p>
+
+        <h3>9.5. Platform Engineering vs DevOps vs SRE</h3>
+
+        <table>
+          <thead><tr><th>Discipline</th><th>Focus</th></tr></thead>
+          <tbody>
+            <tr><td>DevOps</td><td>Văn hóa Dev+Ops collaborate</td></tr>
+            <tr><td>SRE</td><td>Reliability bằng SE</td></tr>
+            <tr><td>Platform Eng</td><td>Self-service internal platform — "industrialize DevOps"</td></tr>
+          </tbody>
+        </table>
+
+        <p>Sam Newman: <em>"Platform Engineering is what happens when you industrialize DevOps."</em> Platform team build tool để stream-aligned teams tự deploy / monitor / scale.</p>
+      </section>
+
+      <section id="idp">
+        <h2>10. Internal Developer Platform (IDP)</h2>
+
+        <h3>10.1. Components</h3>
+
+        <ul>
+          <li><strong>Developer Portal</strong> — UI for self-service (Backstage).</li>
+          <li><strong>Service Catalog</strong> — metadata mọi service (owner, tier, dependencies).</li>
+          <li><strong>Software Templates</strong> — scaffold new service.</li>
+          <li><strong>Tech Docs</strong> — markdown auto-render.</li>
+          <li><strong>Pipelines</strong> — CI/CD integrated.</li>
+          <li><strong>Observability portal</strong> — link to dashboards/logs/traces.</li>
+          <li><strong>Cost / FinOps portal</strong>.</li>
+          <li><strong>Compliance portal</strong>.</li>
+        </ul>
+
+        <h3>10.2. Backstage</h3>
+
+        <p>Backstage (Spotify 2020, CNCF incubating) là IDP framework phổ biến nhất.</p>
+
+<pre><code class="language-yaml"># catalog-info.yaml — file mỗi service
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payment-service
+  description: Handles all payment processing
+  annotations:
+    github.com/project-slug: myorg/payment-service
+    grafana/dashboard-selector: "service=payment"
+    pagerduty.com/integration-key: ABC123
+    sentry.io/project-slug: payment
+  tags:
+    - critical
+    - tier-1
+spec:
+  type: service
+  lifecycle: production
+  owner: payments-team
+  system: checkout
+  dependsOn:
+    - resource:payment-database
+    - component:auth-service
+  providesApis:
+    - payment-api
+</code></pre>
+
+        <h3>10.3. Software Templates</h3>
+
+<pre><code class="language-yaml"># template-go-service.yaml
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: go-microservice
+  title: Go microservice (REST + gRPC)
+spec:
+  parameters:
+    - title: Service info
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        owner:
+          type: string
+          ui:field: OwnerPicker
+  steps:
+    - id: fetch-template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+
+    - id: create-repo
+      action: github:repo:create
+      input:
+        repoUrl: github.com?owner=myorg&amp;repo=${{ parameters.name }}
+
+    - id: register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.create-repo.output.repoContentsUrl }}
+</code></pre>
+
+        <p>Dev "Create new service" → form fill → Backstage creates: GitHub repo + skeleton code + CI/CD + register catalog. ~30s thay 1 ngày setup thủ công.</p>
+
+        <h3>10.4. Other IDP tools</h3>
+
+        <ul>
+          <li><strong>Port</strong> — modern alternative.</li>
+          <li><strong>Cortex</strong> — focus on service catalog + scorecards.</li>
+          <li><strong>OpsLevel</strong> — service maturity scoring.</li>
+          <li><strong>Crossplane</strong> — K8s-native infrastructure abstraction.</li>
+          <li><strong>Humanitec</strong> — declarative IDP.</li>
+        </ul>
+
+        <h3>10.5. Score — Workload spec</h3>
+
+<pre><code class="language-yaml"># score.yaml — declarative workload, platform-agnostic
+apiVersion: score.dev/v1b1
+metadata:
+  name: my-app
+containers:
+  app:
+    image: myapp:1.0
+    variables:
+      DB_URL: ${resources.db.url}
+resources:
+  db:
+    type: postgres
+  cache:
+    type: redis
+service:
+  ports:
+    web:
+      port: 80
+      targetPort: 8080
+</code></pre>
+
+        <p>Platform infer infrastructure (K8s + Terraform) từ score.yaml. Dev không touch K8s YAML.</p>
+      </section>
+
+      <section id="mature">
+        <h2>11. DevOps Maturity Roadmap</h2>
+
+        <h3>11.1. Self-assessment 5 levels</h3>
+
+        <table>
+          <thead><tr><th>Level</th><th>Practices</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>L1 — Initial</strong></td>
+              <td>Manual deploy, no CI, sysadmin separate from dev</td>
+            </tr>
+            <tr>
+              <td><strong>L2 — Managed</strong></td>
+              <td>CI runs on every commit, basic monitoring, scripted deploy</td>
+            </tr>
+            <tr>
+              <td><strong>L3 — Defined</strong></td>
+              <td>CD to staging, IaC, container, K8s, full monitoring</td>
+            </tr>
+            <tr>
+              <td><strong>L4 — Quantified</strong></td>
+              <td>DORA metrics tracked, SLO defined, blameless postmortem, error budget</td>
+            </tr>
+            <tr>
+              <td><strong>L5 — Optimized</strong></td>
+              <td>Continuous deployment, progressive delivery, chaos engineering, IDP, FinOps</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>11.2. Roadmap from L1 → L5</h3>
+
+        <ol class="steps">
+          <li><strong>L1 → L2 (3-6 tháng)</strong>: Setup Git, CI pipeline test+lint, monitoring cơ bản.</li>
+          <li><strong>L2 → L3 (6-12 tháng)</strong>: Container hóa, K8s, IaC (Terraform), CD to staging, structured logging.</li>
+          <li><strong>L3 → L4 (6-12 tháng)</strong>: SLO, blameless postmortem, error budget, observability đầy đủ (3 pillars).</li>
+          <li><strong>L4 → L5 (1-2 năm)</strong>: CD to production, feature flags, progressive delivery, IDP, chaos engineering, FinOps.</li>
+        </ol>
+
+        <h3>11.3. Common pitfalls</h3>
+
+        <ul>
+          <li><strong>Tool-first thinking</strong> — buy K8s/ArgoCD trước khi văn hóa đúng.</li>
+          <li><strong>Skip culture</strong> — install monitoring nhưng không có blameless postmortem.</li>
+          <li><strong>Single hero</strong> — 1 senior làm hết DevOps, knowledge concentrated.</li>
+          <li><strong>"DevOps team" silo</strong> — tạo team mới mà không integrate Dev/Ops.</li>
+          <li><strong>Premature platform</strong> — build IDP trước có 10+ services dùng.</li>
+          <li><strong>Skip SLO</strong> — đo metric nhưng không có target → không actionable.</li>
+        </ul>
+
+        <h3>11.4. Final advice — vai trò của bạn</h3>
+
+        <ul>
+          <li><strong>Junior</strong> — focus master CLI + Git + 1 cloud + Docker. 12 tháng.</li>
+          <li><strong>Mid</strong> — K8s + Terraform + observability. Be on-call. 1-3 năm.</li>
+          <li><strong>Senior</strong> — system design, multi-region, chaos engineering, mentor. 3-7 năm.</li>
+          <li><strong>Staff/Principal</strong> — platform engineering, org-wide impact, technology strategy. 7+ năm.</li>
+        </ul>
+
+        <blockquote>
+          "Đi nhanh thì đi một mình; đi xa thì đi cùng team. DevOps không phải cuộc đua kỹ năng cá nhân — là khả năng làm cho team của bạn nhanh hơn, ổn hơn, vui hơn."
+        </blockquote>
+      </section>
+
+      <section id="exercises">
+        <h2>12. Bài tập</h2>
+
+        <ol>
+          <li><strong>Availability calculator</strong>: cho hệ thống 5 component nối tiếp 99.9%, tính availability tổng. Add redundancy 2× — tính lại.</li>
+
+          <li><strong>SPOF audit</strong>: cho project hiện tại, list mọi component. Identify SPOF. Plan remediation.</li>
+
+          <li><strong>Multi-AZ migration</strong>: nếu hệ thống single-AZ, migrate sang multi-AZ. Estimate cost increase + availability gain.</li>
+
+          <li><strong>RTO/RPO definition</strong>: define cho service hiện tại. Match với DR strategy phù hợp. Estimate cost.</li>
+
+          <li><strong>Backup drill</strong>: pick random backup, restore to staging. Verify data integrity. Time it. Document gaps.</li>
+
+          <li><strong>Argo Rollouts canary</strong>: setup canary với 5% → 25% → 50% → 100%, analysis success rate qua Prometheus. Test với bad deploy → auto rollback.</li>
+
+          <li><strong>Expand-contract migration</strong>: change schema (rename column) bằng pattern expand-contract. Document mỗi step.</li>
+
+          <li><strong>Feature flag</strong>: implement với LaunchDarkly hoặc Unleash. Roll out feature 5% → 50% → 100%. Monitor metric per variant.</li>
+
+          <li><strong>A/B test</strong>: design test (variant, sample size, metric, duration). Run nếu có app real. Analyze.</li>
+
+          <li><strong>Backstage setup</strong>: cài Backstage local. Register 3 service catalog. Create software template cho Go service.</li>
+
+          <li><strong>Maturity self-assessment</strong>: evaluate team theo 5-level model. Identify top 3 gaps. Plan 6-month roadmap.</li>
+
+          <li><strong>DR runbook</strong>: viết runbook cho region failover. Game day với team, time the failover.</li>
+
+          <li><strong>Compose all chapters</strong>: design end-to-end production-ready system với những gì đã học (chương 1-14). Whiteboard architecture, identify trade-offs.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>13. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 14</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">3 component nối tiếp mỗi cái 99.9% availability → tổng availability:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">99.9% (giữ nguyên)</li>
+              <li class="quiz-option">99.7% (= 0.999³ × 100, sequential = tích availability từng cái → giảm)</li>
+              <li class="quiz-option">99.99%</li>
+              <li class="quiz-option">99.999%</li>
+            </ul>
+            <div class="quiz-explain">Sequential dependency: A × B × C = 0.999³ = 0.997 = 99.7%. Mỗi component thêm GIẢM tổng availability. Parallel ngược lại: 1 - (0.001)^n tăng nhanh — 2 instance redundant 99.9% → 99.9999%. Đây là math foundation cho HA design: remove SPOF = parallel where possible.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">RTO vs RPO khác nhau:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">RTO data loss, RPO time</li>
+              <li class="quiz-option">Cùng nghĩa</li>
+              <li class="quiz-option">RTO = Recovery Time Objective (max acceptable downtime); RPO = Recovery Point Objective (max acceptable data loss)</li>
+              <li class="quiz-option">RTO chỉ cho cloud</li>
+            </ul>
+            <div class="quiz-explain">RTO trả lời "Hệ thống có thể offline bao lâu?". RPO trả lời "Mất bao nhiêu data acceptable?". Banking: RTO 15min/RPO 0. Marketing site: RTO 4h/RPO 1day. RTO/RPO target → DR strategy: backup&amp;restore (RTO hours, RPO hours, $) vs active-active (RTO seconds, RPO ~0, $$$$).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">"3-2-1 backup rule":</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">3 copies, 2 different media, 1 off-site</li>
+              <li class="quiz-option">3 backups/day</li>
+              <li class="quiz-option">3 retention level</li>
+              <li class="quiz-option">3 region 2 AZ 1 zone</li>
+            </ul>
+            <div class="quiz-explain">3 copies (original + 2 backup), 2 different storage media (disk + tape, hoặc local + cloud), 1 off-site (cross-region cho disaster). Modern interpretation: 3 copies, 2 storage class (S3 STANDARD + GLACIER), 1 cross-region. Critical: untested backup = no backup. Quarterly restore drill verify backup actually works.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Database migration "expand-contract" pattern:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Migration nhanh hơn</li>
+              <li class="quiz-option">Compress data</li>
+              <li class="quiz-option">Distributed transaction</li>
+              <li class="quiz-option">Multi-step migration backward-compatible: expand (add column nullable) → migrate (backfill data) → dual write → switch read → contract (drop old) — mỗi step rollback-able</li>
+            </ul>
+            <div class="quiz-explain">Antipattern: deploy code v2 cùng lúc với schema change → rollback impossible (schema modified). Expand-contract: schema change incremental, mỗi step backward-compatible. Code v1 vẫn chạy với schema mới (ignore new column). Code v2 có thể rollback về v1 nếu cần. Drop column chỉ ở end khi sure no caller. Pattern bắt buộc cho zero-downtime deploy với schema change.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Feature Flag tách Deploy và Release:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Deploy nhanh hơn</li>
+              <li class="quiz-option">Deploy = code lên prod (luôn safe nếu pass test); Release = code accessible cho user (controlled bằng flag) — decouple = deploy không sợ, release controlled</li>
+              <li class="quiz-option">Replace CI/CD</li>
+              <li class="quiz-option">Cùng nghĩa</li>
+            </ul>
+            <div class="quiz-explain">Trước: deploy = release. Bug = full rollback. Với flag: code merge main + deploy daily, flag off. Bật flag cho 1% beta. 5% canary. 50%, 100% gradual. Bug ở variant: tắt flag = instant "rollback" không cần redeploy. Tools: LaunchDarkly, Unleash, OpenFeature (CNCF standard). Lưu ý: flag debt — cleanup expired flag, otherwise code branches forever.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Progressive Delivery extend canary deployment với:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Faster deploy</li>
+              <li class="quiz-option">Cheaper resource</li>
+              <li class="quiz-option">Combine canary + feature flag + observability + auto rollback dựa trên metric SLO; auto-promote nếu OK, auto-rollback nếu vi phạm</li>
+              <li class="quiz-option">Replace canary</li>
+            </ul>
+            <div class="quiz-explain">Argo Rollouts / Flagger implement progressive delivery: define rollout steps (5% → 25% → 50% → 100%) + analysis template (success rate &gt; 99%, P95 latency &lt; 500ms). Mỗi step pause + analyze metric → tự động promote hoặc rollback. Removes human in critical path. Beyond canary: dark launch (run in shadow), feature flag, multi-region progressive.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">A/B test pitfall "peeking":</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Kiểm tra kết quả mid-test → false positive khi test phát hiện "winner" tạm; phải đợi full sample size; statistical significance không bullet-proof khi continuous testing</li>
+              <li class="quiz-option">Spy on competitor</li>
+              <li class="quiz-option">Look at code</li>
+              <li class="quiz-option">Watch dashboard</li>
+            </ul>
+            <div class="quiz-explain">Standard A/B test giả định: chạy trước, analyze sau. Peeking: nhìn data mid-test, "stop nếu thấy winner" → 5x increased false positive rate. Solutions: pre-define sample size + duration; sequential testing methods (Optimizely, Eppo) handle peeking statistically; bandits dynamic allocation. Other pitfalls: SRM (sample ratio mismatch — implementation bug làm A/B không 50/50), novelty effect, multiple testing.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Platform Engineering vai trò:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Replace DevOps team</li>
+              <li class="quiz-option">Manual deploy faster</li>
+              <li class="quiz-option">Marketing</li>
+              <li class="quiz-option">Build internal abstraction (IDP) cho stream-aligned teams self-service deploy/provision/observe — "industrialize DevOps"; treats devs như customers, golden path</li>
+            </ul>
+            <div class="quiz-explain">Modern infrastructure quá phức tạp (K8s + Terraform + 20 services) cho mỗi dev master. Platform team build internal layer: <code>devctl deploy</code> hoặc Backstage portal hide complexity. Stream-aligned teams (product) consume platform như customers. Sam Newman: "Platform Engineering is what happens when you industrialize DevOps." Required: PM cho platform, SLO cho platform, golden path doc.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Backstage là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Theater concept</li>
+              <li class="quiz-option">Database</li>
+              <li class="quiz-option">Open source IDP framework (Spotify 2020, CNCF) — service catalog, software templates, tech docs, plugins; phổ biến nhất cho IDP</li>
+              <li class="quiz-option">Backup tool</li>
+            </ul>
+            <div class="quiz-explain">Backstage components: (1) Service Catalog (metadata: owner, dependencies, links Grafana/PagerDuty); (2) Software Templates (scaffold new service: GitHub repo + CI/CD + register catalog); (3) TechDocs (markdown auto-render); (4) Plugins ecosystem (Kubernetes, ArgoCD, GitHub, ...). Alternatives: Port, Cortex, OpsLevel. CNCF incubating since 2022.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Common DevOps pitfall ở team mới adopt:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Blameless culture</li>
+              <li class="quiz-option">Tool-first thinking — buy K8s/ArgoCD trước khi văn hóa đúng (collaboration, no blame); install monitoring nhưng không có blameless postmortem hay error budget; "DevOps team" silo isolated</li>
+              <li class="quiz-option">Error budget</li>
+              <li class="quiz-option">Observability</li>
+            </ul>
+            <div class="quiz-explain">DevOps là 30% culture / 30% practice / 40% tool. Tool-first thinking: cài Jenkins/K8s nhưng vẫn deploy 1 lần/quý, blame culture, không có postmortem → vẫn không phải DevOps. CALMS: Culture đứng đầu vì lý do. Buy K8s không = transform, văn hóa change năm tháng. Tool work khi văn hóa support. Antipattern khác: DevOps team silo (rebrand Ops), single hero, premature platform.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        <strong>🎉 Hoàn thành Chương 14 — kết thúc giáo trình DevOps 14 chương!</strong><br><br>
+        Bạn đã đi từ Foundations (Chương 1) → Linux/Git/CI-CD (2-4) → Containers (5-6) → Infrastructure (7-8) → Operate (9-11) → Master (12-14). Đây là kiến thức Senior DevOps Engineer / SRE / Platform Engineer level. Tiếp theo: <em>code thật, ship thật, fail thật, learn thật</em>. Quay về <a href="../index.html"><strong>Lộ trình →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 14 (cuối) · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — Network: HTTP, Dio, Retrofit · Flutter Sub-pillar</title>
+  <meta name="description" content="http package, Dio with interceptor, JSON codegen (freezed + json_serializable), repository pattern, error handling, retrofit, WebSocket." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 10</span>
+      </div>
+      <div class="chapter-num">Chương 10 · Network — HTTP, Dio, Retrofit</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Network — HTTP, Dio, Retrofit
+      </h1>
+      <p class="lead">
+        Mọi app real-world gọi API. Flutter có 2 lựa chọn chính: <code>http</code> (Flutter team, đủ cho 80% case) hoặc
+        <code>dio</code> (community, mạnh hơn). Pattern <strong>Repository + JSON model</strong> là chuẩn industry —
+        không hiểu thì code rối.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1170 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Dart Ch 7 (async) + Ch 5+ state mgmt</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Sử dụng <code>http</code> package cho REST cơ bản.</li>
+            <li>Sử dụng <code>Dio</code> với interceptor, retry, timeout.</li>
+            <li>Parse JSON: manual + <code>json_serializable</code> codegen.</li>
+            <li>Pattern Repository: tách HTTP khỏi widget.</li>
+            <li>Error handling: network, parse, business.</li>
+            <li>Timeout &amp; retry strategy.</li>
+            <li><code>retrofit</code> package: type-safe API client.</li>
+            <li>Upload file (multipart).</li>
+            <li>WebSocket cơ bản với <code>web_socket_channel</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="http">1. <code>http</code> package — basic</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add http</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:http/http.dart'</span> <span class="tok-kw">as</span> http;
+<span class="tok-kw">import</span> <span class="tok-str">'dart:convert'</span>;
+
+<span class="tok-cls">Future</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">User</span>&gt;&gt; <span class="tok-fn">fetchUsers</span>() <span class="tok-kw">async</span> {
+  <span class="tok-kw">final</span> response = <span class="tok-kw">await</span> http.<span class="tok-fn">get</span>(<span class="tok-cls">Uri</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'https://jsonplaceholder.typicode.com/users'</span>));
+
+  <span class="tok-kw">if</span> (response.statusCode == <span class="tok-num">200</span>) {
+    <span class="tok-kw">final</span> json = <span class="tok-fn">jsonDecode</span>(response.body) <span class="tok-kw">as</span> <span class="tok-cls">List</span>;
+    <span class="tok-kw">return</span> json.<span class="tok-fn">map</span>((j) =&gt; <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(j)).<span class="tok-fn">toList</span>();
+  } <span class="tok-kw">else</span> {
+    <span class="tok-fn">throw</span> <span class="tok-fn">Exception</span>(<span class="tok-str">'Failed: $</span>{response.statusCode}<span class="tok-str">'</span>);
+  }
+}</code></pre>
+
+        <h2 id="response">2. Response handling</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> response = <span class="tok-kw">await</span> http.<span class="tok-fn">get</span>(uri);
+
+response.statusCode;       <span class="tok-com">// int: 200, 404, 500...</span>
+response.body;             <span class="tok-com">// String</span>
+response.bodyBytes;        <span class="tok-com">// Uint8List — cho binary</span>
+response.headers;          <span class="tok-com">// Map&lt;String, String&gt;</span>
+response.contentLength;</code></pre>
+
+        <h2 id="json-decode">3. JSON decode</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'dart:convert'</span>;
+
+<span class="tok-kw">final</span> raw = response.body;     <span class="tok-com">// '{"id": 1, "name": "Việt"}'</span>
+
+<span class="tok-com">// jsonDecode trả dynamic — phải cast</span>
+<span class="tok-kw">final</span> obj = <span class="tok-fn">jsonDecode</span>(raw) <span class="tok-kw">as</span> <span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt;;
+<span class="tok-fn">print</span>(obj[<span class="tok-str">'name'</span>]);            <span class="tok-com">// 'Việt'</span>
+
+<span class="tok-com">// List response</span>
+<span class="tok-kw">final</span> list = <span class="tok-fn">jsonDecode</span>(raw) <span class="tok-kw">as</span> <span class="tok-cls">List</span>;
+<span class="tok-kw">final</span> users = list.<span class="tok-fn">map</span>((j) =&gt; <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(j <span class="tok-kw">as</span> <span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt;)).<span class="tok-fn">toList</span>();</code></pre>
+
+        <h2 id="model-manual">4. Model class manual</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">User</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> id;
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span> name;
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span> email;
+
+  <span class="tok-fn">User</span>({<span class="tok-kw">required</span> <span class="tok-kw">this</span>.id, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.name, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.email});
+
+  <span class="tok-kw">factory</span> <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt; json) =&gt; <span class="tok-fn">User</span>(
+    id: json[<span class="tok-str">'id'</span>] <span class="tok-kw">as</span> <span class="tok-type">int</span>,
+    name: json[<span class="tok-str">'name'</span>] <span class="tok-kw">as</span> <span class="tok-cls">String</span>,
+    email: json[<span class="tok-str">'email'</span>] <span class="tok-kw">as</span> <span class="tok-cls">String</span>,
+  );
+
+  <span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt; <span class="tok-fn">toJson</span>() =&gt; {
+    <span class="tok-str">'id'</span>: id,
+    <span class="tok-str">'name'</span>: name,
+    <span class="tok-str">'email'</span>: email,
+  };
+}</code></pre>
+
+        <h2 id="json-serializable">5. JSON codegen — <code>json_serializable</code></h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add json_annotation
+flutter pub add --dev build_runner json_serializable</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// user.dart</span>
+<span class="tok-kw">import</span> <span class="tok-str">'package:json_annotation/json_annotation.dart'</span>;
+
+<span class="tok-kw">part</span> <span class="tok-str">'user.g.dart'</span>;       <span class="tok-com">// codegen output</span>
+
+<span class="tok-kw">@JsonSerializable</span>()
+<span class="tok-kw">class</span> <span class="tok-cls">User</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> id;
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span> name;
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span> email;
+
+  <span class="tok-fn">User</span>({<span class="tok-kw">required</span> <span class="tok-kw">this</span>.id, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.name, <span class="tok-kw">required</span> <span class="tok-kw">this</span>.email});
+
+  <span class="tok-kw">factory</span> <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt; json) =&gt; <span class="tok-fn">_$UserFromJson</span>(json);
+  <span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt; <span class="tok-fn">toJson</span>() =&gt; <span class="tok-fn">_$UserToJson</span>(<span class="tok-kw">this</span>);
+}</code></pre>
+
+        <pre data-lang="bash"><code class="language-bash"># Generate
+dart run build_runner build
+# Hoặc watch mode (auto regenerate khi save)
+dart run build_runner watch</code></pre>
+
+        <h2 id="freezed">6. <code>freezed</code> + <code>json_serializable</code> — pattern modern</h2>
+        <p>
+          <code>freezed</code> sinh thêm <code>copyWith</code>, <code>==</code>, <code>hashCode</code>, <code>toString</code> — pattern chuẩn cho immutable model.
+        </p>
+
+        <pre data-lang="bash"><code class="language-bash">flutter pub add freezed_annotation json_annotation
+flutter pub add --dev build_runner freezed json_serializable</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:freezed_annotation/freezed_annotation.dart'</span>;
+
+<span class="tok-kw">part</span> <span class="tok-str">'user.freezed.dart'</span>;
+<span class="tok-kw">part</span> <span class="tok-str">'user.g.dart'</span>;
+
+<span class="tok-kw">@freezed</span>
+<span class="tok-kw">class</span> <span class="tok-cls">User</span> <span class="tok-kw">with</span> <span class="tok-cls">_$User</span> {
+  <span class="tok-kw">const</span> <span class="tok-kw">factory</span> <span class="tok-cls">User</span>({
+    <span class="tok-kw">required</span> <span class="tok-type">int</span> id,
+    <span class="tok-kw">required</span> <span class="tok-cls">String</span> name,
+    <span class="tok-kw">required</span> <span class="tok-cls">String</span> email,
+    <span class="tok-kw">@Default</span>(<span class="tok-kw">false</span>) <span class="tok-type">bool</span> premium,
+  }) = <span class="tok-cls">_User</span>;
+
+  <span class="tok-kw">factory</span> <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-kw">dynamic</span>&gt; json) =&gt; <span class="tok-fn">_$UserFromJson</span>(json);
+}
+
+<span class="tok-com">// Auto có:</span>
+<span class="tok-com">// - copyWith</span>
+<span class="tok-com">// - == + hashCode</span>
+<span class="tok-com">// - toString</span>
+<span class="tok-com">// - fromJson / toJson</span></code></pre>
+
+        <h2 id="post-put-delete">7. POST / PUT / DELETE</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// POST với body JSON</span>
+<span class="tok-kw">final</span> response = <span class="tok-kw">await</span> http.<span class="tok-fn">post</span>(
+  <span class="tok-cls">Uri</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'$baseUrl/users'</span>),
+  headers: {<span class="tok-str">'Content-Type'</span>: <span class="tok-str">'application/json'</span>},
+  body: <span class="tok-fn">jsonEncode</span>({<span class="tok-str">'name'</span>: <span class="tok-str">'Việt'</span>, <span class="tok-str">'email'</span>: <span class="tok-str">'v@x.com'</span>}),
+);
+
+<span class="tok-com">// PUT — update</span>
+<span class="tok-kw">await</span> http.<span class="tok-fn">put</span>(<span class="tok-cls">Uri</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'$baseUrl/users/1'</span>), headers: ..., body: ...);
+
+<span class="tok-com">// DELETE</span>
+<span class="tok-kw">await</span> http.<span class="tok-fn">delete</span>(<span class="tok-cls">Uri</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'$baseUrl/users/1'</span>));</code></pre>
+
+        <h2 id="dio">8. Dio — mạnh hơn http</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add dio</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:dio/dio.dart'</span>;
+
+<span class="tok-kw">final</span> dio = <span class="tok-fn">Dio</span>(<span class="tok-fn">BaseOptions</span>(
+  baseUrl: <span class="tok-str">'https://api.example.com'</span>,
+  connectTimeout: <span class="tok-kw">const</span> <span class="tok-fn">Duration</span>(seconds: <span class="tok-num">10</span>),
+  receiveTimeout: <span class="tok-kw">const</span> <span class="tok-fn">Duration</span>(seconds: <span class="tok-num">10</span>),
+  headers: {<span class="tok-str">'Accept'</span>: <span class="tok-str">'application/json'</span>},
+));
+
+<span class="tok-com">// GET</span>
+<span class="tok-kw">final</span> r = <span class="tok-kw">await</span> dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users'</span>);
+<span class="tok-fn">print</span>(r.data);   <span class="tok-com">// auto parse JSON, không cần jsonDecode</span>
+
+<span class="tok-com">// POST</span>
+<span class="tok-kw">await</span> dio.<span class="tok-fn">post</span>(<span class="tok-str">'/users'</span>, data: {<span class="tok-str">'name'</span>: <span class="tok-str">'Việt'</span>});
+
+<span class="tok-com">// Query param</span>
+<span class="tok-kw">await</span> dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users'</span>, queryParameters: {<span class="tok-str">'page'</span>: <span class="tok-num">1</span>, <span class="tok-str">'limit'</span>: <span class="tok-num">10</span>});</code></pre>
+
+        <h2 id="dio-interceptor">9. Dio interceptor</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Auth interceptor — auto add Authorization header</span>
+<span class="tok-kw">class</span> <span class="tok-cls">AuthInterceptor</span> <span class="tok-kw">extends</span> <span class="tok-cls">Interceptor</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span> <span class="tok-cls">Function</span>() getToken;
+  <span class="tok-fn">AuthInterceptor</span>(<span class="tok-kw">this</span>.getToken);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">onRequest</span>(<span class="tok-cls">RequestOptions</span> options, <span class="tok-cls">RequestInterceptorHandler</span> handler) {
+    <span class="tok-kw">final</span> token = <span class="tok-fn">getToken</span>();
+    options.headers[<span class="tok-str">'Authorization'</span>] = <span class="tok-str">'Bearer $token'</span>;
+    handler.<span class="tok-fn">next</span>(options);
+  }
+}
+
+<span class="tok-com">// Log interceptor — built-in</span>
+dio.interceptors.<span class="tok-fn">add</span>(<span class="tok-fn">LogInterceptor</span>(
+  requestBody: <span class="tok-kw">true</span>,
+  responseBody: <span class="tok-kw">true</span>,
+));
+
+dio.interceptors.<span class="tok-fn">add</span>(<span class="tok-fn">AuthInterceptor</span>(() =&gt; tokenService.token));</code></pre>
+
+        <h3 id="retry-interceptor">Retry interceptor — exponential backoff</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">RetryInterceptor</span> <span class="tok-kw">extends</span> <span class="tok-cls">Interceptor</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Dio</span> dio;
+  <span class="tok-fn">RetryInterceptor</span>(<span class="tok-kw">this</span>.dio);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">onError</span>(<span class="tok-cls">DioException</span> err, <span class="tok-cls">ErrorInterceptorHandler</span> handler) <span class="tok-kw">async</span> {
+    <span class="tok-kw">final</span> options = err.requestOptions;
+    <span class="tok-kw">final</span> retryCount = (options.extra[<span class="tok-str">'retryCount'</span>] <span class="tok-kw">as</span> <span class="tok-type">int</span>?) ?? <span class="tok-num">0</span>;
+
+    <span class="tok-kw">if</span> (retryCount &lt; <span class="tok-num">3</span> &amp;&amp; (err.response?.statusCode ?? <span class="tok-num">0</span>) &gt;= <span class="tok-num">500</span>) {
+      options.extra[<span class="tok-str">'retryCount'</span>] = retryCount + <span class="tok-num">1</span>;
+      <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span> &lt;&lt; retryCount));   <span class="tok-com">// 1s, 2s, 4s</span>
+      <span class="tok-kw">try</span> {
+        <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> dio.<span class="tok-fn">fetch</span>(options);
+        <span class="tok-kw">return</span> handler.<span class="tok-fn">resolve</span>(r);
+      } <span class="tok-kw">catch</span> (e) {
+        <span class="tok-kw">return</span> handler.<span class="tok-fn">next</span>(err);
+      }
+    }
+    handler.<span class="tok-fn">next</span>(err);
+  }
+}</code></pre>
+
+        <p>Hoặc dùng package <code>dio_smart_retry</code> sẵn.</p>
+
+        <h2 id="cancel-token">10. CancelToken — cancel khi widget unmount</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_UserPageState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">UserPage</span>&gt; {
+  <span class="tok-kw">final</span> _cancelToken = <span class="tok-fn">CancelToken</span>();
+
+  <span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">_load</span>() <span class="tok-kw">async</span> {
+    <span class="tok-kw">try</span> {
+      <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users'</span>, cancelToken: _cancelToken);
+      <span class="tok-kw">if</span> (!mounted) <span class="tok-kw">return</span>;
+      <span class="tok-fn">setState</span>(() =&gt; _users = r.data);
+    } <span class="tok-kw">on</span> <span class="tok-cls">DioException</span> <span class="tok-kw">catch</span> (e) {
+      <span class="tok-kw">if</span> (<span class="tok-cls">CancelToken</span>.<span class="tok-fn">isCancel</span>(e)) <span class="tok-kw">return</span>;
+      <span class="tok-com">// handle other errors</span>
+    }
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">dispose</span>() {
+    _cancelToken.<span class="tok-fn">cancel</span>(<span class="tok-str">'Widget disposed'</span>);
+    <span class="tok-kw">super</span>.<span class="tok-fn">dispose</span>();
+  }
+}</code></pre>
+
+        <h2 id="repository-pattern-net">11. Repository pattern</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Interface — Bloc/Cubit depend trên này</span>
+<span class="tok-kw">abstract</span> <span class="tok-kw">class</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">fetchUser</span>(<span class="tok-type">int</span> id);
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">User</span>&gt;&gt; <span class="tok-fn">fetchAll</span>();
+}
+
+<span class="tok-com">// Impl HTTP</span>
+<span class="tok-kw">class</span> <span class="tok-cls">UserRepositoryImpl</span> <span class="tok-kw">implements</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-kw">final</span> <span class="tok-cls">Dio</span> _dio;
+  <span class="tok-fn">UserRepositoryImpl</span>(<span class="tok-kw">this</span>._dio);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">fetchUser</span>(<span class="tok-type">int</span> id) <span class="tok-kw">async</span> {
+    <span class="tok-kw">try</span> {
+      <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> _dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users/$id'</span>);
+      <span class="tok-kw">return</span> <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(r.data);
+    } <span class="tok-kw">on</span> <span class="tok-cls">DioException</span> <span class="tok-kw">catch</span> (e) {
+      <span class="tok-fn">throw</span> <span class="tok-fn">ApiException</span>(e.response?.statusCode ?? <span class="tok-num">0</span>, e.message ?? <span class="tok-str">''</span>);
+    }
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">User</span>&gt;&gt; <span class="tok-fn">fetchAll</span>() <span class="tok-kw">async</span> {
+    <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> _dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users'</span>);
+    <span class="tok-kw">return</span> (r.data <span class="tok-kw">as</span> <span class="tok-cls">List</span>).<span class="tok-fn">map</span>((j) =&gt; <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(j)).<span class="tok-fn">toList</span>();
+  }
+}
+
+<span class="tok-com">// Inject vào Bloc (Ch 7)</span>
+<span class="tok-kw">class</span> <span class="tok-cls">UserBloc</span> <span class="tok-kw">extends</span> <span class="tok-cls">Cubit</span>&lt;<span class="tok-cls">UserState</span>&gt; {
+  <span class="tok-kw">final</span> <span class="tok-cls">UserRepository</span> _repo;
+  <span class="tok-fn">UserBloc</span>(<span class="tok-kw">this</span>._repo) : <span class="tok-kw">super</span>(<span class="tok-cls">UserInitial</span>());
+
+  <span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">load</span>(<span class="tok-type">int</span> id) <span class="tok-kw">async</span> {
+    <span class="tok-fn">emit</span>(<span class="tok-cls">UserLoading</span>());
+    <span class="tok-kw">try</span> {
+      <span class="tok-kw">final</span> u = <span class="tok-kw">await</span> _repo.<span class="tok-fn">fetchUser</span>(id);
+      <span class="tok-fn">emit</span>(<span class="tok-fn">UserLoaded</span>(u));
+    } <span class="tok-kw">on</span> <span class="tok-cls">ApiException</span> <span class="tok-kw">catch</span> (e) {
+      <span class="tok-fn">emit</span>(<span class="tok-fn">UserError</span>(e.message));
+    }
+  }
+}</code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao Repository pattern?</div>
+          <ul>
+            <li><strong>Test:</strong> mock <code>UserRepository</code> interface, test Bloc với mock data — không cần HTTP thật.</li>
+            <li><strong>Swap source:</strong> đổi HTTP → GraphQL → local DB không cần đổi Bloc/UI.</li>
+            <li><strong>Cache layer:</strong> wrap repo với caching impl, transparent với caller.</li>
+            <li><strong>Tách concern:</strong> Bloc không biết JSON shape, không biết Dio.</li>
+          </ul>
+        </div>
+
+        <h2 id="custom-exception">12. Custom <code>ApiException</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">ApiException</span> <span class="tok-kw">implements</span> <span class="tok-cls">Exception</span> {
+  <span class="tok-kw">final</span> <span class="tok-type">int</span> statusCode;
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span> message;
+  <span class="tok-kw">final</span> <span class="tok-cls">String</span>? endpoint;
+
+  <span class="tok-kw">const</span> <span class="tok-fn">ApiException</span>(<span class="tok-kw">this</span>.statusCode, <span class="tok-kw">this</span>.message, [<span class="tok-kw">this</span>.endpoint]);
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">String</span> <span class="tok-fn">toString</span>() =&gt; <span class="tok-str">'ApiException($statusCode) $message [$endpoint]'</span>;
+}
+
+<span class="tok-com">// Trong catch DioException — convert thành ApiException</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> dio.<span class="tok-fn">get</span>(<span class="tok-str">'/users/$id'</span>);
+  <span class="tok-kw">return</span> <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(r.data);
+} <span class="tok-kw">on</span> <span class="tok-cls">DioException</span> <span class="tok-kw">catch</span> (e) {
+  <span class="tok-fn">throw</span> <span class="tok-fn">ApiException</span>(
+    e.response?.statusCode ?? <span class="tok-num">0</span>,
+    e.response?.data?[<span class="tok-str">'message'</span>] ?? e.message,
+    <span class="tok-str">'/users/$id'</span>,
+  );
+}</code></pre>
+
+        <h2 id="timeout">13. Timeout pattern</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Dio — option</span>
+<span class="tok-fn">Dio</span>(<span class="tok-fn">BaseOptions</span>(
+  connectTimeout: <span class="tok-kw">const</span> <span class="tok-fn">Duration</span>(seconds: <span class="tok-num">10</span>),
+  receiveTimeout: <span class="tok-kw">const</span> <span class="tok-fn">Duration</span>(seconds: <span class="tok-num">10</span>),
+));
+
+<span class="tok-com">// http package — qua .timeout</span>
+<span class="tok-kw">try</span> {
+  <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> http.<span class="tok-fn">get</span>(uri).<span class="tok-fn">timeout</span>(<span class="tok-kw">const</span> <span class="tok-fn">Duration</span>(seconds: <span class="tok-num">10</span>));
+} <span class="tok-kw">on</span> <span class="tok-cls">TimeoutException</span> {
+  <span class="tok-com">// handle</span>
+}</code></pre>
+
+        <h2 id="retrofit">14. <code>retrofit</code> — annotation-driven client</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add retrofit dio
+flutter pub add --dev retrofit_generator build_runner</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:retrofit/retrofit.dart'</span>;
+<span class="tok-kw">import</span> <span class="tok-str">'package:dio/dio.dart'</span>;
+
+<span class="tok-kw">part</span> <span class="tok-str">'api_client.g.dart'</span>;
+
+<span class="tok-kw">@RestApi</span>(baseUrl: <span class="tok-str">'https://api.example.com'</span>)
+<span class="tok-kw">abstract</span> <span class="tok-kw">class</span> <span class="tok-cls">ApiClient</span> {
+  <span class="tok-kw">factory</span> <span class="tok-cls">ApiClient</span>(<span class="tok-cls">Dio</span> dio, {<span class="tok-cls">String</span> baseUrl}) = <span class="tok-fn">_ApiClient</span>;
+
+  <span class="tok-kw">@GET</span>(<span class="tok-str">'/users'</span>)
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">User</span>&gt;&gt; <span class="tok-fn">getUsers</span>();
+
+  <span class="tok-kw">@GET</span>(<span class="tok-str">'/users/{id}'</span>)
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">getUser</span>(<span class="tok-kw">@Path</span>() <span class="tok-type">int</span> id);
+
+  <span class="tok-kw">@POST</span>(<span class="tok-str">'/users'</span>)
+  <span class="tok-cls">Future</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">createUser</span>(<span class="tok-kw">@Body</span>() <span class="tok-cls">User</span> user);
+}
+
+<span class="tok-com">// Codegen sinh impl ApiClient với Dio bên dưới</span>
+<span class="tok-kw">final</span> api = <span class="tok-fn">ApiClient</span>(<span class="tok-fn">Dio</span>());
+<span class="tok-kw">final</span> users = <span class="tok-kw">await</span> api.<span class="tok-fn">getUsers</span>();</code></pre>
+
+        <h2 id="multipart">15. Upload file — Multipart</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> formData = <span class="tok-fn">FormData</span>.<span class="tok-fn">fromMap</span>({
+  <span class="tok-str">'avatar'</span>: <span class="tok-kw">await</span> <span class="tok-cls">MultipartFile</span>.<span class="tok-fn">fromFile</span>(localPath, filename: <span class="tok-str">'avatar.jpg'</span>),
+  <span class="tok-str">'name'</span>: <span class="tok-str">'Việt'</span>,
+});
+
+<span class="tok-kw">final</span> r = <span class="tok-kw">await</span> dio.<span class="tok-fn">post</span>(
+  <span class="tok-str">'/upload'</span>,
+  data: formData,
+  onSendProgress: (sent, total) {
+    <span class="tok-fn">print</span>(<span class="tok-str">'$</span>{(sent / total * <span class="tok-num">100</span>).<span class="tok-fn">toStringAsFixed</span>(<span class="tok-num">1</span>)}<span class="tok-str">%'</span>);
+  },
+);</code></pre>
+
+        <h2 id="websocket">16. WebSocket — <code>web_socket_channel</code></h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add web_socket_channel</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:web_socket_channel/web_socket_channel.dart'</span>;
+
+<span class="tok-kw">final</span> channel = <span class="tok-cls">WebSocketChannel</span>.<span class="tok-fn">connect</span>(
+  <span class="tok-cls">Uri</span>.<span class="tok-fn">parse</span>(<span class="tok-str">'wss://echo.websocket.events'</span>),
+);
+
+<span class="tok-com">// Listen incoming</span>
+channel.stream.<span class="tok-fn">listen</span>(
+  (message) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'Received: $message'</span>),
+  onError: (e) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'Error: $e'</span>),
+  onDone: () =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'Closed'</span>),
+);
+
+<span class="tok-com">// Send message</span>
+channel.sink.<span class="tok-fn">add</span>(<span class="tok-str">'Hello!'</span>);
+
+<span class="tok-com">// Close</span>
+channel.sink.<span class="tok-fn">close</span>();</code></pre>
+
+        <h2 id="compute-pitfall">17. Pitfall: jsonDecode lớn block UI</h2>
+        <p>
+          JSON 10MB parse mất hàng trăm ms — main isolate block, UI jank.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ Sai — block main</span>
+<span class="tok-kw">final</span> data = <span class="tok-fn">jsonDecode</span>(largeJson);
+
+<span class="tok-com">// ✅ Đúng — parse trong isolate khác</span>
+<span class="tok-kw">final</span> data = <span class="tok-kw">await</span> <span class="tok-fn">compute</span>(jsonDecode, largeJson);
+
+<span class="tok-com">// Hoặc convert sang model trong isolate</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">parseUsers</span>(<span class="tok-cls">String</span> raw) {
+  <span class="tok-kw">final</span> list = <span class="tok-fn">jsonDecode</span>(raw) <span class="tok-kw">as</span> <span class="tok-cls">List</span>;
+  <span class="tok-kw">return</span> list.<span class="tok-fn">map</span>((j) =&gt; <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(j)).<span class="tok-fn">toList</span>();
+}
+
+<span class="tok-kw">final</span> users = <span class="tok-kw">await</span> <span class="tok-fn">compute</span>(parseUsers, response.body);</code></pre>
+
+        <h2 id="bai-tap" class="exercises">18. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>List user từ JSONPlaceholder</h4>
+          <div class="exercise-body">
+            <p>
+              App list user từ <code>https://jsonplaceholder.typicode.com/users</code>. Pull-to-refresh.
+              Error state với retry button.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Dùng <code>RefreshIndicator</code> wrap <code>ListView</code>. State: loading, success, error.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Detail page</h4>
+          <div class="exercise-body">
+            <p>Tap user → detail page fetch <code>/users/:id</code>. Loading + error state đầy đủ.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Navigate qua go_router với path param. Hoặc Navigator 1.0 với arguments.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Migrate http → Dio + interceptor</h4>
+          <div class="exercise-body">
+            <p>Migrate bài 1 từ <code>http</code> sang <code>dio</code>. Add LogInterceptor để log request/response.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 8-9. <code>dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true))</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Repository pattern + test mock</h4>
+          <div class="exercise-body">
+            <p>
+              Implement repository: <code>UserRepository</code> interface, <code>UserRepositoryImpl(Dio)</code> concrete.
+              UserBloc inject. Test UserBloc với mock repo.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Mock với <code>mocktail</code>: <code>class MockRepo extends Mock implements UserRepository {}</code>. Chương 14 đi sâu.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>JWT auth flow</h4>
+          <div class="exercise-body">
+            <p>
+              Add JWT auth flow: login → save token (SharedPreferences, Ch 11) → interceptor add header.
+              Handle 401 → refresh token retry.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>AuthInterceptor onRequest add Bearer. RetryInterceptor on 401 → call refresh → retry original request.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">19. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>http.get</code> return type?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Future&lt;http.Response&gt;</code>. Response có <code>statusCode</code>, <code>body</code>, <code>headers</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>jsonDecode string JSON 10MB — chuyện gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Block main isolate, UI jank. Fix: <code>compute(jsonDecode, body)</code> để parse ở isolate khác.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p>Dio interceptor <code>onError</code> — <code>handler.next</code> vs <code>handler.reject</code>?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>.next</code> tiếp tục chain (lan tỏa error). <code>.reject</code> stop chain, throw error sớm. <code>.resolve</code> swap thành response thành công.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>freezed model auto sinh method nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> copyWith, ==, hashCode, toString, optional toJson/fromJson (qua json_serializable). Pattern matching khi dùng <code>sealed</code>/<code>union</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p>CancelToken use case?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Cancel request khi widget unmount, tránh setState after dispose. Hoặc khi user search nhanh, cancel request cũ.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>Retry với 401 (unauthorized) — strategy?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Refresh access token bằng refresh token. Retry original request với token mới. Refresh fail → logout user.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Multipart upload Dio — class chính?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>FormData</code> + <code>MultipartFile.fromFile</code>. Pass vào <code>data:</code> param.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p><code>http</code> follow redirect (3xx) tự không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Có, mặc định. Disable: tạo <code>Request</code> object trực tiếp với <code>followRedirects = false</code>.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">20. Tổng kết</h2>
+        <ul>
+          <li>✅ <code>http</code> đủ cho project nhỏ. <code>dio</code> cho project lớn cần interceptor.</li>
+          <li>✅ JSON: manual fromJson/toJson hoặc <code>json_serializable</code> codegen.</li>
+          <li>✅ <code>freezed</code> + <code>json_serializable</code> = pattern modern cho immutable model.</li>
+          <li>✅ Dio interceptor: auth, log, retry.</li>
+          <li>✅ CancelToken cho cancel + cleanup.</li>
+          <li>✅ Repository pattern: tách HTTP/JSON khỏi Bloc.</li>
+          <li>✅ Custom <code>ApiException</code> chuẩn cho error handling.</li>
+          <li>✅ Timeout + retry exponential backoff.</li>
+          <li>✅ <code>retrofit</code> codegen API client từ annotation.</li>
+          <li>✅ Multipart upload qua FormData + MultipartFile.</li>
+          <li>✅ WebSocket với <code>web_socket_channel</code>.</li>
+          <li>✅ JSON lớn → <code>compute()</code> ra isolate khác.</li>
+        </ul>
+
+        <h2 id="ket-noi">21. Kết nối</h2>
+        <ul>
+          <li><strong>Ch 7-8:</strong> Bloc/Provider gọi repository.</li>
+          <li><a href="chuong11.html"><strong>Ch 11:</strong></a> cache response local (offline-first).</li>
+          <li><strong>Ch 14:</strong> test repo + Bloc với mock.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong9.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">09 · Forms</div>
+          </a>
+          <a href="chuong11.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">11 · Local Storage</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#http">1. http package</a></li>
+          <li><a href="#response">2. Response</a></li>
+          <li><a href="#json-decode">3. jsonDecode</a></li>
+          <li><a href="#model-manual">4. Model manual</a></li>
+          <li><a href="#json-serializable">5. json_serializable</a></li>
+          <li><a href="#freezed">6. freezed</a></li>
+          <li><a href="#post-put-delete">7. POST/PUT/DELETE</a></li>
+          <li><a href="#dio">8. Dio</a></li>
+          <li><a href="#dio-interceptor">9. Dio interceptor</a></li>
+          <li><a href="#cancel-token">10. CancelToken</a></li>
+          <li><a href="#repository-pattern-net">11. Repository pattern</a></li>
+          <li><a href="#custom-exception">12. Custom Exception</a></li>
+          <li><a href="#timeout">13. Timeout</a></li>
+          <li><a href="#retrofit">14. retrofit</a></li>
+          <li><a href="#multipart">15. Multipart upload</a></li>
+          <li><a href="#websocket">16. WebSocket</a></li>
+          <li><a href="#compute-pitfall">17. compute() pitfall</a></li>
+          <li><a href="#bai-tap">18. Bài tập</a></li>
+          <li><a href="#quiz">19. Quiz</a></li>
+          <li><a href="#tong-ket">20. Tổng kết</a></li>
+          <li><a href="#ket-noi">21. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 10 · Pillar 9 — IT Basic<br/>
+        <a href="chuong9.html">← Chương 9</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong11.html">Chương 11 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

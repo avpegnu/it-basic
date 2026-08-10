@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H3 · Live Chat Omnichannel</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-h">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">H3 · Live Chat Omnichannel</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần H · Nghiệp vụ & Thiết kế</div>
+      <nav class="nav">
+        <a href="H1-tong-quan-contact-center.html">H1 · Tổng quan Contact Center</a>
+        <a href="H2-call-center-acd.html">H2 · Call Center: ACD, IVR</a>
+        <a href="H3-live-chat-omnichannel.html" class="active">H3 · Live Chat Omnichannel</a>
+        <a href="H4-crm-dashboard.html">H4 · CRM & Dashboard realtime</a>
+        <a href="H5-rbac-workflow.html">H5 · Phân quyền + Workflow</a>
+        <a href="H6-multi-tenancy.html">H6 · SaaS Multi-tenancy</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#omnichannel">① Omnichannel là gì</a>
+        <a href="#adapters">② Channel adapters</a>
+        <a href="#unified">③ Mô hình hội thoại hợp nhất</a>
+        <a href="#routing">④ Định tuyến & gán agent</a>
+        <a href="#presence">⑤ Presence & typing</a>
+        <a href="#delivery">⑥ Delivery & ordering</a>
+        <a href="#design">⑦ Tư duy thiết kế</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần H · Nghiệp vụ & Thiết kế &nbsp;›&nbsp; <b>H3 · Live Chat Omnichannel</b></div>
+      <div class="live-pill"><span class="blink"></span> omnichannel</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần H · Chương 3</span>
+        <h1>Live Chat Omnichannel</h1>
+        <p class="lead">Hợp nhất nhiều kênh (web, mạng xã hội, email) vào một mô hình hội thoại thống nhất, định tuyến và gán agent — bài toán trừu tượng hóa kênh kinh điển.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phân biệt rõ <b>omnichannel</b> với <b>multichannel</b>, và vì sao "hợp nhất ngữ cảnh" mới là giá trị cốt lõi.</p>
+        <p>• Thiết kế được <b>Channel Adapter Pattern</b> để chuẩn hóa tin nhắn vào/ra của mọi kênh về một mô hình chung.</p>
+        <p>• Mô hình hóa <b>hội thoại hợp nhất</b> (conversation · participants · messages · channel metadata) ở tầng dữ liệu.</p>
+        <p>• Hiểu cách <b>định tuyến và gán agent</b>, quản lý capacity (một agent xử lý N chat), và bàn giao bot→người.</p>
+        <p>• Xử lý <b>presence, typing, read receipt</b> và bài toán <b>delivery &amp; ordering</b> (idempotency, dedup, sequence).</p>
+        <p>• Trả lời tự tin các câu phỏng vấn dạng "hãy thiết kế một inbox omnichannel" theo tư duy đánh đổi.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế hệ thống Contact Center</div>
+        <p>Khách hàng nhắn web chat lúc sáng, gửi tin qua mạng xã hội buổi chiều, rồi email tối — nhưng họ kỳ vọng <b>cùng một agent biết toàn bộ câu chuyện</b>, không phải kể lại từ đầu. Một Contact Center hiện đại phải biến bốn ống dẫn khác nhau thành <b>một dòng hội thoại liền mạch</b>. Chương này là phần "lõi nghiệp vụ" của live chat — nơi tư duy trừu tượng hóa kênh quyết định hệ thống của bạn dễ mở rộng (thêm kênh mới) hay trở thành mớ <code>if/else</code> chằng chịt theo từng kênh.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="omnichannel"><span class="ico">①</span> Omnichannel là gì?</h2>
+      <p><strong>Omnichannel</strong> (đa kênh hợp nhất) nghĩa là khách hàng có thể liên hệ qua <em>nhiều kênh</em> khác nhau, nhưng hệ thống coi tất cả là <b>một hội thoại / một ngữ cảnh thống nhất</b>. Điều này khác hẳn với <strong>multichannel</strong> (đa kênh rời rạc) — nơi mỗi kênh là một silo riêng, agent web chat không thấy được lịch sử email, và khách phải lặp lại vấn đề mỗi lần đổi kênh.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>Multichannel (đa kênh rời)</th><th>Omnichannel (đa kênh hợp nhất)</th></tr></thead>
+          <tbody>
+            <tr><td>Ngữ cảnh khách hàng</td><td>Tách rời theo từng kênh</td><td>Hợp nhất xuyên kênh, một hồ sơ duy nhất</td></tr>
+            <tr><td>Lịch sử hội thoại</td><td>Mỗi kênh giữ lịch sử riêng</td><td>Một timeline chung cho mọi kênh</td></tr>
+            <tr><td>Trải nghiệm đổi kênh</td><td>Khách phải kể lại từ đầu</td><td>Tiếp nối liền mạch, không lặp lại</td></tr>
+            <tr><td>Góc nhìn agent</td><td>Mở nhiều ứng dụng/tab khác nhau</td><td>Một inbox duy nhất, mọi kênh đổ về</td></tr>
+            <tr><td>Kiến trúc kỹ thuật</td><td>N hệ thống độc lập</td><td>1 mô hình chung + N adapter</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Điểm hay nhầm khi phỏng vấn</div>
+        <p>"Hỗ trợ nhiều kênh" <b>không</b> tự động là omnichannel. Một app cho phép chat web <em>và</em> email nhưng hai luồng không liên thông chỉ là multichannel. Omnichannel = <b>hợp nhất identity + hợp nhất hội thoại + hợp nhất ngữ cảnh</b>. Khi trả lời, hãy nhấn vào từ "hợp nhất ngữ cảnh".</p>
+      </div>
+
+      <h3>Các kênh tiêu biểu của một Contact Center</h3>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">💬</span> Web chat</div><p>Widget nhúng website. Kết nối realtime (WebSocket). Kênh "của ta" nên kiểm soát đầy đủ giao thức.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📨</span> Mạng xã hội</div><p>Messenger, Zalo OA... Giao tiếp qua <b>webhook + REST API</b> của nền tảng, có giới hạn và quy tắc riêng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✉️</span> Email</div><p>Bất đồng bộ, phiên dài (giờ/ngày), có subject/threading. Không có "online/offline".</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📱</span> SMS</div><p>Giới hạn ký tự, không có typing/read receipt, định danh bằng số điện thoại.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🤖</span> Bot / IVR text</div><p>Tự động trả lời, gom thông tin, rồi <b>handoff</b> sang agent người khi cần.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⭐</span> Kênh khác</div><p>WhatsApp, review marketplace, app review... Mỗi kênh = một adapter mới cắm vào.</p></div>
+      </div>
+
+      <p>Điểm mấu chốt: mỗi kênh có <strong>khả năng (capabilities) khác nhau</strong> — web chat có typing indicator, SMS thì không; Messenger có "đã xem", email thì không. Hệ thống tốt phải mô hình hóa được sự khác biệt này thay vì giả định mọi kênh giống nhau.</p>
+
+      <!-- 2 -->
+      <h2 id="adapters"><span class="ico">②</span> Channel Adapters</h2>
+      <p>Đây là trái tim kỹ thuật của omnichannel. <strong>Channel Adapter Pattern</strong> đặt một <b>lớp dịch (translation layer)</b> giữa giao thức riêng của từng kênh và <b>mô hình tin nhắn chung (canonical message model)</b> của hệ thống. Lõi nghiệp vụ chỉ làm việc với mô hình chung, hoàn toàn không biết tin nhắn đến từ đâu.</p>
+
+      <div class="flow">
+        <span class="node">Kênh ngoài (Messenger/Zalo/SMS/Email)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Channel Adapter (in)</span><span class="arr">→</span>
+        <span class="node">Canonical Message</span><span class="arr">→</span>
+        <span class="node">Core: Conversation Engine</span>
+      </div>
+      <div class="flow">
+        <span class="node">Core: Agent gửi reply</span><span class="arr">→</span>
+        <span class="node">Canonical Message</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Channel Adapter (out)</span><span class="arr">→</span>
+        <span class="node">API gốc của kênh</span>
+      </div>
+
+      <p>Mỗi adapter chịu trách nhiệm <b>hai chiều</b>:</p>
+      <ul>
+        <li><b>Inbound (vào):</b> nhận webhook/sự kiện từ kênh → xác thực chữ ký → <em>normalize</em> (chuẩn hóa) về canonical message → đẩy vào core.</li>
+        <li><b>Outbound (ra):</b> nhận canonical message từ core → <em>denormalize</em> sang định dạng API của kênh → gọi API gửi đi → xử lý kết quả/lỗi/retry.</li>
+      </ul>
+
+      <h3>Giao diện adapter chung</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">channel-adapter.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Hợp đồng chung mà MỌI adapter phải tuân theo.</span>
+<span class="tok-com">// Core chỉ phụ thuộc interface này — không biết kênh cụ thể.</span>
+<span class="tok-key">export interface</span> <span class="tok-typ">ChannelAdapter</span> {
+  <span class="tok-var">channel</span>: <span class="tok-typ">ChannelType</span>;            <span class="tok-com">// 'web' | 'messenger' | 'zalo' | 'sms' | 'email'</span>
+  <span class="tok-var">capabilities</span>: <span class="tok-typ">ChannelCapabilities</span>;  <span class="tok-com">// kênh này hỗ trợ typing? read receipt? đính kèm?</span>
+
+  <span class="tok-com">// Inbound: webhook thô -&gt; danh sách canonical message</span>
+  <span class="tok-fn">parseInbound</span>(<span class="tok-var">raw</span>: <span class="tok-typ">unknown</span>): <span class="tok-typ">CanonicalMessage</span>[];
+
+  <span class="tok-com">// Outbound: canonical message -&gt; gọi API kênh -&gt; trả về kết quả gửi</span>
+  <span class="tok-fn">sendOutbound</span>(<span class="tok-var">msg</span>: <span class="tok-typ">CanonicalMessage</span>): <span class="tok-typ">Promise</span>&lt;<span class="tok-typ">DeliveryResult</span>&gt;;
+
+  <span class="tok-com">// Xác thực chữ ký webhook (mỗi kênh một cách)</span>
+  <span class="tok-fn">verifySignature</span>(<span class="tok-var">req</span>: <span class="tok-typ">IncomingRequest</span>): <span class="tok-typ">boolean</span>;
+}
+
+<span class="tok-key">interface</span> <span class="tok-typ">ChannelCapabilities</span> {
+  <span class="tok-var">typing</span>: <span class="tok-typ">boolean</span>;
+  <span class="tok-var">readReceipt</span>: <span class="tok-typ">boolean</span>;
+  <span class="tok-var">attachments</span>: <span class="tok-typ">boolean</span>;
+  <span class="tok-var">presence</span>: <span class="tok-typ">boolean</span>;
+  <span class="tok-var">maxLength</span>: <span class="tok-typ">number</span> | <span class="tok-key">null</span>;     <span class="tok-com">// SMS bị giới hạn, web chat thì không</span>
+}</code></pre>
+      </div>
+
+      <h3>Một adapter cụ thể — chuẩn hóa inbound</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">messenger-adapter.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">class</span> <span class="tok-typ">MessengerAdapter</span> <span class="tok-key">implements</span> <span class="tok-typ">ChannelAdapter</span> {
+  <span class="tok-var">channel</span> = <span class="tok-str">'messenger'</span> <span class="tok-key">as const</span>;
+  <span class="tok-var">capabilities</span> = { <span class="tok-var">typing</span>: <span class="tok-key">true</span>, <span class="tok-var">readReceipt</span>: <span class="tok-key">true</span>, <span class="tok-var">attachments</span>: <span class="tok-key">true</span>, <span class="tok-var">presence</span>: <span class="tok-key">false</span>, <span class="tok-var">maxLength</span>: <span class="tok-key">null</span> };
+
+  <span class="tok-fn">parseInbound</span>(<span class="tok-var">raw</span>: <span class="tok-typ">MessengerWebhook</span>): <span class="tok-typ">CanonicalMessage</span>[] {
+    <span class="tok-key">return</span> raw.entry.<span class="tok-fn">flatMap</span>(e =&gt; e.messaging).<span class="tok-fn">map</span>(m =&gt; ({
+      <span class="tok-var">externalId</span>: m.message.mid,          <span class="tok-com">// ID gốc -&gt; dùng để dedup!</span>
+      <span class="tok-var">channel</span>: <span class="tok-str">'messenger'</span>,
+      <span class="tok-var">externalUserId</span>: m.sender.id,         <span class="tok-com">// PSID của nền tảng</span>
+      <span class="tok-var">direction</span>: <span class="tok-str">'inbound'</span>,
+      <span class="tok-var">type</span>: m.message.attachments ? <span class="tok-str">'media'</span> : <span class="tok-str">'text'</span>,
+      <span class="tok-var">text</span>: m.message.text ?? <span class="tok-str">''</span>,
+      <span class="tok-var">sentAt</span>: <span class="tok-key">new</span> <span class="tok-typ">Date</span>(m.timestamp),
+      <span class="tok-var">channelMeta</span>: { <span class="tok-var">pageId</span>: m.recipient.id },  <span class="tok-com">// dữ liệu riêng của kênh</span>
+    }));
+  }
+
+  <span class="tok-key">async</span> <span class="tok-fn">sendOutbound</span>(<span class="tok-var">msg</span>: <span class="tok-typ">CanonicalMessage</span>): <span class="tok-typ">Promise</span>&lt;<span class="tok-typ">DeliveryResult</span>&gt; {
+    <span class="tok-key">const</span> res = <span class="tok-key">await</span> <span class="tok-fn">callGraphApi</span>({
+      <span class="tok-var">recipient</span>: { <span class="tok-var">id</span>: msg.externalUserId },
+      <span class="tok-var">message</span>: { <span class="tok-var">text</span>: msg.text },
+    });
+    <span class="tok-key">return</span> { <span class="tok-var">externalId</span>: res.message_id, <span class="tok-var">status</span>: <span class="tok-str">'sent'</span> };
+  }
+
+  <span class="tok-fn">verifySignature</span>(<span class="tok-var">req</span>): <span class="tok-typ">boolean</span> {
+    <span class="tok-key">return</span> <span class="tok-fn">hmacSha256</span>(req.body, <span class="tok-typ">APP_SECRET</span>) === req.headers[<span class="tok-str">'x-hub-signature-256'</span>];
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Vì sao pattern này quan trọng</div>
+        <p>Khi cần <b>thêm một kênh mới</b> (vd WhatsApp), bạn chỉ viết <b>một adapter mới</b> implement đúng interface — <em>không đụng</em> tới conversation engine, routing, hay UI agent. Đây chính là nguyên lý <b>Open/Closed</b>: mở để mở rộng, đóng để sửa đổi. Câu hỏi phỏng vấn "thêm kênh mới có dễ không?" được trả lời ngay bằng kiến trúc này.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="unified"><span class="ico">③</span> Mô hình hội thoại hợp nhất</h2>
+      <p>Khi mọi tin nhắn đã được chuẩn hóa, ta cần một <strong>schema dữ liệu chung</strong> để lưu và truy vấn xuyên kênh. Bốn thực thể cốt lõi:</p>
+
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🧵</span> Conversation</div><p>Một phiên hội thoại. Có trạng thái (open/assigned/closed), kênh khởi tạo, agent đang xử lý, contact liên quan.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">👥</span> Participants</div><p>Người tham gia: customer, agent(s), bot. Mỗi participant có vai trò và định danh nội bộ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">💌</span> Messages</div><p>Các tin nhắn theo thứ tự, gắn <code>externalId</code> để dedup, <code>seq</code> để sắp xếp, hướng in/out.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🏷️</span> Channel metadata</div><p>Dữ liệu riêng từng kênh (pageId, threadId, phone, subject email...) tách khỏi phần lõi chung.</p></div>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">schema.sql</span><span class="lang">PostgreSQL</span></div>
+        <pre><code><span class="tok-com">-- CONTACT: danh tính khách, hợp nhất nhiều identity của các kênh</span>
+<span class="tok-key">CREATE TABLE</span> contacts (
+  id            <span class="tok-typ">uuid</span> <span class="tok-key">PRIMARY KEY</span>,
+  display_name  <span class="tok-typ">text</span>,
+  created_at    <span class="tok-typ">timestamptz</span> <span class="tok-key">DEFAULT</span> now()
+);
+
+<span class="tok-com">-- Một contact có NHIỀU identity theo kênh (PSID, số ĐT, email...)</span>
+<span class="tok-key">CREATE TABLE</span> channel_identities (
+  id            <span class="tok-typ">uuid</span> <span class="tok-key">PRIMARY KEY</span>,
+  contact_id    <span class="tok-typ">uuid</span> <span class="tok-key">REFERENCES</span> contacts(id),
+  channel       <span class="tok-typ">text</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- 'messenger' | 'sms' | ...</span>
+  external_id   <span class="tok-typ">text</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- PSID / phone / email</span>
+  <span class="tok-key">UNIQUE</span> (channel, external_id)         <span class="tok-com">-- 1 identity = 1 contact</span>
+);
+
+<span class="tok-key">CREATE TABLE</span> conversations (
+  id            <span class="tok-typ">uuid</span> <span class="tok-key">PRIMARY KEY</span>,
+  contact_id    <span class="tok-typ">uuid</span> <span class="tok-key">REFERENCES</span> contacts(id),
+  channel       <span class="tok-typ">text</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- kênh khởi tạo</span>
+  status        <span class="tok-typ">text</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- open | assigned | pending | closed</span>
+  assigned_to   <span class="tok-typ">uuid</span>,                    <span class="tok-com">-- agent đang xử lý</span>
+  last_seq      <span class="tok-typ">bigint</span> <span class="tok-key">DEFAULT</span> <span class="tok-num">0</span>,        <span class="tok-com">-- bộ đếm thứ tự tin nhắn</span>
+  created_at    <span class="tok-typ">timestamptz</span> <span class="tok-key">DEFAULT</span> now()
+);
+
+<span class="tok-key">CREATE TABLE</span> messages (
+  id            <span class="tok-typ">uuid</span> <span class="tok-key">PRIMARY KEY</span>,
+  conversation_id <span class="tok-typ">uuid</span> <span class="tok-key">REFERENCES</span> conversations(id),
+  seq           <span class="tok-typ">bigint</span> <span class="tok-key">NOT NULL</span>,      <span class="tok-com">-- thứ tự ổn định trong hội thoại</span>
+  direction     <span class="tok-typ">text</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- inbound | outbound</span>
+  sender_type   <span class="tok-typ">text</span> <span class="tok-key">NOT NULL</span>,        <span class="tok-com">-- customer | agent | bot | system</span>
+  body          <span class="tok-typ">text</span>,
+  external_id   <span class="tok-typ">text</span>,                    <span class="tok-com">-- ID gốc từ kênh -&gt; chống trùng</span>
+  channel_meta  <span class="tok-typ">jsonb</span>,                   <span class="tok-com">-- phần riêng của từng kênh</span>
+  created_at    <span class="tok-typ">timestamptz</span> <span class="tok-key">DEFAULT</span> now(),
+  <span class="tok-key">UNIQUE</span> (conversation_id, external_id)  <span class="tok-com">-- idempotency: webhook lặp không tạo trùng</span>
+);</code></pre>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Quyết định thiết kế: <code>channel_meta</code> dạng JSONB</div>
+        <p>Phần <b>chung</b> (body, direction, seq...) nằm ở cột cứng để truy vấn nhanh; phần <b>riêng từng kênh</b> (subject email, sticker id, pageId...) nhét vào <code>jsonb</code>. Cách này giữ schema gọn mà vẫn uyển chuyển với đặc thù từng kênh — thêm kênh mới không cần đổi cấu trúc bảng. Đây là nguyên lý "<b>schema chung + phần mở rộng linh hoạt</b>".</p>
+      </div>
+
+      <h3>Hợp nhất identity (identity resolution)</h3>
+      <p>Một người dùng có thể là PSID trên Messenger, số điện thoại trên SMS, email khác nhau — nhưng đều là <b>một con người</b>. Bảng <code>channel_identities</code> ánh xạ nhiều identity về một <code>contact</code>. Khi tin nhắn mới đến, adapter tra <code>(channel, external_id)</code>; nếu chưa có thì tạo identity mới (và có thể gợi ý gộp contact dựa trên email/số ĐT trùng). Đây là điều kiện <b>tiên quyết</b> để hội thoại thực sự "xuyên kênh".</p>
+
+      <!-- 4 -->
+      <h2 id="routing"><span class="ico">④</span> Định tuyến & gán agent</h2>
+      <p>Khi một hội thoại mới được tạo (hoặc một hội thoại đang chờ cần người xử lý), <strong>router</strong> quyết định <b>agent nào</b> nhận. Khác với cuộc gọi thoại (1 agent = 1 cuộc tại một thời điểm), chat cho phép <b>một agent xử lý song song nhiều hội thoại</b> — nên bài toán cốt lõi là <b>quản lý capacity</b>.</p>
+
+      <h3>Các chiến lược định tuyến</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Chiến lược</th><th>Cách hoạt động</th><th>Đánh đổi</th></tr></thead>
+          <tbody>
+            <tr><td>Round-robin</td><td>Chia lần lượt cho agent rảnh</td><td>Đơn giản, nhưng không tính tải/kỹ năng</td></tr>
+            <tr><td>Least-busy</td><td>Gán cho agent đang ít chat nhất</td><td>Cân tải tốt, cần theo dõi capacity realtime</td></tr>
+            <tr><td>Skill-based</td><td>Khớp kỹ năng/ngôn ngữ/nhóm với hội thoại</td><td>Chất lượng cao, cấu hình phức tạp hơn</td></tr>
+            <tr><td>Sticky (gắn kết)</td><td>Ưu tiên agent đã từng xử lý contact này</td><td>Liền mạch ngữ cảnh, nhưng có thể lệch tải</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Mô hình capacity (sức chứa)</div>
+        <p>Mỗi agent có một <b>hạn mức chat đồng thời</b>, ví dụ tối đa 4. Router chỉ gán khi <code>activeChats &lt; maxConcurrent</code>. Có thể tinh hơn: gán "trọng số" cho từng hội thoại (chat phức tạp tốn 2 slot). Hội thoại không gán được sẽ vào <b>hàng đợi (queue)</b> và chờ agent có slot.</p>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">router.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Least-busy + skill-based + capacity. Trả về agent phù hợp nhất.</span>
+<span class="tok-key">async function</span> <span class="tok-fn">routeConversation</span>(<span class="tok-var">conv</span>: <span class="tok-typ">Conversation</span>): <span class="tok-typ">Promise</span>&lt;<span class="tok-typ">AgentId</span> | <span class="tok-key">null</span>&gt; {
+  <span class="tok-key">const</span> candidates = <span class="tok-key">await</span> <span class="tok-fn">getOnlineAgents</span>({
+    <span class="tok-var">skills</span>: conv.requiredSkills,       <span class="tok-com">// vd: ['vi', 'billing']</span>
+    <span class="tok-var">team</span>: conv.team,
+  });
+
+  <span class="tok-key">const</span> available = candidates.<span class="tok-fn">filter</span>(a =&gt; a.activeChats &lt; a.maxConcurrent);
+  <span class="tok-key">if</span> (available.length === <span class="tok-num">0</span>) {
+    <span class="tok-key">await</span> <span class="tok-fn">enqueue</span>(conv);            <span class="tok-com">// không ai rảnh -&gt; vào hàng đợi</span>
+    <span class="tok-key">return</span> <span class="tok-key">null</span>;
+  }
+
+  <span class="tok-com">// Sticky: ưu tiên agent từng phục vụ contact này (liền mạch ngữ cảnh)</span>
+  <span class="tok-key">const</span> sticky = available.<span class="tok-fn">find</span>(a =&gt; a.id === conv.lastAgentId);
+  <span class="tok-key">const</span> chosen = sticky ?? available.<span class="tok-fn">sort</span>((a, b) =&gt; a.activeChats - b.activeChats)[<span class="tok-num">0</span>];
+
+  <span class="tok-key">await</span> <span class="tok-fn">assign</span>(conv.id, chosen.id);   <span class="tok-com">// cập nhật assigned_to + activeChats++</span>
+  <span class="tok-key">return</span> chosen.id;
+}</code></pre>
+      </div>
+
+      <h3>Bàn giao bot → người (bot handoff)</h3>
+      <p>Nhiều hội thoại bắt đầu với <strong>bot</strong> (trả lời FAQ, gom thông tin). Khi bot không xử lý được — khách yêu cầu gặp người, độ tin cậy intent thấp, hay phát hiện cảm xúc tiêu cực — hệ thống <b>handoff</b> sang agent người, <b>kèm toàn bộ ngữ cảnh</b> đã thu thập.</p>
+
+      <div class="flow">
+        <span class="node">Khách nhắn</span><span class="arr">→</span>
+        <span class="node">Bot xử lý</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--amber)">Cần người? (intent thấp / yêu cầu / tức giận)</span><span class="arr">→</span>
+        <span class="node">Router gán agent</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Agent nhận kèm transcript bot</span>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Handoff phải bảo toàn ngữ cảnh</div>
+        <p>Sai lầm kinh điển: bot gom xong thông tin rồi agent vẫn hỏi lại từ đầu. Khi handoff, phải đính kèm <b>transcript bot + biến đã thu thập (slots)</b> vào hội thoại. Trong mô hình hợp nhất, bot chỉ là một <code>participant</code> với <code>sender_type='bot'</code> — transcript của nó <em>vốn đã nằm trong</em> cùng dòng messages, nên agent thấy ngay.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="presence"><span class="ico">⑤</span> Presence & Typing</h2>
+      <p>Ba tín hiệu thời gian thực tạo cảm giác "sống" cho live chat:</p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🟢</span> Presence</div><p>Trạng thái online/away/offline của agent và (với một số kênh) của khách. Ảnh hưởng định tuyến.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✍️</span> Typing indicator</div><p>"… đang soạn tin". Sự kiện ephemeral, không lưu DB, có debounce/timeout.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✔️</span> Read receipt</div><p>"đã xem". Cập nhật con trỏ đọc (read cursor) theo <code>seq</code> tin nhắn cuối đã xem.</p></div>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Tín hiệu ephemeral vs dữ liệu bền vững</div>
+        <p>Typing và presence là <b>ephemeral</b> — phát qua pub/sub realtime (Redis Pub/Sub, Socket.IO room), <b>không</b> ghi DB. Read receipt thì nên <b>bền vững</b> (lưu read cursor) vì nó là một phần lịch sử. Phân biệt hai loại này giúp tránh "ghi DB cho mọi keystroke" — một lỗi hiệu năng phổ biến.</p>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">typing.ts</span><span class="lang">Socket.IO</span></div>
+        <pre><code><span class="tok-com">// Typing: chỉ broadcast trong room hội thoại, có debounce + auto-stop.</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'typing:start'</span>, ({ conversationId }) =&gt; {
+  socket.<span class="tok-fn">to</span>(<span class="tok-str">`conv:${conversationId}`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'typing'</span>, {
+    <span class="tok-var">userId</span>: socket.data.userId, <span class="tok-var">isTyping</span>: <span class="tok-key">true</span>,
+  });
+});
+
+<span class="tok-com">// Quan trọng: KHÔNG ghi DB. Tự tắt sau timeout nếu client mất kết nối.</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'typing:stop'</span>, ({ conversationId }) =&gt; {
+  socket.<span class="tok-fn">to</span>(<span class="tok-str">`conv:${conversationId}`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'typing'</span>, {
+    <span class="tok-var">userId</span>: socket.data.userId, <span class="tok-var">isTyping</span>: <span class="tok-key">false</span>,
+  });
+});
+
+<span class="tok-com">// Read receipt: cập nhật con trỏ đọc theo seq (bền vững)</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'read'</span>, <span class="tok-key">async</span> ({ conversationId, lastSeq }) =&gt; {
+  <span class="tok-key">await</span> <span class="tok-fn">updateReadCursor</span>(conversationId, socket.data.userId, lastSeq);
+  socket.<span class="tok-fn">to</span>(<span class="tok-str">`conv:${conversationId}`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'read'</span>, { <span class="tok-var">lastSeq</span> });
+});</code></pre>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Capability mismatch giữa các kênh</div>
+        <p>Web chat hỗ trợ typing/presence/read; SMS thì không. Adapter phải <b>nuốt im lặng (no-op)</b> các tín hiệu kênh không hỗ trợ thay vì gọi API gây lỗi. UI agent cũng nên ẩn các tín hiệu đó dựa trên <code>capabilities</code> của kênh. Đừng giả định mọi kênh đều có "đã xem".</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="delivery"><span class="ico">⑥</span> Delivery & Ordering</h2>
+      <p>Mạng không đáng tin: webhook bị gửi lại, client mất sóng rồi gửi lại, tin đến không đúng thứ tự. Ba bài toán phải giải:</p>
+
+      <h3>1. Idempotency &amp; dedup (chống trùng)</h3>
+      <p>Nền tảng kênh thường <b>at-least-once</b>: một tin có thể đến nhiều lần. Dùng <code>external_id</code> (ID gốc của kênh) làm khóa idempotency, với ràng buộc <code>UNIQUE(conversation_id, external_id)</code>. Tin trùng bị bỏ qua thay vì tạo bản ghi mới.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">ingest.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">async function</span> <span class="tok-fn">ingestInbound</span>(<span class="tok-var">msg</span>: <span class="tok-typ">CanonicalMessage</span>) {
+  <span class="tok-com">// INSERT idempotent: webhook lặp -&gt; ON CONFLICT bỏ qua, không tạo trùng</span>
+  <span class="tok-key">const</span> seq = <span class="tok-key">await</span> <span class="tok-fn">nextSeq</span>(msg.conversationId);  <span class="tok-com">// bộ đếm nguyên tử</span>
+  <span class="tok-key">const</span> res = <span class="tok-key">await</span> db.<span class="tok-fn">query</span>(<span class="tok-str">`
+    INSERT INTO messages (id, conversation_id, seq, direction, sender_type, body, external_id)
+    VALUES ($1,$2,$3,'inbound','customer',$4,$5)
+    ON CONFLICT (conversation_id, external_id) DO NOTHING
+    RETURNING id`</span>, [<span class="tok-fn">uuid</span>(), msg.conversationId, seq, msg.text, msg.externalId]);
+
+  <span class="tok-key">if</span> (res.rowCount === <span class="tok-num">0</span>) <span class="tok-key">return</span>;        <span class="tok-com">// đã tồn tại -&gt; dừng, KHÔNG broadcast lại</span>
+  <span class="tok-fn">broadcastToRoom</span>(msg.conversationId, { ...msg, seq });
+}</code></pre>
+      </div>
+
+      <h3>2. Ordering (sắp xếp đúng thứ tự)</h3>
+      <p>Không dựa vào <code>created_at</code> (lệch đồng hồ, độ trễ webhook). Dùng <b>bộ đếm <code>seq</code> tăng dần đơn điệu trong phạm vi một hội thoại</b>. Client sắp xếp theo <code>seq</code>; nếu phát hiện "lỗ" (nhận seq 5 mà chưa có 4) thì gọi API lấp khoảng trống. <code>seq</code> theo từng hội thoại (không cần toàn cục) giúp đơn giản và mở rộng tốt.</p>
+
+      <h3>3. Đảm bảo gửi đi (outbound delivery)</h3>
+      <p>Khi agent gửi reply, vòng đời tin nhắn đi qua các trạng thái: <code>pending → sent → delivered → read</code> (hoặc <code>failed</code>). Adapter cập nhật trạng thái từ phản hồi API và từ webhook trạng thái của kênh. Lỗi tạm thời thì <b>retry có backoff + idempotency key</b> để không gửi đôi.</p>
+
+      <div class="flow">
+        <span class="node">pending</span><span class="arr">→</span>
+        <span class="node">sent (API nhận)</span><span class="arr">→</span>
+        <span class="node">delivered (webhook kênh)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">read</span>
+        <span class="arr" style="color:var(--red)">⤷</span>
+        <span class="node" style="border-color:var(--red)">failed → retry/backoff</span>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Tóm tắt nguyên tắc</div>
+        <p><b>Dedup bằng external_id, order bằng seq, deliver bằng retry idempotent.</b> Ba câu này là khung trả lời chuẩn cho mọi câu hỏi "đảm bảo tin nhắn nhất quán và đúng thứ tự thế nào".</p>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="design"><span class="ico">⑦</span> Tư duy thiết kế: trừu tượng hóa nhiều kênh thành một mô hình</h2>
+      <p>Đây là phần "system design" của chương. Giả lập một buổi phỏng vấn: <em>"Hãy thiết kế inbox omnichannel cho Contact Center."</em></p>
+
+      <h3>Bước 1 — Làm rõ yêu cầu</h3>
+      <ul>
+        <li><b>Chức năng:</b> agent thấy mọi kênh trong một inbox; hội thoại liền mạch xuyên kênh; định tuyến + capacity; bot handoff; typing/read.</li>
+        <li><b>Phi chức năng:</b> realtime (&lt; vài trăm ms), tin nhắn không mất/không trùng/đúng thứ tự, <b>dễ thêm kênh mới</b>, scale theo số hội thoại đồng thời.</li>
+        <li><b>Quy mô:</b> hàng nghìn agent, hàng chục nghìn hội thoại mở đồng thời, 5+ loại kênh.</li>
+      </ul>
+
+      <h3>Bước 2 — Các phương án &amp; đánh đổi</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Quyết định</th><th>Phương án A</th><th>Phương án B</th><th>Chọn &amp; lý do</th></tr></thead>
+          <tbody>
+            <tr><td>Xử lý đa kênh</td><td>Code riêng từng kênh (if/else)</td><td>Adapter + canonical model</td><td><b>B</b> — thêm kênh = thêm adapter, lõi bất biến</td></tr>
+            <tr><td>Lưu metadata kênh</td><td>Mỗi kênh một bảng riêng</td><td>Bảng chung + cột JSONB</td><td><b>B</b> — truy vấn xuyên kênh dễ, vẫn linh hoạt</td></tr>
+            <tr><td>Thứ tự tin nhắn</td><td>Theo timestamp</td><td>Bộ đếm seq per-conversation</td><td><b>B</b> — không lệ thuộc đồng hồ, ổn định</td></tr>
+            <tr><td>Realtime fan-out</td><td>Một server giữ mọi socket</td><td>Nhiều node + Redis adapter</td><td><b>B</b> — scale ngang, không nghẽn một node</td></tr>
+            <tr><td>Tín hiệu typing</td><td>Ghi DB mỗi sự kiện</td><td>Pub/sub ephemeral</td><td><b>B</b> — tránh ghi DB nóng vô ích</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Bước 3 — Sơ đồ kiến trúc</h3>
+      <div class="flow">
+        <span class="node">Web chat (WS)</span>
+        <span class="node">Messenger (webhook)</span>
+        <span class="node">SMS / Email</span>
+        <span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Ingress + Adapters</span>
+        <span class="arr">→</span>
+        <span class="node">Canonical Message</span>
+      </div>
+      <div class="flow">
+        <span class="node">Canonical Message</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--violet)">Conversation Engine (dedup · seq · identity)</span><span class="arr">→</span>
+        <span class="node">DB (conversations · messages)</span>
+      </div>
+      <div class="flow">
+        <span class="node">Conversation Engine</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--amber)">Router (capacity · skill · sticky)</span><span class="arr">→</span>
+        <span class="node">Realtime layer (Socket.IO + Redis)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">Agent Inbox UI</span>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Lý do chọn — "một mô hình, N adapter"</div>
+        <p>Toàn bộ độ phức tạp riêng của từng kênh bị <b>cô lập trong lớp adapter</b>. Conversation engine, router, realtime layer và UI agent chỉ làm việc với <b>canonical model</b>. Hệ quả: thêm kênh mới rủi ro thấp; logic nghiệp vụ (định tuyến, capacity, handoff) viết một lần dùng cho mọi kênh; test dễ vì có thể mock adapter. Đây chính là <b>trừu tượng hóa nhiều kênh thành một mô hình</b> — thông điệp trung tâm của chương. Phần mở rộng realtime đa node xem thêm ở <a href="../I/I1-system-design-realtime.html">I1</a>.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> if/else theo kênh khắp nơi</div><p>Logic kênh rò rỉ vào core. Đúng: cô lập trong adapter, core chỉ thấy canonical model.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Bỏ qua dedup webhook</div><p>Kênh gửi at-least-once → tin trùng. Luôn dùng <code>external_id</code> + UNIQUE.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Sắp xếp theo timestamp</div><p>Lệch đồng hồ + trễ webhook gây sai thứ tự. Dùng <code>seq</code> per-conversation.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Ghi DB cho typing</div><p>Mỗi keystroke một ghi DB = quá tải. Typing/presence phải ephemeral qua pub/sub.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Handoff mất ngữ cảnh</div><p>Bot gom xong, agent hỏi lại từ đầu. Đính kèm transcript + slots khi bàn giao.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Giả định mọi kênh giống nhau</div><p>SMS không có "đã xem". Mô hình hóa <code>capabilities</code>, no-op tín hiệu không hỗ trợ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Identity resolution sớm</div><p>Ánh xạ identity→contact ngay khi nhận tin để hội thoại thực sự xuyên kênh.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Capacity rõ ràng</div><p>Đặt hạn mức chat đồng thời + hàng đợi để tránh agent quá tải, khách chờ vô định.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Thiết kế canonical message</div>
+        <p>Cho 3 kênh: web chat, SMS, email. Hãy liệt kê những trường <b>chung</b> đưa vào canonical model và những trường <b>riêng</b> nên đẩy vào <code>channelMeta</code>. Giải thích vì sao tách như vậy giúp "thêm kênh mới" dễ hơn.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Chung: <code>externalId, channel, direction, senderType, text, sentAt, seq</code>. Riêng: SMS → <code>fromNumber</code>; email → <code>subject, inReplyTo, cc</code>; web → <code>browser, pageUrl</code>. Tách vì lõi chỉ phụ thuộc phần chung → thêm kênh chỉ là thêm khóa trong <code>channelMeta</code>, không đổi schema lõi và không sửa conversation engine (Open/Closed).</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Idempotency cho webhook</div>
+        <p>Nền tảng mạng xã hội gửi lại webhook khi không nhận được 200 trong 5 giây. Hãy mô tả cơ chế đảm bảo một tin nhắn chỉ được lưu <b>một lần</b> và chỉ broadcast cho agent <b>một lần</b>, kể cả khi webhook đến 3 lần.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Dùng <code>external_id</code> của tin làm khóa idempotency với <code>UNIQUE(conversation_id, external_id)</code> và <code>INSERT ... ON CONFLICT DO NOTHING RETURNING id</code>. Nếu <code>rowCount === 0</code> nghĩa là đã tồn tại → return sớm, <b>không</b> broadcast lại. Trả 200 nhanh để nền tảng ngừng retry; xử lý nặng đẩy sang queue.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Capacity & hàng đợi</div>
+        <p>Agent có <code>maxConcurrent = 4</code>. Có 10 agent online, 50 hội thoại mới ập đến cùng lúc. Thiết kế thuật toán gán sao cho cân tải, và xử lý phần dư. Điều gì xảy ra khi một agent đóng một chat?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Tổng sức chứa = 10×4 = 40 slot → gán 40 theo least-busy, 10 hội thoại dư vào <b>queue</b>. Khi agent đóng một chat (<code>activeChats--</code>), phát sự kiện "slot freed" → lấy hội thoại đầu queue (ưu tiên theo thời gian chờ/SLA) và gán cho agent đó. Dùng khóa/atomic để tránh hai agent cùng nhận một hội thoại.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Khác biệt cốt lõi giữa omnichannel và multichannel là?</div>
+          <div class="opt">Omnichannel hỗ trợ nhiều kênh hơn</div>
+          <div class="opt" data-correct="true">Omnichannel hợp nhất ngữ cảnh/hội thoại xuyên kênh, multichannel thì rời rạc</div>
+          <div class="opt">Multichannel nhanh hơn</div>
+          <div class="explain"><b>Hợp nhất ngữ cảnh.</b> Nhiều kênh nhưng rời rạc vẫn chỉ là multichannel.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Channel Adapter Pattern giúp ích gì nhất?</div>
+          <div class="opt">Tăng tốc độ mạng</div>
+          <div class="opt" data-correct="true">Cô lập logic riêng từng kênh, core chỉ làm việc với canonical model → thêm kênh dễ</div>
+          <div class="opt">Loại bỏ nhu cầu lưu database</div>
+          <div class="explain"><b>Cô lập kênh.</b> Thêm kênh = thêm adapter, không sửa lõi (Open/Closed).</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Nên sắp xếp tin nhắn trong một hội thoại theo gì?</div>
+          <div class="opt"><code>created_at</code> (timestamp)</div>
+          <div class="opt" data-correct="true">Bộ đếm <code>seq</code> tăng đơn điệu theo từng hội thoại</div>
+          <div class="opt">Thứ tự ID ngẫu nhiên</div>
+          <div class="explain"><b>seq per-conversation.</b> Timestamp lệch đồng hồ + trễ webhook gây sai thứ tự.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Tín hiệu typing indicator nên xử lý thế nào?</div>
+          <div class="opt">Ghi mỗi sự kiện vào database</div>
+          <div class="opt" data-correct="true">Ephemeral — broadcast qua pub/sub trong room, không ghi DB</div>
+          <div class="opt">Gửi qua email</div>
+          <div class="explain"><b>Ephemeral.</b> Ghi DB cho typing gây ghi nóng vô ích; chỉ read receipt mới cần bền vững.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Chống tin nhắn trùng từ webhook at-least-once bằng cách nào?</div>
+          <div class="opt">Tin tưởng nền tảng không gửi trùng</div>
+          <div class="opt">So sánh nội dung text</div>
+          <div class="opt" data-correct="true">Dùng <code>external_id</code> làm khóa idempotency + ràng buộc UNIQUE</div>
+          <div class="explain"><b>external_id + UNIQUE.</b> Insert idempotent (ON CONFLICT DO NOTHING) chống trùng chắc chắn.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Live chat omnichannel — câu hỏi system design "tủ" của vị trí Fullstack realtime.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Omnichannel và multichannel khác nhau thế nào?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Multichannel là hỗ trợ nhiều kênh nhưng <em>rời rạc</em> — mỗi kênh một silo, khách đổi kênh phải kể lại từ đầu. Omnichannel <em>hợp nhất</em>: nhiều identity của khách ánh xạ về một contact, mọi kênh đổ vào một dòng hội thoại/ngữ cảnh chung, agent thấy toàn bộ lịch sử xuyên kênh trong một inbox.</p>
+        <p class="trap">⚠️ Bẫy: nói "omnichannel = nhiều kênh hơn" là sai — mấu chốt là <b>hợp nhất ngữ cảnh</b>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Bạn trừu tượng hóa các kênh khác nhau (web, social, SMS, email) thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Dùng <b>Channel Adapter Pattern</b>: mỗi kênh có một adapter implement interface chung (<code>parseInbound</code>, <code>sendOutbound</code>, <code>verifySignature</code>, <code>capabilities</code>). Adapter dịch giao thức riêng của kênh sang/từ <b>canonical message model</b>. Lõi nghiệp vụ chỉ phụ thuộc canonical model — không biết kênh cụ thể. Phần riêng từng kênh được giữ trong <code>channelMeta</code> (JSONB).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Mô hình hóa "hội thoại hợp nhất" ở tầng dữ liệu ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Bốn thực thể: <code>contacts</code> (danh tính người) + <code>channel_identities</code> (nhiều identity/kênh → một contact) + <code>conversations</code> (phiên, trạng thái, agent gán, last_seq) + <code>messages</code> (seq, direction, sender_type, external_id, channel_meta). Phần chung ở cột cứng để truy vấn nhanh; phần riêng kênh ở JSONB. Ràng buộc UNIQUE trên <code>(conversation_id, external_id)</code> để idempotent.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Đảm bảo tin nhắn nhất quán và đúng thứ tự xuyên kênh thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Ba nguyên tắc: <b>(1) Dedup</b> bằng <code>external_id</code> + UNIQUE + INSERT idempotent; <b>(2) Order</b> bằng bộ đếm <code>seq</code> tăng đơn điệu per-conversation (không dựa timestamp); <b>(3) Delivery</b> bằng máy trạng thái pending→sent→delivered→read và retry có backoff với idempotency key. Client phát hiện "lỗ" seq thì gọi API lấp khoảng trống.</p>
+        <p class="trap">⚠️ Bẫy: sắp xếp theo <code>created_at</code> — sai vì lệch đồng hồ giữa server và độ trễ webhook khác nhau.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Một agent xử lý N chat đồng thời — thiết kế capacity & định tuyến thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mỗi agent có <code>maxConcurrent</code>. Router lọc agent online theo skill/team, chỉ gán khi <code>activeChats &lt; maxConcurrent</code>, chọn theo least-busy (có thể ưu tiên sticky agent đã từng phục vụ contact). Không ai rảnh → vào <b>queue</b>. Khi agent đóng chat, phát sự kiện "slot freed" → lấy hội thoại đầu queue (ưu tiên theo SLA/thời gian chờ). Dùng atomic/lock để tránh gán đôi.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Thêm một kênh mới (vd WhatsApp) tốn bao nhiêu công? Vì sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Chỉ cần viết <b>một adapter mới</b> implement interface chung: parse webhook → canonical, gửi outbound qua API WhatsApp, khai báo <code>capabilities</code>, verify chữ ký. <b>Không sửa</b> conversation engine, router, realtime layer hay UI agent vì chúng chỉ làm việc với canonical model. Đây là minh chứng của nguyên lý Open/Closed — kiến trúc tốt khiến việc thêm kênh là rủi ro thấp.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Bot handoff sang agent người hoạt động ra sao? Cần lưu ý gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Bot là một <code>participant</code> với <code>sender_type='bot'</code>, transcript của nó nằm sẵn trong dòng messages. Khi bot không xử lý được (yêu cầu gặp người, intent confidence thấp, phát hiện tức giận), hệ thống chuyển trạng thái hội thoại sang cần-người và gọi router gán agent. <b>Lưu ý:</b> phải bảo toàn ngữ cảnh — agent thấy ngay transcript + các slot bot đã thu thập, không bắt khách kể lại.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Typing, presence, read receipt khác nhau và nên lưu/truyền thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Typing và presence là <b>ephemeral</b> — phát qua pub/sub realtime trong room hội thoại, <em>không</em> ghi DB, có debounce và auto-timeout. Read receipt nên <b>bền vững</b>: lưu read cursor (seq tin cuối đã xem) để khôi phục khi reload. Phân biệt rõ tránh lỗi ghi DB cho mỗi keystroke.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Các kênh có capability khác nhau (SMS không có "đã xem") — xử lý ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mô hình hóa <code>capabilities</code> trong mỗi adapter (typing/readReceipt/attachments/maxLength...). Khi core phát một tín hiệu mà kênh không hỗ trợ, adapter <b>no-op im lặng</b> thay vì gọi API gây lỗi. UI agent đọc capabilities để ẩn/hiện các chỉ báo tương ứng và cảnh báo giới hạn (vd độ dài SMS). Không bao giờ giả định mọi kênh giống nhau.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Hãy thiết kế một inbox omnichannel từ đầu (system design tổng hợp).<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> (1) Làm rõ yêu cầu: liền mạch xuyên kênh, realtime, không mất/trùng/đúng thứ tự, dễ thêm kênh, scale theo hội thoại. (2) Ingress + Adapters chuẩn hóa về canonical message. (3) Conversation Engine: identity resolution, dedup (external_id), gán seq, lưu DB. (4) Router: skill + capacity + sticky, queue khi đầy. (5) Realtime layer Socket.IO + Redis adapter để fan-out đa node. (6) Agent Inbox UI subscribe room. Nhấn đánh đổi: "một mô hình, N adapter" để cô lập độ phức tạp kênh.</p>
+        <p class="trap">⚠️ Bẫy: nhảy vào code/DB ngay mà bỏ qua bước làm rõ yêu cầu và nêu đánh đổi — interviewer đánh giá tư duy thiết kế hơn là chi tiết.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Realtime layer scale ngang thế nào khi có nhiều node Socket.IO?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mỗi node giữ một phần kết nối socket; dùng <b>Redis adapter (pub/sub)</b> để khi node A emit vào một room, các node khác giữ socket cùng room cũng nhận và đẩy tới client của mình. Cần sticky session ở load balancer (hoặc transport bền). Trạng thái presence/typing đi qua Redis; dữ liệu bền vững vẫn ở DB. Xem sâu hơn ở <a href="../I/I1-system-design-realtime.html">I1</a>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Làm sao hợp nhất một khách dùng nhiều identity (PSID, số ĐT, email)?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Bảng <code>channel_identities</code> ánh xạ <code>(channel, external_id)</code> → <code>contact_id</code>. Khi tin mới đến, tra identity; nếu chưa có thì tạo và có thể gợi ý gộp contact khi phát hiện email/số ĐT trùng (deterministic) hoặc dựa heuristic. Việc gộp nên thận trọng/cho phép undo vì gộp nhầm hai người là lỗi nghiêm trọng. Identity resolution là điều kiện tiên quyết để hội thoại thật sự xuyên kênh.</p>
+        <p class="trap">⚠️ Bẫy: tự động gộp quá hung hăng → trộn lẫn dữ liệu của hai khách khác nhau, vi phạm quyền riêng tư.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương H3</button>
+      </div>
+
+      <div class="pager">
+        <a href="H2-call-center-acd.html"><span class="dir">← Trước</span><span class="ttl">H2 · Call Center: ACD, IVR</span></a>
+        <a href="H4-crm-dashboard.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">H4 · CRM & Dashboard realtime</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='H3',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành H3 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương H3'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

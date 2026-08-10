@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1 · WebSocket + Socket.IO</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-f">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">F1 · WebSocket + Socket.IO</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần F · Realtime & Scaling</div>
+      <nav class="nav">
+        <a href="F1-websocket-socketio.html" class="active">F1 · WebSocket + Socket.IO</a>
+        <a href="F2-realtime-patterns.html">F2 · Realtime patterns</a>
+        <a href="F3-redis.html">F3 · Redis: caching, pub/sub</a>
+        <a href="F4-bullmq-queue.html">F4 · Message Queue & BullMQ</a>
+        <a href="F5-scaling-realtime.html">F5 · Scaling realtime</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#protocol">① Giao thức WebSocket</a>
+        <a href="#vshttp">② WS vs HTTP/polling/SSE</a>
+        <a href="#socketio">③ Socket.IO</a>
+        <a href="#features">④ Tính năng Socket.IO</a>
+        <a href="#example">⑤ Ví dụ chat/call signaling</a>
+        <a href="#when">⑥ Khi nào dùng</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần F · Realtime & Scaling &nbsp;›&nbsp; <b>F1 · WebSocket + Socket.IO</b></div>
+      <div class="live-pill"><span class="blink"></span> full-duplex</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần F · Chương 1</span>
+        <h1>WebSocket nền tảng & Socket.IO</h1>
+        <p class="lead">Giao thức WebSocket cho kết nối hai chiều thời gian thực — xương sống của Call realtime và Live Chat. So sánh với polling/SSE và làm chủ Socket.IO.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Giải thích <b>handshake</b> nâng cấp từ HTTP lên WebSocket (HTTP <code>Upgrade</code>), khái niệm <b>frame</b> và kênh <b>full-duplex</b> bền vững.</p>
+        <p>• So sánh rạch ròi WebSocket với <b>request-response</b>, <b>short polling</b>, <b>long polling</b> và <b>SSE</b> — biết chọn đúng công cụ.</p>
+        <p>• Hiểu vì sao <b>Socket.IO</b> không phải "WebSocket thuần": reconnect, fallback, rooms, namespaces, acknowledgement.</p>
+        <p>• Xây được <b>phòng chat</b> theo room và <b>relay signaling</b> cho cuộc gọi (trao đổi offer/answer/ICE).</p>
+        <p>• Trả lời tự tin các câu phỏng vấn kinh điển: WS vs HTTP, WS vs SSE, heartbeat, WS có dùng TCP không, scale WS khó ở đâu.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ hệ thống Contact Center</div>
+        <p>Một tổng đài hiện đại là <b>realtime tới tận lõi</b>: agent thấy cuộc gọi mới <em>ngay khi</em> đổ chuông, trạng thái hàng đợi (queue) nhảy số liên tục, tin nhắn live chat hiện tức thời, và việc thiết lập cuộc gọi WebRTC cần trao đổi tín hiệu (signaling) hai chiều với độ trễ thấp. Toàn bộ những luồng này đều khó làm tốt bằng HTTP request-response thuần — đây chính là sân nhà của WebSocket. Chương này là nền móng cho cả <a href="F2-realtime-patterns.html">F2 (realtime patterns)</a> và <a href="F5-scaling-realtime.html">F5 (scaling realtime)</a>.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="protocol"><span class="ico">①</span> Giao thức WebSocket</h2>
+      <p><strong>WebSocket</strong> (chuẩn RFC 6455) là một giao thức cho phép mở <b>một kết nối hai chiều, bền vững</b> giữa client và server trên cùng một kết nối TCP duy nhất. Khác với HTTP — nơi client phải hỏi thì server mới được trả lời — WebSocket cho phép <b>cả hai phía chủ động gửi dữ liệu bất cứ lúc nào</b>, không cần đợi yêu cầu trước đó.</p>
+
+      <h3>Handshake: nâng cấp từ HTTP lên WebSocket</h3>
+      <p>WebSocket không tự dựng kết nối từ con số 0. Nó <b>mượn HTTP để bắt tay</b> rồi "nâng cấp" (upgrade) kênh đó thành WebSocket. Client gửi một HTTP request đặc biệt với header <code>Upgrade: websocket</code>:</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">handshake.http</span><span class="lang">HTTP</span></div>
+        <pre><code><span class="tok-com"># 1) Client gửi yêu cầu nâng cấp</span>
+GET /socket HTTP/1.1
+Host: cc.example.com
+<span class="tok-typ">Upgrade</span>: websocket
+<span class="tok-typ">Connection</span>: Upgrade
+<span class="tok-typ">Sec-WebSocket-Key</span>: dGhlIHNhbXBsZSBub25jZQ==
+<span class="tok-typ">Sec-WebSocket-Version</span>: 13
+
+<span class="tok-com"># 2) Server đồng ý → đổi giao thức</span>
+HTTP/1.1 <span class="tok-num">101</span> Switching Protocols
+<span class="tok-typ">Upgrade</span>: websocket
+<span class="tok-typ">Connection</span>: Upgrade
+<span class="tok-typ">Sec-WebSocket-Accept</span>: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
+      </div>
+      <p>Mã <code>101 Switching Protocols</code> là dấu hiệu then chốt: từ giây phút này kết nối TCP <b>không còn nói tiếng HTTP nữa</b> mà chuyển sang nói tiếng WebSocket. Header <code>Sec-WebSocket-Accept</code> được server tính bằng cách ghép <code>Sec-WebSocket-Key</code> của client với một chuỗi ma thuật (GUID cố định) rồi băm SHA-1 — bước này chứng minh server thực sự hiểu giao thức (chống lại proxy "vô tình" trả về 101).</p>
+
+      <div class="flow">
+        <span class="node">Client mở TCP</span><span class="arr">→</span>
+        <span class="node">HTTP GET + Upgrade</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--violet)">101 Switching Protocols</span><span class="arr">→</span>
+        <span class="node">Kênh WebSocket full-duplex</span><span class="arr">→</span>
+        <span class="node">Trao frame hai chiều</span>
+      </div>
+
+      <h3>Scheme: ws:// và wss://</h3>
+      <p>WebSocket dùng scheme riêng: <code>ws://</code> (không mã hóa, tương tự http) và <code>wss://</code> (chạy trên TLS, tương tự https). Trong môi trường thật <b>luôn dùng <code>wss://</code></b>: vừa bảo mật vừa giúp đi qua proxy/firewall tốt hơn vì traffic được mã hóa, proxy không "nghịch" được phần thân.</p>
+
+      <h3>Frame: đơn vị dữ liệu của WebSocket</h3>
+      <p>Sau handshake, dữ liệu không đi theo "request/response" nữa mà theo các <strong>frame</strong>. Mỗi frame có header rất gọn (chỉ 2–14 byte) gồm: bit <code>FIN</code> (đây có phải frame cuối của một message không), <b>opcode</b> (kiểu frame), bit <b>MASK</b> và độ dài payload. Các opcode quan trọng:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Opcode</th><th>Loại frame</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td><code>0x1</code></td><td>Text</td><td>Dữ liệu văn bản UTF-8 (thường là JSON)</td></tr>
+            <tr><td><code>0x2</code></td><td>Binary</td><td>Dữ liệu nhị phân (audio, ảnh, ArrayBuffer)</td></tr>
+            <tr><td><code>0x8</code></td><td>Close</td><td>Yêu cầu đóng kết nối (kèm mã lý do)</td></tr>
+            <tr><td><code>0x9</code></td><td>Ping</td><td>Kiểm tra "còn sống" — bên kia phải trả Pong</td></tr>
+            <tr><td><code>0xA</code></td><td>Pong</td><td>Phản hồi cho Ping (heartbeat)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Overhead cực thấp — điểm mạnh chí mạng</div>
+        <p>Một HTTP request kéo theo hàng trăm byte header (Cookie, User-Agent, Authorization…) <b>mỗi lần</b>. Một WebSocket frame chỉ tốn vài byte header. Với tổng đài bắn cập nhật queue mỗi giây cho hàng nghìn agent, khác biệt này quyết định băng thông và độ trễ.</p>
+      </div>
+      <p>Một chi tiết bảo mật: frame gửi <b>từ client lên server BẮT BUỘC được masking</b> (XOR với một khóa ngẫu nhiên 4 byte). Mục đích không phải để bảo mật nội dung mà để chống tấn công "cache poisoning" trên các proxy cũ. Frame từ server xuống client thì <em>không</em> mask.</p>
+
+      <h3>Ping/Pong & kết nối bền (heartbeat)</h3>
+      <p>Một kết nối WebSocket "mở mãi" nhưng có thể <b>chết âm thầm</b>: cáp mạng rớt, agent đóng laptop, NAT/proxy timeout sau vài phút im lặng. TCP không phải lúc nào cũng báo ngay. Vì vậy WebSocket có cơ chế <strong>heartbeat</strong>: một bên định kỳ gửi frame <code>Ping</code>, bên kia phải đáp <code>Pong</code> trong khoảng thời gian cho phép; nếu không thì coi như kết nối đã chết và đóng lại. Đây là cách hệ thống <b>phát hiện rớt mạng nhanh</b> để đánh dấu agent offline, đẩy cuộc gọi sang agent khác.</p>
+
+      <!-- 2 -->
+      <h2 id="vshttp"><span class="ico">②</span> WebSocket vs HTTP / polling / SSE</h2>
+      <p>Để hiểu vì sao WebSocket ra đời, phải thấy các giải pháp "realtime giả" trước nó đã chật vật thế nào. Bài toán muôn thuở: <b>server có dữ liệu mới, làm sao đẩy ngay cho client?</b></p>
+
+      <h3>HTTP request-response thuần</h3>
+      <p>Client hỏi → server trả → đóng. Server <b>không thể chủ động</b> gửi gì cho client. Hợp với CRUD, tải trang, gọi API — nhưng vô dụng nếu server cần "báo trước" một sự kiện (có cuộc gọi mới đổ về).</p>
+
+      <h3>Short polling — hỏi đi hỏi lại</h3>
+      <p>Client cứ vài giây lại gọi <code>GET /new-events</code> để hỏi "có gì mới không?". Đa số lần trả về rỗng → lãng phí. Độ trễ trung bình bằng nửa chu kỳ poll; muốn nhanh hơn thì poll dày hơn → server "ngộp" request.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">short-polling.js</span><span class="lang">Browser</span></div>
+        <pre><code><span class="tok-com">// Mỗi 3s hỏi server: có cuộc gọi mới trong queue không?</span>
+<span class="tok-fn">setInterval</span>(<span class="tok-key">async</span> () => {
+  <span class="tok-key">const</span> res = <span class="tok-key">await</span> <span class="tok-fn">fetch</span>(<span class="tok-str">'/api/queue/new-calls'</span>);
+  <span class="tok-key">const</span> calls = <span class="tok-key">await</span> res.<span class="tok-fn">json</span>();   <span class="tok-com">// thường rỗng → phí băng thông</span>
+  <span class="tok-fn">render</span>(calls);
+}, <span class="tok-num">3000</span>);</code></pre>
+      </div>
+
+      <h3>Long polling — giữ request lại</h3>
+      <p>Khôn hơn: client gọi request, server <b>không trả ngay</b> mà "treo" request đó cho đến khi có sự kiện (hoặc hết timeout). Có sự kiện → trả về ngay lập tức → client gọi lại request mới. Độ trễ gần như tức thời, nhưng mỗi sự kiện vẫn tốn một vòng request/response đầy đủ header, và server phải giữ nhiều kết nối "treo".</p>
+
+      <h3>SSE — Server-Sent Events (một chiều server→client)</h3>
+      <p><strong>SSE</strong> là một kênh <b>một chiều</b>: server giữ một kết nối HTTP mở và <b>liên tục đẩy</b> các event xuống client qua <code>text/event-stream</code>. Trình duyệt có sẵn <code>EventSource</code>, tự reconnect, hỗ trợ <code>Last-Event-ID</code> để gửi lại event bị lỡ. Nhưng SSE <b>chỉ server→client</b>: client muốn gửi lên vẫn phải dùng HTTP request riêng. SSE cũng chỉ truyền text (không nhị phân) và bị giới hạn số kết nối đồng thời trên HTTP/1.1.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>Short polling</th><th>Long polling</th><th>SSE</th><th>WebSocket</th></tr></thead>
+          <tbody>
+            <tr><td>Chiều dữ liệu</td><td>2 chiều (qua nhiều request)</td><td>2 chiều (qua nhiều request)</td><td><b>1 chiều</b> (server→client)</td><td><b>2 chiều full-duplex</b></td></tr>
+            <tr><td>Độ trễ đẩy</td><td>Cao (≈ chu kỳ poll)</td><td>Thấp</td><td>Thấp</td><td><b>Rất thấp</b></td></tr>
+            <tr><td>Overhead/message</td><td>Cao (full header)</td><td>Cao</td><td>Thấp</td><td><b>Rất thấp</b> (frame nhỏ)</td></tr>
+            <tr><td>Nhị phân</td><td>Có</td><td>Có</td><td>Không (chỉ text)</td><td><b>Có</b></td></tr>
+            <tr><td>Reconnect sẵn</td><td>—</td><td>—</td><td><b>Có sẵn</b> (EventSource)</td><td>Phải tự làm (Socket.IO lo hộ)</td></tr>
+            <tr><td>Hợp với</td><td>Cập nhật hiếm, hệ thống cũ</td><td>Tương thích proxy cũ</td><td>Feed, notification, dashboard chỉ-xem</td><td><b>Chat, call signaling, collaboration</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ "Realtime" không đồng nghĩa với "phải WebSocket"</div>
+        <p>Một dashboard giám sát chỉ <b>hiển thị</b> số liệu queue (server đẩy xuống, client không gửi gì lên) thì SSE đơn giản hơn, đi qua hạ tầng HTTP có sẵn dễ hơn. Chỉ khi cần <b>hai chiều thật sự</b> (agent gửi tin nhắn, trao đổi tín hiệu cuộc gọi) thì WebSocket mới là lựa chọn xứng đáng.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="socketio"><span class="ico">③</span> Socket.IO</h2>
+      <p><strong>Socket.IO không phải là WebSocket.</strong> Đây là hiểu lầm phổ biến nhất. Socket.IO là một <b>thư viện</b> (client + server) xây <em>trên</em> WebSocket nhưng bọc thêm rất nhiều tính năng mà WebSocket thuần không có. Nó có giao thức riêng (gói trong Engine.IO ở tầng dưới và Socket.IO ở tầng trên), nên <b>client Socket.IO chỉ nói chuyện được với server Socket.IO</b>, không cắm thẳng vào một WebSocket server thuần được.</p>
+
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🔌</span> Engine.IO (tầng dưới)</div><p>Lo việc thiết lập kết nối: thử WebSocket, nếu môi trường chặn thì fallback sang HTTP long-polling; quản lý heartbeat, nâng cấp transport.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📡</span> Socket.IO (tầng trên)</div><p>Cung cấp khái niệm <b>event có tên</b>, <b>rooms</b>, <b>namespaces</b>, <b>acknowledgement</b>, gửi lại khi reconnect — API thân thiện cho developer.</p></div>
+      </div>
+
+      <h3>Vì sao không dùng WebSocket thuần cho mọi việc?</h3>
+      <p>WebSocket chuẩn cho bạn một <em>ống dẫn byte hai chiều</em> — đẹp nhưng "trần trụi". Mọi thứ phía trên bạn phải tự xây: tự reconnect khi rớt, tự định nghĩa định dạng message, tự làm cơ chế "gửi cho một nhóm người", tự xác nhận "server đã nhận chưa". Socket.IO đóng gói sẵn những thứ này. Cái giá phải trả: thêm một lớp overhead giao thức và bị khóa vào hệ sinh thái Socket.IO.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Khía cạnh</th><th>WebSocket thuần (<code>ws</code>)</th><th>Socket.IO</th></tr></thead>
+          <tbody>
+            <tr><td>Tự động reconnect</td><td>Phải tự code</td><td><b>Có sẵn</b> (kèm backoff)</td></tr>
+            <tr><td>Fallback khi WS bị chặn</td><td>Không</td><td><b>Có</b> (HTTP long-polling)</td></tr>
+            <tr><td>Event có tên</td><td>Tự quy ước (parse message)</td><td><b>Có sẵn</b> <code>emit('call:new', ...)</code></td></tr>
+            <tr><td>Rooms / broadcast nhóm</td><td>Tự quản lý danh sách socket</td><td><b>Có sẵn</b> <code>to('room').emit()</code></td></tr>
+            <tr><td>Acknowledgement (callback)</td><td>Tự làm correlation id</td><td><b>Có sẵn</b></td></tr>
+            <tr><td>Overhead/khóa hệ sinh thái</td><td>Tối thiểu, chuẩn mở</td><td>Thêm lớp giao thức, cần client Socket.IO</td></tr>
+            <tr><td>Hợp khi</td><td>Cần chuẩn, đa nền tảng, kiểm soát tối đa</td><td>App web nhiều tính năng, muốn nhanh & ổn</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="features"><span class="ico">④</span> Tính năng cốt lõi của Socket.IO</h2>
+
+      <h3>Event có tên (named events)</h3>
+      <p>Thay vì gửi một blob rồi tự parse <code>message.type</code>, Socket.IO cho bạn đặt tên event. Hai phía gọi <code>emit</code> và lắng nghe <code>on</code> theo tên — code đọc như tiếng người.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">events.js</span><span class="lang">Socket.IO</span></div>
+        <pre><code><span class="tok-com">// Server</span>
+io.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (socket) => {
+  socket.<span class="tok-fn">emit</span>(<span class="tok-str">'call:incoming'</span>, { callId: <span class="tok-str">'c-91'</span>, from: <span class="tok-str">'+8490...'</span> });
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'call:answer'</span>, (data) => <span class="tok-fn">routeCall</span>(data.callId));
+});
+
+<span class="tok-com">// Client</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'call:incoming'</span>, (call) => <span class="tok-fn">showRingingUI</span>(call));
+socket.<span class="tok-fn">emit</span>(<span class="tok-str">'call:answer'</span>, { callId: <span class="tok-str">'c-91'</span> });</code></pre>
+      </div>
+
+      <h3>Rooms — kênh con để broadcast nhóm</h3>
+      <p><strong>Room</strong> là một "nhãn" gắn lên các socket. Bạn cho socket <code>join('room')</code> rồi <code>io.to('room').emit(...)</code> để gửi cho <b>mọi socket trong room đó</b>. Đây là công cụ chủ lực của Contact Center: mỗi cuộc gọi là một room (agent + supervisor đang giám sát), mỗi hàng đợi là một room (tất cả agent thuộc kỹ năng đó nghe trạng thái queue).</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">rooms.js</span><span class="lang">Socket.IO</span></div>
+        <pre><code>io.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (socket) => {
+  <span class="tok-com">// Agent vào hàng đợi "sales" → nghe cập nhật của queue đó</span>
+  socket.<span class="tok-fn">join</span>(<span class="tok-str">'queue:sales'</span>);
+
+  <span class="tok-com">// Khi có cuộc gọi mới đổ vào queue sales</span>
+  io.<span class="tok-fn">to</span>(<span class="tok-str">'queue:sales'</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'queue:update'</span>, { waiting: <span class="tok-num">7</span> });
+
+  <span class="tok-com">// Supervisor giám sát một cuộc gọi cụ thể → join room của call</span>
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'monitor:join'</span>, (callId) => socket.<span class="tok-fn">join</span>(<span class="tok-str">`call:</span>${callId}<span class="tok-str">`</span>));
+});</code></pre>
+      </div>
+
+      <h3>Namespaces — tách kênh theo nghiệp vụ</h3>
+      <p><strong>Namespace</strong> chia một kết nối thành nhiều "đường truyền logic" (vd <code>/chat</code>, <code>/calls</code>, <code>/admin</code>) <b>dùng chung một kết nối WebSocket vật lý</b>. Mỗi namespace có middleware, sự kiện, room riêng. Hữu ích để áp quyền khác nhau: namespace <code>/admin</code> chỉ supervisor được vào, có thể gắn middleware kiểm tra vai trò.</p>
+      <div class="callout tip">
+        <div class="c-title">💡 Phân biệt room vs namespace</div>
+        <p><b>Namespace</b> = tách theo <em>chức năng/quyền</em> (cố định, ít, do dev định nghĩa: /chat, /calls). <b>Room</b> = nhóm <em>động</em> trong một namespace (mỗi cuộc gọi, mỗi queue — sinh ra/biến mất liên tục). Đừng dùng namespace cho cái thay đổi liên tục.</p>
+      </div>
+
+      <h3>Acknowledgement — "server đã nhận chưa?"</h3>
+      <p>Khi gửi một tin nhắn quan trọng (vd lưu nội dung chat vào hệ thống), bạn muốn biết server đã xử lý chưa. Socket.IO cho phép truyền một <b>callback</b> kèm <code>emit</code>; bên nhận gọi callback để báo kết quả — giống một "RPC" nhẹ trên WebSocket.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">ack.js</span><span class="lang">Socket.IO</span></div>
+        <pre><code><span class="tok-com">// Client gửi tin nhắn và chờ server xác nhận đã lưu</span>
+socket.<span class="tok-fn">emit</span>(<span class="tok-str">'chat:send'</span>, { text: <span class="tok-str">'Xin chào'</span> }, (res) => {
+  <span class="tok-key">if</span> (res.ok) <span class="tok-fn">markDelivered</span>(res.messageId);
+  <span class="tok-key">else</span> <span class="tok-fn">showRetry</span>();
+});
+
+<span class="tok-com">// Server xử lý rồi gọi callback (tham số cuối)</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'chat:send'</span>, <span class="tok-key">async</span> (msg, ack) => {
+  <span class="tok-key">const</span> saved = <span class="tok-key">await</span> <span class="tok-fn">saveMessage</span>(msg);
+  <span class="tok-fn">ack</span>({ ok: <span class="tok-key">true</span>, messageId: saved.id });
+});</code></pre>
+      </div>
+
+      <h3>Tự reconnect & gửi dữ liệu nhị phân</h3>
+      <p>Khi mạng rớt, client Socket.IO <b>tự kết nối lại</b> với chiến lược backoff (giãn dần thời gian thử) để tránh "bão reconnect" đè server. Socket.IO cũng truyền được <b>dữ liệu nhị phân</b> (<code>Buffer</code>, <code>ArrayBuffer</code>) — hữu ích khi gửi đoạn ghi âm, ảnh đính kèm trong chat.</p>
+      <div class="callout danger">
+        <div class="c-title">🐛 Reconnect KHÔNG đồng nghĩa "không mất message"</div>
+        <p>Khi rớt rồi nối lại, các message phát ra trong lúc đứt <b>có thể mất</b> nếu bạn không có cơ chế bù (server lưu lại, dùng acknowledgement, hoặc đồng bộ lại trạng thái sau reconnect). Với cuộc gọi/giao dịch, đừng tin "socket nối lại là xong" — phải thiết kế <b>idempotency</b> và đồng bộ lại trạng thái.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="example"><span class="ico">⑤</span> Ví dụ thực chiến: phòng chat & call signaling</h2>
+
+      <h3>5.1 — Phòng chat live (room-based)</h3>
+      <p>Khách bấm "Chat với agent" → tạo một room <code>chat:&lt;ticketId&gt;</code>; khách và agent cùng join room này; tin nhắn của bên nào cũng broadcast cho cả room.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">chat-server.js</span><span class="lang">Node.js · Socket.IO</span></div>
+        <pre><code><span class="tok-key">const</span> { Server } = <span class="tok-fn">require</span>(<span class="tok-str">'socket.io'</span>);
+<span class="tok-key">const</span> io = <span class="tok-key">new</span> <span class="tok-fn">Server</span>(httpServer, { cors: { origin: <span class="tok-str">'*'</span> } });
+
+<span class="tok-com">// Middleware: xác thực token trước khi cho kết nối</span>
+io.<span class="tok-fn">use</span>((socket, next) => {
+  <span class="tok-key">const</span> user = <span class="tok-fn">verifyToken</span>(socket.handshake.auth.token);
+  <span class="tok-key">if</span> (!user) <span class="tok-key">return</span> <span class="tok-fn">next</span>(<span class="tok-key">new</span> <span class="tok-fn">Error</span>(<span class="tok-str">'unauthorized'</span>));
+  socket.data.user = user;
+  <span class="tok-fn">next</span>();
+});
+
+io.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (socket) => {
+  <span class="tok-com">// Tham gia phòng chat của một ticket</span>
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'chat:join'</span>, (ticketId) => {
+    socket.<span class="tok-fn">join</span>(<span class="tok-str">`chat:</span>${ticketId}<span class="tok-str">`</span>);
+    socket.<span class="tok-fn">to</span>(<span class="tok-str">`chat:</span>${ticketId}<span class="tok-str">`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'chat:peer-joined'</span>, socket.data.user.name);
+  });
+
+  <span class="tok-com">// Nhận tin nhắn → lưu DB → phát cho cả room (kèm ack)</span>
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'chat:message'</span>, <span class="tok-key">async</span> ({ ticketId, text }, ack) => {
+    <span class="tok-key">const</span> saved = <span class="tok-key">await</span> <span class="tok-fn">saveMessage</span>({ ticketId, text, by: socket.data.user.id });
+    io.<span class="tok-fn">to</span>(<span class="tok-str">`chat:</span>${ticketId}<span class="tok-str">`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'chat:message'</span>, saved);
+    <span class="tok-fn">ack</span>({ ok: <span class="tok-key">true</span>, id: saved.id });
+  });
+
+  <span class="tok-com">// Hiển thị "đang gõ..."</span>
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'chat:typing'</span>, (ticketId) =>
+    socket.<span class="tok-fn">to</span>(<span class="tok-str">`chat:</span>${ticketId}<span class="tok-str">`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'chat:typing'</span>, socket.data.user.name));
+});</code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Vì sao dùng <code>socket.to()</code> chứ không <code>io.to()</code> cho "đang gõ"</div>
+        <p><code>socket.to(room)</code> gửi cho mọi người trong room <b>trừ chính người gửi</b> — đúng cho "đang gõ" và "peer-joined". Còn <code>io.to(room)</code> gửi cho <b>tất cả</b>, kể cả người gửi — đúng cho tin nhắn (để client hiển thị lại tin của mình từ một nguồn nhất quán đã lưu DB).</p>
+      </div>
+
+      <h3>5.2 — Call signaling (relay offer/answer cho WebRTC)</h3>
+      <p>Cuộc gọi audio/video thường dùng <b>WebRTC</b> để truyền media <em>ngang hàng (peer-to-peer)</em>. Nhưng để hai bên "tìm thấy nhau" và thống nhất codec/đường mạng, chúng phải trao đổi vài gói tín hiệu: <b>offer</b>, <b>answer</b> (SDP) và các <b>ICE candidate</b>. WebRTC <em>không định nghĩa</em> cách truyền những gói này — đó là việc của <b>signaling server</b>, và WebSocket/Socket.IO là phương tiện hoàn hảo vì cần hai chiều, độ trễ thấp.</p>
+      <div class="flow">
+        <span class="node">Agent tạo Offer (SDP)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--violet)">Server relay qua WS</span><span class="arr">→</span>
+        <span class="node">Khách tạo Answer</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--violet)">Relay về</span><span class="arr">→</span>
+        <span class="node">Trao ICE candidate</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--green)">Media P2P (không qua server)</span>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">signaling.js</span><span class="lang">Node.js · Socket.IO</span></div>
+        <pre><code>io.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (socket) => {
+  <span class="tok-com">// Hai bên cùng join room của cuộc gọi</span>
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'call:join'</span>, (callId) => socket.<span class="tok-fn">join</span>(<span class="tok-str">`call:</span>${callId}<span class="tok-str">`</span>));
+
+  <span class="tok-com">// Relay offer/answer/ICE — server CHỈ chuyển tiếp, không hiểu nội dung</span>
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'webrtc:offer'</span>, ({ callId, sdp }) =>
+    socket.<span class="tok-fn">to</span>(<span class="tok-str">`call:</span>${callId}<span class="tok-str">`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'webrtc:offer'</span>, { sdp }));
+
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'webrtc:answer'</span>, ({ callId, sdp }) =>
+    socket.<span class="tok-fn">to</span>(<span class="tok-str">`call:</span>${callId}<span class="tok-str">`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'webrtc:answer'</span>, { sdp }));
+
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'webrtc:ice'</span>, ({ callId, candidate }) =>
+    socket.<span class="tok-fn">to</span>(<span class="tok-str">`call:</span>${callId}<span class="tok-str">`</span>).<span class="tok-fn">emit</span>(<span class="tok-str">'webrtc:ice'</span>, { candidate }));
+});</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Signaling server KHÔNG truyền media</div>
+        <p>Một hiểu lầm hay gặp: nghĩ rằng âm thanh cuộc gọi đi qua WebSocket. Không. WebSocket chỉ <b>relay tín hiệu thiết lập</b> (offer/answer/ICE). Sau khi bắt tay xong, <b>media đi P2P qua WebRTC</b> (hoặc qua TURN server nếu P2P bị NAT chặn). Hiểu sự tách biệt này là dấu hiệu của ứng viên đã làm realtime thật.</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="when"><span class="ico">⑥</span> Khi nào dùng WebSocket vs SSE vs polling?</h2>
+      <p>Đừng mặc định "realtime là WebSocket". Hãy hỏi: <b>dữ liệu đi một chiều hay hai chiều? tần suất ra sao? cần nhị phân không? hạ tầng có hỗ trợ kết nối bền không?</b></p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🔁</span> Dùng WebSocket</div><p>Hai chiều, độ trễ thấp, tần suất cao: <b>live chat</b>, <b>call signaling</b>, collaboration, multiplayer, presence (online/offline).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📥</span> Dùng SSE</div><p>Một chiều server→client, chủ yếu text: <b>dashboard queue</b> chỉ-xem, feed thông báo, log streaming, progress của tác vụ nền.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🐢</span> Dùng polling</div><p>Cập nhật <b>hiếm</b>, không cần tức thời, hoặc hạ tầng cũ chặn kết nối bền: kiểm tra trạng thái mỗi vài phút.</p></div>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Khi nào KHÔNG nên dùng WebSocket</div>
+        <p>• Dữ liệu thay đổi hiếm (vài phút/lần) → giữ kết nối mở là phí tài nguyên. • Chỉ cần server đẩy một chiều → SSE đơn giản hơn. • Cần được cache/CDN/REST-friendly → WebSocket bỏ qua hết hạ tầng HTTP caching. • API công khai cho bên thứ ba → REST dễ tích hợp hơn nhiều. • Tải file lớn không tương tác → HTTP/streaming phù hợp hơn.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Tin "kết nối mở = còn sống"</div><p>Kết nối có thể chết âm thầm. Luôn bật heartbeat (ping/pong) để phát hiện rớt và dọn tài nguyên.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Không xác thực lúc handshake</div><p>Đừng để ai cũng connect rồi mới kiểm tra. Dùng middleware <code>io.use()</code> verify token <b>trước</b> khi cho vào.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Broadcast toàn cục cho việc cục bộ</div><p>Dùng rooms thay vì <code>io.emit()</code> cho cả nghìn client. Bắn nhầm dữ liệu nhạy cảm + tốn băng thông.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Bỏ qua backpressure</div><p>Gửi nhanh hơn client tiêu thụ → buffer phình, RAM tăng. Theo dõi buffer, throttle event "đang gõ".</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên dọn listener khi disconnect</div><p>Listener/room không gỡ → rò rỉ bộ nhớ, gửi nhầm cho socket đã chết. Xử lý <code>'disconnect'</code> tử tế.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Một node, không tính scale</div><p>Nhiều instance Node thì room/broadcast không tự đồng bộ. Cần <b>Redis adapter</b> (xem <a href="F5-scaling-realtime.html">F5</a>) để bắc cầu pub/sub.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Giải thích handshake</div>
+        <p>Mô tả từng bước biến một kết nối HTTP thành WebSocket. Mã trạng thái nào báo hiệu thành công? Vai trò của <code>Sec-WebSocket-Key</code> và <code>Sec-WebSocket-Accept</code> là gì?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Client gửi GET với <code>Upgrade: websocket</code> + <code>Sec-WebSocket-Key</code> (nonce ngẫu nhiên). Server tính <code>Sec-WebSocket-Accept</code> = base64(SHA-1(key + GUID cố định)) và trả <b>101 Switching Protocols</b>. Mã 101 là dấu hiệu thành công; cặp key/accept chứng minh server đúng là server WebSocket (chống proxy trả 101 vô tình).</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Chọn công nghệ realtime</div>
+        <p>Với mỗi tình huống của tổng đài, chọn WebSocket / SSE / polling và giải thích: (a) dashboard hiển thị số khách đang chờ; (b) live chat khách–agent; (c) trao đổi tín hiệu cuộc gọi; (d) kiểm tra trạng thái một báo cáo xuất file chạy nền.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">(a) SSE — một chiều server→client, chỉ-xem. (b) WebSocket — hai chiều, độ trễ thấp. (c) WebSocket — hai chiều, relay offer/answer tức thời. (d) Polling (hoặc SSE) — sự kiện hiếm, có thể hỏi mỗi vài giây; không cần kết nối bền.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Room cho cuộc gọi</div>
+        <p>Thiết kế sơ đồ room cho: một cuộc gọi có 1 agent + 1 khách + (tùy chọn) 1 supervisor giám sát. Khi supervisor "barge-in" (xen vào nói), những ai nên nhận event? Viết tên các room và event chính.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Room <code>call:&lt;id&gt;</code> chứa agent + khách (relay media signaling). Supervisor join room đó ở chế độ "monitor" (chỉ nghe, không gửi tín hiệu của mình). Khi barge-in, server emit <code>call:barge</code> tới room → cả agent và khách biết có người thứ ba nói. Có thể tách thêm room <code>call:&lt;id&gt;:whisper</code> để supervisor nói riêng chỉ agent nghe.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> WebSocket bắt đầu kết nối bằng cách nào?</div>
+          <div class="opt">Mở thẳng một kết nối UDP riêng</div>
+          <div class="opt" data-correct="true">Gửi HTTP request có <code>Upgrade: websocket</code>, server trả 101 Switching Protocols</div>
+          <div class="opt">Dùng một cổng cố định 8080 không qua HTTP</div>
+          <div class="explain"><b>Handshake qua HTTP Upgrade.</b> Mã 101 báo hiệu kênh chuyển sang WebSocket trên cùng TCP.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Khác biệt cốt lõi giữa SSE và WebSocket là?</div>
+          <div class="opt">SSE nhanh hơn WebSocket</div>
+          <div class="opt" data-correct="true">SSE chỉ một chiều (server→client); WebSocket hai chiều full-duplex</div>
+          <div class="opt">SSE truyền được nhị phân còn WebSocket thì không</div>
+          <div class="explain"><b>Chiều dữ liệu.</b> SSE một chiều, chỉ text; WebSocket hai chiều và truyền cả nhị phân.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Socket.IO so với WebSocket thuần?</div>
+          <div class="opt">Socket.IO chính là giao thức WebSocket chuẩn</div>
+          <div class="opt" data-correct="true">Là thư viện xây trên WebSocket, thêm reconnect, fallback, rooms, ack — cần client Socket.IO để nối</div>
+          <div class="opt">Socket.IO không dùng WebSocket bao giờ</div>
+          <div class="explain"><b>Thư viện trên WebSocket.</b> Có giao thức riêng nên không cắm thẳng vào WS server thuần.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Trong call signaling qua WebSocket, media (âm thanh) đi đường nào?</div>
+          <div class="opt">Qua chính kết nối WebSocket</div>
+          <div class="opt" data-correct="true">P2P qua WebRTC (hoặc TURN); WebSocket chỉ relay offer/answer/ICE</div>
+          <div class="opt">Qua HTTP polling song song</div>
+          <div class="explain"><b>WebSocket chỉ làm signaling.</b> Media đi P2P qua WebRTC, không qua signaling server.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Heartbeat (ping/pong) dùng để làm gì?</div>
+          <div class="opt">Tăng tốc độ truyền frame</div>
+          <div class="opt" data-correct="true">Phát hiện kết nối đã chết âm thầm để đóng và dọn tài nguyên</div>
+          <div class="opt">Mã hóa dữ liệu giữa hai phía</div>
+          <div class="explain"><b>Phát hiện kết nối chết.</b> Không có Pong trong hạn → coi như rớt, đóng socket.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>WebSocket & Socket.IO — chủ đề ruột khi phỏng vấn vị trí Fullstack realtime.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>WebSocket khác HTTP ở điểm nào?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> HTTP theo mô hình request-response: client hỏi thì server mới trả, mỗi request là một vòng riêng kèm đầy đủ header, và server không chủ động gửi được. WebSocket mở <b>một kết nối hai chiều bền vững</b> trên một TCP: sau handshake, cả hai phía gửi dữ liệu (frame) bất cứ lúc nào với overhead rất thấp. WebSocket hợp cho realtime hai chiều (chat, call), HTTP hợp cho CRUD/API.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>"Full-duplex" nghĩa là gì?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Full-duplex là cả hai phía có thể gửi và nhận <b>đồng thời</b>, độc lập, trên cùng một kênh — như gọi điện thoại (cùng nói cùng nghe). Half-duplex là phải thay phiên (như bộ đàm). HTTP request-response giống half-duplex theo lượt; WebSocket là full-duplex thật sự.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Mô tả handshake WebSocket. Mã trạng thái nào báo thành công?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Client gửi HTTP GET kèm <code>Upgrade: websocket</code>, <code>Connection: Upgrade</code> và <code>Sec-WebSocket-Key</code> (nonce ngẫu nhiên). Server đáp <b>101 Switching Protocols</b> kèm <code>Sec-WebSocket-Accept</code> = base64(SHA-1(key + GUID chuẩn)). Sau đó kênh TCP đó chuyển sang nói WebSocket, trao đổi frame hai chiều.</p>
+        <p class="trap">⚠️ Bẫy: nói "WebSocket là một giao thức hoàn toàn tách rời HTTP" — thực ra nó <b>mượn HTTP để bắt tay</b> rồi mới nâng cấp.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>WebSocket có dùng TCP không? UDP thì sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Có, WebSocket chạy <b>trên TCP</b> (nên đảm bảo thứ tự và độ tin cậy của byte). Nó không dùng UDP. Vì là TCP nên WebSocket có thể bị <b>head-of-line blocking</b>: một gói trễ làm nghẽn cả luồng — đây là lý do media cuộc gọi (cần đúng thời gian thực, chấp nhận mất gói) lại dùng WebRTC/UDP chứ không phải WebSocket.</p>
+        <p class="trap">⚠️ Bẫy: nhầm WebSocket với WebRTC. WebSocket = TCP (signaling); WebRTC media = thường UDP (SRTP).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>WebSocket vs SSE — chọn cái nào khi nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> SSE một chiều server→client, chỉ text, có sẵn reconnect và <code>Last-Event-ID</code>, chạy trên HTTP thường nên dễ qua hạ tầng/proxy — hợp dashboard chỉ-xem, feed, notification. WebSocket hai chiều, độ trễ thấp, truyền nhị phân — hợp chat, call signaling, collaboration. Nguyên tắc: <b>chỉ cần đẩy một chiều thì SSE; cần hai chiều thật thì WebSocket</b>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Socket.IO có phải là WebSocket không? Khác gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Không. Socket.IO là <b>thư viện</b> xây trên WebSocket (qua Engine.IO ở dưới). Nó thêm: tự reconnect có backoff, fallback sang HTTP long-polling khi WS bị chặn, event có tên, rooms, namespaces, acknowledgement, gửi nhị phân. Đổi lại có giao thức riêng nên <b>cần client Socket.IO</b> để kết nối, không cắm thẳng vào WS server thuần được.</p>
+        <p class="trap">⚠️ Bẫy: nói "dùng Socket.IO thì cứ là WebSocket" — nó có thể đang chạy long-polling fallback chứ chưa nâng cấp lên WS.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Phân biệt rooms và namespaces trong Socket.IO.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>Namespace</b> tách theo chức năng/quyền (cố định, ít: <code>/chat</code>, <code>/calls</code>, <code>/admin</code>), mỗi namespace có middleware và sự kiện riêng nhưng dùng chung kết nối WS vật lý. <b>Room</b> là nhóm động bên trong một namespace (mỗi cuộc gọi, mỗi queue), dùng để broadcast tới một tập socket: <code>io.to('call:91').emit(...)</code>. Quy tắc: namespace cho cái cố định, room cho cái sinh-diệt liên tục.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Acknowledgement trong Socket.IO là gì? Khi nào cần?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là cơ chế truyền một callback kèm <code>emit</code>; bên nhận gọi callback để báo kết quả — giống RPC nhẹ. Cần khi bạn muốn chắc chắn bên kia đã <b>nhận và xử lý</b> (vd: lưu tin nhắn vào DB rồi mới đánh dấu "đã gửi"). Lưu ý kết hợp timeout: nếu không có ack trong hạn thì xử lý như thất bại để thử lại.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Heartbeat là gì và tại sao cần?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Heartbeat là việc định kỳ gửi <code>Ping</code> và chờ <code>Pong</code> để xác nhận kết nối còn sống. Cần vì một kết nối có thể <b>chết âm thầm</b> (rớt mạng, NAT/proxy timeout, máy ngủ) mà TCP không báo ngay. Phát hiện sớm giúp đóng socket, dọn room, và quan trọng với tổng đài: đánh dấu agent offline ngay để không định tuyến cuộc gọi vào một agent đã "biến mất".</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Khi nào KHÔNG nên dùng WebSocket?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khi dữ liệu thay đổi hiếm (giữ kết nối mở là lãng phí), khi chỉ cần đẩy một chiều (SSE gọn hơn), khi cần tận dụng caching/CDN và hạ tầng REST, khi làm API công khai cho bên thứ ba (REST dễ tích hợp hơn), hoặc khi truyền file lớn không tương tác (HTTP streaming hợp hơn). WebSocket cũng đắt về tài nguyên (mỗi kết nối là một socket mở giữ trạng thái) nên đừng dùng nếu lợi ích realtime không đáng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Scale WebSocket khó ở đâu? Cách giải quyết?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khó vì WebSocket là <b>stateful</b>: mỗi kết nối gắn với một instance cụ thể và giữ trạng thái lâu dài. Vấn đề: (1) <b>sticky session</b> — load balancer phải đưa client về đúng node giữ kết nối (hoặc hỗ trợ WS đúng cách); (2) <b>broadcast xuyên node</b> — agent trên node A và supervisor trên node B cùng một room thì một mình node không phát tới nhau được; (3) số kết nối mở giới hạn theo RAM/file descriptor. Giải pháp: dùng <b>Redis pub/sub adapter</b> để bắc cầu sự kiện giữa các node, scale ngang nhiều instance, dùng sticky session, và cân nhắc tách tầng gateway WebSocket riêng. Chi tiết ở <a href="F5-scaling-realtime.html">F5</a> và <a href="F3-redis.html">F3</a>.</p>
+        <p class="trap">⚠️ Bẫy: nói "cứ thêm node là scale được" mà quên broadcast xuyên node và sticky session.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Vì sao frame từ client lên server phải masking?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Theo RFC 6455, mọi frame client→server phải XOR payload với một khóa ngẫu nhiên 4 byte (masking). Mục đích <b>không phải bảo mật nội dung</b> (TLS lo việc đó) mà để chống tấn công <b>cache poisoning</b>: nếu không mask, một script độc có thể tạo dữ liệu trông giống HTTP request hợp lệ, lừa các proxy/cache trung gian cũ diễn giải sai và đầu độc cache. Masking làm payload trở nên ngẫu nhiên với proxy. Frame server→client thì không mask.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương F1</button>
+      </div>
+
+      <div class="pager">
+        <a href="../E/E6-nestjs-websocket.html"><span class="dir">← Phần E</span><span class="ttl">E6 · WebSocket Gateway & Microservices</span></a>
+        <a href="F2-realtime-patterns.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">F2 · Realtime patterns</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='F1',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành F1 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương F1'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

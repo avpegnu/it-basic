@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — Arrays, Iterables &amp; Iteration Protocols · JavaScript Sub-pillar</title>
+  <meta name="description" content="Array methods (map/filter/reduce), mutating vs non-mutating, spread/rest/destructuring, iteration protocol, generator, Set/Map/WeakSet/WeakMap — toolset chính để xử lý collection trong JS." />
+  <meta name="theme-color" content="#c8961a" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-js">JS</span>
+        JavaScript · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 5</span>
+      </div>
+      <div class="chapter-num">Chương 05 · Arrays, Iterables &amp; Iteration Protocols</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Mảng, iterable và giao thức lặp
+      </h1>
+      <p class="lead">
+        90% công việc thực tế là biến đổi danh sách: lọc user, tính tổng, gom nhóm, đếm tần suất. JavaScript có
+        bộ tool rất mạnh — <code>map</code>/<code>filter</code>/<code>reduce</code>, spread/rest/destructuring,
+        Set/Map, iterator/generator. Chương này biến những thứ đó thành <strong>phản xạ</strong>.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-4</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Tạo array đúng cách, hiểu vấn đề <strong>sparse array</strong> với <code>new Array(n)</code>.</li>
+            <li>Phân biệt rạch ròi method <strong>mutate</strong> vs <strong>non-mutate</strong>; biết các bản ES2023 (<code>toSorted</code>, <code>toReversed</code>).</li>
+            <li>Master bộ ba <code>map</code> / <code>filter</code> / <code>reduce</code>. Đặc biệt là <code>reduce</code> — pattern gom nhóm, đếm, build object.</li>
+            <li>Biết khi nào chọn <code>forEach</code>, <code>for/of</code>, <code>for</code> — và vì sao <code>for/of</code> nên là default.</li>
+            <li>Hiểu spread/rest cùng cú pháp <code>...</code> nhưng khác ngữ cảnh.</li>
+            <li>Destructuring nâng cao: nested, rename, default, rest.</li>
+            <li>Iteration protocol: tự build iterable, dùng <code>function*</code> để tạo sequence lười.</li>
+            <li>Phân biệt Set/Map/WeakSet/WeakMap — chọn đúng cho từng tình huống.</li>
+          </ul>
+        </div>
+
+        <h2 id="array-basic">1. Tạo array — và cái bẫy sparse</h2>
+
+        <p>JS có nhiều cách tạo array, nhưng <strong>không phải cái nào cũng tương đương</strong>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Các cách tạo array</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// 1. Literal — cách dùng 99% trường hợp</span>
+<span class="tok-kw">const</span> a = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+
+<span class="tok-com">// 2. new Array(n) — tạo array length n nhưng RỖNG (sparse) 🔥</span>
+<span class="tok-kw">const</span> b = <span class="tok-kw">new</span> <span class="tok-cls">Array</span>(<span class="tok-num">3</span>);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(b);          <span class="tok-com">// [ &lt;3 empty items&gt; ]</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(b.length);   <span class="tok-com">// 3</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(b[<span class="tok-num">0</span>]);     <span class="tok-com">// undefined — nhưng KHÔNG phải undefined thật</span>
+
+<span class="tok-com">// 3. Array.of — fix bug new Array(n)</span>
+<span class="tok-cls">Array</span>.<span class="tok-fn">of</span>(<span class="tok-num">3</span>);          <span class="tok-com">// [3]   — luôn coi arg như phần tử</span>
+<span class="tok-cls">Array</span>.<span class="tok-fn">of</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>);    <span class="tok-com">// [1, 2, 3]</span>
+
+<span class="tok-com">// 4. Array.from — convert iterable hoặc array-like sang array thật</span>
+<span class="tok-cls">Array</span>.<span class="tok-fn">from</span>(<span class="tok-str">'abc'</span>);                   <span class="tok-com">// ['a', 'b', 'c']</span>
+<span class="tok-cls">Array</span>.<span class="tok-fn">from</span>({ length: <span class="tok-num">3</span> });            <span class="tok-com">// [undefined, undefined, undefined]</span>
+<span class="tok-cls">Array</span>.<span class="tok-fn">from</span>({ length: <span class="tok-num">3</span> }, (_, i) =&gt; i);  <span class="tok-com">// [0, 1, 2]</span>
+
+<span class="tok-com">// 5. Spread cho iterable → array</span>
+[...<span class="tok-str">'abc'</span>];                <span class="tok-com">// ['a', 'b', 'c']</span>
+[...<span class="tok-kw">new</span> <span class="tok-cls">Set</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>])];   <span class="tok-com">// [1, 2]  ← dedupe trick</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — Sparse array khác array chứa undefined</div>
+          <p>
+            <code>new Array(3)</code> tạo <strong>sparse array</strong>: slot rỗng (empty), khác với <code>[undefined, undefined, undefined]</code>. Sparse slot bị <em>nhiều method bỏ qua</em>:
+          </p>
+<pre><code><span class="tok-kw">const</span> sparse = <span class="tok-kw">new</span> <span class="tok-cls">Array</span>(<span class="tok-num">3</span>);
+<span class="tok-kw">const</span> dense  = [<span class="tok-kw">undefined</span>, <span class="tok-kw">undefined</span>, <span class="tok-kw">undefined</span>];
+
+sparse.<span class="tok-fn">map</span>((x) =&gt; <span class="tok-num">1</span>);   <span class="tok-com">// [ &lt;3 empty&gt; ]  ← KHÔNG chạy callback!</span>
+dense.<span class="tok-fn">map</span>((x) =&gt; <span class="tok-num">1</span>);    <span class="tok-com">// [1, 1, 1]</span>
+
+sparse.<span class="tok-fn">forEach</span>((x) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x));  <span class="tok-com">// không in gì</span>
+dense.<span class="tok-fn">forEach</span>((x) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x));   <span class="tok-com">// in 3 lần undefined</span></code></pre>
+          <p style="margin-top: 8px;">
+            Quy tắc: <strong>tránh <code>new Array(n)</code></strong>. Cần khởi tạo array length n thì dùng
+            <code>Array.from({ length: n }, (_, i) =&gt; ...)</code>.
+          </p>
+        </div>
+
+        <p><code>length</code> là <strong>property writable</strong>, không phải read-only:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">const</span> arr = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>];
+arr.length = <span class="tok-num">2</span>;          <span class="tok-com">// truncate</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(arr);       <span class="tok-com">// [1, 2]</span>
+
+arr.length = <span class="tok-num">5</span>;          <span class="tok-com">// extend với empty slots — TẠO SPARSE!</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(arr);       <span class="tok-com">// [1, 2, &lt;3 empty&gt;]</span></code></pre>
+        </div>
+
+        <h2 id="mutating-vs-not">2. Mutating vs non-mutating — bảng cheat</h2>
+
+        <p>Đây là <em>kiến thức bắt buộc</em>. Trộn lẫn 2 nhóm này gây bug khó nhất trong JS (mutate state vô tình).</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Mutating (sửa mảng gốc)</th><th>Non-mutating (trả mảng mới)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>push</code>, <code>pop</code></td><td><code>concat</code></td></tr>
+              <tr><td><code>shift</code>, <code>unshift</code></td><td><code>slice</code></td></tr>
+              <tr><td><code>splice</code></td><td><code>map</code>, <code>filter</code>, <code>flat</code>, <code>flatMap</code></td></tr>
+              <tr><td><code>sort</code></td><td><code>toSorted</code> (ES2023)</td></tr>
+              <tr><td><code>reverse</code></td><td><code>toReversed</code> (ES2023)</td></tr>
+              <tr><td><code>fill</code>, <code>copyWithin</code></td><td><code>toSpliced</code> (ES2023)</td></tr>
+              <tr><td>—</td><td><code>with(i, v)</code> (ES2023) thay <code>arr[i] = v</code> immutable</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Mutate vs immutable</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> a = [<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>];
+
+<span class="tok-com">// ❌ mutate: thay đổi a</span>
+a.<span class="tok-fn">sort</span>();
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(a);  <span class="tok-com">// [1, 2, 3]  ← a đã bị đổi!</span>
+
+<span class="tok-com">// ✅ immutable: a giữ nguyên</span>
+<span class="tok-kw">const</span> b = [<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>];
+<span class="tok-kw">const</span> sorted = b.<span class="tok-fn">toSorted</span>();
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(b);       <span class="tok-com">// [3, 1, 2]</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(sorted);  <span class="tok-com">// [1, 2, 3]</span>
+
+<span class="tok-com">// with(i, v) — replace 1 phần tử, trả mảng mới</span>
+<span class="tok-kw">const</span> c = [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'c'</span>];
+<span class="tok-kw">const</span> d = c.<span class="tok-fn">with</span>(<span class="tok-num">1</span>, <span class="tok-str">'B'</span>);   <span class="tok-com">// ['a', 'B', 'c']</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(c);             <span class="tok-com">// ['a', 'b', 'c'] — c không đổi</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mẹo nhớ</div>
+          <p>
+            ES2023 đặt tên bằng tiền tố <code>to-</code>: <code>toSorted</code>, <code>toReversed</code>, <code>toSpliced</code>.
+            Tiền tố <em>to</em> = "trả về phiên bản mới". Trong React/Redux/Vuex, <strong>mọi update state nên non-mutate</strong>.
+          </p>
+        </div>
+
+        <h2 id="map-filter-reduce">3. Bộ ba <code>map</code> / <code>filter</code> / <code>reduce</code></h2>
+
+        <p>3 method functional cốt lõi. Học thuộc signature, gotcha, và pattern.</p>
+
+        <h3 id="map">3.1. <code>map</code> — biến đổi từng phần tử</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>map signature</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// arr.map(callback(element, index, array)) → array mới CÙNG length</span>
+
+<span class="tok-kw">const</span> nums = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>];
+
+nums.<span class="tok-fn">map</span>((x) =&gt; x * <span class="tok-num">2</span>);              <span class="tok-com">// [2, 4, 6, 8]</span>
+nums.<span class="tok-fn">map</span>((x, i) =&gt; <span class="tok-str">`</span><span class="tok-op">${</span>i<span class="tok-op">}</span><span class="tok-str">: </span><span class="tok-op">${</span>x<span class="tok-op">}</span><span class="tok-str">`</span>);  <span class="tok-com">// ['0: 1', '1: 2', ...]</span>
+
+<span class="tok-com">// Map object → property</span>
+<span class="tok-kw">const</span> users = [{ name: <span class="tok-str">'An'</span>, age: <span class="tok-num">20</span> }, { name: <span class="tok-str">'Bình'</span>, age: <span class="tok-num">25</span> }];
+users.<span class="tok-fn">map</span>((u) =&gt; u.name);  <span class="tok-com">// ['An', 'Bình']</span></code></pre>
+        </div>
+
+        <h3 id="filter">3.2. <code>filter</code> — giữ phần tử match predicate</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com">// arr.filter(predicate(element, index, array)) → array mới (length ≤ gốc)</span>
+
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>].<span class="tok-fn">filter</span>((x) =&gt; x % <span class="tok-num">2</span> === <span class="tok-num">0</span>);  <span class="tok-com">// [2, 4]</span>
+
+users.<span class="tok-fn">filter</span>((u) =&gt; u.age &gt;= <span class="tok-num">21</span>);  <span class="tok-com">// [{ name: 'Bình', age: 25 }]</span>
+
+<span class="tok-com">// Boolean shortcut — bỏ falsy</span>
+[<span class="tok-num">1</span>, <span class="tok-num">0</span>, <span class="tok-str">'a'</span>, <span class="tok-str">''</span>, <span class="tok-kw">null</span>, <span class="tok-num">5</span>].<span class="tok-fn">filter</span>(<span class="tok-cls">Boolean</span>);  <span class="tok-com">// [1, 'a', 5]</span></code></pre>
+        </div>
+
+        <h3 id="reduce">3.3. <code>reduce</code> — gộp về 1 giá trị (Swiss-army knife)</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>reduce signature</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// arr.reduce(callback(accumulator, element, index, array), initialValue)</span>
+
+<span class="tok-com">// Sum</span>
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>].<span class="tok-fn">reduce</span>((acc, x) =&gt; acc + x, <span class="tok-num">0</span>);  <span class="tok-com">// 10</span>
+
+<span class="tok-com">// Max</span>
+[<span class="tok-num">3</span>, <span class="tok-num">7</span>, <span class="tok-num">1</span>, <span class="tok-num">9</span>, <span class="tok-num">4</span>].<span class="tok-fn">reduce</span>((m, x) =&gt; x &gt; m ? x : m, -<span class="tok-cls">Infinity</span>);  <span class="tok-com">// 9</span></code></pre>
+        </div>
+
+        <p><strong>4 pattern kinh điển</strong> dùng reduce:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pattern 1 — Sum theo property</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> orders = [
+  { id: <span class="tok-num">1</span>, total: <span class="tok-num">120</span> },
+  { id: <span class="tok-num">2</span>, total: <span class="tok-num">80</span> },
+  { id: <span class="tok-num">3</span>, total: <span class="tok-num">200</span> },
+];
+
+<span class="tok-kw">const</span> revenue = orders.<span class="tok-fn">reduce</span>((acc, o) =&gt; acc + o.total, <span class="tok-num">0</span>);
+<span class="tok-com">// 400</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pattern 2 — Group by</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> people = [
+  { name: <span class="tok-str">'An'</span>,   city: <span class="tok-str">'HN'</span> },
+  { name: <span class="tok-str">'Bình'</span>, city: <span class="tok-str">'HCM'</span> },
+  { name: <span class="tok-str">'Cường'</span>, city: <span class="tok-str">'HN'</span> },
+];
+
+<span class="tok-kw">const</span> byCity = people.<span class="tok-fn">reduce</span>((acc, p) =&gt; {
+  (acc[p.city] ??= []).<span class="tok-fn">push</span>(p);
+  <span class="tok-kw">return</span> acc;
+}, {});
+<span class="tok-com">// { HN: [{...An}, {...Cường}], HCM: [{...Bình}] }</span>
+
+<span class="tok-com">// ES2024 có Object.groupBy built-in:</span>
+<span class="tok-cls">Object</span>.<span class="tok-fn">groupBy</span>(people, (p) =&gt; p.city);  <span class="tok-com">// same result</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pattern 3 — Count / tần suất</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> votes = [<span class="tok-str">'A'</span>, <span class="tok-str">'B'</span>, <span class="tok-str">'A'</span>, <span class="tok-str">'C'</span>, <span class="tok-str">'A'</span>, <span class="tok-str">'B'</span>];
+
+<span class="tok-kw">const</span> tally = votes.<span class="tok-fn">reduce</span>((acc, v) =&gt; {
+  acc[v] = (acc[v] ?? <span class="tok-num">0</span>) + <span class="tok-num">1</span>;
+  <span class="tok-kw">return</span> acc;
+}, {});
+<span class="tok-com">// { A: 3, B: 2, C: 1 }</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Pattern 4 — Array of pairs → object</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> pairs = [[<span class="tok-str">'a'</span>, <span class="tok-num">1</span>], [<span class="tok-str">'b'</span>, <span class="tok-num">2</span>], [<span class="tok-str">'c'</span>, <span class="tok-num">3</span>]];
+
+<span class="tok-kw">const</span> obj = pairs.<span class="tok-fn">reduce</span>((acc, [k, v]) =&gt; {
+  acc[k] = v;
+  <span class="tok-kw">return</span> acc;
+}, {});
+<span class="tok-com">// { a: 1, b: 2, c: 3 }</span>
+
+<span class="tok-com">// Built-in tương đương:</span>
+<span class="tok-cls">Object</span>.<span class="tok-fn">fromEntries</span>(pairs);  <span class="tok-com">// { a: 1, b: 2, c: 3 }</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — reduce KHÔNG initial value</div>
+          <p>
+            Nếu không truyền <code>initialValue</code>, reduce dùng phần tử đầu làm acc và bắt đầu từ index 1.
+            Trên <strong>array rỗng</strong>: <code>TypeError: Reduce of empty array with no initial value</code>.
+          </p>
+<pre><code>[].<span class="tok-fn">reduce</span>((a, b) =&gt; a + b);     <span class="tok-com">// ❌ TypeError</span>
+[].<span class="tok-fn">reduce</span>((a, b) =&gt; a + b, <span class="tok-num">0</span>);  <span class="tok-com">// ✅ 0</span></code></pre>
+          <p>Luôn truyền initial value — vừa an toàn, vừa rõ type của accumulator.</p>
+        </div>
+
+        <h2 id="loop-styles">4. <code>forEach</code> vs <code>for/of</code> vs <code>for</code></h2>
+
+        <p>3 cách duyệt array, mỗi cái có ưu/nhược.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>—</th><th><code>forEach</code></th><th><code>for/of</code></th><th>cổ điển <code>for</code></th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>break</code> được không</td><td>❌ (chỉ <code>return</code> bên trong callback)</td><td>✅</td><td>✅</td></tr>
+              <tr><td><code>await</code> tuần tự</td><td>❌ (callback chạy đồng thời)</td><td>✅</td><td>✅</td></tr>
+              <tr><td>Truy cập index</td><td><code>(v, i) =&gt;</code></td><td><code>arr.entries()</code></td><td>biến <code>i</code></td></tr>
+              <tr><td>Skip sparse slot</td><td>Bỏ qua</td><td>Trả <code>undefined</code></td><td>Trả <code>undefined</code></td></tr>
+              <tr><td>Iterable nói chung</td><td>Chỉ Array</td><td>✅ mọi iterable</td><td>Chỉ index được</td></tr>
+              <tr><td>Performance</td><td>Chậm hơn chút</td><td>Nhanh</td><td>Nhanh nhất (vi mô)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>break / async issue với forEach</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ forEach không break được</span>
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>].<span class="tok-fn">forEach</span>((x) =&gt; {
+  <span class="tok-kw">if</span> (x === <span class="tok-num">3</span>) <span class="tok-kw">return</span>;  <span class="tok-com">// chỉ skip phần tử này, không stop loop</span>
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x);
+});
+
+<span class="tok-com">// ✅ for/of break được</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> x <span class="tok-kw">of</span> [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>]) {
+  <span class="tok-kw">if</span> (x === <span class="tok-num">3</span>) <span class="tok-kw">break</span>;
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x);
+}
+
+<span class="tok-com">// ❌ forEach KHÔNG await tuần tự</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">bad</span>() {
+  [url1, url2, url3].<span class="tok-fn">forEach</span>(<span class="tok-kw">async</span> (u) =&gt; {
+    <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(u);  <span class="tok-com">// 3 request chạy đồng thời, "bad" return trước khi xong</span>
+  });
+}
+
+<span class="tok-com">// ✅ for/of await tuần tự</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">good</span>() {
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> u <span class="tok-kw">of</span> [url1, url2, url3]) {
+    <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(u);  <span class="tok-com">// chạy lần lượt</span>
+  }
+}</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Recommend mặc định</div>
+          <p>
+            <strong>Dùng <code>for/of</code></strong> khi cần side-effect / loop bình thường. Dùng
+            <code>map</code>/<code>filter</code>/<code>reduce</code> khi muốn transform / lọc / gộp. Tránh <code>forEach</code> —
+            không có ưu điểm gì mà mất khả năng break, async.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Truy cập index với for/of</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> items = [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'c'</span>];
+
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> [i, v] <span class="tok-kw">of</span> items.<span class="tok-fn">entries</span>()) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(i, v);  <span class="tok-com">// 0 'a', 1 'b', 2 'c'</span>
+}</code></pre>
+        </div>
+
+        <h2 id="find-some-every">5. <code>find</code> / <code>some</code> / <code>every</code> / <code>includes</code> — early return</h2>
+
+        <p>Khác <code>map</code>/<code>filter</code> ở chỗ <strong>dừng sớm</strong> khi tìm thấy / không match.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Method</th><th>Trả về</th><th>Dừng khi</th><th>Mảng rỗng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>find(pred)</code></td><td>Phần tử đầu match, hoặc <code>undefined</code></td><td>Match đầu tiên</td><td><code>undefined</code></td></tr>
+              <tr><td><code>findIndex(pred)</code></td><td>Index của match đầu, hoặc <code>-1</code></td><td>Match đầu tiên</td><td><code>-1</code></td></tr>
+              <tr><td><code>findLast</code> / <code>findLastIndex</code> (ES2023)</td><td>Như trên, từ phải qua</td><td>Match đầu (từ cuối)</td><td>—</td></tr>
+              <tr><td><code>some(pred)</code></td><td><code>boolean</code> — có ít nhất 1 match</td><td>Match đầu tiên</td><td><code>false</code></td></tr>
+              <tr><td><code>every(pred)</code></td><td><code>boolean</code> — TẤT CẢ match</td><td>Không-match đầu tiên</td><td><code>true</code> 🔥</td></tr>
+              <tr><td><code>includes(v)</code></td><td><code>boolean</code> — có v không</td><td>Match đầu (so sánh SameValueZero)</td><td><code>false</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Examples</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> nums = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>];
+
+nums.<span class="tok-fn">find</span>((x) =&gt; x &gt; <span class="tok-num">3</span>);        <span class="tok-com">// 4</span>
+nums.<span class="tok-fn">findIndex</span>((x) =&gt; x &gt; <span class="tok-num">3</span>);   <span class="tok-com">// 3</span>
+nums.<span class="tok-fn">findLast</span>((x) =&gt; x &lt; <span class="tok-num">4</span>);    <span class="tok-com">// 3</span>
+
+nums.<span class="tok-fn">some</span>((x) =&gt; x &gt; <span class="tok-num">10</span>);       <span class="tok-com">// false</span>
+nums.<span class="tok-fn">every</span>((x) =&gt; x &gt; <span class="tok-num">0</span>);        <span class="tok-com">// true</span>
+
+nums.<span class="tok-fn">includes</span>(<span class="tok-num">3</span>);                <span class="tok-com">// true</span>
+nums.<span class="tok-fn">includes</span>(<span class="tok-cls">NaN</span>);              <span class="tok-com">// (nếu array có NaN: true, vì SameValueZero)</span>
+[<span class="tok-cls">NaN</span>].<span class="tok-fn">indexOf</span>(<span class="tok-cls">NaN</span>);             <span class="tok-com">// -1 🔥 (indexOf dùng ===)</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>every</code> trên array rỗng = <code>true</code></div>
+          <p>
+            "Mọi phần tử đều match" trên 0 phần tử thì <em>vacuously true</em> (logic toán học). Cẩn thận khi check
+            "tất cả user đã verified" mà list rỗng — bạn vẫn được "yes".
+          </p>
+        </div>
+
+        <h2 id="flat-flatmap">6. <code>flat</code> / <code>flatMap</code></h2>
+
+        <p><code>flat(depth)</code> làm phẳng nested array. <code>flatMap</code> = <code>map().flat(1)</code> nhưng hiệu quả hơn (1 lần duyệt).</p>
+
+        <div class="code-wrap">
+<pre><code>[<span class="tok-num">1</span>, [<span class="tok-num">2</span>, [<span class="tok-num">3</span>, [<span class="tok-num">4</span>]]]].<span class="tok-fn">flat</span>();           <span class="tok-com">// [1, 2, [3, [4]]]   (depth=1)</span>
+[<span class="tok-num">1</span>, [<span class="tok-num">2</span>, [<span class="tok-num">3</span>, [<span class="tok-num">4</span>]]]].<span class="tok-fn">flat</span>(<span class="tok-num">2</span>);          <span class="tok-com">// [1, 2, 3, [4]]</span>
+[<span class="tok-num">1</span>, [<span class="tok-num">2</span>, [<span class="tok-num">3</span>, [<span class="tok-num">4</span>]]]].<span class="tok-fn">flat</span>(<span class="tok-cls">Infinity</span>);   <span class="tok-com">// [1, 2, 3, 4]</span>
+
+<span class="tok-com">// flatMap — phổ biến: 1 element → nhiều element</span>
+<span class="tok-kw">const</span> sentences = [<span class="tok-str">'I love JS'</span>, <span class="tok-str">'You too'</span>];
+sentences.<span class="tok-fn">flatMap</span>((s) =&gt; s.<span class="tok-fn">split</span>(<span class="tok-str">' '</span>));
+<span class="tok-com">// ['I', 'love', 'JS', 'You', 'too']</span>
+
+<span class="tok-com">// Filter + map gộp 1 lần:</span>
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>].<span class="tok-fn">flatMap</span>((x) =&gt; x % <span class="tok-num">2</span> ? [x * <span class="tok-num">10</span>] : []);
+<span class="tok-com">// [10, 30]   ← chỉ giữ odd, nhân 10</span></code></pre>
+        </div>
+
+        <h2 id="sort-gotcha">7. <code>sort</code> gotcha — default là so sánh STRING</h2>
+
+        <p>Đây là <strong>bug kinh điển</strong> bắt mọi JS developer ít nhất 1 lần.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>sort default</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>[<span class="tok-num">10</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">25</span>, <span class="tok-num">3</span>].<span class="tok-fn">sort</span>();
+<span class="tok-com">// [1, 10, 2, 25, 3]   🔥 SAI! sort by string</span>
+
+<span class="tok-com">// Vì sao? Default sort convert mỗi phần tử sang string, so sánh code point.</span>
+<span class="tok-com">// '10' &lt; '2' khi so chuỗi (ký tự đầu '1' &lt; '2').</span>
+
+<span class="tok-com">// Cách đúng — truyền comparator:</span>
+[<span class="tok-num">10</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">25</span>, <span class="tok-num">3</span>].<span class="tok-fn">sort</span>((a, b) =&gt; a - b);
+<span class="tok-com">// [1, 2, 3, 10, 25]  ✅</span>
+
+<span class="tok-com">// Comparator rule:</span>
+<span class="tok-com">//   trả &lt; 0  → a đứng trước b</span>
+<span class="tok-com">//   trả &gt; 0  → b đứng trước a</span>
+<span class="tok-com">//   trả = 0  → giữ nguyên thứ tự tương đối (stable từ 2019)</span>
+
+<span class="tok-com">// Sort theo property:</span>
+users.<span class="tok-fn">sort</span>((a, b) =&gt; a.age - b.age);  <span class="tok-com">// asc</span>
+users.<span class="tok-fn">sort</span>((a, b) =&gt; b.age - a.age);  <span class="tok-com">// desc</span>
+
+<span class="tok-com">// Sort string đúng locale (tiếng Việt có dấu):</span>
+[<span class="tok-str">'Đào'</span>, <span class="tok-str">'An'</span>, <span class="tok-str">'Bình'</span>].<span class="tok-fn">sort</span>((a, b) =&gt; a.<span class="tok-fn">localeCompare</span>(b, <span class="tok-str">'vi'</span>));</code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>sort</code> mutate — dùng <code>toSorted</code> nếu không muốn đổi gốc</div>
+<pre><code><span class="tok-kw">const</span> a = [<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>];
+<span class="tok-kw">const</span> b = a.<span class="tok-fn">toSorted</span>((x, y) =&gt; x - y);
+<span class="tok-com">// a = [3, 1, 2]  (giữ nguyên)</span>
+<span class="tok-com">// b = [1, 2, 3]</span></code></pre>
+        </div>
+
+        <h2 id="spread-rest">8. Spread (<code>...arr</code>) và Rest (<code>...args</code>) — cùng cú pháp khác ngữ cảnh</h2>
+
+        <p>
+          Cùng dùng dấu <code>...</code> nhưng:
+        </p>
+        <ul>
+          <li><strong>Spread</strong>: "trải" iterable ra — dùng ở <em>function call</em>, <em>array literal</em>, <em>object literal</em>.</li>
+          <li><strong>Rest</strong>: "gom" arg/element vào array — dùng ở <em>function param</em>, <em>destructuring</em>.</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Spread</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Spread trong function call: array → individual args</span>
+<span class="tok-cls">Math</span>.<span class="tok-fn">max</span>(...[<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">4</span>, <span class="tok-num">1</span>, <span class="tok-num">5</span>]);   <span class="tok-com">// 5</span>
+
+<span class="tok-com">// Spread trong array literal: clone / merge</span>
+<span class="tok-kw">const</span> a = [<span class="tok-num">1</span>, <span class="tok-num">2</span>];
+<span class="tok-kw">const</span> b = [<span class="tok-num">3</span>, <span class="tok-num">4</span>];
+<span class="tok-kw">const</span> merged = [...a, ...b];      <span class="tok-com">// [1, 2, 3, 4]</span>
+<span class="tok-kw">const</span> cloned = [...a];            <span class="tok-com">// shallow clone</span>
+
+<span class="tok-com">// Spread trong object literal (ES2018):</span>
+<span class="tok-kw">const</span> o1 = { a: <span class="tok-num">1</span>, b: <span class="tok-num">2</span> };
+<span class="tok-kw">const</span> o2 = { ...o1, c: <span class="tok-num">3</span> };    <span class="tok-com">// { a: 1, b: 2, c: 3 }</span>
+<span class="tok-kw">const</span> o3 = { ...o1, b: <span class="tok-num">99</span> };   <span class="tok-com">// { a: 1, b: 99 }  ← override</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Rest</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Rest trong function param: gom args còn lại vào array</span>
+<span class="tok-kw">function</span> <span class="tok-fn">sum</span>(...nums) {
+  <span class="tok-kw">return</span> nums.<span class="tok-fn">reduce</span>((a, b) =&gt; a + b, <span class="tok-num">0</span>);
+}
+<span class="tok-fn">sum</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>);  <span class="tok-com">// 10</span>
+
+<span class="tok-com">// Rest sau named param</span>
+<span class="tok-kw">function</span> <span class="tok-fn">log</span>(level, ...messages) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">`[</span><span class="tok-op">${</span>level<span class="tok-op">}</span><span class="tok-str">]`</span>, ...messages);
+}
+<span class="tok-fn">log</span>(<span class="tok-str">'INFO'</span>, <span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'c'</span>);  <span class="tok-com">// [INFO] a b c</span>
+
+<span class="tok-com">// Rest trong destructuring</span>
+<span class="tok-kw">const</span> [first, ...others] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>];
+<span class="tok-com">// first = 1, others = [2, 3, 4]</span>
+
+<span class="tok-kw">const</span> { a, ...restObj } = { a: <span class="tok-num">1</span>, b: <span class="tok-num">2</span>, c: <span class="tok-num">3</span> };
+<span class="tok-com">// a = 1, restObj = { b: 2, c: 3 }</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — đứng bên trái hay bên phải dấu <code>=</code>?</div>
+          <p>
+            Nếu <code>...</code> đứng <strong>bên trái</strong> (param, destructuring) → <em>rest</em>: gom vào.<br/>
+            Nếu <code>...</code> đứng <strong>bên phải</strong> hoặc trong call/literal → <em>spread</em>: trải ra.
+          </p>
+        </div>
+
+        <h2 id="destructuring">9. Destructuring nâng cao</h2>
+
+        <p>Đã gặp ở chương 3-4. Đây là full reference.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Array destructuring</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> [a, b, c] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+<span class="tok-com">// a=1, b=2, c=3</span>
+
+<span class="tok-com">// Skip phần tử</span>
+<span class="tok-kw">const</span> [, , third] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];  <span class="tok-com">// third=3</span>
+
+<span class="tok-com">// Default value khi undefined</span>
+<span class="tok-kw">const</span> [x = <span class="tok-num">10</span>, y = <span class="tok-num">20</span>] = [<span class="tok-num">1</span>];  <span class="tok-com">// x=1, y=20</span>
+
+<span class="tok-com">// Rest</span>
+<span class="tok-kw">const</span> [head, ...tail] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>];
+<span class="tok-com">// head=1, tail=[2,3,4]</span>
+
+<span class="tok-com">// Swap không cần biến temp</span>
+<span class="tok-kw">let</span> p = <span class="tok-num">1</span>, q = <span class="tok-num">2</span>;
+[p, q] = [q, p];  <span class="tok-com">// p=2, q=1</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Object destructuring</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> user = { name: <span class="tok-str">'An'</span>, age: <span class="tok-num">20</span>, city: <span class="tok-str">'HN'</span> };
+
+<span class="tok-com">// Cơ bản</span>
+<span class="tok-kw">const</span> { name, age } = user;
+
+<span class="tok-com">// Rename — y trong object → newName trong scope</span>
+<span class="tok-kw">const</span> { name: userName } = user;  <span class="tok-com">// userName = 'An'</span>
+
+<span class="tok-com">// Default</span>
+<span class="tok-kw">const</span> { phone = <span class="tok-str">'N/A'</span> } = user;  <span class="tok-com">// phone = 'N/A'</span>
+
+<span class="tok-com">// Rename + default</span>
+<span class="tok-kw">const</span> { phone: tel = <span class="tok-str">'N/A'</span> } = user;
+
+<span class="tok-com">// Nested</span>
+<span class="tok-kw">const</span> obj = { a: { b: { c: <span class="tok-num">42</span> } } };
+<span class="tok-kw">const</span> { a: { b: { c } } } = obj;  <span class="tok-com">// c = 42</span>
+
+<span class="tok-com">// Destructure trong param + default</span>
+<span class="tok-kw">function</span> <span class="tok-fn">greet</span>({ name = <span class="tok-str">'guest'</span>, lang = <span class="tok-str">'vi'</span> } = {}) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(name, lang);
+}
+<span class="tok-fn">greet</span>();                       <span class="tok-com">// 'guest' 'vi'</span>
+<span class="tok-fn">greet</span>({ name: <span class="tok-str">'An'</span> });          <span class="tok-com">// 'An' 'vi'</span>
+<span class="tok-fn">greet</span>({ name: <span class="tok-str">'An'</span>, lang: <span class="tok-str">'en'</span> });</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Pattern hay — destructure return value</div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">parseUrl</span>(url) {
+  <span class="tok-kw">const</span> u = <span class="tok-kw">new</span> <span class="tok-cls">URL</span>(url);
+  <span class="tok-kw">return</span> { host: u.host, path: u.pathname, query: u.search };
+}
+
+<span class="tok-kw">const</span> { host, path } = <span class="tok-fn">parseUrl</span>(<span class="tok-str">'https://example.com/x?y=1'</span>);
+<span class="tok-com">// host = 'example.com', path = '/x'</span></code></pre>
+        </div>
+
+        <h2 id="iterable">10. Iteration Protocol — vì sao <code>for/of</code> hoạt động</h2>
+
+        <p>
+          Một object là <strong>iterable</strong> nếu có method <code>[Symbol.iterator]()</code>, method này trả về một
+          <strong>iterator</strong>. Iterator là object có method <code>next()</code> trả về
+          <code>{ value, done }</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Iterator của Array (built-in)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> arr = [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'c'</span>];
+<span class="tok-kw">const</span> it = arr[<span class="tok-cls">Symbol</span>.iterator]();
+
+it.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: 'a', done: false }</span>
+it.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: 'b', done: false }</span>
+it.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: 'c', done: false }</span>
+it.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: undefined, done: true }</span></code></pre>
+        </div>
+
+        <p>Built-in iterables: Array, String, Map, Set, NodeList, arguments, TypedArray. Plain object thì <strong>không</strong>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Tự build iterable</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> range = {
+  from: <span class="tok-num">1</span>,
+  to: <span class="tok-num">5</span>,
+  [<span class="tok-cls">Symbol</span>.iterator]() {
+    <span class="tok-kw">let</span> current = <span class="tok-kw">this</span>.from;
+    <span class="tok-kw">const</span> last = <span class="tok-kw">this</span>.to;
+    <span class="tok-kw">return</span> {
+      <span class="tok-fn">next</span>() {
+        <span class="tok-kw">return</span> current &lt;= last
+          ? { value: current++, done: <span class="tok-kw">false</span> }
+          : { value: <span class="tok-kw">undefined</span>, done: <span class="tok-kw">true</span> };
+      }
+    };
+  }
+};
+
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> n <span class="tok-kw">of</span> range) <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(n);  <span class="tok-com">// 1 2 3 4 5</span>
+[...range];                              <span class="tok-com">// [1, 2, 3, 4, 5]</span>
+<span class="tok-cls">Array</span>.<span class="tok-fn">from</span>(range);                       <span class="tok-com">// [1, 2, 3, 4, 5]</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>for/of</code> trên plain object → lỗi</div>
+<pre><code><span class="tok-kw">const</span> obj = { a: <span class="tok-num">1</span>, b: <span class="tok-num">2</span> };
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> x <span class="tok-kw">of</span> obj) { }   <span class="tok-com">// TypeError: obj is not iterable</span>
+
+<span class="tok-com">// Cách đúng:</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> k <span class="tok-kw">of</span> <span class="tok-cls">Object</span>.<span class="tok-fn">keys</span>(obj)) { }
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> v <span class="tok-kw">of</span> <span class="tok-cls">Object</span>.<span class="tok-fn">values</span>(obj)) { }
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> [k, v] <span class="tok-kw">of</span> <span class="tok-cls">Object</span>.<span class="tok-fn">entries</span>(obj)) { }
+
+<span class="tok-com">// Hoặc for/in (duyệt key, kể cả inherited - cẩn thận):</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> k <span class="tok-kw">in</span> obj) { }</code></pre>
+        </div>
+
+        <h2 id="generator">11. Generator — <code>function*</code></h2>
+
+        <p>
+          Generator là function dừng/tiếp được. Khi gọi, nó <em>không chạy</em> — trả về một <strong>generator object</strong>
+          (vừa là iterator vừa là iterable). Mỗi lần <code>next()</code> chạy đến <code>yield</code> tiếp theo rồi pause.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Generator cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span>* <span class="tok-fn">simple</span>() {
+  <span class="tok-kw">yield</span> <span class="tok-num">1</span>;
+  <span class="tok-kw">yield</span> <span class="tok-num">2</span>;
+  <span class="tok-kw">yield</span> <span class="tok-num">3</span>;
+}
+
+<span class="tok-kw">const</span> g = <span class="tok-fn">simple</span>();
+g.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: 1, done: false }</span>
+g.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: 2, done: false }</span>
+g.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: 3, done: false }</span>
+g.<span class="tok-fn">next</span>();  <span class="tok-com">// { value: undefined, done: true }</span>
+
+<span class="tok-com">// Generator object là iterable</span>
+[...<span class="tok-fn">simple</span>()];          <span class="tok-com">// [1, 2, 3]</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> v <span class="tok-kw">of</span> <span class="tok-fn">simple</span>()) <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(v);</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Range bằng generator (gọn hơn)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span>* <span class="tok-fn">range</span>(from, to, step = <span class="tok-num">1</span>) {
+  <span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = from; i &lt;= to; i += step) {
+    <span class="tok-kw">yield</span> i;
+  }
+}
+
+[...<span class="tok-fn">range</span>(<span class="tok-num">1</span>, <span class="tok-num">5</span>)];           <span class="tok-com">// [1, 2, 3, 4, 5]</span>
+[...<span class="tok-fn">range</span>(<span class="tok-num">0</span>, <span class="tok-num">10</span>, <span class="tok-num">2</span>)];        <span class="tok-com">// [0, 2, 4, 6, 8, 10]</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Infinite sequence (lazy)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span>* <span class="tok-fn">naturals</span>() {
+  <span class="tok-kw">let</span> n = <span class="tok-num">1</span>;
+  <span class="tok-kw">while</span> (<span class="tok-kw">true</span>) <span class="tok-kw">yield</span> n++;
+}
+
+<span class="tok-com">// Lấy 5 số đầu — KHÔNG vô hạn loop vì generator lazy</span>
+<span class="tok-kw">function</span>* <span class="tok-fn">take</span>(iter, n) {
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> v <span class="tok-kw">of</span> iter) {
+    <span class="tok-kw">if</span> (n-- &lt;= <span class="tok-num">0</span>) <span class="tok-kw">return</span>;
+    <span class="tok-kw">yield</span> v;
+  }
+}
+
+[...<span class="tok-fn">take</span>(<span class="tok-fn">naturals</span>(), <span class="tok-num">5</span>)];  <span class="tok-com">// [1, 2, 3, 4, 5]</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao generator?</div>
+          <ul>
+            <li><strong>Lazy</strong>: chỉ tính khi cần — viết được sequence vô hạn.</li>
+            <li><strong>Composable</strong>: <code>take</code>, <code>filter</code>, <code>map</code> bằng generator tạo pipeline streaming, không cần buộc array trung gian.</li>
+            <li><strong>State machine</strong>: viết logic kiểu "đợi event, rồi đến event tiếp" tự nhiên hơn.</li>
+            <li>Là nền tảng để hiểu <strong>async generator</strong> (chương 6).</li>
+          </ul>
+        </div>
+
+        <h2 id="set-map">12. Set / Map / WeakSet / WeakMap</h2>
+
+        <p>4 collection ES6 ngoài array/object. Mỗi cái có chỗ dùng riêng.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>—</th><th>Set</th><th>Map</th><th>WeakSet</th><th>WeakMap</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Lưu</td><td>Giá trị unique</td><td>Cặp key→value</td><td>Object unique</td><td>Cặp object→value</td></tr>
+              <tr><td>Key type</td><td>—</td><td>Bất kỳ (kể cả object)</td><td>—</td><td>Object only</td></tr>
+              <tr><td>Lookup</td><td>O(1) — has</td><td>O(1) — get/has</td><td>O(1)</td><td>O(1)</td></tr>
+              <tr><td>Iterable</td><td>✅ insertion order</td><td>✅ insertion order</td><td>❌</td><td>❌</td></tr>
+              <tr><td>size property</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td></tr>
+              <tr><td>GC reference</td><td>Strong</td><td>Strong</td><td>Weak (cho phép GC)</td><td>Weak</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="set">12.1. <code>Set</code> — collection unique</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">const</span> s = <span class="tok-kw">new</span> <span class="tok-cls">Set</span>();
+s.<span class="tok-fn">add</span>(<span class="tok-num">1</span>); s.<span class="tok-fn">add</span>(<span class="tok-num">2</span>); s.<span class="tok-fn">add</span>(<span class="tok-num">2</span>); s.<span class="tok-fn">add</span>(<span class="tok-num">3</span>);
+s.size;            <span class="tok-com">// 3</span>
+s.<span class="tok-fn">has</span>(<span class="tok-num">2</span>);          <span class="tok-com">// true</span>
+s.<span class="tok-fn">delete</span>(<span class="tok-num">2</span>);
+[...s];            <span class="tok-com">// [1, 3]</span>
+
+<span class="tok-com">// Dedupe array đơn giản:</span>
+<span class="tok-kw">const</span> uniq = [...<span class="tok-kw">new</span> <span class="tok-cls">Set</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">3</span>, <span class="tok-num">3</span>])];  <span class="tok-com">// [1, 2, 3]</span>
+
+<span class="tok-com">// So sánh performance: includes O(n) vs Set.has O(1)</span>
+<span class="tok-kw">const</span> bigArr = <span class="tok-cls">Array</span>.<span class="tok-fn">from</span>({ length: <span class="tok-num">100000</span> }, (_, i) =&gt; i);
+<span class="tok-kw">const</span> bigSet = <span class="tok-kw">new</span> <span class="tok-cls">Set</span>(bigArr);
+
+bigArr.<span class="tok-fn">includes</span>(<span class="tok-num">99999</span>);   <span class="tok-com">// chậm — duyệt 100k phần tử</span>
+bigSet.<span class="tok-fn">has</span>(<span class="tok-num">99999</span>);        <span class="tok-com">// nhanh — hash lookup</span></code></pre>
+        </div>
+
+        <h3 id="map">12.2. <code>Map</code> — key bất kỳ + insertion order</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">const</span> m = <span class="tok-kw">new</span> <span class="tok-cls">Map</span>();
+m.<span class="tok-fn">set</span>(<span class="tok-str">'name'</span>, <span class="tok-str">'An'</span>);
+m.<span class="tok-fn">set</span>(<span class="tok-num">42</span>, <span class="tok-str">'số 42'</span>);
+m.<span class="tok-fn">set</span>(<span class="tok-cls">Symbol</span>(<span class="tok-str">'id'</span>), <span class="tok-num">1</span>);
+
+<span class="tok-kw">const</span> obj = {};
+m.<span class="tok-fn">set</span>(obj, <span class="tok-str">'value cho object'</span>);   <span class="tok-com">// Map dùng object làm key — khác plain Object!</span>
+
+m.<span class="tok-fn">get</span>(<span class="tok-str">'name'</span>);   <span class="tok-com">// 'An'</span>
+m.<span class="tok-fn">has</span>(<span class="tok-num">42</span>);       <span class="tok-com">// true</span>
+m.size;          <span class="tok-com">// 4</span>
+
+<span class="tok-com">// Iterate theo INSERTION ORDER</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> [k, v] <span class="tok-kw">of</span> m) { }
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> k <span class="tok-kw">of</span> m.<span class="tok-fn">keys</span>()) { }
+<span class="tok-kw">for</span> (<span class="tok-kw">const</span> v <span class="tok-kw">of</span> m.<span class="tok-fn">values</span>()) { }
+
+<span class="tok-com">// Khởi tạo từ array of pairs</span>
+<span class="tok-kw">const</span> m2 = <span class="tok-kw">new</span> <span class="tok-cls">Map</span>([
+  [<span class="tok-str">'a'</span>, <span class="tok-num">1</span>],
+  [<span class="tok-str">'b'</span>, <span class="tok-num">2</span>],
+]);</code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">⚖️ Map vs plain Object</div>
+          <ul>
+            <li><strong>Key type</strong>: Map cho phép key bất kỳ. Object chỉ string/Symbol.</li>
+            <li><strong>Order</strong>: Map đảm bảo insertion order. Object — chỉ đảm bảo từ ES2020, và integer-like key bị sort.</li>
+            <li><strong>Size</strong>: Map có <code>.size</code>. Object phải <code>Object.keys(o).length</code>.</li>
+            <li><strong>Iterate</strong>: Map iterable trực tiếp. Object cần <code>Object.entries</code>.</li>
+            <li><strong>Performance</strong>: Map tối ưu cho thêm/xóa thường xuyên.</li>
+            <li><strong>Prototype pollution</strong>: Object có inherited key như <code>toString</code>, <code>__proto__</code>. Map sạch.</li>
+            <li><strong>Khi nào dùng Object</strong>: structured record (user, config). <strong>Khi nào dùng Map</strong>: dictionary động, cache, lookup table với key động.</li>
+          </ul>
+        </div>
+
+        <h3 id="weak">12.3. <code>WeakSet</code> / <code>WeakMap</code> — không giữ GC reference</h3>
+
+        <p>
+          Strong reference (Map, Set, biến thường) <em>chặn</em> garbage collector. Weak reference cho phép object bị GC nếu
+          không có chỗ nào khác giữ nó.
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">let</span> user = { name: <span class="tok-str">'An'</span> };
+<span class="tok-kw">const</span> wm = <span class="tok-kw">new</span> <span class="tok-cls">WeakMap</span>();
+wm.<span class="tok-fn">set</span>(user, <span class="tok-str">'metadata'</span>);
+
+user = <span class="tok-kw">null</span>;   <span class="tok-com">// không còn strong ref → entry trong WeakMap sẽ bị GC</span>
+
+<span class="tok-com">// WeakMap KHÔNG iterable, không size, không keys() — vì entries có thể biến mất bất kỳ lúc nào</span>
+<span class="tok-com">// Chỉ có: set / get / has / delete</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Use case WeakMap</div>
+          <p>
+            Gắn metadata cho object mà không "giữ" object đó sống mãi. Pattern: <strong>private fields</strong> trước khi
+            class có <code>#field</code> (chương 4), <strong>memoize</strong> theo object key, <strong>cache</strong> DOM
+            node mà không leak memory khi node bị remove.
+          </p>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — Phân tích danh sách user</h4>
+            <div class="exercise-body">
+              <p>Cho mảng:</p>
+<pre><code><span class="tok-kw">const</span> users = [
+  { name: <span class="tok-str">'An'</span>,    age: <span class="tok-num">25</span> },
+  { name: <span class="tok-str">'Bình'</span>,  age: <span class="tok-num">17</span> },
+  { name: <span class="tok-str">'Cường'</span>, age: <span class="tok-num">30</span> },
+  { name: <span class="tok-str">'An'</span>,    age: <span class="tok-num">21</span> },
+  { name: <span class="tok-str">'Bảo'</span>,   age: <span class="tok-num">19</span> },
+];</code></pre>
+              <p>Viết các tính toán sau (chain <code>filter</code>/<code>map</code>/<code>reduce</code>, không loop tay):</p>
+              <ol>
+                <li>Danh sách tên những user ≥ 21 tuổi.</li>
+                <li>Tuổi trung bình (làm tròn 1 chữ số thập phân).</li>
+                <li>Group user theo ký tự đầu của tên: <code>{ A: [...], B: [...], C: [...] }</code>.</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com">// 1.</span>
+<span class="tok-kw">const</span> adultNames = users
+  .<span class="tok-fn">filter</span>((u) =&gt; u.age &gt;= <span class="tok-num">21</span>)
+  .<span class="tok-fn">map</span>((u) =&gt; u.name);   <span class="tok-com">// ['An', 'Cường', 'An']</span>
+
+<span class="tok-com">// 2.</span>
+<span class="tok-kw">const</span> avgAge = +(
+  users.<span class="tok-fn">reduce</span>((s, u) =&gt; s + u.age, <span class="tok-num">0</span>) / users.length
+).<span class="tok-fn">toFixed</span>(<span class="tok-num">1</span>);   <span class="tok-com">// 22.4</span>
+
+<span class="tok-com">// 3.</span>
+<span class="tok-kw">const</span> byLetter = users.<span class="tok-fn">reduce</span>((acc, u) =&gt; {
+  <span class="tok-kw">const</span> k = u.name[<span class="tok-num">0</span>];
+  (acc[k] ??= []).<span class="tok-fn">push</span>(u);
+  <span class="tok-kw">return</span> acc;
+}, {});
+
+<span class="tok-com">// Hoặc dùng Object.groupBy (ES2024):</span>
+<span class="tok-cls">Object</span>.<span class="tok-fn">groupBy</span>(users, (u) =&gt; u.name[<span class="tok-num">0</span>]);</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — Implement <code>unique</code>, <code>chunk</code>, <code>zip</code> không dùng lodash</h4>
+            <div class="exercise-body">
+              <ul>
+                <li><code>unique(arr)</code> trả mảng các phần tử unique (giữ thứ tự xuất hiện đầu tiên).</li>
+                <li><code>chunk(arr, size)</code> chia mảng thành mảng các "chunk" độ dài <code>size</code>; chunk cuối có thể ngắn hơn. <em>VD</em> <code>chunk([1,2,3,4,5], 2)</code> → <code>[[1,2],[3,4],[5]]</code>.</li>
+                <li><code>zip(...arrs)</code> ghép nhiều mảng cùng index: <code>zip([1,2,3], ['a','b','c'])</code> → <code>[[1,'a'],[2,'b'],[3,'c']]</code>. Nếu length khác, dừng ở mảng ngắn nhất.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">const</span> <span class="tok-fn">unique</span> = (arr) =&gt; [...<span class="tok-kw">new</span> <span class="tok-cls">Set</span>(arr)];
+
+<span class="tok-kw">const</span> <span class="tok-fn">chunk</span> = (arr, size) =&gt;
+  <span class="tok-cls">Array</span>.<span class="tok-fn">from</span>(
+    { length: <span class="tok-cls">Math</span>.<span class="tok-fn">ceil</span>(arr.length / size) },
+    (_, i) =&gt; arr.<span class="tok-fn">slice</span>(i * size, i * size + size)
+  );
+
+<span class="tok-kw">const</span> <span class="tok-fn">zip</span> = (...arrs) =&gt; {
+  <span class="tok-kw">const</span> minLen = <span class="tok-cls">Math</span>.<span class="tok-fn">min</span>(...arrs.<span class="tok-fn">map</span>((a) =&gt; a.length));
+  <span class="tok-kw">return</span> <span class="tok-cls">Array</span>.<span class="tok-fn">from</span>({ length: minLen }, (_, i) =&gt; arrs.<span class="tok-fn">map</span>((a) =&gt; a[i]));
+};
+
+<span class="tok-fn">unique</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);              <span class="tok-com">// [1, 2, 3]</span>
+<span class="tok-fn">chunk</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>], <span class="tok-num">2</span>);          <span class="tok-com">// [[1,2],[3,4],[5]]</span>
+<span class="tok-fn">zip</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>], [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'c'</span>]);   <span class="tok-com">// [[1,'a'],[2,'b'],[3,'c']]</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Generator Fibonacci + <code>take</code></h4>
+            <div class="exercise-body">
+              <p>Viết:</p>
+              <ol>
+                <li><code>function* fib()</code> sinh ra dãy Fibonacci vô hạn: 0, 1, 1, 2, 3, 5, 8, 13, ...</li>
+                <li><code>function* take(iter, n)</code> lấy n phần tử đầu của iterable.</li>
+              </ol>
+              <p>Test: <code>[...take(fib(), 10)]</code> → <code>[0, 1, 1, 2, 3, 5, 8, 13, 21, 34]</code>.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span>* <span class="tok-fn">fib</span>() {
+  <span class="tok-kw">let</span> [a, b] = [<span class="tok-num">0</span>, <span class="tok-num">1</span>];
+  <span class="tok-kw">while</span> (<span class="tok-kw">true</span>) {
+    <span class="tok-kw">yield</span> a;
+    [a, b] = [b, a + b];
+  }
+}
+
+<span class="tok-kw">function</span>* <span class="tok-fn">take</span>(iter, n) {
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> v <span class="tok-kw">of</span> iter) {
+    <span class="tok-kw">if</span> (n-- &lt;= <span class="tok-num">0</span>) <span class="tok-kw">return</span>;
+    <span class="tok-kw">yield</span> v;
+  }
+}
+
+[...<span class="tok-fn">take</span>(<span class="tok-fn">fib</span>(), <span class="tok-num">10</span>)];
+<span class="tok-com">// [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]</span></code></pre>
+                  <p>Generator vô hạn hoạt động được vì <em>lazy</em>: <code>yield</code> dừng tới khi <code>next()</code> mới chạy tiếp. <code>take</code> ngắt mạch sớm.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Refactor imperative → functional</h4>
+            <div class="exercise-body">
+              <p>Code dưới đang dùng loop + push. Refactor thành chain <code>filter</code>/<code>map</code>/<code>reduce</code> đọc rõ ràng hơn:</p>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">totalDiscountedPrice</span>(items) {
+  <span class="tok-kw">const</span> instock = [];
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> it <span class="tok-kw">of</span> items) {
+    <span class="tok-kw">if</span> (it.stock &gt; <span class="tok-num">0</span>) instock.<span class="tok-fn">push</span>(it);
+  }
+  <span class="tok-kw">const</span> prices = [];
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> it <span class="tok-kw">of</span> instock) {
+    prices.<span class="tok-fn">push</span>(it.price * (<span class="tok-num">1</span> - it.discount));
+  }
+  <span class="tok-kw">let</span> total = <span class="tok-num">0</span>;
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> p <span class="tok-kw">of</span> prices) total += p;
+  <span class="tok-kw">return</span> total;
+}</code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">totalDiscountedPrice</span>(items) {
+  <span class="tok-kw">return</span> items
+    .<span class="tok-fn">filter</span>((it) =&gt; it.stock &gt; <span class="tok-num">0</span>)
+    .<span class="tok-fn">map</span>((it) =&gt; it.price * (<span class="tok-num">1</span> - it.discount))
+    .<span class="tok-fn">reduce</span>((s, p) =&gt; s + p, <span class="tok-num">0</span>);
+}</code></pre>
+                  <p>Code ngắn hơn ~⅓, đọc được như "lọc còn hàng → tính giá sau giảm → cộng tổng".</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Generic <code>groupBy(arr, keyFn)</code></h4>
+            <div class="exercise-body">
+              <p>Viết <code>groupBy(arr, keyFn)</code> nhận mảng + function tính key, trả object mỗi key → mảng phần tử match.</p>
+<pre><code><span class="tok-fn">groupBy</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>], (n) =&gt; n % <span class="tok-num">2</span> === <span class="tok-num">0</span> ? <span class="tok-str">'even'</span> : <span class="tok-str">'odd'</span>);
+<span class="tok-com">// { odd: [1, 3, 5], even: [2, 4] }</span>
+
+<span class="tok-fn">groupBy</span>(words, (w) =&gt; w.length);
+<span class="tok-com">// { 3: [...], 4: [...], ... }</span></code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">groupBy</span>(arr, keyFn) {
+  <span class="tok-kw">return</span> arr.<span class="tok-fn">reduce</span>((acc, item) =&gt; {
+    <span class="tok-kw">const</span> k = <span class="tok-fn">keyFn</span>(item);
+    (acc[k] ??= []).<span class="tok-fn">push</span>(item);
+    <span class="tok-kw">return</span> acc;
+  }, {});
+}
+
+<span class="tok-com">// ES2024 native: Object.groupBy(arr, keyFn)  — kết quả tương tự.</span>
+<span class="tok-com">// Hoặc Map.groupBy nếu cần key bất kỳ (object key).</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>[1, 2, 3].map(parseInt)</code> trả về?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>[1, NaN, NaN]</code>. Vì <code>parseInt</code> nhận <code>(value, radix)</code>, <code>map</code> gọi callback với <code>(value, index, array)</code>. Kết quả: <code>parseInt('1', 0)</code> = 1 (radix 0 = mặc định 10); <code>parseInt('2', 1)</code> = NaN (không có radix 1); <code>parseInt('3', 2)</code> = NaN ('3' không hợp lệ trong nhị phân).</p>
+              <p>Fix: <code>[1, 2, 3].map((x) =&gt; parseInt(x))</code> hoặc <code>.map(Number)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>Array.from({ length: 3 }, (_, i) =&gt; i)</code> trả về?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>[0, 1, 2]</code>. <code>Array.from</code> chấp nhận array-like (object có <code>length</code>) + map function. Đây là cách tạo array có index 0..n-1 không cần loop.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Gọi <code>[].reduce((a, b) =&gt; a + b)</code> (không initial value, trên array rỗng) — xảy ra gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>TypeError: Reduce of empty array with no initial value</code>. Reduce không có gì để khởi tạo accumulator. Quy tắc: luôn truyền initial value, vừa an toàn vừa tự document type.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p><code>for (const x of obj)</code> với <code>obj = { a: 1, b: 2 }</code> — chạy được không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Không. Plain object không có <code>[Symbol.iterator]</code> → throw <code>TypeError: obj is not iterable</code>. Dùng <code>Object.entries(obj)</code>, <code>Object.keys(obj)</code> hoặc <code>Object.values(obj)</code> để có iterable.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>So sánh performance lookup giữa <code>arr.includes(x)</code> và <code>set.has(x)</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>Set.has</code> là O(1) (hash lookup). <code>Array.includes</code> là O(n) (duyệt tuần tự). Khi check membership trong vòng lặp / mảng lớn, chuyển sang Set có thể giảm thời gian từ O(n²) xuống O(n).</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>So sánh <code>[...arr1, ...arr2]</code> và <code>arr1.concat(arr2)</code> — khác gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Kết quả giống nhau (đều trả mảng mới, không mutate). Khác nhau ở <em>flexibility</em>: spread chèn được vào giữa <code>[1, ...arr, 99]</code>, gom được iterable khác (Set, Map, generator) — <code>concat</code> chỉ ghép array. <strong>Performance</strong>: spread thường nhanh hơn cho mảng nhỏ; concat có thể nhanh hơn cho mảng rất lớn (engine tối ưu khác nhau).</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p><code>arr.sort()</code> không truyền comparator — sort theo gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Theo <strong>string</strong> — JS convert mọi phần tử sang string rồi so sánh code point. Đó là vì sao <code>[10, 1, 2].sort()</code> ra <code>[1, 10, 2]</code>. Với số phải truyền: <code>arr.sort((a, b) =&gt; a - b)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>WeakMap vs Map — key behavior khác chỗ nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Map giữ <strong>strong reference</strong> đến key — chặn GC, miễn map còn sống thì key còn sống. WeakMap giữ <strong>weak reference</strong> — nếu không nơi nào khác giữ key (chỉ WeakMap có), GC được phép thu hồi, entry biến mất khỏi map. Vì entries có thể biến mất bất kỳ lúc nào, WeakMap <strong>không iterable</strong>, không có <code>.size</code>, <code>.keys()</code>, <code>.values()</code>. Key phải là <strong>object</strong>, không nhận primitive.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 5, bạn nên đã master:</p>
+        <ul>
+          <li><strong>Tạo array</strong>: literal, <code>Array.of</code>, <code>Array.from</code>; tránh <code>new Array(n)</code> sparse trap.</li>
+          <li><strong>Mutate vs non-mutate</strong>: thuộc bảng. Trong React/Redux luôn dùng <code>toSorted</code>, <code>toReversed</code>, spread copy.</li>
+          <li><strong>map/filter/reduce</strong>: 4 pattern reduce kinh điển (sum, group, count, build object); luôn truyền initial value.</li>
+          <li><strong>for/of là default</strong>, <code>forEach</code> tránh, <code>for</code> chỉ khi cần index thực sự.</li>
+          <li><strong>find/some/every/includes</strong>: early return; <code>every([])</code> = true.</li>
+          <li><strong>flat / flatMap</strong>: depth, <code>Infinity</code>.</li>
+          <li><strong>sort</strong> default string — luôn truyền comparator.</li>
+          <li><strong>Spread vs Rest</strong>: cùng <code>...</code>, khác ngữ cảnh (trái = rest, phải = spread).</li>
+          <li><strong>Destructuring</strong>: rename, default, nested, param.</li>
+          <li><strong>Iteration protocol</strong>: <code>[Symbol.iterator]</code> + <code>next()</code>.</li>
+          <li><strong>Generator</strong>: <code>function*</code>, <code>yield</code>, lazy, sequence vô hạn.</li>
+          <li><strong>Set/Map/WeakSet/WeakMap</strong>: chọn đúng loại; Set dedupe; Map khi key bất kỳ; Weak khi cần GC-friendly metadata.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 6 (Async, Event Loop)</strong> — async iterator (<code>for await...of</code>) là phần mở rộng tự nhiên của iteration protocol cho Promise.</li>
+          <li><strong>Chương 7 (Error handling)</strong> — xử lý lỗi bên trong <code>reduce</code>/<code>map</code> mà không phá vỡ chain.</li>
+          <li><strong>Chương 8+ (TypeScript)</strong> — type cho generic array/iterable, tuple, mapped types đối chiếu với <code>map</code>/<code>filter</code>.</li>
+          <li><strong>Dart Chương 6 (Collections)</strong> — đối chiếu <code>List</code>/<code>Set</code>/<code>Map</code> Dart, sync* / async* generator Dart.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong4.html" class="prev">
+            <div class="dir">← Chương 4</div>
+            <div class="label">Objects, Prototypes &amp; Classes</div>
+          </a>
+          <a href="chuong6.html" class="next">
+            <div class="dir">Chương 6 →</div>
+            <div class="label">Async, Promises &amp; Event Loop</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#array-basic">1. Tạo array &amp; sparse</a></li>
+          <li><a href="#mutating-vs-not">2. Mutate vs non-mutate</a></li>
+          <li><a href="#map-filter-reduce">3. map / filter / reduce</a></li>
+          <li class="level-3"><a href="#map">3.1. map</a></li>
+          <li class="level-3"><a href="#filter">3.2. filter</a></li>
+          <li class="level-3"><a href="#reduce">3.3. reduce</a></li>
+          <li><a href="#loop-styles">4. forEach / for-of / for</a></li>
+          <li><a href="#find-some-every">5. find / some / every</a></li>
+          <li><a href="#flat-flatmap">6. flat / flatMap</a></li>
+          <li><a href="#sort-gotcha">7. sort gotcha</a></li>
+          <li><a href="#spread-rest">8. Spread &amp; Rest</a></li>
+          <li><a href="#destructuring">9. Destructuring</a></li>
+          <li><a href="#iterable">10. Iteration Protocol</a></li>
+          <li><a href="#generator">11. Generator</a></li>
+          <li><a href="#set-map">12. Set / Map / Weak*</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 5 — Arrays, Iterables &amp; Iteration Protocols · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong4.html">← Chương 4</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong6.html">Chương 6 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

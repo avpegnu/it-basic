@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6 — Behavioral Patterns Part 1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 06 · Behavioral — Part 1</div>
+      <h1>Behavioral Patterns — Phần 1 (6 mẫu)</h1>
+      <p class="subtitle">Chain of Responsibility · Command · Iterator · Mediator · Memento · Observer. Cách object giao tiếp và phân chia trách nhiệm runtime.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#intro">1. Tổng quan</a></li>
+        <li><a href="#chain">2. Chain of Responsibility</a></li>
+        <li><a href="#command">3. Command</a></li>
+        <li><a href="#iterator">4. Iterator</a></li>
+        <li><a href="#mediator">5. Mediator</a></li>
+        <li><a href="#memento">6. Memento</a></li>
+        <li><a href="#observer">7. Observer</a></li>
+        <li><a href="#summary">8. So sánh nhanh</a></li>
+        <li><a href="#exercises">9. Bài tập</a></li>
+        <li><a href="#quiz">10. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="intro">
+        <h2>1. Tổng quan Behavioral Patterns</h2>
+        <p>
+          Nhóm này tập trung vào <strong>cách các object giao tiếp với nhau</strong> và <strong>phân chia trách nhiệm</strong>. Khác Structural
+          (đóng/ghép cấu trúc), Behavioral nói về luồng điều khiển và message giữa object.
+        </p>
+
+        <p>11 pattern chia 2 chương. Phần 1 — 6 pattern thường gặp:</p>
+
+        <table>
+          <thead><tr><th>Pattern</th><th>Một câu</th></tr></thead>
+          <tbody>
+            <tr><td>Chain of Responsibility</td><td>Chuỗi handler, mỗi cái xử lý hoặc pass tiếp</td></tr>
+            <tr><td>Command</td><td>Đóng gói request thành object</td></tr>
+            <tr><td>Iterator</td><td>Duyệt collection mà không lộ cấu trúc</td></tr>
+            <tr><td>Mediator</td><td>1 object trung gian giảm coupling N-N giữa nhiều object</td></tr>
+            <tr><td>Memento</td><td>Lưu/phục hồi state mà không phá encapsulation</td></tr>
+            <tr><td>Observer</td><td>1-N publish/subscribe</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Chain of Responsibility -->
+      <section id="chain">
+        <h2>2. Chain of Responsibility</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №13 — BEHAVIORAL</div>
+          <h3>Chain of Responsibility</h3>
+          <p class="intent">Tránh coupling sender với receiver bằng cách cho nhiều object cơ hội xử lý request. Pass request dọc chuỗi cho đến khi có handler xử lý.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có nhiều cách xử lý 1 request, không biết handler nào sẽ xử lý ở compile-time.</span>
+            <span class="key">Lợi ích</span>
+            <span>Decouple sender-receiver. Cấu hình chuỗi runtime. Easy thêm/bớt handler.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Không đảm bảo request được xử lý. Khó debug.</span>
+          </div>
+        </div>
+
+        <h3>2.1. Implementation</h3>
+
+<pre><code class="language-typescript">interface Request {
+  type: 'auth' | 'cors' | 'rate-limit' | 'data';
+  user?: { id: string; role: string };
+  body?: any;
+}
+
+abstract class Handler {
+  protected next: Handler | null = null;
+
+  setNext(h: Handler): Handler {
+    this.next = h;
+    return h;   // cho phép chain: a.setNext(b).setNext(c)
+  }
+
+  handle(req: Request): any {
+    if (this.next) return this.next.handle(req);
+    return null;   // cuối chuỗi
+  }
+}
+
+class AuthHandler extends Handler {
+  handle(req: Request) {
+    if (!req.user) throw new Error('401 Unauthorized');
+    return super.handle(req);
+  }
+}
+
+class RoleHandler extends Handler {
+  constructor(private requiredRole: string) { super(); }
+  handle(req: Request) {
+    if (req.user!.role !== this.requiredRole) throw new Error('403 Forbidden');
+    return super.handle(req);
+  }
+}
+
+class RateLimitHandler extends Handler {
+  private hits = new Map&lt;string, number&gt;();
+  handle(req: Request) {
+    const userId = req.user!.id;
+    const count = (this.hits.get(userId) ?? 0) + 1;
+    this.hits.set(userId, count);
+    if (count &gt; 100) throw new Error('429 Too Many');
+    return super.handle(req);
+  }
+}
+
+class BusinessHandler extends Handler {
+  handle(req: Request) {
+    return { message: `Processed ${req.type}` };
+  }
+}
+
+// Setup chuỗi:
+const auth = new AuthHandler();
+auth.setNext(new RoleHandler('admin'))
+    .setNext(new RateLimitHandler())
+    .setNext(new BusinessHandler());
+
+auth.handle({
+  type: 'data',
+  user: { id: 'u1', role: 'admin' },
+});</code></pre>
+
+        <h3>2.2. Use cases thực tế</h3>
+        <ul>
+          <li><strong>Express middleware</strong>: <code>app.use(auth).use(cors).use(rateLimit).use(handler)</code> — đây là Chain of Responsibility.</li>
+          <li><strong>Event bubbling DOM</strong> — event đi từ child đến parent đến document.</li>
+          <li><strong>Approval workflow</strong>: low-level → manager → director → CEO tùy giá trị.</li>
+          <li><strong>Logging level chain</strong>: DEBUG → INFO → WARN → ERROR.</li>
+          <li><strong>Try-catch chain</strong> trong nhiều ngôn ngữ.</li>
+        </ul>
+      </section>
+
+      <!-- Command -->
+      <section id="command">
+        <h2>3. Command</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №14 — BEHAVIORAL</div>
+          <h3>Command</h3>
+          <p class="intent">Đóng gói request thành object — cho phép parameterize client, queue request, log, undo.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Cần queue, log, undo, retry, schedule, redo các action.</span>
+            <span class="key">Lợi ích</span>
+            <span>Action thành "first-class citizen" — pass, store, transform.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Tạo thêm class cho mỗi action.</span>
+          </div>
+        </div>
+
+        <h3>3.1. Implementation cơ bản</h3>
+
+<pre><code class="language-typescript">interface Command {
+  execute(): void;
+  undo(): void;
+}
+
+class TextEditor {
+  private content = '';
+  insert(text: string, pos: number) {
+    this.content = this.content.slice(0, pos) + text + this.content.slice(pos);
+  }
+  delete(pos: number, length: number) {
+    this.content = this.content.slice(0, pos) + this.content.slice(pos + length);
+  }
+  getContent() { return this.content; }
+}
+
+class InsertCommand implements Command {
+  constructor(
+    private editor: TextEditor,
+    private text: string,
+    private pos: number,
+  ) {}
+
+  execute() { this.editor.insert(this.text, this.pos); }
+  undo() { this.editor.delete(this.pos, this.text.length); }
+}
+
+class DeleteCommand implements Command {
+  private deleted = '';
+
+  constructor(
+    private editor: TextEditor,
+    private pos: number,
+    private length: number,
+  ) {}
+
+  execute() {
+    this.deleted = this.editor.getContent().slice(this.pos, this.pos + this.length);
+    this.editor.delete(this.pos, this.length);
+  }
+  undo() { this.editor.insert(this.deleted, this.pos); }
+}
+
+// Invoker với undo/redo:
+class CommandHistory {
+  private undoStack: Command[] = [];
+  private redoStack: Command[] = [];
+
+  execute(cmd: Command) {
+    cmd.execute();
+    this.undoStack.push(cmd);
+    this.redoStack = [];   // clear redo
+  }
+
+  undo() {
+    const cmd = this.undoStack.pop();
+    if (cmd) {
+      cmd.undo();
+      this.redoStack.push(cmd);
+    }
+  }
+
+  redo() {
+    const cmd = this.redoStack.pop();
+    if (cmd) {
+      cmd.execute();
+      this.undoStack.push(cmd);
+    }
+  }
+}
+
+// Sử dụng:
+const editor = new TextEditor();
+const history = new CommandHistory();
+
+history.execute(new InsertCommand(editor, 'Hello', 0));
+history.execute(new InsertCommand(editor, ' World', 5));
+console.log(editor.getContent());   // "Hello World"
+
+history.undo();
+console.log(editor.getContent());   // "Hello"
+history.redo();
+console.log(editor.getContent());   // "Hello World"</code></pre>
+
+        <h3>3.2. Use cases mạnh</h3>
+        <ul>
+          <li>Text editor với undo/redo (Photoshop, IDE).</li>
+          <li>Job queue (Redis BullMQ, AWS SQS).</li>
+          <li>Macro recording / replay.</li>
+          <li>Transaction trong DB (commit/rollback).</li>
+          <li>Wizard form: gom các change thành 1 transaction.</li>
+          <li>Distributed system: gửi command qua message broker.</li>
+        </ul>
+
+        <h3>3.3. Functional alternative</h3>
+        <p>Command = "function as object". Trong FP-style, function tự nó là Command:</p>
+<pre><code class="language-typescript">type Command = { do: () =&gt; void; undo: () =&gt; void };
+
+function insertCmd(editor: TextEditor, text: string, pos: number): Command {
+  return {
+    do:   () =&gt; editor.insert(text, pos),
+    undo: () =&gt; editor.delete(pos, text.length),
+  };
+}</code></pre>
+
+        <p>Object literal với 2 closure đủ — không cần class. Đơn giản hơn cho TS/JS.</p>
+      </section>
+
+      <!-- Iterator -->
+      <section id="iterator">
+        <h2>4. Iterator</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №15 — BEHAVIORAL</div>
+          <h3>Iterator</h3>
+          <p class="intent">Cho cách tuần tự duyệt phần tử của collection mà không lộ cấu trúc bên trong.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Collection có cấu trúc khác nhau (array, tree, graph, linked list) — client muốn duyệt thống nhất.</span>
+            <span class="key">Lợi ích</span>
+            <span>Client code không phụ thuộc cấu trúc collection. Hỗ trợ nhiều cách duyệt.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Có thể overhead nhỏ với collection đơn giản.</span>
+          </div>
+        </div>
+
+        <h3>4.1. Iterator chuẩn (manual)</h3>
+
+<pre><code class="language-typescript">interface Iterator&lt;T&gt; {
+  next(): { value: T; done: boolean };
+  hasNext(): boolean;
+}
+
+interface Iterable&lt;T&gt; {
+  iterator(): Iterator&lt;T&gt;;
+}
+
+// Cây nhị phân
+class TreeNode&lt;T&gt; {
+  constructor(public value: T, public left: TreeNode&lt;T&gt; | null = null, public right: TreeNode&lt;T&gt; | null = null) {}
+}
+
+// In-order iterator
+class InOrderIterator&lt;T&gt; implements Iterator&lt;T&gt; {
+  private stack: TreeNode&lt;T&gt;[] = [];
+
+  constructor(root: TreeNode&lt;T&gt; | null) { this.pushLeft(root); }
+
+  private pushLeft(node: TreeNode&lt;T&gt; | null) {
+    while (node) { this.stack.push(node); node = node.left; }
+  }
+
+  hasNext() { return this.stack.length &gt; 0; }
+
+  next() {
+    if (!this.hasNext()) return { value: null as any, done: true };
+    const node = this.stack.pop()!;
+    this.pushLeft(node.right);
+    return { value: node.value, done: false };
+  }
+}
+
+class BinaryTree&lt;T&gt; implements Iterable&lt;T&gt; {
+  constructor(public root: TreeNode&lt;T&gt; | null) {}
+  iterator() { return new InOrderIterator(this.root); }
+}</code></pre>
+
+        <h3>4.2. JavaScript Iterator Protocol — built-in</h3>
+        <p>JS có protocol chuẩn: object có method <code>[Symbol.iterator]()</code> trả về iterator (object có method <code>next()</code>).</p>
+
+<pre><code class="language-typescript">class Range implements Iterable&lt;number&gt; {
+  constructor(private start: number, private end: number, private step = 1) {}
+
+  [Symbol.iterator](): Iterator&lt;number&gt; {
+    let current = this.start;
+    const { end, step } = this;
+    return {
+      next() {
+        if (current &lt; end) {
+          const value = current;
+          current += step;
+          return { value, done: false };
+        }
+        return { value: undefined, done: true };
+      },
+    };
+  }
+}
+
+// Dùng with for...of:
+for (const n of new Range(0, 5)) console.log(n);   // 0, 1, 2, 3, 4
+
+// Spread + destructure:
+[...new Range(0, 3)];   // [0, 1, 2]
+Array.from(new Range(0, 3));   // [0, 1, 2]</code></pre>
+
+        <h3>4.3. Generator — đơn giản hóa</h3>
+<pre><code class="language-typescript">class Range {
+  constructor(private start: number, private end: number) {}
+
+  *[Symbol.iterator]() {
+    for (let i = this.start; i &lt; this.end; i++) yield i;
+  }
+}
+
+// Tree in-order với generator:
+function* inOrder&lt;T&gt;(node: TreeNode&lt;T&gt; | null): Generator&lt;T&gt; {
+  if (!node) return;
+  yield* inOrder(node.left);
+  yield node.value;
+  yield* inOrder(node.right);
+}</code></pre>
+
+        <p>Generator <code>function*</code> + <code>yield</code> tạo iterator tự nhiên trong JS/TS, Python. Sạch hơn class iterator nhiều.</p>
+
+        <h3>4.4. Use cases</h3>
+        <ul>
+          <li>Custom collection (tree, graph, linked list).</li>
+          <li>Streaming data từ DB / API (paginated cursor).</li>
+          <li>Lazy evaluation — generator không tính giá trị đến khi <code>next()</code>.</li>
+          <li>Infinite sequence: Fibonacci, primes.</li>
+        </ul>
+      </section>
+
+      <!-- Mediator -->
+      <section id="mediator">
+        <h2>5. Mediator</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №16 — BEHAVIORAL</div>
+          <h3>Mediator</h3>
+          <p class="intent">Định nghĩa object đóng gói cách 1 nhóm object giao tiếp. Giảm coupling N-N thành N-1.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Nhiều object giao tiếp trực tiếp với nhau → coupling N×N. Đổi 1 object phải sửa nhiều.</span>
+            <span class="key">Lợi ích</span>
+            <span>Mỗi object chỉ biết Mediator. Logic tương tác tập trung 1 chỗ.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Mediator có thể trở thành "god object" nếu phình quá.</span>
+          </div>
+        </div>
+
+        <h3>5.1. Vấn đề: spaghetti N×N</h3>
+
+        <div class="ascii">  Trước Mediator (N×N coupling):
+       ┌────────────────────────────────────┐
+       │ Button ────► Dialog                │
+       │   │ ◄────────  │                   │
+       │   │            ▼                   │
+       │   ▼         Checkbox               │
+       │ TextField ◄────► Submit            │
+       │   ▲                │               │
+       │   └────────────────┘               │
+       └────────────────────────────────────┘
+
+  Sau Mediator (N-1 coupling):
+            ┌─────────────┐
+            │  Mediator   │
+            └──────┬──────┘
+                   │
+       ┌─────┬─────┼─────┬─────┐
+       ▼     ▼     ▼     ▼     ▼
+     Button Text Submit Check Dialog</div>
+
+        <h3>5.2. Implementation: form validation</h3>
+
+<pre><code class="language-typescript">// Mediator interface
+interface FormMediator {
+  notify(sender: Component, event: string): void;
+}
+
+abstract class Component {
+  constructor(protected mediator: FormMediator) {}
+}
+
+class TextField extends Component {
+  private _value = '';
+  set value(v: string) {
+    this._value = v;
+    this.mediator.notify(this, 'changed');
+  }
+  get value() { return this._value; }
+}
+
+class Button extends Component {
+  private _enabled = true;
+  click() { this.mediator.notify(this, 'clicked'); }
+  setEnabled(b: boolean) { this._enabled = b; }
+  isEnabled() { return this._enabled; }
+}
+
+class Checkbox extends Component {
+  private _checked = false;
+  toggle() {
+    this._checked = !this._checked;
+    this.mediator.notify(this, 'toggled');
+  }
+  isChecked() { return this._checked; }
+}
+
+// Concrete mediator
+class LoginForm implements FormMediator {
+  email = new TextField(this);
+  password = new TextField(this);
+  remember = new Checkbox(this);
+  submit = new Button(this);
+
+  notify(sender: Component, event: string) {
+    if (sender === this.email || sender === this.password) {
+      // Logic: enable submit khi đầy đủ
+      const valid = this.email.value.includes('@') &amp;&amp; this.password.value.length &gt;= 6;
+      this.submit.setEnabled(valid);
+    }
+    if (sender === this.submit &amp;&amp; event === 'clicked') {
+      console.log('Login:', this.email.value, this.remember.isChecked() ? '(remember)' : '');
+    }
+  }
+}
+
+const form = new LoginForm();
+form.email.value = 'a@x.com';
+form.password.value = 'secret';
+form.submit.click();</code></pre>
+
+        <h3>5.3. Use cases</h3>
+        <ul>
+          <li>UI form: button enable/disable phụ thuộc nhiều input.</li>
+          <li>Chat room: User1 không gửi trực tiếp tới User2 — qua ChatRoom mediator.</li>
+          <li>Air traffic control — máy bay không nói trực tiếp với nhau, qua tower.</li>
+          <li>Air traffic control — máy bay không nói trực tiếp với nhau, qua tower.</li>
+          <li>Microservice orchestrator (vs choreography).</li>
+        </ul>
+      </section>
+
+      <!-- Memento -->
+      <section id="memento">
+        <h2>6. Memento</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №17 — BEHAVIORAL</div>
+          <h3>Memento</h3>
+          <p class="intent">Capture và externalize state nội bộ của object để có thể restore sau, mà không vi phạm encapsulation.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Cần undo/checkpoint nhưng không muốn expose mọi internal field qua getter/setter.</span>
+            <span class="key">Lợi ích</span>
+            <span>Bảo toàn encapsulation. Snapshot opaque cho client.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Nếu state lớn, snapshot tốn memory.</span>
+          </div>
+        </div>
+
+        <h3>6.1. Implementation</h3>
+
+<pre><code class="language-typescript">// Memento (opaque snapshot)
+class EditorMemento {
+  // Public field — chỉ Editor đọc
+  constructor(public readonly state: string) {}
+}
+
+// Originator
+class Editor {
+  private content = '';
+
+  type(text: string) { this.content += text; }
+
+  save(): EditorMemento {
+    return new EditorMemento(this.content);
+  }
+
+  restore(m: EditorMemento) {
+    this.content = m.state;
+  }
+
+  getContent() { return this.content; }
+}
+
+// Caretaker — quản lý history, không đọc memento content
+class History {
+  private mementos: EditorMemento[] = [];
+
+  push(m: EditorMemento) { this.mementos.push(m); }
+  pop(): EditorMemento | undefined { return this.mementos.pop(); }
+}
+
+// Sử dụng:
+const editor = new Editor();
+const history = new History();
+
+editor.type('Hello');
+history.push(editor.save());
+
+editor.type(' World');
+console.log(editor.getContent());   // "Hello World"
+
+editor.restore(history.pop()!);
+console.log(editor.getContent());   // "Hello"</code></pre>
+
+        <h3>6.2. Memento vs Command-undo</h3>
+        <p>Hai cách undo:</p>
+        <ul>
+          <li><strong>Memento</strong>: lưu <em>full snapshot</em> trước action. Đơn giản, đắt memory.</li>
+          <li><strong>Command undo</strong>: lưu <em>delta</em> để inverse action. Tiết kiệm, phức tạp implement.</li>
+        </ul>
+
+        <p>Trong thực tế: Memento cho object nhỏ (form state), Command cho action có inverse rõ (insert/delete text).</p>
+
+        <h3>6.3. Use cases</h3>
+        <ul>
+          <li>Game save/load.</li>
+          <li>Form draft auto-save.</li>
+          <li>Database transaction: snapshot trước commit.</li>
+          <li>Undo trong app đơn giản.</li>
+        </ul>
+      </section>
+
+      <!-- Observer -->
+      <section id="observer">
+        <h2>7. Observer</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №18 — BEHAVIORAL</div>
+          <h3>Observer</h3>
+          <p class="intent">Định nghĩa quan hệ 1-N: khi 1 object đổi state, mọi observer được notify tự động.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Nhiều object cần phản ứng khi 1 object thay đổi — không muốn polling.</span>
+            <span class="key">Lợi ích</span>
+            <span>Loose coupling. Subject không biết observer cụ thể.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Order notify khó kiểm soát. Memory leak nếu quên unsubscribe.</span>
+          </div>
+        </div>
+
+        <h3>7.1. Implementation</h3>
+
+<pre><code class="language-typescript">type Observer&lt;T&gt; = (value: T) =&gt; void;
+
+class Subject&lt;T&gt; {
+  private observers = new Set&lt;Observer&lt;T&gt;&gt;();
+
+  subscribe(obs: Observer&lt;T&gt;): () =&gt; void {
+    this.observers.add(obs);
+    return () =&gt; this.observers.delete(obs);   // unsubscribe function
+  }
+
+  notify(value: T) {
+    for (const obs of this.observers) obs(value);
+  }
+}
+
+// Sử dụng:
+const stockPrice = new Subject&lt;number&gt;();
+
+const unsub1 = stockPrice.subscribe(price =&gt; console.log('Logger:', price));
+const unsub2 = stockPrice.subscribe(price =&gt; {
+  if (price &gt; 100) console.log('Alert: high price!', price);
+});
+
+stockPrice.notify(95);
+stockPrice.notify(105);
+
+unsub1();   // dừng nhận log
+stockPrice.notify(110);   // chỉ alert, không log</code></pre>
+
+        <h3>7.2. Use cases khắp nơi</h3>
+        <ul>
+          <li><strong>Event listener DOM</strong>: <code>button.addEventListener('click', handler)</code> — Observer pattern thuần.</li>
+          <li><strong>RxJS</strong>: Observable + Observer là extension mạnh của pattern này.</li>
+          <li><strong>Redux store.subscribe</strong>: state thay đổi → re-render UI.</li>
+          <li><strong>Vue/React reactivity</strong>: dependency tracking.</li>
+          <li><strong>Pub/Sub message queue</strong>: Kafka, Redis pub/sub.</li>
+          <li><strong>Hooks file watch</strong>: chokidar, Webpack HMR.</li>
+        </ul>
+
+        <h3>7.3. Push vs Pull</h3>
+        <ul>
+          <li><strong>Push</strong> — subject gửi data trong notify(): <code>obs(newValue)</code>. Observer dùng ngay.</li>
+          <li><strong>Pull</strong> — subject chỉ "ping", observer tự lấy: <code>obs(); /* observer.read(subject) */</code>. Linh hoạt hơn nhưng coupling cao hơn.</li>
+        </ul>
+
+        <p>Đa số implementation hiện đại dùng push.</p>
+
+        <h3>7.4. Pitfall: Memory leak</h3>
+        <p>Observer giữ reference. Nếu không unsubscribe, subject giữ observer mãi → Observer không bị GC. Phổ biến trong React khi component unmount mà không clean up subscription:</p>
+
+<pre><code class="language-typescript">useEffect(() =&gt; {
+  const unsub = store.subscribe(handleChange);
+  return unsub;   // ← clean up khi unmount
+}, []);</code></pre>
+
+        <h3>7.5. Observer vs Mediator</h3>
+        <ul>
+          <li><strong>Observer</strong>: 1-N quan hệ subscribe; subject không biết observer cụ thể.</li>
+          <li><strong>Mediator</strong>: N-N decoupling qua trung gian; mediator biết các thành phần.</li>
+        </ul>
+      </section>
+
+      <section id="summary">
+        <h2>8. So sánh nhanh 6 Behavioral Part 1</h2>
+
+        <table>
+          <thead><tr><th>Pattern</th><th>Quan hệ</th><th>Use case mẫu</th></tr></thead>
+          <tbody>
+            <tr><td>Chain of Responsibility</td><td>Chain handler</td><td>Express middleware</td></tr>
+            <tr><td>Command</td><td>Action như object</td><td>Undo/redo, queue</td></tr>
+            <tr><td>Iterator</td><td>1 collection</td><td>Tree traversal, lazy stream</td></tr>
+            <tr><td>Mediator</td><td>N-N qua trung gian</td><td>UI form, chat room</td></tr>
+            <tr><td>Memento</td><td>Snapshot state</td><td>Save/load, undo</td></tr>
+            <tr><td>Observer</td><td>1-N publish</td><td>Event listener, reactive</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="exercises">
+        <h2>9. Bài tập</h2>
+
+        <ol>
+          <li>Chain of Responsibility: implement validation chain cho form đăng ký: NotEmpty → ValidEmail → UniqueEmail → StrongPassword. Mỗi handler trả error hoặc pass tiếp.</li>
+
+          <li>Command: implement remote control TV với button Volume+, Volume-, Mute, Unmute. Hỗ trợ undo cho lần bấm gần nhất.</li>
+
+          <li>Iterator (generator): viết hàm <code>function* primes(): Generator&lt;number&gt;</code> sinh số nguyên tố vô hạn. Dùng <code>for...of</code> với <code>break</code> để lấy 100 số đầu.</li>
+
+          <li>Mediator: chat room với 3 user. User gửi message qua ChatRoom, room broadcast cho user khác. Code không có direct user-to-user reference.</li>
+
+          <li>Memento: Game character có hp, mp, position. Implement save/load state qua Memento. Demo undo move sai.</li>
+
+          <li>Observer: tạo simple Pub/Sub cho stock price. 3 subscriber: Logger, Alert (giá &gt; 100), Chart (đổi UI). Demo unsubscribe.</li>
+
+          <li>So sánh: Observer vs Mediator — cho 2 use case, mỗi use case nói tại sao chọn pattern đó.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>10. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 6</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Chain of Responsibility được dùng nhiều nhất ở đâu trong web dev?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">CSS specificity</li>
+              <li class="quiz-option">React hooks</li>
+              <li class="quiz-option">Express/Koa middleware — chuỗi xử lý request</li>
+              <li class="quiz-option">CSS variables</li>
+            </ul>
+            <div class="quiz-explain">Express middleware là Chain of Responsibility kinh điển: <code>app.use(auth).use(cors).use(rateLimit).use(handler)</code>. Mỗi middleware xử lý hoặc <code>next()</code> pass tiếp. DOM event bubbling cũng là biến thể.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Command pattern phù hợp nhất khi cần:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tạo Singleton</li>
+              <li class="quiz-option">Undo/redo, queue, log, hoặc schedule action</li>
+              <li class="quiz-option">Inheritance đa cấp</li>
+              <li class="quiz-option">Tách abstraction</li>
+            </ul>
+            <div class="quiz-explain">Command đóng gói action thành object → có thể store, queue, log, undo. Use case: text editor undo, job queue, macro recording, transaction. Trong FP, function/closure tự nó là Command — không cần class.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">JavaScript generator (<code>function*</code>):</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tạo class</li>
+              <li class="quiz-option">Bắt buộc cho async</li>
+              <li class="quiz-option">Cấu trúc cây</li>
+              <li class="quiz-option">Cách đơn giản tạo iterator — yield giá trị, lazy evaluation, hỗ trợ infinite sequence</li>
+            </ul>
+            <div class="quiz-explain">Generator là syntax đẹp cho Iterator pattern. <code>yield</code> tạm dừng, lần gọi next() chạy tiếp. Dùng cho infinite sequence (Fibonacci, primes), tree traversal, async iteration. Sạch hơn class Iterator nhiều.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Mediator giảm coupling từ:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">N×N (mọi object kết nối nhau) → N-1 (mỗi object chỉ biết mediator)</li>
+              <li class="quiz-option">N×N → 1×1</li>
+              <li class="quiz-option">N → 0</li>
+              <li class="quiz-option">Không thay đổi coupling</li>
+            </ul>
+            <div class="quiz-explain">Trước Mediator, K object giao tiếp trực tiếp = K(K-1)/2 connection. Sau, chỉ K connection (mỗi object → mediator). Đổi component không ảnh hưởng các component khác. Trade-off: mediator có thể phình thành god object.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Memento KHÁC Command-undo ở chỗ:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Memento nhanh hơn</li>
+              <li class="quiz-option">Command nhanh hơn</li>
+              <li class="quiz-option">Memento lưu full snapshot; Command lưu delta để inverse — tradeoff memory vs complexity</li>
+              <li class="quiz-option">Hai cái như nhau</li>
+            </ul>
+            <div class="quiz-explain">Memento: snapshot toàn bộ state trước action → đơn giản, đắt memory. Command undo: lưu inverse op → tiết kiệm, phức tạp. Memento cho object nhỏ (form), Command cho action có inverse rõ (text edit).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Observer pattern xuất hiện rõ ràng trong:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Composite</li>
+              <li class="quiz-option">DOM event listener, Redux store.subscribe, React useState, RxJS Observable</li>
+              <li class="quiz-option">Singleton</li>
+              <li class="quiz-option">Bridge</li>
+            </ul>
+            <div class="quiz-explain">Observer là 1 trong những pattern phổ biến nhất. Mọi event-driven system đều dùng. RxJS mở rộng pattern này thành Observable với operators (map, filter, debounce). Pitfall: nhớ unsubscribe trong React useEffect cleanup.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Pitfall lớn nhất của Observer:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Chậm</li>
+              <li class="quiz-option">Tốn RAM</li>
+              <li class="quiz-option">Khó implement</li>
+              <li class="quiz-option">Memory leak nếu quên unsubscribe — subject giữ reference observer, observer không bị GC</li>
+            </ul>
+            <div class="quiz-explain">Subject lưu danh sách observer. Observer không unsubscribe → giữ reference → không GC. Phổ biến: React component unmount không cleanup subscription. Luôn return unsubscribe function trong useEffect.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Observer vs Mediator:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Observer = 1-N pub-sub (subject không biết observer); Mediator = N-N decoupling qua trung gian biết các bên</li>
+              <li class="quiz-option">Hai cái như nhau</li>
+              <li class="quiz-option">Observer chỉ cho UI</li>
+              <li class="quiz-option">Mediator chỉ cho networking</li>
+            </ul>
+            <div class="quiz-explain">Observer: subject publish event, observer subscribe (1-N, anonymous). Mediator: nhiều object giao tiếp qua trung gian (N-N coordination, mediator biết các bên). Use case khác — đôi khi kết hợp.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 6 (18/23 patterns). Tiếp theo: <a href="chuong7.html"><strong>Chương 7 — Behavioral Part 2 (5 mẫu) →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 6 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

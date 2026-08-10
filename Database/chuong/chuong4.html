@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 4 — Normalization & Schema Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 04 · Schema Design</div>
+      <h1>Normalization & Schema Design</h1>
+      <p class="subtitle">1NF → BCNF với ví dụ thực tế, các anti-pattern thường gặp, ERD, và walkthrough thiết kế schema cho 1 mạng xã hội.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao normalize?</a></li>
+        <li><a href="#anomalies">2. Ba anomaly</a></li>
+        <li><a href="#1nf">3. 1NF — Atomicity</a></li>
+        <li><a href="#fd">4. Functional dependency</a></li>
+        <li><a href="#2nf">5. 2NF</a></li>
+        <li><a href="#3nf">6. 3NF</a></li>
+        <li><a href="#bcnf">7. BCNF</a></li>
+        <li><a href="#high">8. 4NF / 5NF (nhanh)</a></li>
+        <li><a href="#denorm">9. Khi nào denormalize?</a></li>
+        <li><a href="#erd">10. ERD & Cardinality</a></li>
+        <li><a href="#naming">11. Naming & Anti-pattern</a></li>
+        <li><a href="#walkthrough">12. Walkthrough: Twitter</a></li>
+        <li><a href="#exercises">13. Bài tập</a></li>
+        <li><a href="#quiz">14. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao normalize?</h2>
+        <p>Hãy xem xét một bảng <em>không</em> normalize:</p>
+
+<pre><code>orders (chưa normalize):
+┌────┬─────────┬──────────────┬────────────┬─────────────────────┐
+│ id │ user_id │ user_name    │ user_email │ products            │
+├────┼─────────┼──────────────┼────────────┼─────────────────────┤
+│  1 │     42  │ Alice        │ a@x.com    │ "iPhone, Charger"   │
+│  2 │     42  │ Alice        │ a@x.com    │ "Cable"             │
+│  3 │     43  │ Bob          │ b@x.com    │ "iPhone"            │
+│  4 │     42  │ Alice Smith  │ a@x.com    │ "Adapter"           │
+└────┴─────────┴──────────────┴────────────┴─────────────────────┘</code></pre>
+
+        <p>Hai vấn đề lớn:</p>
+        <ol>
+          <li><strong>Trùng lặp dữ liệu</strong> — Alice xuất hiện 3 lần với 3 thông tin user. Khi cô ấy đổi email → phải update 3 dòng. Quên 1 dòng → dữ liệu không nhất quán.</li>
+          <li><strong>Cột "products" chứa nhiều giá trị</strong> — không thể query "đếm số lần bán iPhone" mà không parse string.</li>
+        </ol>
+
+        <p><strong>Normalization</strong> là quá trình tách bảng thành các bảng nhỏ hơn để: (1) loại bỏ trùng lặp, (2) đảm bảo mỗi cột phụ thuộc vào toàn bộ PK, (3) tránh các anomaly khi insert/update/delete.</p>
+      </section>
+
+      <section id="anomalies">
+        <h2>2. Ba loại Anomaly</h2>
+
+        <h3>2.1. Update anomaly</h3>
+        <p>Khi cùng một dữ liệu lặp ở nhiều dòng, update phải đụng nhiều nơi. Quên 1 nơi = bug nhất quán.</p>
+        <p>Trong ví dụ trên: Alice đổi tên thành "Alice Smith" ở order #4, nhưng order #1, #2 vẫn ghi "Alice". → Hệ thống có 2 sự thật.</p>
+
+        <h3>2.2. Insert anomaly</h3>
+        <p>Không thể thêm dữ liệu mà không có dữ liệu khác đi kèm. Ví dụ: muốn thêm 1 user mới chưa có order — bảng trên không cho phép (vì PK là id của order).</p>
+
+        <h3>2.3. Delete anomaly</h3>
+        <p>Xóa dữ liệu lại làm mất dữ liệu khác không liên quan. Xóa order cuối cùng của Alice → mất luôn thông tin Alice (email, name).</p>
+
+        <p>Normalization ra đời để giải quyết 3 vấn đề này.</p>
+      </section>
+
+      <section id="1nf">
+        <h2>3. 1NF — First Normal Form: nguyên tử hóa</h2>
+        <p>Một bảng thuộc 1NF khi:</p>
+        <ul>
+          <li>Mỗi cột chứa <strong>giá trị nguyên tử</strong> (không phải list, không phải nested object).</li>
+          <li>Mỗi dòng có giá trị unique (có PK).</li>
+          <li>Thứ tự dòng và cột không quan trọng.</li>
+        </ul>
+
+        <p>Bảng vi phạm 1NF:</p>
+<pre><code>orders:
+| id | products             |
+|----|----------------------|
+|  1 | ["iPhone","Charger"] |   ← list trong cột!
+|  2 | "Cable, Cable"       |   ← string nhiều giá trị</code></pre>
+
+        <p>Tuân thủ 1NF — tách bảng:</p>
+<pre><code class="language-sql">CREATE TABLE orders (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT
+);
+
+CREATE TABLE order_items (
+  order_id   BIGINT REFERENCES orders(id),
+  product_id BIGINT REFERENCES products(id),
+  qty        INT,
+  PRIMARY KEY (order_id, product_id)
+);</code></pre>
+
+        <div class="callout callout-note">
+          <span class="callout-title">JSON/ARRAY trong Postgres — vi phạm 1NF?</span>
+          Về lý thuyết: có. Nhưng thực tế: nếu giá trị JSON là <em>opaque blob</em> mà bạn không cần query (vd: payload webhook), lưu JSONB là OK. Nếu cần index/JOIN/aggregate trên các thuộc tính bên trong JSON → tách thành cột/bảng. Đây là quyết định kỹ thuật, không phải tôn giáo.
+        </div>
+      </section>
+
+      <section id="fd">
+        <h2>4. Functional Dependency (FD)</h2>
+        <p><strong>Định nghĩa:</strong> A → B (đọc: "A xác định B") nếu mọi tuple có cùng giá trị A đều có cùng giá trị B.</p>
+        <p>Ví dụ:</p>
+        <ul>
+          <li><code>user_id → email</code> — biết user_id biết email (mỗi user có 1 email).</li>
+          <li><code>order_id → user_id</code> — mỗi order có 1 user.</li>
+          <li><code>{order_id, product_id} → qty</code> — composite determinant.</li>
+        </ul>
+
+        <p>FD là nền tảng để định nghĩa các normal form. Khi bạn nói "cột X phụ thuộc vào PK", thực ra bạn đang nói "PK → X".</p>
+
+        <h3>4.1. Loại FD đặc biệt</h3>
+        <ul>
+          <li><strong>Trivial FD</strong> — A → A (luôn đúng, vô nghĩa).</li>
+          <li><strong>Partial FD</strong> — chỉ <em>một phần</em> của composite key xác định attribute. Vi phạm 2NF.</li>
+          <li><strong>Transitive FD</strong> — A → B → C (vi phạm 3NF).</li>
+        </ul>
+      </section>
+
+      <section id="2nf">
+        <h2>5. 2NF — Second Normal Form: full FD on PK</h2>
+        <p>Bảng 2NF khi:</p>
+        <ul>
+          <li>Đã ở 1NF.</li>
+          <li><strong>Mọi cột không thuộc PK đều phụ thuộc vào TOÀN BỘ PK</strong>, không phụ thuộc một phần.</li>
+        </ul>
+        <p>2NF chỉ quan trọng khi PK là <em>composite</em>. Nếu PK là 1 cột (id) thì 2NF tự động thỏa.</p>
+
+        <p>Ví dụ vi phạm 2NF:</p>
+<pre><code>order_items (PK = order_id + product_id):
+| order_id | product_id | qty | product_name | product_price |
+|----------|------------|-----|--------------|---------------|
+|     1    |    99      |  2  | iPhone       |     999       |
+|     2    |    99      |  1  | iPhone       |     999       |
+|     3    |    50      |  5  | Cable        |      10       |</code></pre>
+
+        <p><code>product_name</code>, <code>product_price</code> phụ thuộc vào <code>product_id</code> (chỉ 1 phần PK), không phụ thuộc <code>order_id</code>. → vi phạm 2NF.</p>
+
+        <p>Tuân thủ 2NF — tách products ra bảng riêng:</p>
+<pre><code class="language-sql">CREATE TABLE products (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(255),
+  price DECIMAL(10,2)
+);
+CREATE TABLE order_items (
+  order_id BIGINT, product_id BIGINT,
+  qty INT,
+  PRIMARY KEY (order_id, product_id),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);</code></pre>
+      </section>
+
+      <section id="3nf">
+        <h2>6. 3NF — Third Normal Form: no transitive</h2>
+        <p>Bảng 3NF khi:</p>
+        <ul>
+          <li>Đã ở 2NF.</li>
+          <li><strong>Không có transitive dependency</strong>: nếu PK → A → B thì B phải phụ thuộc trực tiếp vào PK, không gián tiếp qua A.</li>
+        </ul>
+
+        <p>Ví dụ vi phạm 3NF:</p>
+<pre><code>employees:
+| id (PK) | name  | dept_id | dept_name | dept_location |
+|---------|-------|---------|-----------|---------------|
+|    1    | Anh   |    10   | HR        | HCM           |
+|    2    | Bình  |    10   | HR        | HCM           |
+|    3    | Cường |    20   | IT        | HN            |</code></pre>
+
+        <p>Phụ thuộc: <code>id → dept_id → dept_name, dept_location</code>. <code>dept_name</code>, <code>dept_location</code> phụ thuộc vào <code>id</code> qua trung gian <code>dept_id</code> → vi phạm 3NF.</p>
+
+        <p>Tuân thủ 3NF:</p>
+<pre><code class="language-sql">CREATE TABLE departments (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  location VARCHAR(100)
+);
+CREATE TABLE employees (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  dept_id BIGINT REFERENCES departments(id)
+);</code></pre>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Mantra Boyce</span>
+          Bill Kent: <em>"Mỗi non-key attribute phải cung cấp một fact về <strong>the key, the whole key, and nothing but the key</strong>"</em>.
+          1NF — atomicity → 2NF — the whole key → 3NF — nothing but the key. So help me Codd.
+        </div>
+      </section>
+
+      <section id="bcnf">
+        <h2>7. BCNF — Boyce-Codd Normal Form</h2>
+        <p>BCNF strict hơn 3NF. Yêu cầu: <strong>mọi FD nontrivial X → Y, X phải là superkey</strong>.</p>
+
+        <p>Ví dụ thường gặp khi 3NF nhưng KHÔNG BCNF:</p>
+<pre><code>course_teaches (PK = student_id + course):
+| student_id | course | teacher |
+|------------|--------|---------|
+|    1       | DB     | Smith   |
+|    2       | DB     | Smith   |
+|    3       | OS     | Jones   |</code></pre>
+        <p>Giả sử ràng buộc: mỗi teacher dạy đúng 1 course → có FD: <code>teacher → course</code>. Nhưng <code>teacher</code> không phải superkey → vi phạm BCNF.</p>
+
+        <p>Tuân thủ BCNF:</p>
+<pre><code class="language-sql">CREATE TABLE teachers_courses (
+  teacher VARCHAR(100) PRIMARY KEY,
+  course  VARCHAR(100)
+);
+CREATE TABLE student_teachers (
+  student_id BIGINT,
+  teacher VARCHAR(100),
+  PRIMARY KEY (student_id, teacher)
+);</code></pre>
+
+        <p><strong>Trong thực hành</strong>: hầu hết DB tốt chỉ cần đến 3NF. BCNF strict, đôi khi đánh đổi tính đơn giản — chỉ cần thiết cho domain phức tạp hoặc khi 3NF rõ ràng còn anomaly.</p>
+      </section>
+
+      <section id="high">
+        <h2>8. 4NF & 5NF — nói qua</h2>
+        <p><strong>4NF</strong> giải quyết Multi-valued Dependency (MVD) — khi 1 thuộc tính có thể có nhiều giá trị độc lập với 1 thuộc tính khác. Ví dụ: 1 sinh viên có nhiều môn học và nhiều câu lạc bộ — không nên gộp 2 list vào 1 bảng.</p>
+        <p><strong>5NF</strong> (Project-join NF) liên quan join dependency — rất hiếm gặp trong thực hành.</p>
+        <p>99% projects không cần đụng đến 4NF/5NF. Hiểu 1NF–3NF + biết khi nào denormalize là đủ.</p>
+      </section>
+
+      <section id="denorm">
+        <h2>9. Khi nào DENORMALIZE?</h2>
+        <p>Normalize đầy đủ → schema đẹp nhưng có thể chậm. Khi đó denormalize có chọn lọc. Quy tắc:</p>
+
+        <ol>
+          <li><strong>Bắt đầu bằng normalize</strong>. Đẹp, dễ bảo trì, ít bug.</li>
+          <li><strong>Đo lường</strong> trước khi optimize. Đừng denormalize vì cảm tính.</li>
+          <li>Khi <em>read-heavy</em> + JOIN nóng quá nhiều → denormalize cụ thể.</li>
+          <li>Đảm bảo <em>cách đồng bộ</em> dữ liệu trùng (trigger, app, queue).</li>
+        </ol>
+
+        <h3>9.1. Các pattern denormalize phổ biến</h3>
+
+        <h4>Cached counters</h4>
+<pre><code class="language-sql">-- Thay vì JOIN + COUNT mỗi lần render:
+ALTER TABLE posts ADD COLUMN comment_count INT DEFAULT 0;
+
+-- Update qua trigger hoặc app:
+CREATE TRIGGER ... AFTER INSERT ON comments ...
+  UPDATE posts SET comment_count = comment_count + 1 WHERE id = NEW.post_id;</code></pre>
+
+        <h4>Materialized aggregate</h4>
+<pre><code class="language-sql">CREATE MATERIALIZED VIEW user_stats AS
+SELECT user_id, COUNT(*) AS orders, SUM(total) AS spent
+FROM orders GROUP BY user_id;
+
+-- Refresh định kỳ (cron) hoặc concurrent:
+REFRESH MATERIALIZED VIEW CONCURRENTLY user_stats;</code></pre>
+
+        <h4>Wide table cho read</h4>
+<pre><code class="language-sql">-- Thay vì JOIN 5 bảng cho dashboard, copy snapshot:
+CREATE TABLE order_summary (
+  order_id BIGINT PRIMARY KEY,
+  user_email VARCHAR,    -- denormalized
+  user_country VARCHAR,  -- denormalized
+  product_names TEXT[],
+  total DECIMAL,
+  created_at TIMESTAMPTZ
+);</code></pre>
+
+        <h4>Tiền-tính sort key</h4>
+<pre><code class="language-sql">-- Để dùng index cho ORDER BY phức tạp:
+ALTER TABLE posts ADD COLUMN hot_score DECIMAL;
+-- Update mỗi vote/comment:
+UPDATE posts SET hot_score = (votes - 1) / EXTRACT(EPOCH FROM (NOW() - created_at)) ...;
+CREATE INDEX idx_hot ON posts(hot_score DESC);</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Bẫy denormalize</span>
+          Mỗi lần copy dữ liệu = một nguồn lệch. Phải có cơ chế đồng bộ (trigger / event sourcing / scheduled job). Nếu không có, sau 6 tháng bạn sẽ có "user_email" cũ ở 5 bảng và 1 user thật.
+        </div>
+      </section>
+
+      <section id="erd">
+        <h2>10. ERD — Entity Relationship Diagram</h2>
+
+        <h3>10.1. Các thành phần</h3>
+        <ul>
+          <li><strong>Entity</strong> — đối tượng nghiệp vụ → một bảng (User, Order, Product).</li>
+          <li><strong>Attribute</strong> — thuộc tính → cột.</li>
+          <li><strong>Relationship</strong> — quan hệ giữa entity (User <em>places</em> Order).</li>
+          <li><strong>Cardinality</strong> — số lượng đối ứng (1-1, 1-N, N-N).</li>
+        </ul>
+
+        <h3>10.2. Cardinality</h3>
+
+        <table>
+          <thead><tr><th>Loại</th><th>Mô tả</th><th>Ví dụ</th><th>Cách triển khai</th></tr></thead>
+          <tbody>
+            <tr><td>1-1</td><td>Mỗi A có đúng 1 B, mỗi B có đúng 1 A</td><td>User ↔ UserProfile</td><td>FK + UNIQUE constraint</td></tr>
+            <tr><td>1-N</td><td>Mỗi A có nhiều B, mỗi B thuộc về 1 A</td><td>User → Orders</td><td>FK ở phía N (orders.user_id)</td></tr>
+            <tr><td>N-N</td><td>Mỗi A có nhiều B và ngược lại</td><td>Students ↔ Courses</td><td>Bảng nối (junction): enrollments</td></tr>
+          </tbody>
+        </table>
+
+        <h3>10.3. Quan hệ tham gia (participation)</h3>
+        <ul>
+          <li><strong>Total</strong> (mandatory) — mọi instance bên A bắt buộc có B → FK NOT NULL.</li>
+          <li><strong>Partial</strong> (optional) — không bắt buộc → FK nullable.</li>
+        </ul>
+
+        <h3>10.4. Ví dụ ERD ASCII</h3>
+        <div class="ascii">┌────────────┐         ┌────────────┐         ┌─────────────┐
+│   USERS    │ 1 ─── N │   ORDERS   │ 1 ─── N │ ORDER_ITEMS │
+├────────────┤         ├────────────┤         ├─────────────┤
+│ id (PK)    │◀────────│ user_id    │◀────────│ order_id    │
+│ email      │         │ id (PK)    │         │ product_id  │──┐
+│ name       │         │ total      │         │ qty         │  │
+└────────────┘         │ status     │         └─────────────┘  │
+                       └────────────┘                           │
+                                                                ▼
+                                                      ┌─────────────┐
+                                                      │  PRODUCTS   │
+                                                      ├─────────────┤
+                                                      │ id (PK)     │
+                                                      │ name        │
+                                                      │ category_id │──→ categories
+                                                      │ price       │
+                                                      └─────────────┘</div>
+      </section>
+
+      <section id="naming">
+        <h2>11. Naming conventions & Anti-patterns</h2>
+
+        <h3>11.1. Naming</h3>
+        <ul>
+          <li><strong>snake_case</strong> cho table và column. SQL không phân biệt hoa thường mặc định, snake tránh nhầm lẫn.</li>
+          <li><strong>Tên bảng số nhiều</strong>: <code>users</code>, <code>orders</code>, <code>order_items</code>. (Hoặc số ít — nhất quán cả project.)</li>
+          <li><strong>Tên cột số ít</strong>: <code>email</code>, <code>created_at</code>.</li>
+          <li><strong>FK</strong>: <code>user_id</code>, <code>category_id</code> — luôn có suffix <code>_id</code>.</li>
+          <li><strong>Boolean</strong>: <code>is_active</code>, <code>has_avatar</code>, <code>can_edit</code>.</li>
+          <li><strong>Timestamp</strong>: <code>created_at</code>, <code>updated_at</code>, <code>deleted_at</code>.</li>
+          <li><strong>Index</strong>: <code>idx_users_email</code> (idx_table_col).</li>
+          <li><strong>Constraint</strong>: <code>users_email_uniq</code>, <code>orders_user_fk</code>.</li>
+        </ul>
+
+        <h3>11.2. Anti-patterns</h3>
+
+        <h4>EAV (Entity-Attribute-Value)</h4>
+<pre><code>attributes:
+| entity_id | key       | value       |
+| 1         | "name"    | "iPhone"    |
+| 1         | "price"   | "999"       |
+| 1         | "color"   | "black"     |</code></pre>
+        <p>"Linh hoạt vô hạn" nhưng <strong>cực chậm</strong>, không có type safety, JOIN dày đặc. Chỉ dùng khi schema thực sự dynamic (form builder, custom field). Cân nhắc <code>JSONB</code> thay thế.</p>
+
+        <h4>Magic strings</h4>
+<pre><code class="language-sql">status VARCHAR(20)  -- 'paid' | 'pending' | ?? typo 'pendng' không ai catch</code></pre>
+        <p>Sửa: dùng <code>CHECK (status IN (...))</code>, ENUM, hoặc bảng status riêng có FK.</p>
+
+        <h4>Chiếc bảng "kitchen sink"</h4>
+        <p>1 bảng 50+ cột vì "tất cả thông tin về user". Khi vài cột chỉ liên quan với nhau (preferences, billing, profile) — tách bảng theo concern.</p>
+
+        <h4>Polymorphic FK</h4>
+<pre><code class="language-sql">comments(commentable_id, commentable_type)  -- 'post' | 'video' | 'product'</code></pre>
+        <p>FK constraint không enforce được, JOIN khó. Cách thay thế: bảng riêng cho từng (post_comments, video_comments) hoặc bảng polymorphic + UNION view.</p>
+
+        <h4>UUID v4 làm clustered PK</h4>
+        <p>UUID v4 random → INSERT chèn random vào B-tree → fragmentation, page split, ghi chậm. Dùng UUID v7 (time-ordered) hoặc BIGSERIAL nếu OK.</p>
+
+        <h4>Soft delete bừa bãi</h4>
+        <p>Thêm <code>deleted_at</code> vào mọi bảng → mọi query phải <code>WHERE deleted_at IS NULL</code>. Quên 1 chỗ = bug bảo mật. Cân nhắc archive table riêng.</p>
+      </section>
+
+      <section id="walkthrough">
+        <h2>12. Walkthrough: thiết kế schema cho Twitter mini</h2>
+
+        <p><strong>Bước 1 — Liệt kê entity nghiệp vụ:</strong></p>
+        <ul>
+          <li>User</li>
+          <li>Tweet (post)</li>
+          <li>Follow (quan hệ N-N giữa user)</li>
+          <li>Like</li>
+          <li>Retweet</li>
+          <li>Reply (thread)</li>
+          <li>Hashtag</li>
+          <li>Direct Message</li>
+        </ul>
+
+        <p><strong>Bước 2 — Top truy vấn cần phục vụ:</strong></p>
+        <ol>
+          <li>Timeline của 1 user (tweets từ những người họ follow, sắp theo created_at).</li>
+          <li>Trang user X — tweets của X + thông tin profile.</li>
+          <li>Search hashtag #abc.</li>
+          <li>Đếm follower / following.</li>
+          <li>Like + retweet count cho mỗi tweet.</li>
+        </ol>
+
+        <p><strong>Bước 3 — Schema:</strong></p>
+
+<pre><code class="language-sql">-- Users
+CREATE TABLE users (
+  id            BIGSERIAL PRIMARY KEY,
+  username      VARCHAR(50) NOT NULL UNIQUE,
+  email         VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  display_name  VARCHAR(100),
+  bio           TEXT,
+  avatar_url    VARCHAR(500),
+  follower_count  INT NOT NULL DEFAULT 0,  -- denormalized
+  following_count INT NOT NULL DEFAULT 0,  -- denormalized
+  tweet_count     INT NOT NULL DEFAULT 0,  -- denormalized
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Tweets
+CREATE TABLE tweets (
+  id           BIGSERIAL PRIMARY KEY,
+  author_id    BIGINT NOT NULL REFERENCES users(id),
+  content      VARCHAR(280) NOT NULL,
+  reply_to_id  BIGINT REFERENCES tweets(id),    -- thread
+  retweet_of_id BIGINT REFERENCES tweets(id),   -- retweet
+  like_count   INT NOT NULL DEFAULT 0,           -- denormalized
+  retweet_count INT NOT NULL DEFAULT 0,          -- denormalized
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_tweets_author_created ON tweets(author_id, created_at DESC);
+
+-- Follows (N-N self join)
+CREATE TABLE follows (
+  follower_id BIGINT NOT NULL REFERENCES users(id),
+  followee_id BIGINT NOT NULL REFERENCES users(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (follower_id, followee_id),
+  CHECK (follower_id != followee_id)
+);
+CREATE INDEX idx_follows_followee ON follows(followee_id);   -- "ai follow X?"
+
+-- Likes
+CREATE TABLE likes (
+  user_id BIGINT NOT NULL REFERENCES users(id),
+  tweet_id BIGINT NOT NULL REFERENCES tweets(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, tweet_id)
+);
+
+-- Hashtags (N-N)
+CREATE TABLE hashtags (
+  id BIGSERIAL PRIMARY KEY,
+  tag VARCHAR(100) UNIQUE NOT NULL
+);
+CREATE TABLE tweet_hashtags (
+  tweet_id BIGINT NOT NULL REFERENCES tweets(id),
+  hashtag_id BIGINT NOT NULL REFERENCES hashtags(id),
+  PRIMARY KEY (tweet_id, hashtag_id)
+);
+CREATE INDEX idx_th_hashtag ON tweet_hashtags(hashtag_id);
+
+-- Direct Messages (1-N giữa users; phòng chat đơn giản hóa)
+CREATE TABLE conversations (
+  id BIGSERIAL PRIMARY KEY,
+  user_a_id BIGINT NOT NULL REFERENCES users(id),
+  user_b_id BIGINT NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (user_a_id &lt; user_b_id),
+  UNIQUE (user_a_id, user_b_id)
+);
+CREATE TABLE messages (
+  id BIGSERIAL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL REFERENCES conversations(id),
+  sender_id BIGINT NOT NULL REFERENCES users(id),
+  body TEXT NOT NULL,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_messages_conv_created ON messages(conversation_id, created_at DESC);</code></pre>
+
+        <p><strong>Phân tích:</strong></p>
+        <ul>
+          <li><strong>Counter denormalize</strong> (follower_count, like_count) — read-heavy, cập nhật qua trigger hoặc app.</li>
+          <li><strong>Bảng nối</strong> follows, likes, tweet_hashtags — composite PK = (a_id, b_id).</li>
+          <li><strong>Index</strong> theo top query: timeline → idx tweets(author_id, created_at DESC).</li>
+          <li><strong>CHECK trên follows</strong> ngăn user follow chính mình.</li>
+          <li><strong>conversations</strong> dùng <code>user_a_id &lt; user_b_id</code> để chuẩn hóa cặp, tránh 2 hàng (A,B) và (B,A) cho cùng 1 cuộc.</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Khi schema này hết tải</span>
+          Khi user count vượt 10M+: timeline query <em>"tweets từ người tôi follow"</em> bắt đầu chậm. Twitter giải bằng <strong>fan-out on write</strong> — khi user post, ghi tweet_id vào "home_timeline" của từng follower (tốn ghi nhưng đọc cực nhanh). Sẽ học pattern này ở Ch10–11.
+        </div>
+      </section>
+
+      <section id="exercises">
+        <h2>13. Bài tập</h2>
+
+        <p><strong>Bài 1.</strong> Bảng sau vi phạm normal form nào? Sửa lại đúng 3NF:</p>
+<pre><code>course_offering:
+| id | course_code | course_name | semester | teacher_id | teacher_name | teacher_dept |
+|----|-------------|-------------|----------|------------|--------------|--------------|
+|  1 | CS101       | DB Intro    | Fall26   |    7       | Smith        | CS           |
+|  2 | CS101       | DB Intro    | Spring27 |    7       | Smith        | CS           |</code></pre>
+
+        <p><strong>Bài 2.</strong> Thiết kế schema cho 1 hệ E-commerce mini với: user, product, category (cây phân cấp), cart, order, order_item, payment, address. Vẽ ERD và viết CREATE TABLE.</p>
+
+        <p><strong>Bài 3.</strong> Bạn cần lưu "preferences" của user — tập key-value động (theme, language, notifications…). Cách nào tốt hơn:</p>
+        <ul>
+          <li>(a) bảng <code>user_preferences(user_id, key, value)</code> EAV</li>
+          <li>(b) cột <code>preferences JSONB</code> trên users</li>
+          <li>(c) các cột boolean cố định: <code>theme, lang, ...</code></li>
+        </ul>
+        <p>Đưa ra phân tích trade-off và chọn.</p>
+
+        <p><strong>Bài 4.</strong> Xác định cardinality giữa các cặp:</p>
+        <ul>
+          <li>User ↔ Email (1 user có nhiều email được lưu)</li>
+          <li>Order ↔ Address (mỗi order có 1 shipping + 1 billing)</li>
+          <li>Movie ↔ Actor</li>
+          <li>Book ↔ Author</li>
+          <li>User ↔ Profile</li>
+        </ul>
+
+        <p><strong>Bài 5.</strong> Khi nào denormalize <code>follower_count</code> là hợp lý? Khi nào thì NÊN tính lại từ <code>SELECT COUNT(*) FROM follows</code>?</p>
+      </section>
+
+      <section id="quiz">
+        <h2>14. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 4</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Bảng <code>orders(id PK, user_id, user_email, total)</code> vi phạm:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">1NF</li>
+              <li class="quiz-option">2NF</li>
+              <li class="quiz-option">3NF (transitive: id → user_id → user_email)</li>
+              <li class="quiz-option">BCNF nhưng tuân thủ 3NF</li>
+            </ul>
+            <div class="quiz-explain">id → user_id → user_email là transitive dependency. user_email không phụ thuộc trực tiếp vào id mà qua trung gian user_id → vi phạm 3NF. Sửa: bỏ user_email khỏi orders, JOIN với bảng users khi cần.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">2NF chỉ liên quan đến:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Bảng có index</li>
+              <li class="quiz-option">Bảng có FK</li>
+              <li class="quiz-option">Bảng có nhiều cột</li>
+              <li class="quiz-option">Bảng có composite primary key</li>
+            </ul>
+            <div class="quiz-explain">2NF nói về partial dependency — chỉ có nghĩa khi PK có nhiều cột. PK 1 cột tự động thỏa 2NF nếu đã 1NF.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Câu mantra Codd về normal forms:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Each column must be in alphabetical order</li>
+              <li class="quiz-option">Mỗi non-key attribute must depend on the key, the whole key, and nothing but the key</li>
+              <li class="quiz-option">The fewer indexes the better</li>
+              <li class="quiz-option">Always use natural keys</li>
+            </ul>
+            <div class="quiz-explain">"the key" = 1NF (atomic, có key), "the whole key" = 2NF (full FD), "nothing but the key" = 3NF (no transitive). Nhớ câu này thay vì học định nghĩa khô.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Khi nào denormalize HỢP LÝ?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Khi đã đo lường thấy JOIN/aggregate là bottleneck cho query nóng</li>
+              <li class="quiz-option">Mặc định ngay từ đầu để "phòng xa"</li>
+              <li class="quiz-option">Khi schema có hơn 5 bảng</li>
+              <li class="quiz-option">Khi DBA bảo</li>
+            </ul>
+            <div class="quiz-explain">Bắt đầu normalize. Đo lường. Chỉ denormalize khi có proof là JOIN/aggregate là bottleneck thực sự cho query thường chạy. Mỗi denormalize đẻ 1 nguồn lệch dữ liệu — không miễn phí.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">EAV (Entity-Attribute-Value) là pattern:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Khuyến nghị mặc định</li>
+              <li class="quiz-option">Tăng performance</li>
+              <li class="quiz-option">Anti-pattern trong hầu hết trường hợp — JSONB hoặc bảng cột cố định thường tốt hơn</li>
+              <li class="quiz-option">Thay thế cho FK</li>
+            </ul>
+            <div class="quiz-explain">EAV mất type safety, slow query, JOIN dày. Postgres JSONB hoặc bảng cột rõ ràng thường là lựa chọn tốt hơn. EAV chỉ dùng khi schema thực sự động (form builder).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Quan hệ N-N giữa Students và Courses thường được triển khai bằng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cột array trong students</li>
+              <li class="quiz-option">JSONB trong courses</li>
+              <li class="quiz-option">FK 2 chiều</li>
+              <li class="quiz-option">Bảng nối <code>enrollments(student_id, course_id)</code> với composite PK</li>
+            </ul>
+            <div class="quiz-explain">N-N cần bảng trung gian (junction/associative table) với composite PK gồm 2 FK. Có thể thêm cột phụ (enrolled_at, grade) nếu cần.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">UUID v4 (random) làm clustered PK trên B-tree:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tốt vì giúp shard</li>
+              <li class="quiz-option">Gây fragmentation và page split do random insertion</li>
+              <li class="quiz-option">Không có khác biệt với BIGSERIAL</li>
+              <li class="quiz-option">Tự động sort theo created_at</li>
+            </ul>
+            <div class="quiz-explain">B-tree thích insert đầu/cuối (sequential). UUID v4 random → mỗi insert đến page khác → page split, fragmentation, IO không liên tục. Dùng UUID v7 (time-ordered) hoặc BIGSERIAL.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Khi cần query "tất cả con cháu của node X" trong cây phân cấp, lựa chọn tốt là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Recursive CTE; hoặc lưu thêm cột "path"/closure table nếu cần truy vấn rất thường xuyên</li>
+              <li class="quiz-option">JOIN parent_id 100 lần</li>
+              <li class="quiz-option">Lưu mọi node trong 1 cột JSON</li>
+              <li class="quiz-option">Phải dùng Graph DB</li>
+            </ul>
+            <div class="quiz-explain">Recursive CTE đủ tốt cho đa số. Nếu query rất nhiều và cây sâu/lớn, các pattern khác như "materialized path" (path = '/1/5/12') hoặc "closure table" (bảng (ancestor, descendant, depth)) cho phép query phẳng nhanh hơn.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 4. Tiếp theo: <a href="chuong5.html"><strong>Chương 5 — Indexes (B-tree, Hash, GIN, Composite) →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 4 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

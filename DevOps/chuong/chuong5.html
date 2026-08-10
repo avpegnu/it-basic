@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — Containers & Docker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 05 · Containers</div>
+      <h1>Containers & Docker</h1>
+      <p class="subtitle">Container thay đổi cách triển khai phần mềm. Học từ namespaces/cgroups (cốt lõi Linux), Docker architecture, Dockerfile best practice, multi-stage build, image optimization, networking, volumes, Docker Compose. Đây là nền cho Kubernetes ở chương kế tiếp.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Container vs VM — khác gì?</a></li>
+        <li><a href="#how">2. Cách container hoạt động</a></li>
+        <li><a href="#docker-arch">3. Docker Architecture</a></li>
+        <li><a href="#first">4. Container đầu tiên</a></li>
+        <li><a href="#dockerfile">5. Dockerfile sâu</a></li>
+        <li><a href="#multi-stage">6. Multi-stage Build</a></li>
+        <li><a href="#optimize">7. Image Optimization</a></li>
+        <li><a href="#registry">8. Registry & Distribution</a></li>
+        <li><a href="#network">9. Networking</a></li>
+        <li><a href="#volume">10. Volumes & Data</a></li>
+        <li><a href="#compose">11. Docker Compose</a></li>
+        <li><a href="#security">12. Container Security</a></li>
+        <li><a href="#exercises">13. Bài tập</a></li>
+        <li><a href="#quiz">14. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Container vs VM — khác biệt cốt lõi</h2>
+
+        <p>Trước Docker (2013), 2 cách phổ biến deploy app:</p>
+        <ul>
+          <li><strong>Bare metal</strong> — install app trực tiếp lên server. Conflict dependency cao.</li>
+          <li><strong>VM (Virtual Machine)</strong> — VMware/KVM/Hyper-V. Mỗi app 1 VM với full OS. Isolation tốt nhưng nặng (mỗi VM 500MB+ RAM, vài GB disk, boot 30s).</li>
+        </ul>
+
+        <p>Container giải bài toán: isolation tương tự VM nhưng <em>nhẹ hơn 100×</em>:</p>
+
+        <div class="ascii">┌─────── VM ────────┐    ┌──── Container ──────┐
+│  App A            │    │  App A   App B   …  │
+├───────────────────┤    ├─────────────────────┤
+│  Bin / Libs       │    │  Bin / Libs (mỗi)   │
+├───────────────────┤    ├─────────────────────┤
+│  Guest OS         │    │  Container Runtime  │
+│  (FULL kernel)    │    │  (containerd)       │
+├───────────────────┤    ├─────────────────────┤
+│  Hypervisor       │    │       Host OS       │
+│  (KVM, ESXi)      │    │   (kernel SHARED)   │
+├───────────────────┤    ├─────────────────────┤
+│  Host OS          │    │       Hardware      │
+├───────────────────┤    └─────────────────────┘
+│  Hardware         │
+└───────────────────┘
+   1 VM = 500MB+         1 container = vài MB-vài chục MB
+   Boot 30s              Boot &lt; 1s</div>
+
+        <h3>1.1. So sánh chi tiết</h3>
+
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>VM</th><th>Container</th></tr></thead>
+          <tbody>
+            <tr><td>Kernel</td><td>Riêng (full OS)</td><td>Chia sẻ với host</td></tr>
+            <tr><td>Boot time</td><td>30s - vài phút</td><td>&lt; 1s</td></tr>
+            <tr><td>Size</td><td>vài GB</td><td>vài MB - vài trăm MB</td></tr>
+            <tr><td>Density</td><td>10-20 VM/host</td><td>100-1000+ container/host</td></tr>
+            <tr><td>Isolation</td><td>Hardware-level (mạnh)</td><td>OS-level (process)</td></tr>
+            <tr><td>Image format</td><td>VMDK, QCOW2 (vài GB)</td><td>OCI image (vài MB+)</td></tr>
+            <tr><td>OS hỗ trợ</td><td>Bất kỳ OS</td><td>Cùng kernel với host (Linux container chỉ chạy trên Linux host)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>1.2. Khi nào VM tốt hơn?</h3>
+        <ul>
+          <li>Need full OS isolation (multi-tenant cloud).</li>
+          <li>Cross-OS (Windows app trên Linux host).</li>
+          <li>Hardware passthrough (GPU, custom kernel).</li>
+        </ul>
+
+        <p>Trong DevOps modern: VM là <em>infrastructure layer</em>; container là <em>application layer</em>. Cloud thường chạy K8s trong VM (EKS node = EC2 instance) — combo tốt nhất.</p>
+      </section>
+
+      <section id="how">
+        <h2>2. Cách container hoạt động — Linux primitives</h2>
+
+        <p>Container không phải magic. Nó là 3 Linux features cũ kết hợp:</p>
+
+        <h3>2.1. Namespaces — isolation</h3>
+
+        <p>Namespace tạo "view" riêng của system resource cho process:</p>
+
+        <table>
+          <thead><tr><th>Namespace</th><th>Isolate</th></tr></thead>
+          <tbody>
+            <tr><td>PID</td><td>Process IDs (process trong container thấy mình PID 1)</td></tr>
+            <tr><td>Network (NET)</td><td>Interface, route, port</td></tr>
+            <tr><td>Mount (MNT)</td><td>Filesystem mount points</td></tr>
+            <tr><td>UTS</td><td>Hostname, domain name</td></tr>
+            <tr><td>IPC</td><td>Inter-process communication (shared memory, queues)</td></tr>
+            <tr><td>User (USER)</td><td>UIDs, GIDs (UID 0 trong container = UID 1000 ngoài)</td></tr>
+            <tr><td>Cgroup</td><td>Cgroup root (Linux 4.6+)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.2. Cgroups — resource limits</h3>
+
+        <p>Control Groups (cgroups) giới hạn tài nguyên process:</p>
+        <ul>
+          <li><strong>cpu</strong> — share CPU time, set quota.</li>
+          <li><strong>memory</strong> — limit RAM, kill nếu vượt (OOM kill).</li>
+          <li><strong>blkio</strong> — limit disk I/O.</li>
+          <li><strong>pids</strong> — limit số process.</li>
+          <li><strong>net_cls</strong> — tag traffic cho QoS.</li>
+        </ul>
+
+        <h3>2.3. Capabilities + seccomp — security</h3>
+
+        <p>Linux capability chia quyền root thành 40+ phần (CAP_NET_ADMIN, CAP_SYS_ADMIN, ...). Container chỉ giữ lại capability cần thiết.</p>
+
+        <p>seccomp filter syscall — block syscall nguy hiểm.</p>
+
+        <h3>2.4. Demo container "thủ công" với unshare</h3>
+
+<pre><code class="language-bash"># Bash + unshare = container thô sơ
+sudo unshare --pid --net --mount --uts --ipc --fork bash
+
+# Trong shell mới:
+hostname container1                    # đổi hostname (UTS namespace)
+mount -t proc proc /proc               # remount proc
+ps aux                                  # chỉ thấy process trong namespace
+ip addr                                 # chỉ thấy lo (network namespace)
+exit
+</code></pre>
+
+        <p>Đó là "container" — không cần Docker. Docker tự động hóa: tạo namespace, mount image filesystem, set cgroup, drop capability.</p>
+      </section>
+
+      <section id="docker-arch">
+        <h2>3. Docker Architecture</h2>
+
+        <p>Docker không phải 1 binary mà là client-server architecture:</p>
+
+        <div class="ascii">┌─────────────────────┐         ┌──────────────────────────────────┐
+│  Docker CLI         │         │  Docker Daemon (dockerd)         │
+│  (docker run …)     │ ──REST→ │  ├─ image manage                 │
+└─────────────────────┘         │  ├─ container manage             │
+                                │  ├─ network manage               │
+                                │  └─ volume manage                │
+                                │           ↓                      │
+                                │   ┌────────────────┐             │
+                                │   │  containerd    │             │
+                                │   │  (runtime)     │             │
+                                │   │      ↓         │             │
+                                │   │   runc / crun  │             │
+                                │   │   (low-level)  │             │
+                                │   └────────────────┘             │
+                                │      ↓                           │
+                                │   namespaces + cgroups (kernel)  │
+                                └──────────────────────────────────┘</div>
+
+        <h3>3.1. Components</h3>
+
+        <ul>
+          <li><strong>Docker CLI</strong> — <code>docker</code> command. Gọi REST API.</li>
+          <li><strong>Docker Daemon (dockerd)</strong> — service chạy nền, quản lý high-level objects.</li>
+          <li><strong>containerd</strong> — high-level runtime (lifecycle container, image transfer).</li>
+          <li><strong>runc</strong> — low-level OCI runtime tạo namespace+cgroup. Chuẩn OCI.</li>
+        </ul>
+
+        <p>Modern alternative: <strong>Podman</strong> — daemonless (mỗi command spawn runc trực tiếp), rootless mặc định, CLI compat Docker.</p>
+
+        <h3>3.2. OCI Standard</h3>
+
+        <p>Open Container Initiative (2015) định nghĩa:</p>
+        <ul>
+          <li><strong>Image Spec</strong> — format image (layers, manifest).</li>
+          <li><strong>Runtime Spec</strong> — cách chạy container.</li>
+          <li><strong>Distribution Spec</strong> — cách push/pull registry.</li>
+        </ul>
+
+        <p>Vì OCI: Docker image chạy được với Podman, BuildKit, K8s (containerd, CRI-O). Không lock-in vendor.</p>
+      </section>
+
+      <section id="first">
+        <h2>4. Container đầu tiên — lệnh cơ bản</h2>
+
+<pre><code class="language-bash"># Pull image từ Docker Hub
+docker pull nginx:1.25-alpine
+
+# Run container
+docker run --rm -d -p 8080:80 --name web nginx:1.25-alpine
+#   --rm: xóa container khi stop
+#   -d: detached (background)
+#   -p host:container — port mapping
+#   --name: tên container
+
+# Verify
+curl http://localhost:8080
+docker ps                              # container đang chạy
+
+# Logs
+docker logs web
+docker logs -f web                     # follow
+
+# Exec vào container
+docker exec -it web sh
+# Trong container:
+ps aux
+ls /etc/nginx
+exit
+
+# Stop & remove
+docker stop web
+docker rm web                          # nếu không có --rm
+
+# Liệt kê
+docker ps                              # running
+docker ps -a                           # all (kể cả stopped)
+docker images                          # images
+docker volume ls
+docker network ls
+</code></pre>
+
+        <h3>4.1. Run options quan trọng</h3>
+
+<pre><code class="language-bash">docker run \
+  -d \                                  # background
+  --name myapp \                        # tên
+  -p 3000:3000 \                        # port
+  -e NODE_ENV=production \              # env var
+  --env-file .env \                     # env từ file
+  -v $(pwd)/data:/app/data \            # bind mount
+  --memory=512m \                       # RAM limit
+  --cpus=0.5 \                           # 50% 1 core
+  --restart=unless-stopped \             # auto restart
+  --user 1000:1000 \                    # non-root
+  --read-only \                          # filesystem read-only
+  --cap-drop=ALL \                       # drop tất cả capability
+  --cap-add=NET_BIND_SERVICE \           # chỉ giữ cái cần
+  myapp:1.0
+</code></pre>
+
+        <h3>4.2. docker prune — dọn dẹp</h3>
+
+<pre><code class="language-bash">docker container prune                 # xóa container stopped
+docker image prune                     # xóa dangling image
+docker image prune -a                  # xóa unused image
+docker volume prune                    # xóa volume không reference
+docker network prune
+docker system prune -a --volumes       # xóa TẤT CẢ unused (nuclear)
+</code></pre>
+
+        <p>Mẹo: kiểm tra <code>docker system df</code> xem disk usage trước khi prune.</p>
+      </section>
+
+      <section id="dockerfile">
+        <h2>5. Dockerfile — Build image declarative</h2>
+
+        <h3>5.1. Hello world</h3>
+
+<pre><code class="language-dockerfile"># Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+EXPOSE 3000
+
+USER node
+
+CMD ["node", "server.js"]
+</code></pre>
+
+<pre><code class="language-bash">docker build -t myapp:1.0 .
+docker run -p 3000:3000 myapp:1.0
+</code></pre>
+
+        <h3>5.2. Instruction reference</h3>
+
+        <table>
+          <thead><tr><th>Instruction</th><th>Mục đích</th></tr></thead>
+          <tbody>
+            <tr><td><code>FROM</code></td><td>Base image (bắt buộc, dòng đầu)</td></tr>
+            <tr><td><code>WORKDIR</code></td><td>Set working directory (cd)</td></tr>
+            <tr><td><code>COPY src dst</code></td><td>Copy file vào image (preferred)</td></tr>
+            <tr><td><code>ADD</code></td><td>Như COPY nhưng auto-extract tar, fetch URL (avoid)</td></tr>
+            <tr><td><code>RUN cmd</code></td><td>Chạy command tại build time</td></tr>
+            <tr><td><code>ENV KEY=value</code></td><td>Set env var (cả build + runtime)</td></tr>
+            <tr><td><code>ARG name</code></td><td>Build-time variable (không persist runtime)</td></tr>
+            <tr><td><code>EXPOSE port</code></td><td>Document port (chỉ doc, không thực sự open)</td></tr>
+            <tr><td><code>VOLUME /path</code></td><td>Mount point declaration</td></tr>
+            <tr><td><code>USER name</code></td><td>Set user chạy command sau</td></tr>
+            <tr><td><code>HEALTHCHECK</code></td><td>Define health check command</td></tr>
+            <tr><td><code>ENTRYPOINT</code></td><td>Executable mặc định (khó override)</td></tr>
+            <tr><td><code>CMD</code></td><td>Default args (override bằng <code>docker run … cmd</code>)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.3. Layer system</h3>
+
+        <p>Mỗi instruction tạo 1 <strong>layer</strong> (filesystem diff). Image = stack of layers, immutable, cached.</p>
+
+        <div class="ascii">┌──────────────────────────────────┐  ← container (writable)
+├──────────────────────────────────┤
+│ Layer 5 (CMD ["node", ...])      │
+├──────────────────────────────────┤
+│ Layer 4 (COPY . .)               │
+├──────────────────────────────────┤
+│ Layer 3 (RUN npm ci)             │
+├──────────────────────────────────┤
+│ Layer 2 (COPY package*.json)     │
+├──────────────────────────────────┤
+│ Layer 1 (WORKDIR /app)           │
+├──────────────────────────────────┤
+│ Base layers (node:20-alpine)     │
+└──────────────────────────────────┘</div>
+
+        <h3>5.4. Cache mechanism</h3>
+
+        <p>Khi build lại, Docker check từng instruction:</p>
+        <ul>
+          <li>Instruction giống và input giống → cache hit, skip.</li>
+          <li>Bất kỳ thay đổi → invalidate cache từ đó về sau.</li>
+        </ul>
+
+        <p><strong>Quy tắc vàng</strong>: đặt instruction ít thay đổi ở đầu, nhiều thay đổi ở cuối.</p>
+
+<pre><code class="language-dockerfile"># ❌ KÉM — COPY trước npm ci
+FROM node:20-alpine
+WORKDIR /app
+COPY . .                               # mỗi lần code đổi → invalidate
+RUN npm ci                             # → rebuild cả npm ci
+
+# ✓ TỐT — separate package.json copy
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./                  # ít thay đổi
+RUN npm ci                             # cache khi package.json không đổi
+COPY . .                               # nhiều thay đổi, đặt cuối
+</code></pre>
+
+        <h3>5.5. .dockerignore</h3>
+
+<pre><code># .dockerignore — file/folder không vào build context
+node_modules
+.git
+.env
+*.log
+dist
+build
+coverage
+.next
+.cache
+.vscode
+.idea
+README.md
+</code></pre>
+
+        <p>Lợi ích: build context nhỏ → upload nhanh, không leak secret (.env), không dirty cache (node_modules thay đổi).</p>
+      </section>
+
+      <section id="multi-stage">
+        <h2>6. Multi-stage Build — image gọn hơn 10×</h2>
+
+        <p>Vấn đề: build time cần dev tool (compiler, npm devDep) — runtime không cần. Single-stage image chứa cả → lớn + nhiều attack surface.</p>
+
+        <h3>6.1. Single-stage (BAD)</h3>
+
+<pre><code class="language-dockerfile">FROM node:20
+WORKDIR /app
+COPY . .
+RUN npm ci                              # cài cả devDep
+RUN npm run build                       # cần TypeScript, webpack, ...
+CMD ["npm", "start"]
+
+# Kết quả: ~1.5 GB
+</code></pre>
+
+        <h3>6.2. Multi-stage (GOOD)</h3>
+
+<pre><code class="language-dockerfile"># Stage 1: build
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci                              # cài tất cả (kể cả devDep)
+COPY . .
+RUN npm run build                       # tạo dist/
+
+# Stage 2: production runtime
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package*.json ./
+RUN npm ci --only=production            # chỉ prod dep
+
+COPY --from=builder /app/dist ./dist    # copy artifact từ stage 1
+
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+CMD ["node", "dist/server.js"]
+
+# Kết quả: ~150 MB (10× nhỏ hơn)
+</code></pre>
+
+        <h3>6.3. Build target cụ thể</h3>
+
+<pre><code class="language-bash">docker build --target builder -t myapp:dev .
+docker build --target runner -t myapp:prod .
+</code></pre>
+
+        <h3>6.4. Multi-stage cho compiled language</h3>
+
+<pre><code class="language-dockerfile"># Go example
+FROM golang:1.22-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /app -ldflags="-s -w" ./cmd/server
+
+# Stage 2: distroless (no shell, no apt)
+FROM gcr.io/distroless/static:nonroot
+COPY --from=builder /app /app
+USER nonroot:nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app"]
+
+# Result: ~20 MB total
+</code></pre>
+
+        <p><strong>Distroless</strong> images (Google) chỉ chứa binary + minimal runtime, không có shell/package manager → attack surface cực thấp.</p>
+      </section>
+
+      <section id="optimize">
+        <h2>7. Image Optimization — Best Practices</h2>
+
+        <h3>7.1. Chọn base image phù hợp</h3>
+
+        <table>
+          <thead><tr><th>Base</th><th>Size</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td>scratch</td><td>0 MB</td><td>Static binary (Go, Rust)</td></tr>
+            <tr><td>distroless/static</td><td>2 MB</td><td>Static binary, có CA cert</td></tr>
+            <tr><td>distroless/base</td><td>20 MB</td><td>Dynamic linked binary</td></tr>
+            <tr><td>alpine:3.19</td><td>5 MB</td><td>Cần shell, apk</td></tr>
+            <tr><td>debian:slim</td><td>28 MB</td><td>Cần glibc (Node native module)</td></tr>
+            <tr><td>ubuntu:22.04</td><td>78 MB</td><td>Cần apt ecosystem</td></tr>
+            <tr><td>UBI (RHEL)</td><td>200 MB</td><td>Enterprise compliance</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.2. Combine RUN để giảm layer</h3>
+
+<pre><code class="language-dockerfile"># ❌ Mỗi RUN = 1 layer
+RUN apt-get update
+RUN apt-get install -y curl
+RUN apt-get install -y vim
+RUN rm -rf /var/lib/apt/lists/*
+
+# ✓ Combine + cleanup trong cùng layer
+RUN apt-get update &amp;&amp; \
+    apt-get install -y --no-install-recommends curl vim &amp;&amp; \
+    rm -rf /var/lib/apt/lists/* &amp;&amp; \
+    apt-get clean
+</code></pre>
+
+        <p>Quan trọng: cleanup phải <em>trong cùng RUN</em>, không thì cleanup ở layer sau không xóa được data từ layer trước (immutable).</p>
+
+        <h3>7.3. BuildKit cache mount</h3>
+
+<pre><code class="language-dockerfile"># syntax=docker/dockerfile:1.7
+
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+# Mount cache cho npm — không vào image, persistent giữa builds
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline
+COPY . .
+CMD ["node", "server.js"]
+</code></pre>
+
+<pre><code class="language-bash"># Enable BuildKit (default Docker 23+)
+DOCKER_BUILDKIT=1 docker build -t myapp .
+
+# Hoặc dùng buildx
+docker buildx build --cache-from type=registry,ref=myapp:cache \
+                    --cache-to   type=registry,ref=myapp:cache,mode=max \
+                    -t myapp:1.0 .
+</code></pre>
+
+        <h3>7.4. Đo và phân tích image</h3>
+
+<pre><code class="language-bash"># Size
+docker images myapp
+
+# Layer breakdown
+docker history myapp:1.0
+
+# Detail (file system, layer wasted)
+dive myapp:1.0                          # https://github.com/wagoodman/dive
+</code></pre>
+
+        <h3>7.5. Reproducible build</h3>
+
+<pre><code class="language-dockerfile"># ❌ Không reproducible
+FROM node:20                            # latest 20 — thay đổi khi rebuild
+
+# ✓ Pin version cụ thể
+FROM node:20.11.1-alpine3.19
+
+# ✓ Pin theo digest (mạnh nhất)
+FROM node:20-alpine@sha256:5c7bd23a4...
+</code></pre>
+      </section>
+
+      <section id="registry">
+        <h2>8. Container Registry & Distribution</h2>
+
+        <h3>8.1. Public registries</h3>
+
+        <table>
+          <thead><tr><th>Registry</th><th>URL</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Docker Hub</td><td>docker.io</td><td>Default, rate limit 100 pull/6h anonymous</td></tr>
+            <tr><td>GitHub Container Registry</td><td>ghcr.io</td><td>Free for public, integrate GHA</td></tr>
+            <tr><td>AWS ECR Public</td><td>public.ecr.aws</td><td>Free, no rate limit</td></tr>
+            <tr><td>Google Container Registry</td><td>gcr.io / pkg.dev</td><td>Migrating to Artifact Registry</td></tr>
+            <tr><td>Quay.io</td><td>quay.io</td><td>Red Hat owned, security scan</td></tr>
+          </tbody>
+        </table>
+
+        <h3>8.2. Private registries</h3>
+
+        <ul>
+          <li><strong>AWS ECR</strong> — tích hợp IAM, lifecycle policy.</li>
+          <li><strong>GCP Artifact Registry</strong> — multi-format (Docker, Maven, npm, Helm).</li>
+          <li><strong>Azure Container Registry (ACR)</strong>.</li>
+          <li><strong>Harbor</strong> — open source, self-host, có vulnerability scan, signing.</li>
+          <li><strong>JFrog Artifactory</strong> — enterprise.</li>
+        </ul>
+
+        <h3>8.3. Push & Pull</h3>
+
+<pre><code class="language-bash"># Login
+docker login                            # Docker Hub
+docker login ghcr.io -u USER -p PAT     # GitHub
+aws ecr get-login-password | docker login --username AWS \
+  --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
+
+# Tag
+docker tag myapp:1.0 ghcr.io/me/myapp:1.0
+
+# Push
+docker push ghcr.io/me/myapp:1.0
+
+# Pull
+docker pull ghcr.io/me/myapp:1.0
+
+# Multi-arch (ARM + x86)
+docker buildx create --use
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/me/myapp:1.0 \
+  --push .
+</code></pre>
+
+        <h3>8.4. Image tagging strategy</h3>
+
+        <table>
+          <thead><tr><th>Tag</th><th>Use case</th><th>Pin level</th></tr></thead>
+          <tbody>
+            <tr><td>latest</td><td>Demo, dev (avoid prod)</td><td>None — moves</td></tr>
+            <tr><td>1, 1.5, 1.5.2</td><td>Tag SemVer</td><td>Reasonable</td></tr>
+            <tr><td>main-abc1234</td><td>CI build (branch + commit)</td><td>Specific commit</td></tr>
+            <tr><td>sha256:abc...</td><td>Production deploy</td><td>Immutable</td></tr>
+          </tbody>
+        </table>
+
+        <p>Best practice prod: pin theo SHA256 digest — không thể bị "moved" như tag.</p>
+      </section>
+
+      <section id="network">
+        <h2>9. Container Networking</h2>
+
+        <h3>9.1. Network drivers</h3>
+
+        <ul>
+          <li><strong>bridge</strong> (default) — virtual network, container có IP riêng, NAT ra ngoài.</li>
+          <li><strong>host</strong> — share network với host (no isolation).</li>
+          <li><strong>none</strong> — không network (chỉ loopback).</li>
+          <li><strong>overlay</strong> — multi-host (Swarm, K8s).</li>
+          <li><strong>macvlan</strong> — container có MAC address riêng, xuất hiện như device riêng trên LAN.</li>
+        </ul>
+
+        <h3>9.2. Bridge network mặc định</h3>
+
+<pre><code class="language-bash"># List network
+docker network ls
+# bridge, host, none đã có sẵn
+
+# Container trên bridge default — KHÔNG resolve nhau bằng tên
+docker run -d --name db postgres
+docker run -d --name web --link db nginx     # --link deprecated
+
+# Tốt hơn: tạo user-defined bridge
+docker network create mynet
+docker run -d --name db --network mynet postgres
+docker run -d --name web --network mynet nginx
+# Bây giờ web có thể curl http://db:5432 — DNS resolution tự động
+</code></pre>
+
+        <h3>9.3. Port mapping</h3>
+
+<pre><code class="language-bash"># -p host_port:container_port
+docker run -p 8080:80 nginx              # host 8080 → container 80
+docker run -p 127.0.0.1:8080:80 nginx    # bind chỉ localhost
+docker run -P nginx                       # auto map EXPOSE'd ports random
+
+# Inspect
+docker port web                           # xem mapping
+</code></pre>
+
+        <h3>9.4. DNS giữa container</h3>
+
+        <p>Trong user-defined network, container resolve nhau qua tên container hoặc network alias:</p>
+
+<pre><code class="language-bash">docker network create app-net
+
+docker run -d --name api --network app-net myapi
+docker run -d --name web --network app-net \
+  -e API_URL=http://api:3000 \
+  myweb
+
+# Network alias
+docker run -d --network app-net --network-alias db postgres
+# Container khác có thể nối "db" hoặc "&lt;container-name&gt;"
+</code></pre>
+
+        <h3>9.5. Inspect network</h3>
+
+<pre><code class="language-bash">docker network inspect mynet           # IP range, container, options
+docker exec web ip addr                # interface trong container
+docker exec web cat /etc/resolv.conf   # DNS server (Docker daemon)
+docker exec web netstat -tlnp          # ports listening
+</code></pre>
+      </section>
+
+      <section id="volume">
+        <h2>10. Volumes & Data Persistence</h2>
+
+        <h3>10.1. Storage options</h3>
+
+        <table>
+          <thead><tr><th>Type</th><th>Lifetime</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td>Container layer (writable)</td><td>Container delete = mất</td><td>Temp data</td></tr>
+            <tr><td>Volume (named)</td><td>Persistent (docker volume)</td><td>DB data, app state</td></tr>
+            <tr><td>Bind mount</td><td>Persistent (host path)</td><td>Dev: code mount, share file với host</td></tr>
+            <tr><td>tmpfs (RAM)</td><td>Container delete = mất</td><td>Sensitive data, no disk</td></tr>
+          </tbody>
+        </table>
+
+        <h3>10.2. Named volume</h3>
+
+<pre><code class="language-bash"># Tạo volume
+docker volume create pgdata
+
+# Mount volume
+docker run -d --name pg \
+  -v pgdata:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:15
+
+# Inspect
+docker volume inspect pgdata
+# Mountpoint: /var/lib/docker/volumes/pgdata/_data
+
+# List
+docker volume ls
+
+# Cleanup volume không reference
+docker volume prune
+</code></pre>
+
+        <h3>10.3. Bind mount</h3>
+
+<pre><code class="language-bash"># Bind host path → container path
+docker run -d --name dev \
+  -v $(pwd):/app \                       # mount code source vào /app
+  -v /app/node_modules \                  # anonymous volume (shadow node_modules)
+  node:20 npm run dev
+</code></pre>
+
+        <p>Use case: development hot-reload (sửa code local → container thấy ngay).</p>
+
+        <h3>10.4. tmpfs</h3>
+
+<pre><code class="language-bash">docker run --tmpfs /tmp:size=100M nginx
+# /tmp ở RAM, max 100MB. Process write nhanh, không bao giờ ra disk.
+</code></pre>
+
+        <h3>10.5. Backup volume</h3>
+
+<pre><code class="language-bash"># Backup volume thành tar.gz
+docker run --rm \
+  -v pgdata:/data \
+  -v $(pwd):/backup \
+  alpine \
+  tar czf /backup/pgdata-$(date +%Y%m%d).tar.gz -C /data .
+
+# Restore
+docker run --rm \
+  -v pgdata:/data \
+  -v $(pwd):/backup \
+  alpine \
+  sh -c "cd /data &amp;&amp; tar xzf /backup/pgdata-20240115.tar.gz"
+</code></pre>
+      </section>
+
+      <section id="compose">
+        <h2>11. Docker Compose — Multi-container</h2>
+
+        <p>Docker Compose orchestrate nhiều container = 1 app. File <code>compose.yaml</code> declarative.</p>
+
+        <h3>11.1. Compose file</h3>
+
+<pre><code class="language-yaml"># compose.yaml
+services:
+  web:
+    build: .                             # build từ Dockerfile
+    image: myapp:dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://app:secret@db:5432/myapp
+      - REDIS_URL=redis://cache:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_started
+    volumes:
+      - ./src:/app/src                   # bind mount cho hot reload
+      - /app/node_modules                # anon volume
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: myapp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cache:
+    image: redis:7-alpine
+    volumes:
+      - cachedata:/data
+
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  cachedata:
+
+networks:
+  default:
+    name: myapp-net
+</code></pre>
+
+        <h3>11.2. Lệnh Compose</h3>
+
+<pre><code class="language-bash"># Start all
+docker compose up                       # foreground (logs)
+docker compose up -d                    # background
+
+# Stop & remove
+docker compose down                     # giữ volume
+docker compose down -v                  # xóa cả volume
+
+# Logs
+docker compose logs                     # all services
+docker compose logs -f web              # follow service
+
+# Exec
+docker compose exec web sh
+docker compose exec db psql -U app myapp
+
+# Scale
+docker compose up -d --scale web=3      # 3 instance web
+
+# Build
+docker compose build                    # build all
+docker compose build web                # 1 service
+
+# Status
+docker compose ps                       # service status
+docker compose top                      # processes
+</code></pre>
+
+        <h3>11.3. Multi-environment với override</h3>
+
+<pre><code class="language-yaml"># compose.yaml — base
+services:
+  web:
+    image: myapp:1.0
+    environment:
+      - LOG_LEVEL=info
+
+# compose.dev.yaml — dev override
+services:
+  web:
+    build: .
+    volumes:
+      - ./src:/app/src
+    environment:
+      - LOG_LEVEL=debug
+      - HOT_RELOAD=true
+
+# compose.prod.yaml — prod
+services:
+  web:
+    image: ghcr.io/me/myapp:1.5.0
+    environment:
+      - LOG_LEVEL=warn
+    deploy:
+      replicas: 3
+</code></pre>
+
+<pre><code class="language-bash"># Dev
+docker compose -f compose.yaml -f compose.dev.yaml up
+
+# Prod
+docker compose -f compose.yaml -f compose.prod.yaml up -d
+</code></pre>
+
+        <p>Compose phù hợp dev environment, demo, single-host deploy. Production multi-host → Kubernetes.</p>
+      </section>
+
+      <section id="security">
+        <h2>12. Container Security — 10 nguyên tắc</h2>
+
+        <ol class="steps">
+          <li><strong>Run as non-root</strong>:
+<pre><code class="language-dockerfile">RUN addgroup -S app &amp;&amp; adduser -S app -G app
+USER app</code></pre>
+          </li>
+          <li><strong>Read-only root filesystem</strong>:
+<pre><code class="language-bash">docker run --read-only --tmpfs /tmp myapp</code></pre>
+          </li>
+          <li><strong>Drop capabilities</strong>:
+<pre><code class="language-bash">docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE myapp</code></pre>
+          </li>
+          <li><strong>Limit resources</strong>: <code>--memory=512m --cpus=0.5</code> tránh DoS.</li>
+          <li><strong>No privileged</strong>: tránh <code>--privileged</code> trừ khi tuyệt đối cần.</li>
+          <li><strong>Don't expose Docker socket</strong>: <code>/var/run/docker.sock</code> = root host.</li>
+          <li><strong>Pin base image theo digest</strong>: tag có thể bị move.</li>
+          <li><strong>Multi-stage build + distroless</strong>: minimize attack surface.</li>
+          <li><strong>Scan image</strong>: Trivy, Snyk, Grype mỗi build.</li>
+          <li><strong>Sign image</strong>: cosign — supply chain integrity.</li>
+        </ol>
+
+        <h3>12.1. Trivy scan</h3>
+
+<pre><code class="language-bash"># Quick scan
+trivy image myapp:1.0
+
+# Severity filter, fail CI nếu HIGH
+trivy image --severity HIGH,CRITICAL --exit-code 1 myapp:1.0
+
+# Filesystem scan (Dockerfile)
+trivy fs .
+
+# IaC scan
+trivy config .                          # scan terraform, k8s YAML
+</code></pre>
+
+        <h3>12.2. cosign — sign image</h3>
+
+<pre><code class="language-bash"># Generate key pair
+cosign generate-key-pair
+
+# Sign image
+cosign sign --key cosign.key ghcr.io/me/myapp:1.0
+
+# Verify
+cosign verify --key cosign.pub ghcr.io/me/myapp:1.0
+</code></pre>
+
+        <p>Chi tiết hơn ở Chương 12 DevSecOps.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>13. Bài tập</h2>
+
+        <ol>
+          <li><strong>First container</strong>: pull nginx, run với port 8080. Mount HTML file vào <code>/usr/share/nginx/html</code>. Truy cập trên browser.</li>
+
+          <li><strong>Build app</strong>: container hóa 1 app Node.js / Python / Go. Dockerfile multi-stage. Đo size, target &lt; 100 MB.</li>
+
+          <li><strong>Layer caching</strong>: build app 2 lần. Verify cache hit ở COPY package.json. Sau đó sửa code, rebuild — verify chỉ rebuild từ COPY . trở đi.</li>
+
+          <li><strong>Distroless</strong>: convert Dockerfile sang multi-stage với base distroless/static. Verify image &lt; 30 MB.</li>
+
+          <li><strong>Compose stack</strong>: viết compose.yaml cho stack 3 services: web (Node) + DB (Postgres) + cache (Redis). Health check, restart policy, named volume.</li>
+
+          <li><strong>Multi-env Compose</strong>: tạo compose.dev.yaml + compose.prod.yaml override. Dev có hot-reload, prod có replicas=3.</li>
+
+          <li><strong>Volume backup</strong>: backup Postgres data volume thành tar.gz, restore trên container mới.</li>
+
+          <li><strong>Network</strong>: tạo 2 network. Place api + db ở "backend", web + nginx ở "frontend". Web nối api qua "frontend" only — verify db không reachable từ web.</li>
+
+          <li><strong>Security harden</strong>: harden 1 image: non-root user, read-only fs, drop ALL caps, memory limit. Verify app vẫn chạy. Xác minh bằng <code>docker inspect</code>.</li>
+
+          <li><strong>Trivy scan</strong>: scan image của bạn. Sửa CVE HIGH bằng cách upgrade base image. Re-scan.</li>
+
+          <li><strong>Multi-arch</strong>: build image cho cả x86 và ARM (M1/M2). Push lên ghcr.io, verify cả 2 platform pull được.</li>
+
+          <li><strong>Compare</strong>: cùng app, build với (a) Ubuntu base, (b) Alpine base, (c) Distroless. So sánh size, build time, startup time, RAM.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>14. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 5</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Container KHÁC VM ở điểm cốt lõi nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Container chỉ chạy được Linux</li>
+              <li class="quiz-option">VM nhanh hơn</li>
+              <li class="quiz-option">Container chia sẻ kernel với host (lightweight); VM có guest OS riêng (full kernel) — nặng hơn nhiều lần</li>
+              <li class="quiz-option">Hai cái giống nhau</li>
+            </ul>
+            <div class="quiz-explain">VM: hypervisor virtualize hardware → guest OS có kernel riêng (vài GB, boot 30s). Container: kernel host shared, dùng namespaces+cgroups isolate process (vài MB, boot &lt; 1s). Hệ quả: 1 host chạy 100-1000 container, chỉ 10-20 VM. Container có isolation yếu hơn VM (chia sẻ kernel) — không phù hợp multi-tenant untrusted.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Container isolation dựa trên Linux primitives nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Namespaces (isolation), Cgroups (resource limits), Capabilities + seccomp (security)</li>
+              <li class="quiz-option">VirtualBox, KVM</li>
+              <li class="quiz-option">Hyper-V</li>
+              <li class="quiz-option">SELinux only</li>
+            </ul>
+            <div class="quiz-explain">3 components: (1) Namespaces — PID/NET/MNT/UTS/IPC/USER tạo "view" riêng; (2) Cgroups — limit CPU/RAM/IO; (3) Capabilities (chia quyền root) + seccomp (filter syscall) cho security. Docker, Podman đều dùng cùng primitives — không phải Docker phát minh ra container, chỉ làm UX dễ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Quy tắc cache Dockerfile để optimize build:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Đặt COPY . . ở đầu</li>
+              <li class="quiz-option">Đặt instruction ÍT thay đổi ở ĐẦU, NHIỀU thay đổi ở CUỐI — vd COPY package.json + RUN npm ci trước, COPY . . sau</li>
+              <li class="quiz-option">Mọi RUN nên trên 1 dòng</li>
+              <li class="quiz-option">Không quan trọng</li>
+            </ul>
+            <div class="quiz-explain">Mỗi instruction tạo layer. Khi rebuild, Docker check input giống → cache hit. Bất kỳ thay đổi → invalidate từ đó về sau. Code thay đổi nhiều hơn package.json → tách ra để cache npm ci. Lợi: rebuild khi sửa code chỉ tốn 5s thay vì 2 phút.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Multi-stage build mang lại lợi ích gì?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Build nhanh hơn</li>
+              <li class="quiz-option">Tăng cache hit</li>
+              <li class="quiz-option">Cho phép code TypeScript</li>
+              <li class="quiz-option">Final image chỉ chứa runtime + artifact build, không có compiler/devDep — image nhỏ 10× và attack surface thấp</li>
+            </ul>
+            <div class="quiz-explain">Single-stage: image cuối có cả Node devDep (TypeScript, webpack, jest) + source code → 1.5GB. Multi-stage: stage build có tool, stage runner chỉ COPY --from=builder dist/ → 150MB. Distroless còn nhỏ hơn nữa (~20MB cho Go). Ngoài ra: ít attack surface, không có shell/apt cho attacker exploit.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Pin image theo gì để reproducible build?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">latest tag</li>
+              <li class="quiz-option">node:20</li>
+              <li class="quiz-option">SHA256 digest (vd node:20-alpine@sha256:abc...) — immutable</li>
+              <li class="quiz-option">Major version</li>
+            </ul>
+            <div class="quiz-explain">Tag <code>node:20</code> hoặc <code>node:20-alpine</code> có thể được maintainer rebuild với patch khác. Build hôm nay khác build tuần sau. Digest SHA256 là content-addressable, immutable. Trade-off: phải update digest thủ công khi muốn nâng version (Dependabot có thể tự động).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Container ở user-defined bridge network có thể resolve nhau bằng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">IP address only</li>
+              <li class="quiz-option">Tên container (DNS resolution tự động) hoặc network alias</li>
+              <li class="quiz-option">Phải config /etc/hosts</li>
+              <li class="quiz-option">Phải dùng --link</li>
+            </ul>
+            <div class="quiz-explain">Default bridge (network "bridge"): không có DNS giữa container, phải dùng --link (deprecated). User-defined bridge (do <code>docker network create</code>): có DNS tự động, container resolve nhau bằng tên. Best practice: luôn tạo user-defined network thay vì dùng default.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Để app trong container persist data sau khi container delete:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Mount volume (named volume hoặc bind mount) vào path data</li>
+              <li class="quiz-option">Dùng latest tag</li>
+              <li class="quiz-option">Set environment variable</li>
+              <li class="quiz-option">Restart container</li>
+            </ul>
+            <div class="quiz-explain">Container layer (writable) bị xóa khi container remove. Volume tách biệt khỏi container lifecycle: <code>docker run -v pgdata:/var/lib/postgresql/data postgres</code>. Named volume managed by Docker; bind mount = path host. Lưu ý: anonymous volume (chỉ <code>-v /path</code>) cũng tạo nhưng tên random, khó manage.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Container security best practice:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Run as root để có quyền cao</li>
+              <li class="quiz-option">Mount /var/run/docker.sock để container quản lý container khác</li>
+              <li class="quiz-option">Run as non-root user, drop capabilities, read-only filesystem, scan vuln, pin digest</li>
+              <li class="quiz-option">Disable AppArmor/SELinux</li>
+            </ul>
+            <div class="quiz-explain">Defense in depth: (1) USER non-root trong Dockerfile, (2) <code>--cap-drop=ALL --cap-add=needed</code>, (3) <code>--read-only --tmpfs /tmp</code>, (4) Trivy/Snyk scan trong CI, (5) pin SHA256, (6) cosign sign. Mount Docker socket = full host root (container có thể spawn privileged container ra escape).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Docker Compose phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Production multi-region multi-host</li>
+              <li class="quiz-option">Replace Kubernetes</li>
+              <li class="quiz-option">Stateless app horizontal scale</li>
+              <li class="quiz-option">Local dev environment, demo, CI integration test, single-host deploy nhỏ</li>
+            </ul>
+            <div class="quiz-explain">Compose là tool single-host. Production multi-host cần Kubernetes/Nomad/Swarm. Compose vẫn cực hữu ích: dev environment với DB/cache mà không cần install local; integration test trong CI (service container thay thế); demo onboarding nhanh.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Container "scratch" (FROM scratch) phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cần shell debug</li>
+              <li class="quiz-option">Static binary (Go, Rust) — không cần shell, libc, hoặc bất kỳ runtime nào → image cực nhỏ (vài MB), attack surface gần zero</li>
+              <li class="quiz-option">Node.js app</li>
+              <li class="quiz-option">App có Python script</li>
+            </ul>
+            <div class="quiz-explain"><code>FROM scratch</code>: image rỗng tuyệt đối, 0 byte. Chỉ chạy được static-linked binary (Go với CGO_ENABLED=0, Rust). Lợi: tiny image, không có CVE từ base. Nhược: không debug được (không shell), không tool. Khuyến cáo dùng <code>distroless/static</code> thay vì scratch — có CA cert, tzdata, etc., vẫn rất nhỏ.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 5. Tiếp theo: <a href="chuong6.html"><strong>Chương 6 — Kubernetes →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 5 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

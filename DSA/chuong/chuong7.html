@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 07 — Sorting Algorithms · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong6.html">← Ch.06</a></li>
+        <li><a href="chuong7.html" class="active">Ch.07</a></li>
+        <li><a href="chuong8.html">Ch.08 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 07 · ALGORITHM · ~140 phút</div>
+      <h1>Sorting<br/><span class="text-amber">Algorithms</span></h1>
+      <p class="lead">
+        Phỏng vấn ít hỏi cài đặt sort từ đầu, nhưng <strong>cực hay hỏi</strong>:
+        "Sort này hoạt động thế nào? Big-O? Stable không? In-place không?".
+        Học chương này, bạn sẽ thuộc lòng 7 thuật toán + biết khi nào pick cái nào + hiểu TimSort của V8.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#criteria">7.1 Tiêu chí so sánh</a></li>
+          <li><a href="#bubble">7.2 Bubble Sort</a></li>
+          <li><a href="#selection">7.3 Selection Sort</a></li>
+          <li><a href="#insertion">7.4 Insertion Sort</a></li>
+          <li><a href="#merge">7.5 Merge Sort</a></li>
+          <li><a href="#quick">7.6 Quick Sort</a></li>
+          <li><a href="#heap">7.7 Heap Sort</a></li>
+          <li><a href="#counting">7.8 Counting Sort</a></li>
+          <li><a href="#radix">7.9 Radix Sort</a></li>
+          <li><a href="#timsort">7.10 TimSort (V8/Python)</a></li>
+          <li><a href="#summary">7.11 Bảng tổng hợp</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 7.1 -->
+        <section id="criteria">
+          <h2>7.1 Tiêu chí so sánh thuật toán sort</h2>
+
+          <p>5 tiêu chí cần nhớ:</p>
+
+          <h3>Time complexity</h3>
+          <ul>
+            <li><strong>Best case</strong>: input "tốt" nhất (vd đã sort sẵn)</li>
+            <li><strong>Average case</strong>: input ngẫu nhiên</li>
+            <li><strong>Worst case</strong>: input "xấu" nhất (vd sort ngược)</li>
+          </ul>
+
+          <h3>Space complexity</h3>
+          <p>Bộ nhớ thêm cần (không tính input). <code>In-place</code> = O(1) hoặc O(log n) extra space.</p>
+
+          <h3>Stable</h3>
+          <p>
+            Stable = giữ nguyên thứ tự tương đối của các phần tử bằng nhau. Quan trọng khi sort theo nhiều criteria.
+          </p>
+
+          <pre data-lang="javascript"><code>// Vd: sort users theo age, giữ thứ tự xuất hiện ban đầu khi cùng age
+const users = [
+  {name: "A", age: 30},
+  {name: "B", age: 25},
+  {name: "C", age: 30},  // cùng age với A
+];
+// Stable sort: A trước C (giữ nguyên thứ tự ban đầu)
+// Unstable sort: có thể C trước A</code></pre>
+
+          <h3>Comparison-based hay không</h3>
+          <p>
+            Sort dựa trên so sánh (vd <code>a &lt; b</code>) <strong>không thể nhanh hơn O(n log n)</strong> trên worst case
+            (giới hạn lý thuyết). Sort không so sánh (Counting, Radix) có thể đạt O(n) nhưng chỉ với input đặc biệt.
+          </p>
+
+          <h3>Adaptive</h3>
+          <p>Adaptive sort chạy nhanh hơn trên input "gần sort" (Insertion, TimSort).</p>
+        </section>
+
+        <!-- 7.2 -->
+        <section id="bubble">
+          <h2>7.2 Bubble Sort — O(n²)</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> đi qua mảng, swap các cặp kề nhau nếu sai thứ tự. Lặp lại đến khi không còn swap.
+            Phần tử lớn nhất "nổi lên" cuối mảng như bong bóng → tên "bubble".
+          </p>
+
+          <pre data-lang="javascript"><code>function bubbleSort(arr) {
+  const n = arr.length;
+  for (let i = 0; i &lt; n - 1; i++) {
+    let swapped = false;
+    for (let j = 0; j &lt; n - i - 1; j++) {
+      if (arr[j] &gt; arr[j + 1]) {
+        [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+        swapped = true;
+      }
+    }
+    if (!swapped) break;  // optimization: đã sort
+  }
+  return arr;
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(n²) avg/worst, O(n) best (đã sort)</li>
+            <li><strong>Space:</strong> O(1) — in-place</li>
+            <li><strong>Stable:</strong> ✓ (chỉ swap khi <code>&gt;</code>, không swap khi bằng)</li>
+          </ul>
+
+          <p>Bubble sort là sort <strong>chậm nhất</strong> trong các sort O(n²). Chỉ tốt để dạy học.</p>
+        </section>
+
+        <!-- 7.3 -->
+        <section id="selection">
+          <h2>7.3 Selection Sort — O(n²)</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> mỗi vòng, tìm phần tử nhỏ nhất trong phần chưa sort, swap về đầu.
+          </p>
+
+          <pre data-lang="javascript"><code>function selectionSort(arr) {
+  const n = arr.length;
+  for (let i = 0; i &lt; n - 1; i++) {
+    let minIdx = i;
+    for (let j = i + 1; j &lt; n; j++) {
+      if (arr[j] &lt; arr[minIdx]) minIdx = j;
+    }
+    if (minIdx !== i) [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
+  }
+  return arr;
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(n²) trong mọi trường hợp</li>
+            <li><strong>Space:</strong> O(1)</li>
+            <li><strong>Stable:</strong> ✗ (swap có thể đảo thứ tự phần tử bằng)</li>
+            <li><strong>Đặc điểm:</strong> ÍT swap nhất (n-1 swap) — tốt khi swap đắt</li>
+          </ul>
+        </section>
+
+        <!-- 7.4 -->
+        <section id="insertion">
+          <h2>7.4 Insertion Sort — O(n²) worst, O(n) best</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> như sắp bài trên tay — lấy từng lá, chèn vào vị trí đúng trong phần đã sort.
+          </p>
+
+          <pre data-lang="javascript"><code>function insertionSort(arr) {
+  for (let i = 1; i &lt; arr.length; i++) {
+    const key = arr[i];
+    let j = i - 1;
+    // Dịch các phần tử lớn hơn key về phía sau
+    while (j &gt;= 0 &amp;&amp; arr[j] &gt; key) {
+      arr[j + 1] = arr[j];
+      j--;
+    }
+    arr[j + 1] = key;  // chèn vào vị trí đúng
+  }
+  return arr;
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(n²) avg/worst, <strong>O(n) best</strong> (đã sort)</li>
+            <li><strong>Space:</strong> O(1)</li>
+            <li><strong>Stable:</strong> ✓</li>
+            <li><strong>Adaptive:</strong> ✓ — nhanh trên input "gần sort"</li>
+          </ul>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Insertion Sort vẫn dùng trong production</div>
+            <p>
+              Mặc dù O(n²), Insertion Sort cực nhanh trên <strong>mảng nhỏ (n ≤ 10-20)</strong> vì:
+              ít overhead, cache friendly, low constant factor. Vì vậy V8/Java/Python dùng nó kết hợp với Merge Sort
+              để sort các sub-array nhỏ trong TimSort.
+            </p>
+          </div>
+        </section>
+
+        <!-- 7.5 -->
+        <section id="merge">
+          <h2>7.5 Merge Sort — O(n log n) đảm bảo</h2>
+
+          <p>
+            <strong>Divide &amp; Conquer:</strong>
+            (1) Chia mảng đôi đệ quy đến khi rỗng/1 phần tử,
+            (2) Merge 2 mảng đã sort thành 1 mảng sort.
+          </p>
+
+          <pre data-lang="javascript"><code>function mergeSort(arr) {
+  if (arr.length &lt;= 1) return arr;
+  const mid = Math.floor(arr.length / 2);
+  const left  = mergeSort(arr.slice(0, mid));
+  const right = mergeSort(arr.slice(mid));
+  return merge(left, right);
+}
+
+function merge(left, right) {
+  const result = [];
+  let i = 0, j = 0;
+  while (i &lt; left.length &amp;&amp; j &lt; right.length) {
+    if (left[i] &lt;= right[j]) result.push(left[i++]);
+    else                     result.push(right[j++]);
+  }
+  while (i &lt; left.length)  result.push(left[i++]);
+  while (j &lt; right.length) result.push(right[j++]);
+  return result;
+}</code></pre>
+
+          <h3>Recurrence relation</h3>
+          <p><code>T(n) = 2T(n/2) + O(n)</code> → Master theorem case 2 → <strong>O(n log n)</strong>.</p>
+
+          <ul>
+            <li><strong>Time:</strong> O(n log n) trong mọi trường hợp (best/avg/worst)</li>
+            <li><strong>Space:</strong> <span class="text-red">O(n)</span> — không in-place</li>
+            <li><strong>Stable:</strong> ✓ (khi <code>&lt;=</code> thay vì <code>&lt;</code> trong merge)</li>
+          </ul>
+
+          <h3>Khi nào dùng?</h3>
+          <ul>
+            <li>Sort linked list (đã thấy ở Chương 3)</li>
+            <li>External sort (sort file lớn không vừa RAM)</li>
+            <li>Khi cần stable sort guaranteed O(n log n)</li>
+          </ul>
+        </section>
+
+        <!-- 7.6 -->
+        <section id="quick">
+          <h2>7.6 Quick Sort — O(n log n) avg, O(n²) worst</h2>
+
+          <p>
+            <strong>Divide &amp; Conquer với pivot:</strong>
+            (1) Chọn pivot,
+            (2) Partition: phần tử nhỏ hơn pivot sang trái, lớn hơn sang phải,
+            (3) Đệ quy sort 2 phần.
+          </p>
+
+          <pre data-lang="javascript"><code>function quickSort(arr, lo = 0, hi = arr.length - 1) {
+  if (lo &lt; hi) {
+    const p = partition(arr, lo, hi);
+    quickSort(arr, lo, p - 1);
+    quickSort(arr, p + 1, hi);
+  }
+  return arr;
+}
+
+// Lomuto partition (đơn giản hơn Hoare)
+function partition(arr, lo, hi) {
+  const pivot = arr[hi];
+  let i = lo - 1;
+  for (let j = lo; j &lt; hi; j++) {
+    if (arr[j] &lt;= pivot) {
+      i++;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+  [arr[i + 1], arr[hi]] = [arr[hi], arr[i + 1]];
+  return i + 1;
+}</code></pre>
+
+          <h3>Vấn đề: Worst case O(n²)</h3>
+          <p>
+            Khi pivot là min/max của mảng (vd: pivot luôn là phần tử cuối + mảng đã sort), partition không đều →
+            O(n²). Khắc phục:
+          </p>
+          <ul>
+            <li><strong>Random pivot:</strong> chọn pivot ngẫu nhiên → tránh worst case "có chủ đích"</li>
+            <li><strong>Median-of-three:</strong> pick median của <code>arr[lo], arr[mid], arr[hi]</code></li>
+            <li><strong>Introsort:</strong> chuyển sang Heap Sort khi đệ quy sâu quá <code>2 log n</code></li>
+          </ul>
+
+          <pre data-lang="javascript"><code>// Quick Sort với random pivot
+function partitionRandom(arr, lo, hi) {
+  const pivotIdx = lo + Math.floor(Math.random() * (hi - lo + 1));
+  [arr[pivotIdx], arr[hi]] = [arr[hi], arr[pivotIdx]];
+  return partition(arr, lo, hi);
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(n log n) avg, O(n²) worst</li>
+            <li><strong>Space:</strong> O(log n) cho call stack (in-place partition)</li>
+            <li><strong>Stable:</strong> ✗ (partition có thể đảo thứ tự)</li>
+          </ul>
+
+          <h3>Tại sao Quick Sort thực tế nhanh hơn Merge Sort?</h3>
+          <ul>
+            <li>Cache friendly hơn (in-place, ít cấp phát memory)</li>
+            <li>Constant factor thấp hơn</li>
+            <li>Trung bình rất ổn định, worst case hiếm gặp khi có random pivot</li>
+          </ul>
+
+          <h3>Quickselect — biến thể tìm phần tử thứ k</h3>
+
+          <pre data-lang="javascript"><code>// Tìm phần tử thứ k smallest mà KHÔNG cần sort hết
+// Time: O(n) trung bình, O(n²) worst
+function quickselect(arr, k, lo = 0, hi = arr.length - 1) {
+  if (lo === hi) return arr[lo];
+  const p = partition(arr, lo, hi);
+  if (p === k) return arr[k];
+  if (k &lt; p) return quickselect(arr, k, lo, p - 1);
+  return quickselect(arr, k, p + 1, hi);
+}
+
+// Bài LeetCode "Kth Largest Element" giải bằng quickselect</code></pre>
+        </section>
+
+        <!-- 7.7 -->
+        <section id="heap">
+          <h2>7.7 Heap Sort — O(n log n) đảm bảo, in-place</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> build max-heap từ mảng, lấy max liên tục đặt về cuối.
+            Heap sẽ học chi tiết ở Chương 10.
+          </p>
+
+          <pre data-lang="javascript"><code>function heapSort(arr) {
+  const n = arr.length;
+
+  // Build max-heap (heapify từ cuối lên)
+  for (let i = Math.floor(n / 2) - 1; i &gt;= 0; i--) {
+    siftDown(arr, n, i);
+  }
+
+  // Lấy max ra cuối, giảm size, heapify lại
+  for (let i = n - 1; i &gt; 0; i--) {
+    [arr[0], arr[i]] = [arr[i], arr[0]];
+    siftDown(arr, i, 0);
+  }
+  return arr;
+}
+
+function siftDown(arr, n, i) {
+  while (true) {
+    let largest = i;
+    const l = 2 * i + 1, r = 2 * i + 2;
+    if (l &lt; n &amp;&amp; arr[l] &gt; arr[largest]) largest = l;
+    if (r &lt; n &amp;&amp; arr[r] &gt; arr[largest]) largest = r;
+    if (largest === i) break;
+    [arr[i], arr[largest]] = [arr[largest], arr[i]];
+    i = largest;
+  }
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(n log n) đảm bảo (best/avg/worst)</li>
+            <li><strong>Space:</strong> O(1) in-place</li>
+            <li><strong>Stable:</strong> ✗</li>
+          </ul>
+
+          <p>Heap Sort có Big-O đảm bảo và in-place — hơn Quick Sort về worst case, hơn Merge Sort về memory. Nhưng constant factor lớn hơn.</p>
+        </section>
+
+        <!-- 7.8 -->
+        <section id="counting">
+          <h2>7.8 Counting Sort — O(n+k) không so sánh</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> đếm tần suất xuất hiện của mỗi giá trị, dựng output từ count.
+            Chỉ áp dụng được khi <strong>giá trị là số nguyên trong khoảng nhỏ</strong>.
+          </p>
+
+          <pre data-lang="javascript"><code>function countingSort(arr) {
+  if (arr.length === 0) return arr;
+  const max = Math.max(...arr);
+  const min = Math.min(...arr);
+  const count = new Array(max - min + 1).fill(0);
+
+  // Đếm tần suất
+  for (const x of arr) count[x - min]++;
+
+  // Dựng output
+  let idx = 0;
+  for (let i = 0; i &lt; count.length; i++) {
+    while (count[i]-- &gt; 0) arr[idx++] = i + min;
+  }
+  return arr;
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(n + k), k = max - min</li>
+            <li><strong>Space:</strong> O(k)</li>
+            <li><strong>Stable:</strong> ✓ (với cài đặt đầy đủ dùng prefix sum)</li>
+            <li><strong>Limitation:</strong> chỉ cho integer trong khoảng hẹp</li>
+          </ul>
+
+          <p><strong>Khi nào dùng?</strong> Sort điểm thi (0-100), tuổi (0-150), ký tự ASCII, dữ liệu có range giới hạn.</p>
+        </section>
+
+        <!-- 7.9 -->
+        <section id="radix">
+          <h2>7.9 Radix Sort — sort theo từng "chữ số"</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> sort theo từng chữ số, từ ít quan trọng nhất (LSD) đến quan trọng nhất.
+            Mỗi pass dùng Counting Sort.
+          </p>
+
+          <pre data-lang="javascript"><code>function radixSort(arr) {
+  const max = Math.max(...arr);
+  let exp = 1;  // 1, 10, 100, ...
+  while (Math.floor(max / exp) &gt; 0) {
+    countingSortByDigit(arr, exp);
+    exp *= 10;
+  }
+  return arr;
+}
+
+function countingSortByDigit(arr, exp) {
+  const n = arr.length;
+  const output = new Array(n);
+  const count = new Array(10).fill(0);
+
+  for (const x of arr) count[Math.floor(x / exp) % 10]++;
+  // Prefix sum để giữ stable
+  for (let i = 1; i &lt; 10; i++) count[i] += count[i - 1];
+  // Build output (duyệt ngược để stable)
+  for (let i = n - 1; i &gt;= 0; i--) {
+    const d = Math.floor(arr[i] / exp) % 10;
+    output[--count[d]] = arr[i];
+  }
+  for (let i = 0; i &lt; n; i++) arr[i] = output[i];
+}</code></pre>
+
+          <ul>
+            <li><strong>Time:</strong> O(d · (n + k)) với d = số digit, k = base (thường 10)</li>
+            <li><strong>Space:</strong> O(n + k)</li>
+            <li><strong>Stable:</strong> ✓</li>
+          </ul>
+
+          <p>Radix Sort vượt qua giới hạn O(n log n) cho integer/string, là vũ khí cho big data sort.</p>
+        </section>
+
+        <!-- 7.10 -->
+        <section id="timsort">
+          <h2>7.10 TimSort — V8 và Python dùng</h2>
+
+          <p>
+            <strong>TimSort</strong> (Tim Peters, 2002) là hybrid Merge Sort + Insertion Sort. Đây là default sort của:
+          </p>
+          <ul>
+            <li>JavaScript V8 (Node, Chrome) từ 2018</li>
+            <li>Python từ 2.3</li>
+            <li>Java cho Object array từ Java 7</li>
+            <li>Android, Apple Swift</li>
+          </ul>
+
+          <h3>Nguyên lý</h3>
+          <ol>
+            <li>Phát hiện <strong>"runs"</strong> (đoạn đã tăng/giảm sẵn) trong mảng</li>
+            <li>Sort các run nhỏ bằng Insertion Sort (cực nhanh trên đoạn ngắn)</li>
+            <li>Merge các run với chiến lược thông minh (giữ stack run, merge khi vi phạm bất đẳng thức)</li>
+          </ol>
+
+          <h3>Tại sao TimSort xuất sắc?</h3>
+          <ul>
+            <li><strong>O(n) trên input đã sort hoặc gần sort</strong> (real-world data thường có pattern)</li>
+            <li><strong>O(n log n) đảm bảo worst case</strong></li>
+            <li><strong>Stable</strong></li>
+            <li><strong>Adaptive</strong></li>
+          </ul>
+
+          <p>
+            Đó là lý do bạn không cần code sort thủ công — <code>arr.sort()</code> trong JS đã rất tốt
+            (chỉ cần custom comparator nếu cần).
+          </p>
+
+          <pre data-lang="javascript"><code>// arr.sort() mặc định convert sang string để so sánh — bug kinh điển
+[10, 2, 1].sort();  // [1, 10, 2] (!)
+
+// Phải truyền comparator cho number
+[10, 2, 1].sort((a, b) =&gt; a - b);  // [1, 2, 10]
+
+// Sort object theo property
+users.sort((a, b) =&gt; a.age - b.age);
+users.sort((a, b) =&gt; a.name.localeCompare(b.name));</code></pre>
+        </section>
+
+        <!-- 7.11 -->
+        <section id="summary">
+          <h2>7.11 Bảng tổng hợp — học thuộc</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Algorithm</th>
+                <th>Best</th>
+                <th>Average</th>
+                <th>Worst</th>
+                <th>Space</th>
+                <th>Stable</th>
+                <th>In-place</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Bubble</td><td>O(n)</td><td>O(n²)</td><td>O(n²)</td><td>O(1)</td><td>✓</td><td>✓</td></tr>
+              <tr><td>Selection</td><td>O(n²)</td><td>O(n²)</td><td>O(n²)</td><td>O(1)</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Insertion</td><td>O(n)</td><td>O(n²)</td><td>O(n²)</td><td>O(1)</td><td>✓</td><td>✓</td></tr>
+              <tr><td>Merge</td><td>O(n log n)</td><td>O(n log n)</td><td>O(n log n)</td><td>O(n)</td><td>✓</td><td>✗</td></tr>
+              <tr><td>Quick</td><td>O(n log n)</td><td>O(n log n)</td><td>O(n²)</td><td>O(log n)</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Heap</td><td>O(n log n)</td><td>O(n log n)</td><td>O(n log n)</td><td>O(1)</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Counting</td><td>O(n+k)</td><td>O(n+k)</td><td>O(n+k)</td><td>O(k)</td><td>✓</td><td>✗</td></tr>
+              <tr><td>Radix</td><td>O(d(n+k))</td><td>O(d(n+k))</td><td>O(d(n+k))</td><td>O(n+k)</td><td>✓</td><td>✗</td></tr>
+              <tr><td>TimSort</td><td>O(n)</td><td>O(n log n)</td><td>O(n log n)</td><td>O(n)</td><td>✓</td><td>✗</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Cheat sheet "khi nào dùng cái gì"</h3>
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Pick</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Production code</td><td><code>arr.sort(comparator)</code> (TimSort)</td></tr>
+              <tr><td>Mảng nhỏ (n &lt; 20)</td><td>Insertion Sort</td></tr>
+              <tr><td>Mảng "gần sort"</td><td>Insertion Sort hoặc TimSort</td></tr>
+              <tr><td>Cần stable, đảm bảo O(n log n)</td><td>Merge Sort</td></tr>
+              <tr><td>Linked list</td><td>Merge Sort</td></tr>
+              <tr><td>Memory hạn chế, không cần stable</td><td>Heap Sort hoặc Quick Sort</td></tr>
+              <tr><td>Integer trong range nhỏ</td><td>Counting Sort</td></tr>
+              <tr><td>Integer/String dài</td><td>Radix Sort</td></tr>
+              <tr><td>Cần phần tử thứ k, không cần full sort</td><td>Quickselect O(n)</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Cài đặt Insertion Sort + Merge Sort</div>
+            <p>Tự gõ tay cả 2 thuật toán không nhìn bài. Test trên <code>[5, 2, 8, 1, 9, 3]</code>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Sort Colors (Dutch National Flag)</div>
+            <p>Cho mảng chỉ chứa 0, 1, 2. Sort tại chỗ trong O(n) với 1 lần duyệt. (3-way partition)</p>
+            <pre data-lang="text"><code>[2,0,2,1,1,0] → [0,0,1,1,2,2]</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Merge Intervals</div>
+            <p>Cho mảng intervals <code>[[1,3],[2,6],[8,10],[15,18]]</code>, merge các interval chồng lấn.</p>
+            <pre data-lang="text"><code>→ [[1,6],[8,10],[15,18]]</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Kth Largest Element</div>
+            <p>Tìm phần tử lớn thứ k trong mảng. Cách 1: sort + index. Cách 2: Quickselect O(n) avg. Cách 3: Min-heap O(n log k).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Largest Number</div>
+            <p>Cho mảng số, sắp xếp sao cho ghép lại tạo ra số lớn nhất. (Custom comparator)</p>
+            <pre data-lang="text"><code>[3,30,34,5,9] → "9534330"</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Counting Sort cho điểm thi</div>
+            <p>Cho mảng điểm 0-100 với 1 triệu phần tử, sort trong O(n).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Top K Frequent Elements</div>
+            <p>Trả về k phần tử xuất hiện nhiều nhất. Cách bucket sort O(n).</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> Sort comparison-based <strong>không thể</strong> nhanh hơn?</p>
+              <ul class="quiz-options">
+                <li>O(n)</li>
+                <li>O(n²)</li>
+                <li>O(n log n)</li>
+                <li>O(log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n log n).</strong> Đây là giới hạn lý thuyết (information-theoretic lower bound).
+                Sort không so sánh (Counting, Radix) có thể nhanh hơn nhưng cần input đặc biệt.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> JS V8 dùng thuật toán sort nào?</p>
+              <ul class="quiz-options">
+                <li>Quick Sort</li>
+                <li>TimSort</li>
+                <li>Heap Sort</li>
+                <li>Merge Sort</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: TimSort.</strong> V8 chuyển từ Quick Sort sang TimSort vào năm 2018 vì TimSort stable + adaptive.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> Sort nào KHÔNG stable?</p>
+              <ul class="quiz-options">
+                <li>Quick Sort</li>
+                <li>Merge Sort</li>
+                <li>Insertion Sort</li>
+                <li>Bubble Sort</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Quick Sort.</strong> Partition có thể đảo thứ tự phần tử bằng. Heap Sort và Selection Sort cũng không stable.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Worst case của Quick Sort xảy ra khi nào?</p>
+              <ul class="quiz-options">
+                <li>Khi mảng có nhiều phần tử trùng</li>
+                <li>Khi mảng quá lớn</li>
+                <li>Khi pivot luôn là min hoặc max của mảng (vd mảng đã sort + pick pivot cuối)</li>
+                <li>Khi mảng có giá trị âm</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: pivot luôn min/max.</strong> Lúc đó partition không đều → đệ quy n tầng → O(n²). Random pivot tránh được.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> Sort nào tốt nhất khi mảng đã <em>gần sort</em>?</p>
+              <ul class="quiz-options">
+                <li>Selection Sort</li>
+                <li>Insertion Sort (hoặc TimSort)</li>
+                <li>Heap Sort</li>
+                <li>Merge Sort</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Insertion Sort.</strong> O(n) trên input gần sort. TimSort tận dụng tính chất này.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Tại sao <code>[10, 2, 1].sort()</code> trong JS cho ra <code>[1, 10, 2]</code>?</p>
+              <ul class="quiz-options">
+                <li>Vì sort không hoạt động với số</li>
+                <li>Vì có bug trong V8</li>
+                <li>Vì mặc định sort convert sang string để so sánh ("10" &lt; "2" theo lexicographic)</li>
+                <li>Vì cần truyền sort vào hàm sort()</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: convert sang string.</strong> Phải truyền comparator: <code>sort((a,b) =&gt; a-b)</code>.
+                Đây là bẫy phỏng vấn JS.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> Counting Sort có Big-O O(n+k). Khi nào nó CHẬM hơn O(n log n)?</p>
+              <ul class="quiz-options">
+                <li>Khi n nhỏ</li>
+                <li>Khi k (range giá trị) lớn hơn rất nhiều so với n</li>
+                <li>Khi mảng có số âm</li>
+                <li>Khi n = k</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: k &gt;&gt; n.</strong> Vd n=10 phần tử nhưng giá trị từ 0 đến 1 tỷ → k = 10⁹ → tệ. Counting Sort tốt khi k = O(n).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> Khi cần phần tử thứ k trong mảng <em>không cần sort hết</em>, dùng?</p>
+              <ul class="quiz-options">
+                <li>Bubble Sort partial</li>
+                <li>Merge Sort dừng ở giữa</li>
+                <li>Quickselect — O(n) trung bình</li>
+                <li>Counting Sort</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Quickselect.</strong> Biến thể của Quick Sort: chỉ đệ quy 1 nửa (nửa chứa phần tử thứ k). Average O(n), worst O(n²).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 7</h2>
+          <ul>
+            <li>✅ Sort comparison-based ≥ O(n log n) (giới hạn lý thuyết)</li>
+            <li>✅ <strong>Bubble/Selection/Insertion</strong> = O(n²); Insertion adaptive O(n) trên gần sort</li>
+            <li>✅ <strong>Merge Sort</strong> = O(n log n) đảm bảo, stable, không in-place</li>
+            <li>✅ <strong>Quick Sort</strong> = O(n log n) avg, in-place; random pivot tránh worst case O(n²)</li>
+            <li>✅ <strong>Heap Sort</strong> = O(n log n) đảm bảo, in-place, không stable</li>
+            <li>✅ <strong>Counting/Radix Sort</strong> không so sánh, vượt O(n log n) cho integer/string</li>
+            <li>✅ <strong>TimSort</strong> = hybrid Merge + Insertion → V8/Python/Java dùng</li>
+            <li>✅ <code>arr.sort()</code> không truyền comparator → convert sang string. Luôn truyền <code>(a,b)=&gt;a-b</code> cho number.</li>
+            <li>✅ <strong>Quickselect</strong> tìm phần tử thứ k trong O(n) — bài Kth Largest</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong6.html">
+        <span class="label">← Chương trước</span>
+        Chương 06: Recursion &amp; Backtracking
+      </a>
+      <a href="chuong8.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 08: Searching →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 07 · Sorting Algorithms
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

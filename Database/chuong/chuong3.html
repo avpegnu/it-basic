@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3 — Advanced SQL (JOIN, Subquery, CTE, Window)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 03 · Advanced SQL</div>
+      <h1>JOIN, Subquery, CTE & Window Functions</h1>
+      <p class="subtitle">SQL nâng cao tách biệt junior với senior. Hiểu sâu JOIN, biết khi nào subquery, dùng thạo CTE đệ quy và Window Functions.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#join-overview">1. JOIN — Cartesian gốc</a></li>
+        <li><a href="#inner">2. INNER JOIN</a></li>
+        <li><a href="#outer">3. OUTER JOIN</a></li>
+        <li><a href="#cross">4. CROSS JOIN</a></li>
+        <li><a href="#self">5. Self-join</a></li>
+        <li><a href="#multi">6. JOIN nhiều bảng</a></li>
+        <li><a href="#subquery">7. Subquery</a></li>
+        <li><a href="#cte">8. CTE (WITH)</a></li>
+        <li><a href="#recursive">9. Recursive CTE</a></li>
+        <li><a href="#window">10. Window Functions</a></li>
+        <li><a href="#patterns">11. Patterns kinh điển</a></li>
+        <li><a href="#exercises">12. Bài tập</a></li>
+        <li><a href="#quiz">13. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="join-overview">
+        <h2>1. JOIN bắt nguồn từ Cartesian Product</h2>
+        <p>Mỗi loại JOIN chỉ là <strong>tích Đề-các</strong> + <strong>filter</strong>. Hiểu được Cartesian, mọi JOIN khác trở nên hiển nhiên.</p>
+
+        <div class="ascii">users (3 dòng):           orders (4 dòng):
+  id name                  id user_id total
+  ─  ────                  ─  ─────── ─────
+  1  Anh                   1  1       100
+  2  Bình                  2  1       50
+  3  Cường                 3  2       200
+                           4  9       30   ← user_id=9 không tồn tại
+
+CROSS JOIN → 3 × 4 = 12 dòng (mọi tổ hợp):
+INNER JOIN ON u.id = o.user_id → 3 dòng (chỉ giữ tổ hợp khớp)
+LEFT JOIN  ON u.id = o.user_id → 4 dòng (mọi user, kể cả không order)
+RIGHT JOIN ON u.id = o.user_id → 4 dòng (mọi order, kể cả mồ côi user)
+FULL JOIN  ON u.id = o.user_id → 5 dòng (cả hai phía mất khớp)</div>
+
+        <p>Hai bảng <strong>users</strong> và <strong>orders</strong> sẽ là ví dụ chạy xuyên cả chương.</p>
+      </section>
+
+      <section id="inner">
+        <h2>2. INNER JOIN — chỉ giữ phần giao</h2>
+
+<pre><code class="language-sql">-- Cú pháp đầy đủ:
+SELECT u.name, o.total
+FROM users u
+INNER JOIN orders o ON u.id = o.user_id;
+
+-- INNER là MẶC ĐỊNH, có thể bỏ:
+SELECT u.name, o.total
+FROM users u JOIN orders o ON u.id = o.user_id;
+
+-- Cú pháp cũ (1992) — KHÔNG khuyến nghị:
+SELECT u.name, o.total
+FROM users u, orders o
+WHERE u.id = o.user_id;</code></pre>
+
+        <p>INNER JOIN chỉ giữ dòng có <em>đối ứng ở cả 2 bảng</em>. Trong ví dụ trên, chỉ trả 3 dòng (user 3 không có order, order 4 không có user — bị loại).</p>
+
+        <h3>2.1. JOIN với điều kiện phức tạp</h3>
+<pre><code class="language-sql">-- Nhiều điều kiện ON:
+SELECT u.name, o.total
+FROM users u
+JOIN orders o
+  ON u.id = o.user_id
+ AND o.status = 'paid'
+ AND o.created_at &gt; NOW() - INTERVAL '30 days';
+
+-- Khác gì với WHERE? Với INNER JOIN: KHÔNG khác.
+-- Nhưng với OUTER JOIN: khác lớn (xem phần sau).</code></pre>
+
+        <h3>2.2. JOIN trên nhiều cột</h3>
+<pre><code class="language-sql">-- Khi PK composite hoặc match đa điều kiện:
+SELECT *
+FROM order_items oi
+JOIN inventory i
+  ON i.product_id = oi.product_id
+ AND i.warehouse_id = oi.warehouse_id;
+
+-- USING (cú pháp ngắn nếu cột cùng tên):
+SELECT * FROM order_items JOIN inventory USING (product_id, warehouse_id);
+
+-- NATURAL JOIN — JOIN trên TẤT CẢ cột cùng tên (CHỚ DÙNG, dễ sai):
+SELECT * FROM order_items NATURAL JOIN inventory;</code></pre>
+        <p><code>NATURAL JOIN</code> nguy hiểm vì nếu thêm cột chung mới, JOIN tự động đổi nghĩa. Tránh.</p>
+      </section>
+
+      <section id="outer">
+        <h2>3. OUTER JOIN — giữ cả phần lệch</h2>
+
+        <h3>3.1. LEFT JOIN</h3>
+        <p>Giữ <strong>mọi dòng bên trái</strong>, ngay cả khi không có match bên phải. Dòng mất khớp → cột phải = NULL.</p>
+
+<pre><code class="language-sql">SELECT u.name, o.total
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id;
+
+-- Output:
+-- Anh    | 100
+-- Anh    | 50
+-- Bình   | 200
+-- Cường  | NULL    ← user 3 không có order, vẫn xuất hiện</code></pre>
+
+        <h3>3.2. RIGHT JOIN</h3>
+        <p>Đối xứng với LEFT, giữ mọi dòng bên phải. Trong thực tế ít dùng — chỉ cần <strong>đảo thứ tự bảng</strong> và dùng LEFT.</p>
+
+<pre><code class="language-sql">-- Hai cái sau tương đương:
+SELECT * FROM A LEFT  JOIN B ON ...;
+SELECT * FROM B RIGHT JOIN A ON ...;</code></pre>
+
+        <h3>3.3. FULL OUTER JOIN</h3>
+        <p>Giữ <strong>mọi dòng cả hai bên</strong>. Dòng nào không match → cột phía kia = NULL.</p>
+
+<pre><code class="language-sql">SELECT u.name, o.total
+FROM users u
+FULL OUTER JOIN orders o ON u.id = o.user_id;
+
+-- Output:
+-- Anh    | 100
+-- Anh    | 50
+-- Bình   | 200
+-- Cường  | NULL   ← user không order
+-- NULL   | 30     ← order mồ côi (user_id = 9)</code></pre>
+
+        <p>FULL JOIN hữu ích khi bạn cần phát hiện <strong>cả 2 phía mất đồng bộ</strong> (data audit, reconciliation).</p>
+
+        <h3>3.4. ON vs WHERE trong OUTER JOIN — khác biệt LỚN</h3>
+
+<pre><code class="language-sql">-- A. Điều kiện ở ON:
+SELECT u.name, o.total
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id AND o.status = 'paid';
+-- Mọi user đều xuất hiện. Order chưa paid → o.total = NULL
+
+-- B. Điều kiện ở WHERE:
+SELECT u.name, o.total
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE o.status = 'paid';
+-- WHERE filter SAU JOIN → loại user không có order paid
+-- Hệ quả: trở thành INNER JOIN!</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Bug kinh điển</span>
+          Đặt filter ở WHERE thay vì ON với LEFT JOIN sẽ <em>vô tình biến nó thành INNER JOIN</em>. Đây là một trong những lỗi phổ biến nhất khi viết SQL.
+        </div>
+
+        <h3>3.5. Anti-join — "phía bên trái KHÔNG có match"</h3>
+
+<pre><code class="language-sql">-- Lấy user CHƯA bao giờ đặt order:
+SELECT u.*
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE o.id IS NULL;
+
+-- Cú pháp tương đương dùng NOT EXISTS:
+SELECT u.* FROM users u
+WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);
+
+-- HOẶC NOT IN (cẩn thận với NULL!):
+SELECT u.* FROM users u
+WHERE u.id NOT IN (SELECT user_id FROM orders WHERE user_id IS NOT NULL);</code></pre>
+      </section>
+
+      <section id="cross">
+        <h2>4. CROSS JOIN — Cartesian Product thuần</h2>
+        <p>Mọi tổ hợp giữa 2 bảng, không cần ON.</p>
+
+<pre><code class="language-sql">-- Tạo lịch: mọi (date, user):
+SELECT u.id, d.date
+FROM users u
+CROSS JOIN generate_series('2026-01-01'::date, '2026-12-31'::date, '1 day'::interval) AS d(date);
+
+-- Hữu ích cho:
+-- - Báo cáo "0 row" (lấp đầy ngày không có order)
+-- - Combinatorial testing
+-- - Tạo lookup matrix
+
+-- Cú pháp ngầm (cẩn thận):
+SELECT * FROM A, B;  -- = CROSS JOIN nếu không có WHERE</code></pre>
+      </section>
+
+      <section id="self">
+        <h2>5. Self-join — JOIN bảng với chính nó</h2>
+        <p>Bảng có quan hệ "tự tham chiếu" — cây phân cấp, network.</p>
+
+<pre><code class="language-sql">CREATE TABLE employees (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  manager_id BIGINT REFERENCES employees(id)
+);
+
+-- Lấy mỗi nhân viên + tên manager:
+SELECT e.name AS employee, m.name AS manager
+FROM employees e
+LEFT JOIN employees m ON e.manager_id = m.id;
+
+-- Bậc quản lý 2 cấp:
+SELECT e.name AS emp, m.name AS mgr, mm.name AS mgr_mgr
+FROM employees e
+LEFT JOIN employees m  ON e.manager_id = m.id
+LEFT JOIN employees mm ON m.manager_id = mm.id;</code></pre>
+
+        <p>Cây sâu &gt; 2-3 cấp → dùng <strong>Recursive CTE</strong> (mục 9).</p>
+      </section>
+
+      <section id="multi">
+        <h2>6. JOIN nhiều bảng</h2>
+
+<pre><code class="language-sql">-- 4-table query: order detail đầy đủ
+SELECT
+  u.name              AS customer,
+  o.id                AS order_id,
+  oi.qty,
+  p.name              AS product,
+  c.name              AS category,
+  oi.qty * p.price    AS line_total
+FROM users u
+JOIN orders o       ON u.id = o.user_id
+JOIN order_items oi ON o.id = oi.order_id
+JOIN products p     ON oi.product_id = p.id
+JOIN categories c   ON p.category_id = c.id
+WHERE o.status = 'paid'
+ORDER BY o.created_at DESC;</code></pre>
+
+        <p>JOIN có thứ tự (associativity) ảnh hưởng cách <strong>planner sẽ chọn thứ tự thực thi</strong> nhưng không ảnh hưởng kết quả với INNER. Với LEFT/RIGHT thì thứ tự CÓ ảnh hưởng — luôn JOIN từ "core table" sang "phụ".</p>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Mẹo</span>
+          Khi viết JOIN nhiều bảng, đặt <strong>bảng chính</strong> (bảng có most rows hoặc bảng "trung tâm") ở FROM, rồi LEFT JOIN các bảng phụ. Như vậy kết quả luôn có ít nhất 1 dòng / record chính.
+        </div>
+      </section>
+
+      <section id="subquery">
+        <h2>7. Subquery — câu lệnh SELECT lồng nhau</h2>
+
+        <h3>7.1. Scalar subquery (trả 1 giá trị)</h3>
+<pre><code class="language-sql">SELECT
+  email,
+  (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count
+FROM users u;</code></pre>
+
+        <h3>7.2. Subquery trong WHERE — IN, NOT IN</h3>
+<pre><code class="language-sql">-- User đã từng đặt order:
+SELECT * FROM users
+WHERE id IN (SELECT user_id FROM orders);
+
+-- User chưa bao giờ đặt:
+SELECT * FROM users
+WHERE id NOT IN (SELECT user_id FROM orders WHERE user_id IS NOT NULL);
+-- ⚠ NOT IN với NULL trong subquery → trả 0 dòng. Luôn lọc NULL.</code></pre>
+
+        <h3>7.3. EXISTS — bán kết hợp (semi-join)</h3>
+<pre><code class="language-sql">-- "User có ÍT NHẤT 1 order paid":
+SELECT * FROM users u
+WHERE EXISTS (
+  SELECT 1 FROM orders o
+  WHERE o.user_id = u.id AND o.status = 'paid'
+);
+
+-- EXISTS chỉ check tồn tại — KHÔNG cần SELECT cột nào.
+-- DB có thể short-circuit khi tìm thấy 1 dòng.</code></pre>
+
+        <p><strong>EXISTS vs IN:</strong> Trong Postgres hiện đại, planner đủ thông minh để tối ưu cả hai. Theo cảm tính: dùng <strong>EXISTS với NULL</strong> để tránh bug, dùng <strong>IN với danh sách hằng</strong> để rõ.</p>
+
+        <h3>7.4. Correlated subquery — phụ thuộc dòng ngoài</h3>
+<pre><code class="language-sql">-- Lấy mỗi user và đơn hàng MỚI NHẤT của họ:
+SELECT u.email, (
+  SELECT MAX(created_at)
+  FROM orders o
+  WHERE o.user_id = u.id
+) AS last_order_at
+FROM users u;</code></pre>
+
+        <p>Subquery <em>chạy lại cho từng dòng</em> bảng ngoài → có thể chậm trên bảng lớn. Window function (mục 10) thường nhanh hơn.</p>
+
+        <h3>7.5. Subquery trong FROM (derived table)</h3>
+<pre><code class="language-sql">SELECT category, AVG(top10_price) AS avg_top10
+FROM (
+  SELECT category, price
+  FROM products
+  ORDER BY price DESC
+  LIMIT 10
+) top10
+GROUP BY category;
+
+-- CTE thường rõ hơn (xem mục 8).</code></pre>
+
+        <h3>7.6. ANY / ALL</h3>
+<pre><code class="language-sql">-- Lương cao hơn ÍT NHẤT 1 manager:
+SELECT * FROM employees
+WHERE salary &gt; ANY (SELECT salary FROM employees WHERE role = 'manager');
+
+-- Lương cao hơn TẤT CẢ junior:
+SELECT * FROM employees
+WHERE salary &gt; ALL (SELECT salary FROM employees WHERE role = 'junior');</code></pre>
+      </section>
+
+      <section id="cte">
+        <h2>8. CTE — Common Table Expression (WITH)</h2>
+        <p>CTE là "biến tạm" cho subquery. Đặt tên cho 1 truy vấn rồi dùng nó như bảng. Dễ đọc hơn nhiều subquery lồng.</p>
+
+<pre><code class="language-sql">-- Trước (subquery khó đọc):
+SELECT *
+FROM (
+  SELECT user_id, COUNT(*) AS oc
+  FROM orders
+  WHERE status = 'paid'
+  GROUP BY user_id
+) AS uc
+WHERE oc &gt; 5;
+
+-- Sau (CTE rõ ràng):
+WITH paid_counts AS (
+  SELECT user_id, COUNT(*) AS oc
+  FROM orders
+  WHERE status = 'paid'
+  GROUP BY user_id
+)
+SELECT *
+FROM paid_counts
+WHERE oc &gt; 5;</code></pre>
+
+        <h3>8.1. Nhiều CTE cùng câu</h3>
+<pre><code class="language-sql">WITH
+  active_users AS (
+    SELECT * FROM users WHERE deleted_at IS NULL
+  ),
+  recent_orders AS (
+    SELECT * FROM orders WHERE created_at &gt; NOW() - INTERVAL '30d'
+  ),
+  user_revenue AS (
+    SELECT u.id, u.email, COALESCE(SUM(o.total), 0) AS revenue
+    FROM active_users u
+    LEFT JOIN recent_orders o ON o.user_id = u.id
+    GROUP BY u.id, u.email
+  )
+SELECT * FROM user_revenue ORDER BY revenue DESC LIMIT 10;</code></pre>
+
+        <h3>8.2. CTE với DML (Postgres)</h3>
+<pre><code class="language-sql">-- "Move data" trong 1 transaction:
+WITH archived AS (
+  DELETE FROM orders WHERE created_at &lt; NOW() - INTERVAL '5 years'
+  RETURNING *
+)
+INSERT INTO orders_archive SELECT * FROM archived;</code></pre>
+
+        <p>Đây là pattern <strong>data lifecycle</strong> — di chuyển dữ liệu cũ sang archive table mà vẫn đảm bảo atomic.</p>
+      </section>
+
+      <section id="recursive">
+        <h2>9. Recursive CTE — duyệt cây/đồ thị</h2>
+        <p>Cú pháp: <code>WITH RECURSIVE name AS (anchor UNION ALL recursive_step) SELECT ...</code></p>
+
+<pre><code class="language-sql">-- Bảng employees với manager_id (cây phân cấp)
+-- Lấy toàn bộ "team" của manager có id = 5
+
+WITH RECURSIVE team AS (
+  -- Anchor: manager bắt đầu
+  SELECT id, name, manager_id, 0 AS depth
+  FROM employees
+  WHERE id = 5
+
+  UNION ALL
+
+  -- Recursive: lấy nhân viên có manager_id thuộc team
+  SELECT e.id, e.name, e.manager_id, t.depth + 1
+  FROM employees e
+  JOIN team t ON e.manager_id = t.id
+)
+SELECT * FROM team ORDER BY depth, name;</code></pre>
+
+        <div class="ascii">      Tree:                 Output:
+        5  CTO                depth=0  CTO
+       / \                    depth=1  Eng Lead
+     12   13                  depth=1  Design Lead
+    /  \    \                 depth=2  Anh
+   21  22   23                depth=2  Bình
+                              depth=2  Cường</div>
+
+        <h3>9.1. Phát sinh dãy</h3>
+<pre><code class="language-sql">-- Postgres: dùng generate_series
+SELECT generate_series(1, 10);
+
+-- Recursive CTE generic (chuẩn SQL):
+WITH RECURSIVE numbers AS (
+  SELECT 1 AS n
+  UNION ALL
+  SELECT n + 1 FROM numbers WHERE n &lt; 10
+)
+SELECT * FROM numbers;</code></pre>
+
+        <h3>9.2. Ngăn vô hạn — UNION (DISTINCT)</h3>
+        <p>Nếu đồ thị có chu trình, <code>UNION ALL</code> có thể loop vô hạn. Dùng <code>UNION</code> (DISTINCT) hoặc thêm điều kiện dừng (depth &lt; N).</p>
+
+<pre><code class="language-sql">WITH RECURSIVE traversal AS (
+  SELECT id, name, ARRAY[id] AS path FROM nodes WHERE id = 1
+  UNION ALL
+  SELECT n.id, n.name, t.path || n.id
+  FROM nodes n
+  JOIN edges e ON e.from_id = n.id
+  JOIN traversal t ON t.id = e.to_id
+  WHERE NOT n.id = ANY(t.path)   -- ngăn revisit
+    AND array_length(t.path, 1) &lt; 20  -- giới hạn depth
+)
+SELECT * FROM traversal;</code></pre>
+      </section>
+
+      <section id="window">
+        <h2>10. Window Functions — superpower của SQL</h2>
+        <p>Window function tính giá trị aggregate <strong>trên một "cửa sổ" của các dòng quanh dòng hiện tại</strong>, mà KHÔNG gom nhóm dòng lại. Đây là điểm khác biệt lớn so với GROUP BY.</p>
+
+        <h3>10.1. Cú pháp tổng quát</h3>
+<pre><code class="language-sql">function() OVER (
+  [PARTITION BY cols]   -- chia thành các cửa sổ
+  [ORDER BY cols]       -- thứ tự trong cửa sổ
+  [ROWS|RANGE BETWEEN ... AND ...]  -- frame
+)</code></pre>
+
+        <h3>10.2. Ranking functions</h3>
+<pre><code class="language-sql">SELECT
+  category, name, price,
+  ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) AS rn,
+  RANK()       OVER (PARTITION BY category ORDER BY price DESC) AS rk,
+  DENSE_RANK() OVER (PARTITION BY category ORDER BY price DESC) AS drk
+FROM products;
+
+-- ROW_NUMBER: 1, 2, 3, 4, 5 (luôn unique)
+-- RANK:       1, 2, 2, 4, 5 (skip sau ngang bằng)
+-- DENSE_RANK: 1, 2, 2, 3, 4 (không skip)</code></pre>
+
+        <h3>10.3. NTILE — chia bucket</h3>
+<pre><code class="language-sql">-- Chia user thành 4 quartile theo total spent:
+SELECT
+  user_id, total_spent,
+  NTILE(4) OVER (ORDER BY total_spent DESC) AS quartile
+FROM user_revenue;</code></pre>
+
+        <h3>10.4. LAG / LEAD — dòng trước/sau</h3>
+<pre><code class="language-sql">-- So sánh order với order TRƯỚC đó của cùng user:
+SELECT
+  user_id, created_at, total,
+  LAG(total)  OVER (PARTITION BY user_id ORDER BY created_at) AS prev_total,
+  LEAD(total) OVER (PARTITION BY user_id ORDER BY created_at) AS next_total,
+  total - LAG(total) OVER (PARTITION BY user_id ORDER BY created_at) AS delta
+FROM orders;</code></pre>
+
+        <h3>10.5. Aggregate windows — running total / moving avg</h3>
+<pre><code class="language-sql">-- Running total (tổng tích lũy):
+SELECT
+  created_at, total,
+  SUM(total) OVER (ORDER BY created_at) AS running_total,
+  AVG(total) OVER (
+    ORDER BY created_at
+    ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+  ) AS rolling_7d_avg
+FROM orders;</code></pre>
+
+        <h3>10.6. FIRST_VALUE / LAST_VALUE / NTH_VALUE</h3>
+<pre><code class="language-sql">SELECT
+  category, name, price,
+  FIRST_VALUE(name) OVER (PARTITION BY category ORDER BY price DESC) AS top_in_cat,
+  LAST_VALUE(name)  OVER (
+    PARTITION BY category ORDER BY price DESC
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  ) AS cheapest_in_cat
+FROM products;</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Lưu ý LAST_VALUE</span>
+          Mặc định frame của window là <code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code> — nên <code>LAST_VALUE</code> sẽ trả dòng hiện tại, không phải dòng cuối thật. Phải set frame rõ ràng.
+        </div>
+
+        <h3>10.7. Named window — tránh lặp</h3>
+<pre><code class="language-sql">SELECT
+  user_id, created_at, total,
+  ROW_NUMBER() OVER w AS rn,
+  LAG(total)   OVER w AS prev,
+  SUM(total)   OVER w AS running
+FROM orders
+WINDOW w AS (PARTITION BY user_id ORDER BY created_at);</code></pre>
+      </section>
+
+      <section id="patterns">
+        <h2>11. Patterns kinh điển</h2>
+
+        <h3>11.1. Top-N per group</h3>
+<pre><code class="language-sql">-- "Top 3 sản phẩm đắt nhất theo từng category"
+WITH ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) AS rn
+  FROM products
+)
+SELECT * FROM ranked WHERE rn &lt;= 3;
+
+-- Cách khác: LATERAL (Postgres):
+SELECT c.name, p.*
+FROM categories c,
+LATERAL (
+  SELECT * FROM products
+  WHERE category_id = c.id
+  ORDER BY price DESC LIMIT 3
+) p;</code></pre>
+
+        <h3>11.2. Latest record per group</h3>
+<pre><code class="language-sql">-- Order mới nhất của mỗi user:
+SELECT DISTINCT ON (user_id) *      -- Postgres-only, very fast
+FROM orders
+ORDER BY user_id, created_at DESC;
+
+-- Cú pháp chuẩn (window):
+WITH ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn
+  FROM orders
+)
+SELECT * FROM ranked WHERE rn = 1;</code></pre>
+
+        <h3>11.3. Running total theo tháng</h3>
+<pre><code class="language-sql">SELECT
+  DATE_TRUNC('month', created_at) AS month,
+  SUM(total) AS month_total,
+  SUM(SUM(total)) OVER (ORDER BY DATE_TRUNC('month', created_at)) AS cumulative
+FROM orders
+GROUP BY DATE_TRUNC('month', created_at)
+ORDER BY month;</code></pre>
+
+        <h3>11.4. Gaps & Islands — phân đoạn</h3>
+<pre><code class="language-sql">-- "Tìm chuỗi ngày liên tiếp user login":
+WITH grouped AS (
+  SELECT
+    user_id, login_date,
+    login_date - (ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY login_date))::int AS grp
+  FROM logins
+)
+SELECT user_id, MIN(login_date) AS streak_start, MAX(login_date) AS streak_end,
+       COUNT(*) AS streak_len
+FROM grouped
+GROUP BY user_id, grp
+ORDER BY user_id, streak_start;</code></pre>
+
+        <h3>11.5. Pivot — chuyển dòng thành cột</h3>
+<pre><code class="language-sql">-- Đếm order theo status, mỗi status 1 cột:
+SELECT
+  user_id,
+  COUNT(*) FILTER (WHERE status = 'paid')      AS paid_count,
+  COUNT(*) FILTER (WHERE status = 'pending')   AS pending_count,
+  COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled_count
+FROM orders
+GROUP BY user_id;
+
+-- Ngắn dùng crosstab() (Postgres extension tablefunc).</code></pre>
+      </section>
+
+      <section id="exercises">
+        <h2>12. Bài tập</h2>
+
+        <p>Schema dùng cho mọi bài:</p>
+<pre><code class="language-sql">users(id, email, name, country, created_at)
+products(id, name, category_id, price, stock)
+categories(id, name)
+orders(id, user_id, total, status, created_at)
+order_items(order_id, product_id, qty)</code></pre>
+
+        <ol>
+          <li>Top 5 country có nhiều order nhất tháng này.</li>
+          <li>User chi tiêu nhiều nhất từng tháng (top 1 mỗi tháng).</li>
+          <li>Sản phẩm chưa từng được order.</li>
+          <li>Đơn hàng đầu tiên và cuối cùng của mỗi user (LAG/MIN/MAX OVER).</li>
+          <li>Phần trăm order paid theo tháng (so với tổng order tháng đó).</li>
+          <li>Streak ngày liên tiếp có order &gt; 0 (gaps & islands).</li>
+          <li>Cây danh mục: cho <code>categories(id, name, parent_id)</code>, lấy tất cả con cháu của category id = 5 (recursive CTE).</li>
+          <li>Pivot: bảng <code>(user_id, paid, pending, cancelled)</code> với count mỗi status.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>13. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 3</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Khi LEFT JOIN có điều kiện ở WHERE thay vì ON, hệ quả thường gặp là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không có gì khác</li>
+              <li class="quiz-option">LEFT JOIN bị "biến" thành INNER JOIN, mất dòng không match</li>
+              <li class="quiz-option">Câu query lỗi cú pháp</li>
+              <li class="quiz-option">Performance tăng gấp đôi</li>
+            </ul>
+            <div class="quiz-explain">WHERE filter SAU JOIN. Nếu điều kiện ở WHERE đụng cột bên phải, các dòng có cột đó NULL (do mất khớp) sẽ bị loại — kết quả giống INNER JOIN. Đặt điều kiện ở ON nếu muốn giữ đặc tính LEFT JOIN.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Sự khác biệt giữa ROW_NUMBER, RANK, DENSE_RANK?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cả 3 cho cùng kết quả</li>
+              <li class="quiz-option">RANK luôn unique như ROW_NUMBER</li>
+              <li class="quiz-option">RANK skip số khi tie; DENSE_RANK không skip; ROW_NUMBER luôn unique</li>
+              <li class="quiz-option">DENSE_RANK = ROW_NUMBER</li>
+            </ul>
+            <div class="quiz-explain">Nếu dữ liệu là 100, 90, 90, 80: ROW_NUMBER = 1,2,3,4; RANK = 1,2,2,4 (skip 3); DENSE_RANK = 1,2,2,3 (không skip).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Subquery EXISTS thường được tối ưu thành:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Semi-join — short-circuit khi tìm thấy 1 dòng match</li>
+              <li class="quiz-option">Cartesian product</li>
+              <li class="quiz-option">FULL OUTER JOIN</li>
+              <li class="quiz-option">Phải scan toàn bảng inner mỗi lần</li>
+            </ul>
+            <div class="quiz-explain">EXISTS chỉ cần "ít nhất 1" → planner biến thành semi-join, dừng quét khi tìm được. Trong nhiều trường hợp nhanh hơn IN với subquery có nhiều dòng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Recursive CTE phải có:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tối thiểu 3 cấp đệ quy</li>
+              <li class="quiz-option">Một câu SELECT duy nhất</li>
+              <li class="quiz-option">JOIN với chính bảng</li>
+              <li class="quiz-option">Anchor + UNION (ALL) + bước đệ quy tham chiếu chính CTE</li>
+            </ul>
+            <div class="quiz-explain">Cấu trúc: anchor (điểm bắt đầu) UNION ALL recursive (tham chiếu chính nó). Phải có điều kiện dừng để tránh vô hạn.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Window function khác GROUP BY ở chỗ:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Window function chậm hơn nhiều</li>
+              <li class="quiz-option">Window không gom dòng lại — mỗi dòng giữ nguyên + thêm cột tính từ "cửa sổ"</li>
+              <li class="quiz-option">Window không hỗ trợ aggregate function</li>
+              <li class="quiz-option">GROUP BY không thể tính SUM</li>
+            </ul>
+            <div class="quiz-explain">GROUP BY thu gọn N dòng → 1 dòng/group. Window giữ nguyên N dòng, thêm cột tính trên window. Đây là khác biệt cốt lõi.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">"NOT IN với subquery có NULL" gặp bug gì?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Lỗi syntax</li>
+              <li class="quiz-option">Chậm</li>
+              <li class="quiz-option">Trả 0 dòng vì so sánh với NULL → UNKNOWN, NOT UNKNOWN vẫn UNKNOWN</li>
+              <li class="quiz-option">Tự động drop NULL</li>
+            </ul>
+            <div class="quiz-explain"><code>x NOT IN (1,2,NULL)</code> → <code>x!=1 AND x!=2 AND x!=NULL</code>. Vế cuối là UNKNOWN → cả AND là UNKNOWN → 0 dòng. Phải lọc <code>WHERE col IS NOT NULL</code> trong subquery, hoặc dùng NOT EXISTS.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Pattern "top 3 per group" — cách hiệu quả nhất:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">ROW_NUMBER OVER (PARTITION BY group ORDER BY metric DESC) rồi lọc rn ≤ 3</li>
+              <li class="quiz-option">SELECT DISTINCT</li>
+              <li class="quiz-option">3 câu UNION cho từng group</li>
+              <li class="quiz-option">CROSS JOIN</li>
+            </ul>
+            <div class="quiz-explain">ROW_NUMBER với PARTITION BY là cú pháp chuẩn. Postgres còn có <code>DISTINCT ON</code> cho top-1, hoặc LATERAL JOIN cho top-N hiệu quả hơn nữa khi có index phù hợp.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">CTE so với subquery:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">CTE bao giờ cũng nhanh hơn</li>
+              <li class="quiz-option">CTE không hỗ trợ DML</li>
+              <li class="quiz-option">CTE chỉ là alias, hoàn toàn tương đương subquery</li>
+              <li class="quiz-option">CTE giúp đặt tên cho bước trung gian → query dễ đọc; còn nhanh hay chậm phụ thuộc planner</li>
+            </ul>
+            <div class="quiz-explain">CTE chủ yếu cải thiện <em>khả năng đọc</em>. Postgres có thể inline CTE (12+) hoặc materialize (cũ hơn). Performance tương đương subquery hoặc derived table tùy planner.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 3. Tiếp theo: <a href="chuong4.html"><strong>Chương 4 — Normalization & Schema Design →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 3 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

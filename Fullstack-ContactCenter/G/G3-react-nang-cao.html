@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G3 · React nâng cao & performance</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-g">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">G3 · React nâng cao & performance</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần G · Frontend React</div>
+      <nav class="nav">
+        <a href="G1-react-core.html">G1 · React core</a>
+        <a href="G2-react-hooks.html">G2 · React Hooks</a>
+        <a href="G3-react-nang-cao.html" class="active">G3 · React nâng cao & performance</a>
+        <a href="G4-data-fetching.html">G4 · Data fetching & state</a>
+        <a href="G5-tailwindcss.html">G5 · TailwindCSS</a>
+        <a href="G6-realtime-ui.html">G6 · Realtime UI</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#render">① Nguyên nhân re-render</a>
+        <a href="#memo">② React.memo & memoization</a>
+        <a href="#context">③ Tối ưu Context</a>
+        <a href="#splitting">④ Code splitting & lazy</a>
+        <a href="#boundary">⑤ Error boundaries</a>
+        <a href="#patterns">⑥ Render patterns</a>
+        <a href="#reconciliation">⑦ Reconciliation</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần G · Frontend React &nbsp;›&nbsp; <b>G3 · React nâng cao & performance</b></div>
+      <div class="live-pill"><span class="blink"></span> perf tuning</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần G · Chương 3</span>
+        <h1>React nâng cao & Performance</h1>
+        <p class="lead">Tối ưu re-render, code splitting, error boundary và các mẫu tổ chức component — để Dashboard realtime nhiều dữ liệu vẫn mượt.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Liệt kê <b>chính xác</b> những nguyên nhân khiến một component re-render, và phân biệt re-render "cần thiết" với re-render "thừa".</p>
+        <p>• Dùng đúng <code>React.memo</code>, <code>useMemo</code>, <code>useCallback</code> để ổn định tham chiếu — và biết khi nào chúng <em>vô ích hoặc có hại</em>.</p>
+        <p>• Tối ưu Context (tách context, memoize value, đẩy state xuống) để tránh re-render lan toả cả cây.</p>
+        <p>• Tách bundle bằng <code>React.lazy</code> + <code>Suspense</code>, dựng <b>Error Boundary</b> để một widget hỏng không sập cả app.</p>
+        <p>• Nắm các <b>render patterns</b> (composition, children, render props, HOC, compound) và cách React <b>reconciliation</b> dùng <code>key</code> để diff.</p>
+        <p>• Đọc được flamegraph trong React DevTools Profiler để định vị component "nóng".</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ hệ thống Contact Center</div>
+        <p>Một màn hình giám sát tổng đài thường có: danh sách <b>hàng đợi cuộc gọi</b> cập nhật mỗi giây, bảng <b>trạng thái agent</b>,
+        ô <b>chat</b> nhiều cửa sổ, và biểu đồ KPI realtime. Mỗi event WebSocket (cuộc gọi mới, agent đổi trạng thái, tin nhắn đến)
+        có thể kích hoạt <code>setState</code>. Nếu không tối ưu, một tin nhắn chat sẽ vẽ lại cả 300 dòng hàng đợi → UI giật, quạt CPU rít.
+        Chương này dạy bạn cô lập re-render để chỉ phần thực sự đổi mới được vẽ lại.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="render"><span class="ico">①</span> Nguyên nhân re-render</h2>
+      <p><strong>Re-render</strong> nghĩa là React gọi lại <em>hàm component</em> để tính ra cây phần tử mới (virtual DOM), rồi đem so sánh
+      với cây cũ. Quan trọng: <b>re-render KHÔNG đồng nghĩa với cập nhật DOM</b>. React có thể chạy lại hàm của bạn mà cuối cùng
+      không sửa một pixel nào trên màn hình — nhưng việc chạy lại đó vẫn tốn CPU, tạo rác cho GC, và có thể lan xuống con.</p>
+      <p>Một component sẽ re-render khi <b>một trong bốn</b> điều sau xảy ra:</p>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🔄</span> State đổi</div><p>Gọi <code>setState</code> / setter của <code>useState</code> / <code>dispatch</code> của <code>useReducer</code> với giá trị mới.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📥</span> Props đổi</div><p>Cha truyền props mới xuống (theo nghĩa <em>tham chiếu/giá trị</em> khác sau khi cha re-render).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">👆</span> Cha re-render</div><p>Khi cha render lại, <b>mọi con</b> mặc định render lại — kể cả khi props không đổi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🌐</span> Context đổi</div><p>Mọi component <code>useContext(C)</code> sẽ re-render khi <em>value</em> của Provider <code>C</code> thay đổi tham chiếu.</p></div>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Hiểu lầm kinh điển</div>
+        <p>"Truyền prop mới xuống con thì con mới re-render." <b>Sai.</b> Mặc định, khi cha render lại thì <b>tất cả</b> con render lại,
+        bất kể props có đổi hay không. <code>React.memo</code> mới là thứ chặn việc đó dựa trên so sánh props. Không có <code>memo</code>,
+        prop "y nguyên" cũng không cứu được con khỏi việc render lại theo cha.</p>
+      </div>
+
+      <h3>Re-render "thừa" trông như thế nào?</h3>
+      <p>Trong Dashboard tổng đài, một component cha giữ nhiều mảnh state. Khi một mảnh nhỏ đổi (ví dụ ô tìm kiếm), cả cây render lại:</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">Dashboard.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-key">function</span> <span class="tok-fn">Dashboard</span>() {
+  <span class="tok-key">const</span> [search, setSearch] = <span class="tok-fn">useState</span>(<span class="tok-str">''</span>);
+  <span class="tok-key">const</span> [queue, setQueue]   = <span class="tok-fn">useState</span>([]);   <span class="tok-com">// 300 cuộc gọi chờ</span>
+
+  <span class="tok-com">// Mỗi lần gõ phím vào ô search → Dashboard re-render →</span>
+  <span class="tok-com">// &lt;QueueTable&gt; (300 dòng) cũng render lại dù queue KHÔNG đổi.</span>
+  <span class="tok-key">return</span> (
+    &lt;<span class="tok-typ">div</span>&gt;
+      &lt;<span class="tok-typ">SearchBox</span> value={search} onChange={setSearch} /&gt;
+      &lt;<span class="tok-typ">QueueTable</span> rows={queue} /&gt;        <span class="tok-com">// 😱 nạn nhân vô tội</span>
+      &lt;<span class="tok-typ">AgentPanel</span> /&gt;
+    &lt;/<span class="tok-typ">div</span>&gt;
+  );
+}</code></pre>
+      </div>
+      <p>Đây là re-render thừa: <code>queue</code> không đổi nhưng <code>QueueTable</code> vẫn chạy lại toàn bộ. Ba hướng xử lý sẽ đi qua trong các mục tiếp theo:
+      (1) <b>bọc con bằng <code>React.memo</code></b>; (2) <b>đẩy state xuống thấp nhất</b> nơi nó được dùng; (3) <b>dùng composition</b> để con
+      được truyền dạng <code>children</code> — khi đó cha re-render mà <code>children</code> giữ nguyên tham chiếu thì con không phải tính lại.</p>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Nguyên tắc đầu tiên: đo trước, tối ưu sau</div>
+        <p>Đừng rải <code>memo</code>/<code>useCallback</code> khắp nơi theo cảm tính. Mở <b>React DevTools → Profiler</b>, bấm record, thao tác,
+        rồi đọc flamegraph: component nào <em>màu vàng/cam</em> và render lại nhiều lần là điểm nóng. Bật "Highlight updates when components render"
+        để thấy đường viền nhấp nháy quanh phần đang vẽ lại — nếu cả màn hình nháy khi bạn chỉ gõ chat, đó là dấu hiệu re-render lan toả.</p>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="memo"><span class="ico">②</span> React.memo & memoization</h2>
+      <p><code>React.memo</code> là một <b>Higher-Order Component</b> bọc quanh component và nói với React:
+      <em>"nếu props lần này so với lần trước giống nhau (so sánh nông), hãy bỏ qua render và tái dùng kết quả cũ."</em></p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">QueueRow.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-key">const</span> QueueRow = <span class="tok-typ">React</span>.<span class="tok-fn">memo</span>(<span class="tok-key">function</span> <span class="tok-fn">QueueRow</span>({ call, onAssign }) {
+  <span class="tok-com">// Chỉ render lại khi `call` hoặc `onAssign` đổi tham chiếu</span>
+  <span class="tok-key">return</span> (
+    &lt;<span class="tok-typ">tr</span>&gt;
+      &lt;<span class="tok-typ">td</span>&gt;{call.phone}&lt;/<span class="tok-typ">td</span>&gt;
+      &lt;<span class="tok-typ">td</span>&gt;{call.waitSec}s&lt;/<span class="tok-typ">td</span>&gt;
+      &lt;<span class="tok-typ">td</span>&gt;&lt;<span class="tok-typ">button</span> onClick={() =&gt; <span class="tok-fn">onAssign</span>(call.id)}&gt;Nhận&lt;/<span class="tok-typ">button</span>&gt;&lt;/<span class="tok-typ">td</span>&gt;
+    &lt;/<span class="tok-typ">tr</span>&gt;
+  );
+});</code></pre>
+      </div>
+      <p><b>So sánh nông (shallow compare)</b> nghĩa là React duyệt từng key của props và so bằng <code>Object.is</code>:
+      với số/chuỗi/boolean là so giá trị; với object/array/function là so <b>tham chiếu</b>. Đây là mấu chốt khiến <code>memo</code>
+      thường "không ăn": nếu cha tạo object/array/hàm <em>mới mỗi lần render</em>, tham chiếu luôn khác → <code>memo</code> luôn cho qua.</p>
+
+      <h3>useMemo & useCallback — ổn định tham chiếu</h3>
+      <p>Hai hook này tồn tại để giữ <b>cùng một tham chiếu</b> qua các lần render, miễn là dependency không đổi:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Hook</th><th>Memoize cái gì</th><th>Dùng khi</th></tr></thead>
+          <tbody>
+            <tr><td><code>useMemo(fn, deps)</code></td><td><b>Giá trị</b> trả về của <code>fn()</code></td><td>Tính toán nặng (lọc/sắp xếp 1000 dòng), hoặc tạo object/array cần truyền cho con có <code>memo</code></td></tr>
+            <tr><td><code>useCallback(fn, deps)</code></td><td><b>Bản thân hàm</b> (≡ <code>useMemo(()=&gt;fn, deps)</code>)</td><td>Truyền callback cho con có <code>memo</code>, hoặc làm dep của <code>useEffect</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">QueueTable.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-key">function</span> <span class="tok-fn">QueueTable</span>({ calls, filter, onAssign }) {
+  <span class="tok-com">// 1) Lọc + sắp xếp nặng → chỉ tính lại khi calls/filter đổi</span>
+  <span class="tok-key">const</span> visible = <span class="tok-fn">useMemo</span>(() =&gt;
+    calls
+      .<span class="tok-fn">filter</span>(c =&gt; c.status === filter)
+      .<span class="tok-fn">sort</span>((a, b) =&gt; b.waitSec - a.waitSec),
+    [calls, filter]
+  );
+
+  <span class="tok-com">// 2) Hàm ổn định → QueueRow (có React.memo) không bị render oan</span>
+  <span class="tok-key">const</span> handleAssign = <span class="tok-fn">useCallback</span>((id) =&gt; {
+    socket.<span class="tok-fn">emit</span>(<span class="tok-str">'assign'</span>, { id, agentId: me.id });
+  }, [me.id]);
+
+  <span class="tok-key">return</span> (
+    &lt;<span class="tok-typ">tbody</span>&gt;
+      {visible.<span class="tok-fn">map</span>(c =&gt; (
+        &lt;<span class="tok-typ">QueueRow</span> key={c.id} call={c} onAssign={handleAssign} /&gt;
+      ))}
+    &lt;/<span class="tok-typ">tbody</span>&gt;
+  );
+}</code></pre>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Khi nào React.memo / useCallback có HẠI?</div>
+        <p>1) <b>Mọi memoization đều tốn chi phí</b>: lưu giá trị cũ + so sánh deps/props mỗi render. Với component nhẹ render lại nhanh,
+        chi phí so sánh có khi đắt hơn chính việc render → tối ưu thành chậm hơn.</p>
+        <p>2) <code>memo</code> <b>vô dụng nếu props vẫn đổi tham chiếu mỗi lần</b> (truyền inline object/array/hàm mà không memoize). Bạn vừa tốn
+        chi phí so sánh vừa luôn render lại.</p>
+        <p>3) Nếu component nhận <code>children</code> hay prop luôn đổi (vd timestamp, mảng mới từ server mỗi tick), <code>memo</code> gần như
+        không bao giờ "hit". Composition hoặc đẩy state xuống thường tốt hơn.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 React 19 & React Compiler</div>
+        <p>React Compiler (trước đây gọi "React Forget") tự động chèn memoization lúc build, giúp bạn <b>không phải</b> viết tay
+        <code>useMemo</code>/<code>useCallback</code> trong nhiều trường hợp. Nhưng trong phỏng vấn, bạn vẫn cần hiểu <em>vì sao</em>
+        chúng tồn tại và cơ chế so sánh nông — đó là nền để dùng compiler đúng và debug khi nó không kick in.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="context"><span class="ico">③</span> Tối ưu Context</h2>
+      <p>Context giải bài toán "prop drilling" nhưng mang theo một cạm bẫy hiệu năng lớn: <b>khi <code>value</code> của Provider đổi tham chiếu,
+      MỌI component <code>useContext</code> nó sẽ re-render</b> — kể cả component chỉ dùng <em>một phần nhỏ</em> của value. Context không có
+      cơ chế "selector" để chỉ lấy slice cần thiết.</p>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Lỗi value mới mỗi render</div>
+        <p>Tạo object inline làm value là sai lầm phổ biến nhất — tham chiếu mới mỗi lần Provider render, kéo theo toàn bộ consumer render lại.</p>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">CallContext.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-com">// ❌ SAI: { user, calls, dispatch } là object MỚI mỗi render</span>
+&lt;<span class="tok-typ">CallContext.Provider</span> value={{ user, calls, dispatch }}&gt;...&lt;/&gt;
+
+<span class="tok-com">// ✅ ĐÚNG: memoize value, chỉ đổi khi dữ liệu thật sự đổi</span>
+<span class="tok-key">const</span> value = <span class="tok-fn">useMemo</span>(
+  () =&gt; ({ user, calls, dispatch }),
+  [user, calls]   <span class="tok-com">// dispatch của useReducer vốn đã ổn định</span>
+);
+<span class="tok-key">return</span> &lt;<span class="tok-typ">CallContext.Provider</span> value={value}&gt;{children}&lt;/<span class="tok-typ">CallContext.Provider</span>&gt;;</code></pre>
+      </div>
+
+      <h3>Tách context theo nhịp thay đổi</h3>
+      <p>Vấn đề sâu hơn: nếu nhồi <em>cả</em> state ít đổi (user đăng nhập) lẫn state đổi liên tục (danh sách cuộc gọi mỗi giây) vào <b>một</b> context,
+      thì mỗi tick cuộc gọi sẽ làm các consumer chỉ cần <code>user</code> cũng render lại. Giải pháp: <b>tách thành nhiều context theo tần suất đổi</b>.</p>
+      <div class="flow">
+        <span class="node" style="border-color:var(--cyan)">AppContext (1 context to)</span>
+        <span class="arr">→ tách →</span>
+        <span class="node">AuthContext <small>(hiếm đổi)</small></span>
+        <span class="node">QueueContext <small>(đổi mỗi giây)</small></span>
+        <span class="node">UiContext <small>(theme, modal)</small></span>
+      </div>
+      <p>Một mẹo nữa: <b>tách state và dispatch thành hai context</b>. Component nào chỉ cần <code>dispatch</code> (gửi hành động) sẽ không render lại
+      khi state đổi, vì <code>dispatch</code> luôn ổn định.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Chiến lược</th><th>Cách làm</th><th>Hiệu quả</th></tr></thead>
+          <tbody>
+            <tr><td>Memoize value</td><td><code>useMemo</code> bọc object value</td><td>Chặn re-render do tham chiếu mới vô nghĩa</td></tr>
+            <tr><td>Tách context</td><td>Mỗi nhịp đổi = 1 context riêng</td><td>Consumer chỉ render khi đúng slice của nó đổi</td></tr>
+            <tr><td>Tách state/dispatch</td><td>2 Provider lồng nhau</td><td>Component "chỉ ghi" không render khi state đổi</td></tr>
+            <tr><td>Dùng external store</td><td>Zustand/Redux + selector</td><td>Subscribe theo slice, bỏ hẳn nhược điểm của Context (xem <a href="G4-data-fetching.html">G4</a>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Khi nào KHÔNG nên cố cứu Context?</div>
+        <p>Context hợp cho state <b>ít đổi, đọc rộng</b>: theme, ngôn ngữ, user, quyền. Với state đổi nhanh và cần đọc theo slice (danh sách cuộc gọi
+        realtime), một thư viện store có selector (Zustand, Redux Toolkit) sẽ gọn và nhanh hơn nhiều so với việc nhồi rồi tối ưu Context.</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="splitting"><span class="ico">④</span> Code splitting & lazy</h2>
+      <p>Một SPA tổng đài có nhiều màn hình: dashboard, lịch sử cuộc gọi, báo cáo, cài đặt, trình quay số... Nếu gói tất cả vào <b>một bundle</b>,
+      người dùng phải tải mọi thứ trước khi thấy màn hình đầu tiên — thời gian tải tăng, chỉ số Web Vitals (LCP, TTI) xấu đi.
+      <strong>Code splitting</strong> chia bundle thành các chunk tải <em>theo nhu cầu</em>.</p>
+      <p>React cung cấp <code>React.lazy</code> + <code>Suspense</code>. <code>lazy</code> nhận một hàm trả về <code>import()</code> động;
+      <code>Suspense</code> hiển thị fallback trong lúc chunk đang tải.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">routes.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-key">import</span> { lazy, Suspense } <span class="tok-key">from</span> <span class="tok-str">'react'</span>;
+
+<span class="tok-com">// Mỗi màn hình nặng = 1 chunk riêng, chỉ tải khi điều hướng tới</span>
+<span class="tok-key">const</span> Reports  = <span class="tok-fn">lazy</span>(() =&gt; <span class="tok-fn">import</span>(<span class="tok-str">'./pages/Reports'</span>));
+<span class="tok-key">const</span> Dialer   = <span class="tok-fn">lazy</span>(() =&gt; <span class="tok-fn">import</span>(<span class="tok-str">'./pages/Dialer'</span>));
+
+<span class="tok-key">function</span> <span class="tok-fn">App</span>() {
+  <span class="tok-key">return</span> (
+    &lt;<span class="tok-typ">Suspense</span> fallback={&lt;<span class="tok-typ">PanelSkeleton</span> /&gt;}&gt;
+      &lt;<span class="tok-typ">Routes</span>&gt;
+        &lt;<span class="tok-typ">Route</span> path=<span class="tok-str">"/reports"</span> element={&lt;<span class="tok-typ">Reports</span> /&gt;} /&gt;
+        &lt;<span class="tok-typ">Route</span> path=<span class="tok-str">"/dialer"</span>  element={&lt;<span class="tok-typ">Dialer</span> /&gt;} /&gt;
+      &lt;/<span class="tok-typ">Routes</span>&gt;
+    &lt;/<span class="tok-typ">Suspense</span>&gt;
+  );
+}</code></pre>
+      </div>
+      <h3>Các mức tách & mẹo thực chiến</h3>
+      <ul>
+        <li><b>Tách theo route</b> — phổ biến nhất, ranh giới tự nhiên. Mỗi trang một chunk.</li>
+        <li><b>Tách theo component nặng</b> — biểu đồ KPI, trình soạn thảo, bản đồ heatmap chỉ tải khi mở.</li>
+        <li><b>Tách theo thư viện nặng</b> — thư viện chart/PDF dung lượng lớn nên nằm trong chunk lazy riêng.</li>
+        <li><b>Preload thông minh</b> — khi người dùng <em>hover</em> menu "Báo cáo", gọi trước hàm import để chunk tải nền, lúc bấm vào là tức thì.</li>
+      </ul>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Suspense fallback và "nhấp nháy"</div>
+        <p>Nếu chunk tải quá nhanh, fallback hiện rồi biến mất ngay gây nháy khó chịu. Dùng skeleton có độ trễ tối thiểu, hoặc kết hợp
+        <code>startTransition</code> để giữ UI cũ trong lúc tải nội dung mới (xem cơ chế concurrent ở mục ⑥). Luôn bọc lazy component
+        bằng cả <code>Suspense</code> <b>và</b> Error Boundary — vì <code>import()</code> có thể <em>thất bại</em> khi mạng kém.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="boundary"><span class="ico">⑤</span> Error boundaries</h2>
+      <p>Mặc định, một lỗi JS ném ra <em>trong lúc render</em> sẽ làm React <b>unmount toàn bộ cây</b> — màn hình trắng. Trong tổng đài,
+      một widget biểu đồ lỗi không được phép làm sập cả bảng điều khiển khiến agent mất luôn danh sách cuộc gọi. <strong>Error Boundary</strong>
+      là component bắt lỗi của <em>cây con</em> bên dưới và hiển thị UI dự phòng.</p>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Error Boundary phải là CLASS component</div>
+        <p>Tính đến hiện tại chưa có hook tương đương cho hai lifecycle <code>getDerivedStateFromError</code> và <code>componentDidCatch</code>,
+        nên Error Boundary <b>bắt buộc</b> viết bằng class (hoặc dùng thư viện như <code>react-error-boundary</code> bọc sẵn).</p>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">ErrorBoundary.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-key">class</span> <span class="tok-typ">ErrorBoundary</span> <span class="tok-key">extends</span> <span class="tok-typ">React</span>.<span class="tok-typ">Component</span> {
+  state = { hasError: <span class="tok-key">false</span>, error: <span class="tok-key">null</span> };
+
+  <span class="tok-com">// Đổi state để render fallback ở lần render tiếp theo</span>
+  <span class="tok-key">static</span> <span class="tok-fn">getDerivedStateFromError</span>(error) {
+    <span class="tok-key">return</span> { hasError: <span class="tok-key">true</span>, error };
+  }
+
+  <span class="tok-com">// Tác dụng phụ: log lỗi về Sentry/server</span>
+  <span class="tok-fn">componentDidCatch</span>(error, info) {
+    logToServer({ error: error.message, stack: info.componentStack });
+  }
+
+  <span class="tok-fn">render</span>() {
+    <span class="tok-key">if</span> (<span class="tok-key">this</span>.state.hasError) {
+      <span class="tok-key">return</span> (
+        &lt;<span class="tok-typ">div</span> className=<span class="tok-str">"widget-error"</span>&gt;
+          ⚠️ Widget gặp sự cố.
+          &lt;<span class="tok-typ">button</span> onClick={() =&gt; <span class="tok-key">this</span>.<span class="tok-fn">setState</span>({ hasError: <span class="tok-key">false</span> })}&gt;Thử lại&lt;/<span class="tok-typ">button</span>&gt;
+        &lt;/<span class="tok-typ">div</span>&gt;
+      );
+    }
+    <span class="tok-key">return</span> <span class="tok-key">this</span>.props.children;
+  }
+}
+
+<span class="tok-com">// Mỗi widget bọc boundary riêng → 1 cái hỏng không kéo cả app sập</span>
+&lt;<span class="tok-typ">ErrorBoundary</span>&gt;&lt;<span class="tok-typ">KpiChart</span> /&gt;&lt;/<span class="tok-typ">ErrorBoundary</span>&gt;
+&lt;<span class="tok-typ">ErrorBoundary</span>&gt;&lt;<span class="tok-typ">QueueTable</span> /&gt;&lt;/<span class="tok-typ">ErrorBoundary</span>&gt;</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Error Boundary KHÔNG bắt loại lỗi nào?</div>
+        <p>Nó chỉ bắt lỗi xảy ra <b>trong render, trong lifecycle và trong constructor của cây con</b>. Nó <em>không</em> bắt:
+        lỗi trong <b>event handler</b> (dùng <code>try/catch</code> thường), lỗi trong <b>code bất đồng bộ</b> (setTimeout, fetch — dùng catch/then),
+        lỗi khi <b>server-side render</b>, và lỗi ném ra từ <b>chính Error Boundary</b>. Với async, hãy <code>setState</code> cờ lỗi rồi để
+        một render kế tiếp ném ra, hoặc dùng thư viện hỗ trợ.</p>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Đặt boundary ở đâu?</div>
+        <p>Theo <b>tầng</b>: một boundary "gốc" cho cả app (màn hình lỗi tử tế thay vì trắng trang), và nhiều boundary "cục bộ" bao quanh
+        từng widget độc lập (chart, chat, ticket panel). Càng đặt sâu, phạm vi sập càng nhỏ, agent càng giữ được nhiều chức năng khi một phần lỗi.</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="patterns"><span class="ico">⑥</span> Render patterns</h2>
+      <p>Các mẫu tổ chức component giúp tái sử dụng logic, kiểm soát re-render và làm API component dễ dùng. Dưới đây là các mẫu hay được hỏi,
+      kèm vai trò của chúng trong UI tổng đài.</p>
+
+      <h3>① Composition & prop <code>children</code></h3>
+      <p>Thay vì hardcode con bên trong, truyền chúng vào qua <code>children</code>. Điều này không chỉ linh hoạt mà còn là <b>mẹo tối ưu</b>:
+      khi cha re-render, nếu <code>children</code> được tạo ở <em>component cấp trên</em> thì tham chiếu của nó <b>không đổi</b> → React bỏ qua việc vẽ lại phần đó.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">composition.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-com">// &lt;ExpensiveTree/&gt; được tạo ở App, KHÔNG render lại khi count đổi</span>
+<span class="tok-key">function</span> <span class="tok-fn">App</span>() {
+  <span class="tok-key">return</span> (
+    &lt;<span class="tok-typ">Counter</span>&gt;
+      &lt;<span class="tok-typ">ExpensiveQueueTree</span> /&gt;   <span class="tok-com">// children — tham chiếu ổn định</span>
+    &lt;/<span class="tok-typ">Counter</span>&gt;
+  );
+}
+<span class="tok-key">function</span> <span class="tok-fn">Counter</span>({ children }) {
+  <span class="tok-key">const</span> [n, setN] = <span class="tok-fn">useState</span>(<span class="tok-num">0</span>);
+  <span class="tok-key">return</span> &lt;<span class="tok-typ">div</span> onClick={() =&gt; <span class="tok-fn">setN</span>(n + <span class="tok-num">1</span>)}&gt;{n}{children}&lt;/<span class="tok-typ">div</span>&gt;;
+}</code></pre>
+      </div>
+
+      <h3>② Render props</h3>
+      <p>Component nhận một <em>hàm</em> qua prop (thường là <code>children</code> dạng function) và gọi nó với dữ liệu nội bộ. Cho phép chia sẻ
+      logic mà bên dùng tự quyết cách render.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">render-props.jsx</span><span class="lang">React</span></div>
+        <pre><code>&lt;<span class="tok-typ">AgentPresence</span> agentId={id}&gt;
+  {(status) =&gt; status === <span class="tok-str">'online'</span>
+    ? &lt;<span class="tok-typ">Badge</span> color=<span class="tok-str">"green"</span>&gt;Sẵn sàng&lt;/<span class="tok-typ">Badge</span>&gt;
+    : &lt;<span class="tok-typ">Badge</span> color=<span class="tok-str">"red"</span>&gt;Bận&lt;/<span class="tok-typ">Badge</span>&gt;}
+&lt;/<span class="tok-typ">AgentPresence</span>&gt;</code></pre>
+      </div>
+
+      <h3>③ Higher-Order Component (HOC)</h3>
+      <p>Một hàm nhận component và trả về component "được tăng cường": <code>withAuth(Panel)</code>, <code>withWebSocket(Chat)</code>.
+      Mạnh nhưng dễ gây "wrapper hell" và khó truy vết props — nay phần lớn được thay bằng <b>custom hooks</b>.</p>
+
+      <h3>④ Compound components</h3>
+      <p>Một nhóm component phối hợp chia sẻ state ngầm qua context, cho API khai báo gọn gàng — kiểu <code>&lt;Tabs&gt;&lt;Tab/&gt;&lt;/Tabs&gt;</code>:</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">compound.jsx</span><span class="lang">React</span></div>
+        <pre><code>&lt;<span class="tok-typ">CallTabs</span> defaultTab=<span class="tok-str">"active"</span>&gt;
+  &lt;<span class="tok-typ">CallTabs.List</span>&gt;
+    &lt;<span class="tok-typ">CallTabs.Tab</span> id=<span class="tok-str">"active"</span>&gt;Đang gọi&lt;/<span class="tok-typ">CallTabs.Tab</span>&gt;
+    &lt;<span class="tok-typ">CallTabs.Tab</span> id=<span class="tok-str">"queue"</span>&gt;Hàng đợi&lt;/<span class="tok-typ">CallTabs.Tab</span>&gt;
+  &lt;/<span class="tok-typ">CallTabs.List</span>&gt;
+  &lt;<span class="tok-typ">CallTabs.Panel</span> id=<span class="tok-str">"active"</span>&gt;...&lt;/<span class="tok-typ">CallTabs.Panel</span>&gt;
+&lt;/<span class="tok-typ">CallTabs</span>&gt;</code></pre>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Pattern</th><th>Tái dùng cái gì</th><th>Trạng thái hiện nay</th></tr></thead>
+          <tbody>
+            <tr><td>Composition / children</td><td>Bố cục, vị trí render</td><td>Luôn nên dùng; còn giúp tối ưu re-render</td></tr>
+            <tr><td>Render props</td><td>Logic + cho bên dùng tự render</td><td>Phần lớn được thay bằng custom hooks</td></tr>
+            <tr><td>HOC</td><td>Bọc/chèn props chéo</td><td>Cũ; ưu tiên hooks, trừ vài lib</td></tr>
+            <tr><td>Compound</td><td>State ngầm giữa nhóm component</td><td>Rất hợp cho UI library (Tabs, Select, Menu)</td></tr>
+            <tr><td>Custom hooks</td><td>Logic có state, tách khỏi UI</td><td>✅ Cách mặc định ngày nay (xem <a href="G2-react-hooks.html">G2</a>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Render props vs Hooks</div>
+        <p>Trước hooks, render props/HOC là cách duy nhất chia sẻ <em>logic có state</em>. Hooks làm điều đó mà không thêm cấp component
+        (tránh wrapper hell), không "callback lồng nhau", và dễ kết hợp nhiều logic. Vẫn còn lý do dùng render props khi bạn cần <b>điều khiển
+        vị trí/cách render</b> dựa trên state nội bộ (vd component đo kích thước trả về <code>{width}</code> để bên ngoài tuỳ biến layout).</p>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="reconciliation"><span class="ico">⑦</span> Reconciliation & keys</h2>
+      <p><strong>Reconciliation</strong> là thuật toán React dùng để so cây phần tử mới với cây cũ và quyết định thay đổi DOM tối thiểu cần làm.
+      Vì so sánh hai cây tổng quát là chậm (O(n³)), React dùng vài <b>heuristic</b> để hạ về ~O(n):</p>
+      <ul>
+        <li><b>Khác loại phần tử</b> → vứt cả cây con cũ, dựng lại từ đầu (vd <code>&lt;div&gt;</code> đổi thành <code>&lt;section&gt;</code>, hay <code>ChatPanel</code> đổi thành <code>CallPanel</code> → unmount/mount, mất state nội bộ).</li>
+        <li><b>Cùng loại phần tử</b> → giữ DOM node, chỉ cập nhật thuộc tính đổi, rồi đệ quy vào con.</li>
+        <li><b>Danh sách con</b> → React ghép cặp phần tử cũ/mới theo <code>key</code>.</li>
+      </ul>
+
+      <h3>Tại sao <code>key</code> quan trọng?</h3>
+      <p><code>key</code> là <b>danh tính ổn định</b> của một phần tử trong danh sách qua các lần render. Nó giúp React biết phần tử nào
+      được <em>giữ, thêm, xoá, hoặc di chuyển</em> — thay vì so theo vị trí (index).</p>
+      <div class="callout danger">
+        <div class="c-title">🐛 Đừng dùng index làm key cho danh sách động</div>
+        <p>Nếu danh sách hàng đợi cuộc gọi thêm/bớt/sắp xếp lại, dùng <code>key={index}</code> khiến React ghép sai cặp: state nội bộ (ô input,
+        checkbox "đã đọc", animation) <b>dính nhầm</b> sang dòng khác sau khi xoá phần tử đầu. Hãy dùng <b>id ổn định</b> từ dữ liệu (<code>call.id</code>).
+        Index chỉ tạm chấp nhận khi danh sách <em>tĩnh, không sắp xếp lại, không thêm/xoá giữa chừng</em>.</p>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">keys.jsx</span><span class="lang">React</span></div>
+        <pre><code><span class="tok-com">// ❌ key=index → xoá dòng đầu làm state lệch toàn bộ</span>
+{calls.<span class="tok-fn">map</span>((c, i) =&gt; &lt;<span class="tok-typ">QueueRow</span> key={i} call={c} /&gt;)}
+
+<span class="tok-com">// ✅ key=id ổn định → React di chuyển/giữ đúng dòng</span>
+{calls.<span class="tok-fn">map</span>((c) =&gt; &lt;<span class="tok-typ">QueueRow</span> key={c.id} call={c} /&gt;)}
+
+<span class="tok-com">// 💡 Đổi key để CỐ Ý reset state — vd chuyển sang chat khác,</span>
+<span class="tok-com">// muốn xoá hết ô soạn tin/scroll position cũ:</span>
+&lt;<span class="tok-typ">ChatWindow</span> key={activeConversationId} /&gt;</code></pre>
+      </div>
+
+      <h3>Virtualization cho danh sách dài</h3>
+      <p>Khi danh sách lên tới hàng nghìn dòng (lịch sử cuộc gọi, log tin nhắn), kể cả đã memoize, việc render <em>mọi</em> DOM node vẫn nặng.
+      <b>Virtualization</b> (cuộn ảo) chỉ render những dòng <em>nằm trong viewport</em> cộng một ít đệm, tái dùng node khi cuộn — dùng
+      <code>react-window</code> / <code>@tanstack/react-virtual</code>.</p>
+      <div class="flow">
+        <span class="node">10.000 cuộc gọi</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">chỉ render ~20 dòng thấy được</span><span class="arr">→</span>
+        <span class="node">DOM nhẹ, cuộn 60fps</span>
+      </div>
+
+      <h3>Profiling với React DevTools</h3>
+      <p>Tab <b>Profiler</b> ghi lại các lần render trong một thao tác. Đọc kết quả theo các chỉ báo:</p>
+      <ul>
+        <li><b>Flamegraph</b> — thanh càng rộng = render càng lâu; màu xám = không render lại lần này.</li>
+        <li><b>Ranked chart</b> — xếp component theo thời gian render, lộ ngay điểm nóng.</li>
+        <li><b>"Why did this render?"</b> — bật trong Settings để xem lý do: props đổi, hook đổi, hay cha render.</li>
+        <li><b>Highlight updates</b> — viền nháy quanh phần đang vẽ lại; nếu cả màn hình nháy khi gõ chat → re-render lan toả cần cô lập.</li>
+      </ul>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Rải memo khắp nơi</div><p>Tối ưu mù không đo. Đo bằng Profiler trước; memo chỗ thực sự nóng và render lại nhiều.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> memo + props inline</div><p>Bọc <code>memo</code> nhưng truyền <code>{}</code>/<code>[]</code>/hàm inline → tham chiếu luôn đổi, memo vô dụng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Context value mới mỗi render</div><p>Quên <code>useMemo</code> object value → toàn bộ consumer render lại. Nhồi mọi state vào 1 context.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Index làm key</div><p>Với list động → state nội bộ dính nhầm dòng. Dùng id ổn định từ dữ liệu.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> State đặt quá cao</div><p>Một ô search ở cha làm cả cây render. Đẩy state xuống component thấp nhất dùng nó (colocation).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lazy không có boundary</div><p><code>import()</code> lỗi mạng làm trắng trang. Luôn bọc Suspense + Error Boundary.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên virtualization</div><p>Render 5.000 DOM node "vì đã memo rồi". Memo không cứu chi phí dựng DOM — phải cuộn ảo.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Composition trước</div><p>Trước khi memo, thử đẩy state xuống / dùng <code>children</code> — thường giải quyết gọn hơn.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Chặn re-render hàng đợi khi gõ chat</div>
+        <p>Một <code>Dashboard</code> giữ state <code>chatDraft</code> (ô soạn tin) và <code>queue</code> (300 dòng). Mỗi ký tự gõ vào ô chat làm cả
+        <code>QueueTable</code> render lại. Hãy nêu <b>ba</b> cách độc lập để chặn, sắp theo thứ tự ưu tiên.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">(1) <b>Colocation</b>: đẩy <code>chatDraft</code> xuống chính <code>ChatBox</code> để Dashboard không render khi gõ — gọn nhất, không cần memo.
+        (2) <b>Composition</b>: truyền <code>&lt;QueueTable/&gt;</code> dưới dạng <code>children</code> từ cấp trên để tham chiếu ổn định.
+        (3) <b>React.memo</b> bọc <code>QueueTable</code>, đồng thời memoize props (<code>useMemo</code> cho mảng rows, <code>useCallback</code> cho handler).
+        Luôn đo bằng Profiler trước/sau.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Vì sao React.memo "không ăn"?</div>
+        <p>Đồng nghiệp bọc <code>memo</code> cho <code>&lt;QueueRow onAssign={() =&gt; assign(c.id)} style={{padding:8}} /&gt;</code> nhưng nó vẫn render lại mỗi lần.
+        Chẩn đoán nguyên nhân và sửa.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Cả <code>onAssign</code> (hàm inline) và <code>style</code> (object inline) tạo tham chiếu <b>mới mỗi render</b> ở cha → so sánh nông luôn "khác" → memo
+        không bao giờ hit, lại tốn thêm chi phí so sánh. Sửa: dùng <code>useCallback</code> cho handler (truyền <code>id</code> qua tham số/closure ổn định),
+        đưa <code>style</code> ra hằng số ngoài render hoặc <code>useMemo</code>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Tách Context cho dữ liệu realtime</div>
+        <p>Hiện có một <code>AppContext</code> chứa <code>{ user, queue, theme }</code>. <code>queue</code> cập nhật mỗi giây qua WebSocket. Header chỉ
+        đọc <code>user</code> nhưng render lại mỗi giây. Thiết kế lại context để khắc phục.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Tách theo nhịp đổi: <code>AuthContext</code> (user — hiếm đổi), <code>QueueContext</code> (queue — đổi mỗi giây), <code>UiContext</code> (theme).
+        Header chỉ <code>useContext(AuthContext)</code> nên không render khi queue tick. Mỗi value bọc <code>useMemo</code>. Nếu cần đọc slice nhỏ của queue,
+        cân nhắc external store có selector (Zustand).</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Khi component cha re-render, mặc định điều gì xảy ra với con (không có <code>memo</code>)?</div>
+          <div class="opt">Con chỉ render lại nếu props đổi</div>
+          <div class="opt" data-correct="true">Mọi con đều render lại, kể cả props không đổi</div>
+          <div class="opt">Con không bao giờ render lại</div>
+          <div class="explain"><b>Mọi con render lại.</b> Chỉ <code>React.memo</code> (so sánh props) mới chặn được việc render theo cha.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Vì sao <code>React.memo</code> thường "không ăn"?</div>
+          <div class="opt">Vì component quá nhỏ</div>
+          <div class="opt" data-correct="true">Vì props là object/array/hàm inline → tham chiếu mới mỗi render</div>
+          <div class="opt">Vì thiếu key</div>
+          <div class="explain"><b>Tham chiếu mới.</b> So sánh nông dùng <code>Object.is</code>; object/array/hàm tạo inline luôn khác tham chiếu → memo luôn cho qua.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Lỗi nào làm mọi consumer của Context render lại không cần thiết?</div>
+          <div class="opt">Đặt Provider ở gốc app</div>
+          <div class="opt" data-correct="true">Truyền value là object inline (mới mỗi render), không <code>useMemo</code></div>
+          <div class="opt">Dùng nhiều Provider</div>
+          <div class="explain"><b>Value mới mỗi render.</b> Memoize value và tách context theo nhịp đổi để giảm re-render lan toả.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Error Boundary KHÔNG bắt loại lỗi nào?</div>
+          <div class="opt">Lỗi trong render của cây con</div>
+          <div class="opt" data-correct="true">Lỗi trong event handler và code bất đồng bộ</div>
+          <div class="opt">Lỗi trong constructor cây con</div>
+          <div class="explain"><b>Handler & async.</b> Dùng <code>try/catch</code> hoặc <code>.catch</code> rồi <code>setState</code> cờ lỗi cho các trường hợp này.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Với danh sách 10.000 dòng đã memoize nhưng vẫn lag khi cuộn, giải pháp đúng là?</div>
+          <div class="opt">Thêm nhiều <code>useCallback</code></div>
+          <div class="opt">Bọc thêm một lớp <code>memo</code></div>
+          <div class="opt" data-correct="true">Virtualization — chỉ render các dòng trong viewport</div>
+          <div class="explain"><b>Virtualization.</b> Memo không giảm chi phí dựng/giữ hàng nghìn DOM node; cuộn ảo mới giải quyết gốc.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>React performance — phần phân loại nhanh ứng viên "biết dùng" với "hiểu cơ chế".</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Liệt kê các nguyên nhân khiến một component re-render.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Bốn nguyên nhân: (1) state nội bộ đổi (<code>setState</code>/<code>dispatch</code>); (2) props nhận được đổi; (3) component cha re-render
+        (mặc định kéo theo mọi con); (4) một context mà nó <code>useContext</code> đổi value. Lưu ý re-render là việc React chạy lại hàm component để tính
+        virtual DOM, không nhất thiết dẫn tới cập nhật DOM thật.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Re-render và cập nhật DOM có phải một? Tại sao re-render thừa vẫn xấu nếu không đổi DOM?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Không. Re-render = chạy lại hàm component + diff (reconciliation). Cập nhật DOM chỉ xảy ra khi diff phát hiện khác biệt.
+        Re-render thừa vẫn tốn: chạy lại logic/tạo object tạm (tăng GC), so sánh cây, và có thể lan xuống con. Trong UI realtime nhiều dữ liệu,
+        các re-render thừa cộng dồn gây tụt khung hình dù DOM không đổi.</p>
+        <p class="trap">⚠️ Bẫy: nói "re-render luôn cập nhật DOM nên rất chậm" là sai bản chất — vấn đề là chi phí tính toán + lan toả, không phải DOM.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span><code>React.memo</code> hoạt động thế nào? Khi nào dùng nó là sai lầm?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>memo</code> bọc component và so sánh <b>nông</b> props giữa hai lần render; nếu giống, bỏ qua render, tái dùng kết quả cũ.
+        Sai lầm: (1) dùng cho component nhẹ render lại rất nhanh — chi phí so sánh đắt hơn lợi ích; (2) props vẫn là object/array/hàm inline đổi tham chiếu
+        mỗi render → memo không bao giờ hit, lại tốn thêm; (3) prop <code>children</code> hoặc dữ liệu luôn đổi mỗi tick. Phải đo bằng Profiler trước.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Phân biệt <code>useMemo</code> và <code>useCallback</code>. Cho ví dụ dùng đúng.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>useMemo(fn, deps)</code> nhớ <b>giá trị</b> trả về của <code>fn</code>; <code>useCallback(fn, deps)</code> nhớ <b>chính hàm</b>
+        (tương đương <code>useMemo(()=&gt;fn, deps)</code>). Dùng <code>useMemo</code> cho tính toán nặng (lọc/sắp 1000 dòng) hoặc tạo object/array truyền cho con có
+        <code>memo</code>. Dùng <code>useCallback</code> để giữ callback ổn định khi truyền xuống con có <code>memo</code> hoặc làm dependency của <code>useEffect</code>.</p>
+        <p class="trap">⚠️ Bẫy: dùng <code>useCallback</code>/<code>useMemo</code> nhưng phía nhận không có <code>memo</code> → vô ích, chỉ tốn bộ nhớ.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Vấn đề re-render của Context là gì? Liệt kê các cách tối ưu.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khi <code>value</code> của Provider đổi tham chiếu, <b>mọi</b> consumer render lại — Context không có selector lấy slice.
+        Tối ưu: (1) <code>useMemo</code> object value để tránh tham chiếu mới vô nghĩa; (2) tách context theo nhịp đổi (auth ít đổi vs queue đổi mỗi giây);
+        (3) tách state và dispatch thành hai context (component "chỉ ghi" không render khi state đổi); (4) với state đổi nhanh, dùng external store có
+        selector (Zustand/Redux Toolkit) thay vì cố cứu Context.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Code splitting là gì? Triển khai trong React thế nào và cần lưu ý gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là chia bundle thành nhiều chunk tải theo nhu cầu để giảm thời gian tải ban đầu. Trong React dùng <code>React.lazy(() =&gt; import('...'))</code>
+        + <code>Suspense fallback</code>. Thường tách theo route, theo component/lib nặng. Lưu ý: luôn bọc Error Boundary vì <code>import()</code> có thể lỗi mạng;
+        cân nhắc preload khi hover; tránh fallback nhấp nháy với chunk tải quá nhanh.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Error Boundary là gì? Vì sao phải là class? Nó không bắt loại lỗi nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là component bắt lỗi render của cây con và hiển thị UI dự phòng thay vì để sập cả app. Phải là class vì dùng hai lifecycle
+        chưa có hook tương đương: <code>getDerivedStateFromError</code> (đổi state để render fallback) và <code>componentDidCatch</code> (log lỗi).
+        Nó <b>không</b> bắt lỗi trong event handler, code bất đồng bộ (setTimeout/fetch), SSR, và lỗi từ chính nó. Đặt boundary theo tầng: gốc + cục bộ quanh
+        từng widget để cô lập phạm vi sập.</p>
+        <p class="trap">⚠️ Bẫy: tưởng Error Boundary bắt được lỗi trong <code>onClick</code> — không; phải <code>try/catch</code> hoặc set cờ lỗi vào state.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Render props vs custom hooks — chọn cái nào và vì sao hooks thắng thế?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Cả hai chia sẻ logic có state. Render props/HOC thêm cấp component (wrapper hell), khó kết hợp, callback lồng nhau khó đọc.
+        Custom hooks chia sẻ logic mà không thêm node cây, dễ kết hợp nhiều hook, props minh bạch — nên là mặc định ngày nay. Render props vẫn hợp khi cần
+        cho bên ngoài <b>tự quyết cách render</b> dựa trên state nội bộ (vd component đo kích thước trả về <code>{width,height}</code>).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Reconciliation là gì? Vai trò của <code>key</code> trong danh sách?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Reconciliation là thuật toán diff cây mới với cây cũ để áp thay đổi DOM tối thiểu, dùng heuristic: khác loại phần tử thì dựng lại cả cây con;
+        cùng loại thì giữ node, cập nhật thuộc tính, đệ quy. Với danh sách, React ghép cặp phần tử theo <code>key</code> — danh tính ổn định giúp biết phần tử nào
+        giữ/thêm/xoá/di chuyển thay vì so theo vị trí. <code>key</code> đúng giúp giữ state nội bộ và tối ưu thao tác DOM.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Vì sao không nên dùng index làm <code>key</code> cho danh sách động?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khi thêm/xoá/sắp xếp lại, index của một phần tử thay đổi, khiến React ghép sai cặp cũ/mới: state nội bộ (giá trị input, checkbox, animation)
+        dính nhầm sang phần tử khác, có thể render sai và lỗi tinh vi. Dùng id ổn định từ dữ liệu (<code>call.id</code>). Index chỉ chấp nhận khi danh sách tĩnh,
+        không sắp xếp lại, không thêm/xoá giữa chừng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Danh sách 50.000 cuộc gọi cần render. Tiếp cận thế nào để UI mượt?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Memo hay useCallback không đủ vì chi phí nằm ở việc dựng/giữ hàng chục nghìn DOM node. Dùng <b>virtualization</b> (react-window / react-virtual):
+        chỉ render các dòng trong viewport + đệm, tái dùng node khi cuộn. Kết hợp: phân trang/infinite scroll từ server, memoize row, key ổn định, và nếu dữ liệu
+        tới dồn dập thì gộp cập nhật (batching) hoặc <code>startTransition</code> để giữ UI phản hồi.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Bạn dùng React DevTools Profiler để tìm điểm nóng như thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mở tab Profiler, bấm record, thực hiện thao tác nghi ngờ (gõ chat, nhận event), dừng. Đọc <b>flamegraph</b> (thanh rộng = render lâu, xám = không render),
+        <b>ranked chart</b> để xếp hạng component theo thời gian, và bật "Why did this render?" để biết lý do (props/hook/cha). Bật "Highlight updates" để thấy phần nháy.
+        Từ đó quyết định: đẩy state xuống, composition, memo có chọn lọc, hay virtualization — rồi đo lại để xác nhận có cải thiện.</p>
+        <p class="trap">⚠️ Bẫy: tối ưu mà không đo trước/sau. Luôn so sánh số liệu để chắc thay đổi thực sự giúp, không phải cảm tính.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương G3</button>
+      </div>
+
+      <div class="pager">
+        <a href="G2-react-hooks.html"><span class="dir">← Trước</span><span class="ttl">G2 · React Hooks</span></a>
+        <a href="G4-data-fetching.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">G4 · Data fetching & state</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='G3',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành G3 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương G3'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

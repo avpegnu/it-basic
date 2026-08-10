@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B1 · Kiến trúc Node.js</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-b">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">B1 · Kiến trúc Node.js</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần B · Node.js Core</div>
+      <nav class="nav">
+        <a href="B1-kien-truc-nodejs.html" class="active">B1 · Kiến trúc Node.js</a>
+        <a href="B2-module-npm.html">B2 · Module, npm, môi trường</a>
+        <a href="B3-streams-buffer-events.html">B3 · Streams, Buffer, Events</a>
+        <a href="B4-http-rest-co-ban.html">B4 · HTTP & REST cơ bản</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#whatis">① Node.js là gì</a>
+        <a href="#arch">② Kiến trúc tổng thể</a>
+        <a href="#eventloop">③ Các pha Event Loop</a>
+        <a href="#libuv">④ libuv & thread pool</a>
+        <a href="#process">⑤ process & global</a>
+        <a href="#concurrency">⑥ Worker, cluster, child_process</a>
+        <a href="#fit">⑦ Khi nào hợp/không hợp</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần B · Node.js Core &nbsp;›&nbsp; <b>B1 · Kiến trúc Node.js</b></div>
+      <div class="live-pill"><span class="blink"></span> runtime online</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần B · Chương 1</span>
+        <h1>Kiến trúc Node.js</h1>
+        <p class="lead">
+          Hiểu <b>bên dưới nắp capo</b> của Node.js: V8, libuv, các pha Event Loop, thread pool và <code>process</code>.
+          Đây là kiến thức phân biệt người "biết viết Express" với người thực sự hiểu vì sao hệ thống realtime
+          của mình nhanh hay chậm, treo hay mượt.
+        </p>
+      </div>
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Giải thích Node.js là <b>runtime</b>, gồm V8 + libuv + Node API — không phải ngôn ngữ hay framework.</p>
+        <p>• Mô tả 6 pha của Event Loop trong Node và việc gì chạy ở pha nào.</p>
+        <p>• Hiểu libuv thread pool, vì sao một số tác vụ "I/O" lại dùng thread.</p>
+        <p>• Dùng <code>process</code> (env, argv, signals) và biết Worker Threads vs cluster vs child_process.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="whatis"><span class="ico">①</span> Node.js là gì?</h2>
+      <p><strong>Node.js là một runtime</strong> cho phép chạy JavaScript <em>ngoài trình duyệt</em> — trên server.
+      Nó <b>không phải</b> ngôn ngữ (ngôn ngữ vẫn là JavaScript) và <b>không phải</b> framework (Express/NestJS mới là framework).</p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">⚡</span> V8</div><p>Engine của Google (cũng dùng trong Chrome) — biên dịch JS sang mã máy, quản lý bộ nhớ/GC.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔁</span> libuv</div><p>Thư viện C cung cấp Event Loop, non-blocking I/O, thread pool — "trái tim" bất đồng bộ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📦</span> Node APIs</div><p><code>fs</code>, <code>http</code>, <code>net</code>, <code>crypto</code>... — API bằng C++/JS để thao tác hệ thống.</p></div>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="arch"><span class="ico">②</span> Kiến trúc tổng thể</h2>
+      <p>Khi bạn gọi <code>fs.readFile</code>, hành trình diễn ra qua nhiều tầng:</p>
+      <div class="flow">
+        <span class="node">Code JS của bạn</span><span class="arr">→</span>
+        <span class="node">Node API (JS)</span><span class="arr">→</span>
+        <span class="node">C++ bindings</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">libuv (Event Loop + thread pool)</span><span class="arr">→</span>
+        <span class="node">OS / kernel</span>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Mấu chốt</div>
+        <p>V8 thực thi JavaScript của bạn (đơn luồng). libuv lo phần bất đồng bộ: đăng ký I/O với OS, quản lý hàng đợi callback,
+        và có một <b>thread pool</b> để xử lý các tác vụ không có API non-blocking gốc của OS (vd <code>fs</code>, <code>crypto</code>, DNS).</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="eventloop"><span class="ico">③</span> Các pha của Event Loop (Node)</h2>
+      <p>Event Loop của Node (qua libuv) chạy theo <strong>các pha tuần tự</strong>, mỗi pha có hàng đợi callback riêng:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Pha</th><th>Xử lý gì</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><b>timers</b></td><td>Callback của <code>setTimeout</code>, <code>setInterval</code> đã tới hạn</td></tr>
+            <tr><td>2</td><td>pending callbacks</td><td>Một số callback I/O bị hoãn từ vòng trước</td></tr>
+            <tr><td>3</td><td>idle, prepare</td><td>Nội bộ libuv</td></tr>
+            <tr><td>4</td><td><b>poll</b></td><td>Lấy I/O event mới, thực thi callback I/O (đây là nơi "chờ" nếu rảnh)</td></tr>
+            <tr><td>5</td><td><b>check</b></td><td>Callback của <code>setImmediate</code></td></tr>
+            <tr><td>6</td><td>close callbacks</td><td><code>socket.on('close')</code>...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ microtask chen giữa các pha</div>
+        <p>Giữa <b>mỗi</b> callback, Node vét sạch <code>process.nextTick</code> queue rồi tới microtask Promise.
+        Vì vậy <code>nextTick</code> &gt; Promise &gt; (các macrotask theo pha). Xem lại chương <a href="../A/A2-bat-dong-bo-event-loop.html">A2</a>.</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="libuv"><span class="ico">④</span> libuv & Thread Pool</h2>
+      <p>Một hiểu lầm phổ biến: "Node hoàn toàn đơn luồng". Đúng là <b>code JS</b> chạy đơn luồng, nhưng libuv có
+      <strong>thread pool</strong> (mặc định 4 thread, đổi qua <code>UV_THREADPOOL_SIZE</code>) để xử lý các tác vụ
+      không thể non-blocking ở tầng OS.</p>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🧵</span> Dùng thread pool</div><p><code>fs.*</code> (file I/O), <code>crypto</code> (pbkdf2, bcrypt), <code>zlib</code> (nén), DNS lookup.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🌐</span> Không dùng thread pool</div><p>Network I/O (TCP/UDP/HTTP) dùng cơ chế non-blocking gốc của OS (epoll/kqueue/IOCP).</p></div>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Hệ quả thực tế cho Contact Center</div>
+        <p>Nếu mỗi cuộc gọi cần hash mật khẩu/băm bản ghi nặng (CPU + crypto), bạn có thể làm cạn 4 thread của pool →
+        các thao tác fs/crypto khác bị xếp hàng. Giải pháp: tăng <code>UV_THREADPOOL_SIZE</code>, hoặc đẩy việc nặng sang
+        Worker Threads / message queue.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="process"><span class="ico">⑤</span> <code>process</code> & global objects</h2>
+      <p>Trong Node <strong>không có <code>window</code>/<code>document</code></strong>. Thay vào đó có <code>global</code>,
+      và quan trọng nhất là object <code>process</code> — cầu nối với môi trường runtime.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">process.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-typ">process</span>.env.<span class="tok-var">NODE_ENV</span>;        <span class="tok-com">// biến môi trường (config)</span>
+<span class="tok-typ">process</span>.argv;                <span class="tok-com">// tham số dòng lệnh</span>
+<span class="tok-typ">process</span>.pid;                 <span class="tok-com">// process id</span>
+<span class="tok-typ">process</span>.cwd();               <span class="tok-com">// thư mục làm việc</span>
+<span class="tok-typ">process</span>.<span class="tok-fn">memoryUsage</span>();       <span class="tok-com">// theo dõi RAM</span>
+
+<span class="tok-com">// Graceful shutdown — đóng kết nối DB/socket trước khi tắt</span>
+<span class="tok-typ">process</span>.<span class="tok-fn">on</span>(<span class="tok-str">'SIGTERM'</span>, <span class="tok-key">async</span> () => {
+  <span class="tok-key">await</span> <span class="tok-fn">closeDbAndSockets</span>();
+  <span class="tok-typ">process</span>.<span class="tok-fn">exit</span>(<span class="tok-num">0</span>);
+});
+
+<span class="tok-com">// Bắt lỗi không lường trước — log rồi tắt an toàn</span>
+<span class="tok-typ">process</span>.<span class="tok-fn">on</span>(<span class="tok-str">'unhandledRejection'</span>, (err) => { <span class="tok-fn">log</span>(err); <span class="tok-typ">process</span>.<span class="tok-fn">exit</span>(<span class="tok-num">1</span>); });
+
+<span class="tok-com">// __dirname / __filename (CommonJS) — đường dẫn file hiện tại</span>
+console.<span class="tok-fn">log</span>(__dirname);</code></pre>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="concurrency"><span class="ico">⑥</span> Mở rộng đa luồng/đa tiến trình</h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Cơ chế</th><th>Bản chất</th><th>Dùng khi</th></tr></thead>
+          <tbody>
+            <tr><td><code>Worker Threads</code></td><td>Nhiều luồng trong cùng tiến trình, chia sẻ bộ nhớ (SharedArrayBuffer)</td><td>Tác vụ <b>CPU nặng</b> (mã hóa, xử lý dữ liệu) không chặn main thread</td></tr>
+            <tr><td><code>cluster</code></td><td>Fork nhiều tiến trình Node cùng lắng nghe 1 port</td><td>Tận dụng nhiều core cho web server, tăng throughput</td></tr>
+            <tr><td><code>child_process</code></td><td>Chạy tiến trình con (kể cả lệnh hệ thống)</td><td>Gọi chương trình ngoài, tách việc nặng/độc lập</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Trong thực tế production</div>
+        <p>Thường người ta không tự viết <code>cluster</code> mà để <b>PM2</b> hoặc <b>Kubernetes</b> chạy nhiều instance Node,
+        đặt sau load balancer. Worker Threads dành cho CPU-bound trong cùng service. Việc nền (gửi email, xử lý ghi âm cuộc gọi)
+        thì đẩy sang <b>message queue</b> (xem Part F).</p>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="fit"><span class="ico">⑦</span> Khi nào Node.js phù hợp?</h2>
+      <div class="two-col">
+        <div class="callout tip"><div class="c-title">✅ Rất hợp</div>
+          <p>Hệ thống <b>I/O-bound</b>, nhiều kết nối đồng thời: API, realtime (chat, call), streaming, microservices, BFF.
+          Chính là hồ sơ của một Contact Center.</p></div>
+        <div class="callout danger"><div class="c-title">❌ Kém hợp</div>
+          <p>Tác vụ <b>CPU-bound</b> nặng kéo dài (xử lý video, ML training) — sẽ chặn Event Loop. Khi đó cần Worker Threads,
+          ngôn ngữ khác, hoặc dịch vụ chuyên dụng.</p></div>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Chặn Event Loop</div><p>Vòng lặp tính toán lớn, <code>JSON.parse</code> file khổng lồ đồng bộ → treo server.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Dùng <code>*Sync</code> trong request</div><p><code>readFileSync</code> trong handler chặn mọi request khác. Chỉ dùng lúc khởi động.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Bỏ qua graceful shutdown</div><p>Tắt đột ngột làm rớt cuộc gọi/mất dữ liệu. Luôn xử lý SIGTERM/SIGINT.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Rò rỉ bộ nhớ</div><p>Listener không gỡ, cache vô hạn → RAM tăng dần. Theo dõi <code>memoryUsage</code>.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Đọc env an toàn</div>
+        <p>Viết hàm <code>getEnv(key, fallback?)</code> đọc <code>process.env</code>, ném lỗi nếu biến bắt buộc bị thiếu. Vì sao nên kiểm tra env lúc khởi động?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Kiểm tra env khi boot để <b>fail-fast</b>: nếu thiếu config (DB_URL, JWT_SECRET) thì dừng ngay thay vì lỗi giữa lúc phục vụ khách. Dùng <code>if (val == null &amp;&amp; fallback === undefined) throw ...</code>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — CPU-bound</div>
+        <p>Giải thích vì sao tính số Fibonacci(45) đệ quy trong một HTTP handler làm cả server treo, và 2 cách khắc phục.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Vì nó chạy đồng bộ trên main thread, chiếm call stack lâu → Event Loop không xử lý request khác. Khắc phục: (1) Worker Threads, (2) đẩy sang queue/worker riêng, (3) thuật toán/cache tốt hơn.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Node.js là?</div>
+          <div class="opt">Một ngôn ngữ lập trình</div>
+          <div class="opt" data-correct="true">Một runtime chạy JS ngoài trình duyệt (V8 + libuv + API)</div>
+          <div class="opt">Một framework web</div>
+          <div class="explain"><b>Runtime.</b> Ngôn ngữ là JS; framework là Express/NestJS.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Thư viện nào cung cấp Event Loop & thread pool?</div>
+          <div class="opt">V8</div>
+          <div class="opt" data-correct="true">libuv</div>
+          <div class="opt">npm</div>
+          <div class="explain"><b>libuv.</b> V8 chỉ thực thi JS & quản lý bộ nhớ.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Tác vụ nào dùng libuv thread pool?</div>
+          <div class="opt">HTTP request đến</div>
+          <div class="opt" data-correct="true"><code>fs.readFile</code> và <code>crypto.pbkdf2</code></div>
+          <div class="opt">setTimeout</div>
+          <div class="explain"><b>fs & crypto.</b> Network I/O dùng cơ chế non-blocking gốc của OS, không cần thread pool.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Cách đúng để xử lý CPU-bound nặng trong Node?</div>
+          <div class="opt">Tăng setTimeout</div>
+          <div class="opt" data-correct="true">Worker Threads hoặc đẩy sang queue/worker</div>
+          <div class="opt">Dùng nhiều Promise.all</div>
+          <div class="explain"><b>Worker Threads / queue.</b> Promise không giúp gì với CPU-bound vì vẫn chạy trên main thread.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Kiến trúc Node — hay được hỏi để đánh giá chiều sâu.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Node.js là gì? Gồm những thành phần nào?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Node.js là runtime để chạy JavaScript phía server, xây trên engine V8 (thực thi JS) và libuv (Event Loop, non-blocking I/O, thread pool), kèm bộ Node API (fs, http, net, crypto...). Nó hướng sự kiện và non-blocking, hợp cho ứng dụng I/O-bound.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Node single-thread hay multi-thread? Giải thích.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Code JavaScript của bạn chạy trên <b>một</b> luồng (Event Loop). Nhưng libuv có thread pool (mặc định 4) cho một số tác vụ như fs, crypto, zlib, DNS. Ngoài ra có thể tự mở rộng bằng Worker Threads, cluster, child_process. Network I/O không dùng thread pool mà dùng cơ chế non-blocking của OS.</p>
+        <p class="trap">⚠️ Bẫy: nói "hoàn toàn đơn luồng" là sai — chỉ tầng JS đơn luồng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Các pha của Event Loop trong Node là gì?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> 6 pha lặp tuần tự: timers (setTimeout/Interval), pending callbacks, idle/prepare (nội bộ), poll (I/O), check (setImmediate), close callbacks. Giữa mỗi callback, Node vét nextTick queue rồi microtask Promise. Hiểu pha giúp giải thích thứ tự setImmediate vs setTimeout, vì sao nextTick ưu tiên.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span><code>UV_THREADPOOL_SIZE</code> là gì? Khi nào cần chỉnh?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là số thread trong thread pool của libuv (mặc định 4). Khi app làm nhiều fs/crypto/zlib song song, pool có thể trở thành nút cổ chai — tăng size (giới hạn ~ số core) có thể cải thiện. Nhưng tăng vô tội vạ gây tranh chấp CPU; tốt hơn là giảm tải hoặc dùng Worker/queue.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Phân biệt Worker Threads, cluster, child_process.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Worker Threads: nhiều luồng trong 1 process, hợp CPU-bound, có thể chia sẻ bộ nhớ. cluster: fork nhiều process Node cùng nghe 1 port để tận dụng nhiều core (web server). child_process: chạy tiến trình con bất kỳ (kể cả lệnh ngoài), giao tiếp qua IPC. Production thường dùng PM2/K8s nhân bản process thay vì tự viết cluster.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Vì sao Node hợp cho hệ thống realtime nhưng kém với CPU-bound?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mô hình non-blocking + Event Loop cho phép một luồng phục vụ hàng nghìn kết nối I/O-bound (chat, call, DB) hiệu quả. Nhưng tác vụ CPU-bound chạy đồng bộ sẽ chiếm luồng và chặn Event Loop, làm mọi request khác bị treo. Vì vậy phải tách CPU-bound ra Worker/queue.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Graceful shutdown là gì? Vì sao quan trọng với Contact Center?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là quy trình tắt service có kiểm soát: ngừng nhận kết nối mới, hoàn tất request đang xử lý, đóng DB/WebSocket/queue, rồi mới exit. Lắng nghe SIGTERM/SIGINT. Với Contact Center, tắt đột ngột làm rớt cuộc gọi đang diễn ra, mất tin nhắn chưa lưu — graceful shutdown giảm thiểu mất mát khi deploy/scale.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Giải thích pha <code>poll</code> trong Event Loop. Khi poll queue rỗng thì điều gì xảy ra?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Pha <code>poll</code> là nơi Event Loop lấy và thực thi các callback I/O đã sẵn sàng. Nếu poll queue rỗng: nếu có <code>setImmediate</code> đang chờ, loop chuyển sang pha <code>check</code>; nếu không và có timer sắp tới hạn, loop quay lại pha <code>timers</code>; nếu không có gì, loop có thể <b>chặn (block) tại poll</b> chờ I/O mới tới (đây chính là lúc tiến trình "ngủ" thay vì quay vòng tốn CPU).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Phân biệt <b>concurrency</b> và <b>parallelism</b> trong ngữ cảnh Node.js.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Concurrency là xử lý <b>nhiều việc xen kẽ</b> trên một luồng (Event Loop luân phiên giữa các tác vụ I/O — Node rất giỏi việc này). Parallelism là <b>thực thi đồng thời thật sự</b> trên nhiều core/luồng. Node đạt concurrency cao nhờ non-blocking I/O, nhưng để parallelism thật cho CPU-bound thì cần Worker Threads, cluster hoặc nhiều tiến trình.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Một endpoint khiến TOÀN BỘ server chậm đột ngột. Bạn nghi gì và debug Event Loop ra sao?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Nghi ngờ hàng đầu là <b>chặn Event Loop</b> (tác vụ CPU-bound đồng bộ: vòng lặp lớn, <code>JSON.parse</code> payload khổng lồ, regex thảm họa, mã hóa đồng bộ) hoặc <b>cạn libuv thread pool</b> (nhiều fs/crypto song song). Cách debug: đo <b>event loop lag</b> (<code>perf_hooks.monitorEventLoopDelay</code>), profiling bằng <code>--prof</code> / clinic.js / flame graph, kiểm tra <code>UV_THREADPOOL_SIZE</code>, và rà các lời gọi <code>*Sync</code> trong đường xử lý request. Khắc phục: đẩy việc nặng sang Worker/queue, dùng API bất đồng bộ, chia nhỏ tác vụ.</p>
+        <p class="trap">⚠️ Bẫy: nếu chỉ một endpoint chậm còn endpoint khác vẫn nhanh thì thường là I/O chậm của riêng nó (DB query, API ngoài); còn khi MỌI endpoint cùng chậm mới là dấu hiệu Event Loop bị chặn.</p></div></details>
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương B1</button>
+      </div>
+
+      <div class="pager">
+        <a href="../A/A3-typescript-backend.html"><span class="dir">← Phần A</span><span class="ttl">A3 · TypeScript cho Backend</span></a>
+        <a href="B2-module-npm.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">B2 · Module, npm, môi trường</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='B1',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành B1 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương B1'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

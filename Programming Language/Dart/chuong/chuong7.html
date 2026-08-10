@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — Async, Future &amp; Stream · Dart Sub-pillar</title>
+  <meta name="description" content="Event loop, Future, async/await, Stream single vs broadcast, StreamController, async*/yield, Isolate intro." />
+  <meta name="theme-color" content="#0568b9" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Crimson+Pro:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-dart">D</span>
+        Dart · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Dart</a></li>
+          <li><a href="../../Flutter/index.html">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Dart</a><span class="sep">/</span>
+        <span>Chương 7</span>
+      </div>
+      <div class="chapter-num">Chương 07 · Async, Future &amp; Stream</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Async, Future &amp; Stream
+      </h1>
+      <p class="lead">
+        UI Flutter là <strong>stream of frames</strong> — không hiểu async/stream thì không hiểu Flutter.
+        State management Bloc dùng <code>Stream&lt;State&gt;</code>. Network call ai cũng dùng <code>await http.get</code>.
+        Animation chạy trên event loop. Đây là chương "tim mạch" — bỏ qua thì các chương Flutter sẽ vỡ.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1150 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 3, 5, 6</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu Dart concurrency model: single-threaded event loop + isolate.</li>
+            <li>Sử dụng <code>Future&lt;T&gt;</code>, <code>async</code>/<code>await</code>.</li>
+            <li>Xử lý lỗi async đúng: <code>try/catch</code> quanh await, <code>.catchError</code>.</li>
+            <li><code>Future.wait</code>, <code>Future.any</code> cho parallel.</li>
+            <li>Hiểu <code>Stream&lt;T&gt;</code>: single-subscription vs broadcast.</li>
+            <li>Tạo Stream: <code>StreamController</code>, generator <code>async*</code>/<code>yield</code>.</li>
+            <li>Tiêu thụ Stream: <code>await for</code>, <code>.listen</code>, transform.</li>
+            <li>Quản lý StreamSubscription: pause/resume/cancel.</li>
+            <li>Intro Isolate: <code>compute</code>, <code>Isolate.spawn</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="concurrency-model">1. Concurrency model Dart</h2>
+        <p>
+          Dart dùng <strong>single-threaded event loop</strong> — giống JavaScript. Mỗi Dart program chạy trên một <strong>isolate</strong>
+          (= 1 thread riêng + 1 heap riêng). Không share memory giữa isolate.
+        </p>
+
+        <figure>
+          <svg viewBox="0 0 540 280" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; max-width:100%;">
+            <style>
+              .lt { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+              .lt-acc { font-family: var(--font-mono); font-size: 12px; fill: var(--accent); font-weight: 700; }
+              .lt-soft { font-family: var(--font-mono); font-size: 11px; fill: var(--text-muted); }
+              .ln { stroke: var(--text-muted); stroke-width: 1.2; fill: none; }
+              .arr { fill: var(--accent); }
+              .bx { fill: var(--bg-alt); stroke: var(--border); rx: 6; ry: 6; }
+              .bx-q { fill: var(--accent-soft); stroke: var(--accent); rx: 4; ry: 4; }
+            </style>
+            <text class="lt-acc" x="270" y="22" text-anchor="middle">Dart Event Loop (per Isolate)</text>
+
+            <!-- Loop arrow -->
+            <circle cx="270" cy="140" r="80" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-dasharray="3,3"/>
+            <text class="lt" x="270" y="145" text-anchor="middle">tick</text>
+
+            <!-- Microtask queue (left top) -->
+            <rect class="bx" x="40" y="60" width="140" height="48" />
+            <text class="lt" x="110" y="78" text-anchor="middle">Microtask Queue</text>
+            <text class="lt-soft" x="110" y="98" text-anchor="middle">Future.value, .then</text>
+
+            <!-- Event queue (left bottom) -->
+            <rect class="bx" x="40" y="180" width="140" height="48" />
+            <text class="lt" x="110" y="198" text-anchor="middle">Event Queue</text>
+            <text class="lt-soft" x="110" y="218" text-anchor="middle">Timer, I/O, gesture</text>
+
+            <!-- Stack execution (right) -->
+            <rect class="bx-q" x="380" y="118" width="130" height="48" />
+            <text class="lt-acc" x="445" y="148" text-anchor="middle">Run task</text>
+
+            <!-- Arrows -->
+            <path d="M 180 84 Q 280 84 380 134" class="ln" />
+            <path d="M 180 204 Q 280 204 380 154" class="ln" />
+            <polygon points="378,132 388,138 380,142" class="arr"/>
+            <polygon points="378,156 388,150 380,148" class="arr"/>
+
+            <text class="lt-soft" x="280" y="260" text-anchor="middle">Loop: drain microtask → drain event → drain microtask → ...</text>
+          </svg>
+          <figcaption>Event loop Dart: microtask queue ưu tiên cao hơn event queue.</figcaption>
+        </figure>
+
+        <ul>
+          <li><strong>Microtask queue</strong> — task ưu tiên cao. <code>Future.value()</code>, <code>.then()</code> resolved schedule vào đây.</li>
+          <li><strong>Event queue</strong> — task ưu tiên thấp hơn. Timer callback, I/O completion, gesture event.</li>
+          <li>Mỗi tick: drain hết microtask queue, lấy 1 event từ event queue chạy, lặp.</li>
+          <li>Code đồng bộ chạy trên <strong>main isolate</strong> — không yield event loop trong khi chạy.</li>
+        </ul>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Single-thread ≠ chậm</div>
+          <p>
+            Single-thread nghe có vẻ kém — nhưng đa số việc của UI là <em>chờ I/O</em>. Trong khi chờ HTTP response, network packet,
+            event tap, CPU không làm gì. Event loop dispatch sang task khác → UI vẫn responsive.
+          </p>
+          <p style="margin-top: 8px;">
+            CPU-bound work (parse JSON 10MB, encrypt, image process) <em>SẼ</em> block UI — đó là lúc cần <strong>isolate</strong>.
+          </p>
+        </div>
+
+        <h2 id="future">2. <code>Future&lt;T&gt;</code> — value xuất hiện trong tương lai</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Tạo Future</span>
+<span class="tok-kw">final</span> a = <span class="tok-cls">Future</span>.<span class="tok-fn">value</span>(<span class="tok-num">5</span>);                  <span class="tok-com">// Future&lt;int&gt; resolved 5</span>
+<span class="tok-kw">final</span> b = <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>), () =&gt; <span class="tok-str">'hi'</span>);
+<span class="tok-kw">final</span> c = <span class="tok-cls">Future</span>.<span class="tok-fn">error</span>(<span class="tok-fn">Exception</span>(<span class="tok-str">'boom'</span>));</code></pre>
+
+        <h3 id="then-chain"><code>.then()</code> — callback chain style</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">fetchUser</span>()
+  .<span class="tok-fn">then</span>((user) {
+    <span class="tok-fn">print</span>(user.name);
+    <span class="tok-kw">return</span> <span class="tok-fn">fetchPosts</span>(user.id);
+  })
+  .<span class="tok-fn">then</span>((posts) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'$</span>{posts.length}<span class="tok-str"> posts'</span>))
+  .<span class="tok-fn">catchError</span>((e) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'Error: $e'</span>))
+  .<span class="tok-fn">whenComplete</span>(() =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'done'</span>));</code></pre>
+
+        <h3 id="async-await"><code>async</code>/<code>await</code> — sugar đẹp hơn</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">demo</span>() <span class="tok-kw">async</span> {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">final</span> user = <span class="tok-kw">await</span> <span class="tok-fn">fetchUser</span>();
+    <span class="tok-fn">print</span>(user.name);
+    <span class="tok-kw">final</span> posts = <span class="tok-kw">await</span> <span class="tok-fn">fetchPosts</span>(user.id);
+    <span class="tok-fn">print</span>(<span class="tok-str">'$</span>{posts.length}<span class="tok-str"> posts'</span>);
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-fn">print</span>(<span class="tok-str">'Error: $e'</span>);
+  } <span class="tok-kw">finally</span> {
+    <span class="tok-fn">print</span>(<span class="tok-str">'done'</span>);
+  }
+}</code></pre>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So với JavaScript Promise</div>
+          <p>
+            Dart <code>Future</code> ≈ JS <code>Promise</code> gần 1-1.
+          </p>
+          <div class="table-wrap" style="margin-top: 8px;">
+            <table>
+              <thead><tr><th>JS</th><th>Dart</th></tr></thead>
+              <tbody>
+                <tr><td><code>new Promise((resolve, reject) =&gt; ...)</code></td><td><code>Completer&lt;T&gt;()</code> (low-level) hoặc <code>async</code> function</td></tr>
+                <tr><td><code>Promise.resolve(x)</code></td><td><code>Future.value(x)</code></td></tr>
+                <tr><td><code>Promise.reject(e)</code></td><td><code>Future.error(e)</code></td></tr>
+                <tr><td><code>Promise.all([p1, p2])</code></td><td><code>Future.wait([f1, f2])</code></td></tr>
+                <tr><td><code>Promise.race([p1, p2])</code></td><td><code>Future.any([f1, f2])</code></td></tr>
+                <tr><td><code>async/await</code></td><td><code>async/await</code> (same syntax)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 id="async-not-sync"><code>async</code> function — không chạy đồng bộ</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Future</span>&lt;<span class="tok-type">int</span>&gt; <span class="tok-fn">compute</span>() <span class="tok-kw">async</span> {
+  <span class="tok-fn">print</span>(<span class="tok-str">'B'</span>);
+  <span class="tok-kw">return</span> <span class="tok-num">42</span>;
+}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">print</span>(<span class="tok-str">'A'</span>);
+  <span class="tok-fn">compute</span>().<span class="tok-fn">then</span>(<span class="tok-fn">print</span>);
+  <span class="tok-fn">print</span>(<span class="tok-str">'C'</span>);
+}
+<span class="tok-com">// Output: A, B, C, 42 (không phải A, B, 42, C)</span></code></pre>
+
+        <p>Lý do: <code>compute</code> chạy đến end body và return Future. Future resolve schedule microtask. Microtask chạy sau khi <code>print('C')</code> xong.</p>
+
+        <h2 id="future-error">3. Error handling Async</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Future</span>&lt;<span class="tok-type">String</span>&gt; <span class="tok-fn">fetch</span>() <span class="tok-kw">async</span> {
+  <span class="tok-fn">throw</span> <span class="tok-fn">Exception</span>(<span class="tok-str">'oops'</span>);
+}
+
+<span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">main</span>() <span class="tok-kw">async</span> {
+  <span class="tok-com">// Cách 1: try/catch quanh await (idiomatic)</span>
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">final</span> r = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>();
+  } <span class="tok-kw">catch</span> (e) {
+    <span class="tok-fn">print</span>(<span class="tok-str">'caught: $e'</span>);
+  }
+
+  <span class="tok-com">// Cách 2: .catchError (callback)</span>
+  <span class="tok-fn">fetch</span>().<span class="tok-fn">catchError</span>((e) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'caught2: $e'</span>));
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Async error trong callback không await — unhandled!</div>
+          <p>
+            Đây là pitfall Flutter cực phổ biến:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-fn">ElevatedButton</span>(
+  onPressed: () <span class="tok-kw">async</span> {
+    <span class="tok-kw">await</span> <span class="tok-fn">riskyOperation</span>();  <span class="tok-com">// nếu throw → unhandled exception</span>
+  },
+  ...
+)
+
+<span class="tok-com">// Pattern an toàn</span>
+<span class="tok-fn">ElevatedButton</span>(
+  onPressed: () <span class="tok-kw">async</span> {
+    <span class="tok-kw">try</span> {
+      <span class="tok-kw">await</span> <span class="tok-fn">riskyOperation</span>();
+    } <span class="tok-kw">catch</span> (e) {
+      <span class="tok-fn">_showError</span>(e);
+    }
+  },
+  ...
+)</code></pre>
+        </div>
+
+        <h2 id="future-wait"><code>Future.wait</code> — parallel</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Future</span>&lt;<span class="tok-type">String</span>&gt; <span class="tok-fn">slowApi</span>(<span class="tok-type">String</span> id) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>));
+  <span class="tok-kw">return</span> <span class="tok-str">'data-$id'</span>;
+}
+
+<span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">main</span>() <span class="tok-kw">async</span> {
+  <span class="tok-kw">final</span> sw = <span class="tok-cls">Stopwatch</span>()..<span class="tok-fn">start</span>();
+
+  <span class="tok-com">// Tuần tự — ~3 giây</span>
+  <span class="tok-kw">final</span> a = <span class="tok-kw">await</span> <span class="tok-fn">slowApi</span>(<span class="tok-str">'1'</span>);
+  <span class="tok-kw">final</span> b = <span class="tok-kw">await</span> <span class="tok-fn">slowApi</span>(<span class="tok-str">'2'</span>);
+  <span class="tok-kw">final</span> c = <span class="tok-kw">await</span> <span class="tok-fn">slowApi</span>(<span class="tok-str">'3'</span>);
+  <span class="tok-fn">print</span>(<span class="tok-str">'Sequential: $</span>{sw.elapsedMilliseconds}<span class="tok-str">ms'</span>);
+
+  <span class="tok-com">// Parallel — ~1 giây (3 task chạy cùng lúc)</span>
+  sw.<span class="tok-fn">reset</span>();
+  <span class="tok-kw">final</span> [a2, b2, c2] = <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">wait</span>([
+    <span class="tok-fn">slowApi</span>(<span class="tok-str">'1'</span>),
+    <span class="tok-fn">slowApi</span>(<span class="tok-str">'2'</span>),
+    <span class="tok-fn">slowApi</span>(<span class="tok-str">'3'</span>),
+  ]);
+  <span class="tok-fn">print</span>(<span class="tok-str">'Parallel: $</span>{sw.elapsedMilliseconds}<span class="tok-str">ms'</span>);
+}</code></pre>
+
+        <h2 id="future-any"><code>Future.any</code> — timeout pattern</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Future</span>&lt;<span class="tok-type">String</span>&gt; <span class="tok-fn">withTimeout</span>(<span class="tok-cls">Future</span>&lt;<span class="tok-type">String</span>&gt; task, <span class="tok-cls">Duration</span> timeout) {
+  <span class="tok-kw">return</span> <span class="tok-cls">Future</span>.<span class="tok-fn">any</span>([
+    task,
+    <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(timeout, () =&gt; <span class="tok-fn">throw</span> <span class="tok-fn">TimeoutException</span>(<span class="tok-str">'timed out'</span>)),
+  ]);
+}
+
+<span class="tok-com">// Hoặc dùng built-in</span>
+<span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">5</span>)).<span class="tok-fn">timeout</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">2</span>));
+<span class="tok-com">// Future throws TimeoutException sau 2s</span></code></pre>
+
+        <h2 id="stream">4. <code>Stream&lt;T&gt;</code> — Iterable async</h2>
+        <p>
+          <code>Stream</code> = "Iterable mỗi value đến tại thời điểm khác nhau". So sánh:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Iterable</th><th>Stream</th></tr></thead>
+            <tbody>
+              <tr><td>Số value</td><td>0 hoặc nhiều, sẵn có</td><td>0 hoặc nhiều, async</td></tr>
+              <tr><td>Consume</td><td><code>for-in</code></td><td><code>await for</code> hoặc <code>.listen</code></td></tr>
+              <tr><td>Transform</td><td><code>.map</code>, <code>.where</code></td><td><code>.map</code>, <code>.where</code>, <code>.asyncMap</code></td></tr>
+              <tr><td>Tương tự</td><td>—</td><td>JS RxJS Observable</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="single-broadcast">Single-subscription vs Broadcast</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Single-subscription — chỉ 1 listener</span>
+<span class="tok-kw">final</span> single = <span class="tok-cls">Stream</span>.<span class="tok-fn">fromIterable</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);
+single.<span class="tok-fn">listen</span>((v) =&gt; <span class="tok-fn">print</span>(v));
+<span class="tok-com">// single.listen((v) =&gt; print(v));  // ❌ runtime error</span>
+
+<span class="tok-com">// Broadcast — nhiều listener</span>
+<span class="tok-kw">final</span> broadcast = single.<span class="tok-fn">asBroadcastStream</span>();
+broadcast.<span class="tok-fn">listen</span>((v) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'A: $v'</span>));
+broadcast.<span class="tok-fn">listen</span>((v) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'B: $v'</span>));</code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Khi nào dùng cái nào?</div>
+          <ul>
+            <li><strong>Single:</strong> data flow một-một (HTTP response Stream, file read).</li>
+            <li><strong>Broadcast:</strong> event bus, multiple component nghe cùng nguồn (Bloc state, gesture, network connectivity).</li>
+          </ul>
+        </div>
+
+        <h2 id="create-stream">5. Tạo Stream</h2>
+
+        <h3 id="stream-controller"><code>StreamController</code> — manual push</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> controller = <span class="tok-cls">StreamController</span>&lt;<span class="tok-type">int</span>&gt;();
+
+<span class="tok-com">// Subscribe</span>
+controller.stream.<span class="tok-fn">listen</span>(
+  (v) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'value: $v'</span>),
+  onError: (e) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'error: $e'</span>),
+  onDone: () =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'done'</span>),
+);
+
+<span class="tok-com">// Push events</span>
+controller.<span class="tok-fn">add</span>(<span class="tok-num">1</span>);
+controller.<span class="tok-fn">add</span>(<span class="tok-num">2</span>);
+controller.<span class="tok-fn">addError</span>(<span class="tok-fn">Exception</span>(<span class="tok-str">'oops'</span>));
+controller.<span class="tok-fn">add</span>(<span class="tok-num">3</span>);
+controller.<span class="tok-fn">close</span>();   <span class="tok-com">// trigger onDone</span></code></pre>
+
+        <h3 id="async-generator"><code>async*</code>/<code>yield</code> — generator</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Stream</span>&lt;<span class="tok-type">int</span>&gt; <span class="tok-fn">countdown</span>(<span class="tok-type">int</span> from) <span class="tok-kw">async*</span> {
+  <span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = from; i &gt;= <span class="tok-num">0</span>; i--) {
+    <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>));
+    <span class="tok-kw">yield</span> i;
+  }
+}
+
+<span class="tok-com">// Consume</span>
+<span class="tok-kw">await</span> <span class="tok-kw">for</span> (<span class="tok-kw">final</span> v <span class="tok-kw">in</span> <span class="tok-fn">countdown</span>(<span class="tok-num">3</span>)) {
+  <span class="tok-fn">print</span>(v);
+}
+<span class="tok-com">// 3 (sau 1s), 2, 1, 0</span></code></pre>
+
+        <h3 id="builtin-stream">Built-in factories</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Stream</span>.<span class="tok-fn">fromIterable</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);          <span class="tok-com">// emit 3 value rồi done</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">value</span>(<span class="tok-num">42</span>);                       <span class="tok-com">// emit 1 value rồi done</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">error</span>(<span class="tok-fn">Exception</span>(<span class="tok-str">'oops'</span>));         <span class="tok-com">// emit 1 error rồi done</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">periodic</span>(<span class="tok-cls">Duration</span>(seconds: <span class="tok-num">1</span>), (i) =&gt; i);  <span class="tok-com">// emit mỗi giây, vô hạn</span></code></pre>
+
+        <h2 id="consume-stream">6. Tiêu thụ Stream</h2>
+
+        <h3 id="listen"><code>.listen()</code> — callback style</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> subscription = stream.<span class="tok-fn">listen</span>(
+  (v) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'data: $v'</span>),
+  onError: (e) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'error: $e'</span>),
+  onDone: () =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'done'</span>),
+  cancelOnError: <span class="tok-kw">false</span>,
+);
+
+<span class="tok-com">// Sau khi không cần, cancel để tránh leak</span>
+subscription.<span class="tok-fn">cancel</span>();</code></pre>
+
+        <h3 id="await-for"><code>await for</code> — đợi tuần tự</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Future</span>&lt;<span class="tok-kw">void</span>&gt; <span class="tok-fn">main</span>() <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> <span class="tok-kw">for</span> (<span class="tok-kw">final</span> v <span class="tok-kw">in</span> stream) {
+    <span class="tok-fn">print</span>(v);
+    <span class="tok-kw">if</span> (v &gt; <span class="tok-num">10</span>) <span class="tok-kw">break</span>;  <span class="tok-com">// tự cancel subscription</span>
+  }
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>await for</code> chỉ trong <code>async</code> function</div>
+          <p>
+            Body của <code>await for</code> chạy tuần tự — value tiếp theo chỉ xử lý sau khi body của value trước done.
+            Block nếu body chậm.
+          </p>
+        </div>
+
+        <h2 id="transform-stream">7. Transform Stream</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Stream</span>&lt;<span class="tok-type">int</span>&gt; <span class="tok-fn">numbers</span>() <span class="tok-kw">async*</span> {
+  <span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">1</span>; i &lt;= <span class="tok-num">10</span>; i++) <span class="tok-kw">yield</span> i;
+}
+
+<span class="tok-fn">numbers</span>()
+  .<span class="tok-fn">where</span>((x) =&gt; x % <span class="tok-num">2</span> == <span class="tok-num">0</span>)            <span class="tok-com">// filter</span>
+  .<span class="tok-fn">map</span>((x) =&gt; x * <span class="tok-num">10</span>)                  <span class="tok-com">// transform</span>
+  .<span class="tok-fn">take</span>(<span class="tok-num">3</span>)                              <span class="tok-com">// chỉ lấy 3 đầu</span>
+  .<span class="tok-fn">listen</span>(<span class="tok-fn">print</span>);
+<span class="tok-com">// 20, 40, 60</span>
+
+<span class="tok-com">// asyncMap — transform async</span>
+<span class="tok-fn">numbers</span>().<span class="tok-fn">asyncMap</span>((x) <span class="tok-kw">async</span> {
+  <span class="tok-kw">await</span> <span class="tok-cls">Future</span>.<span class="tok-fn">delayed</span>(<span class="tok-cls">Duration</span>(milliseconds: <span class="tok-num">100</span>));
+  <span class="tok-kw">return</span> x * <span class="tok-num">2</span>;
+});
+
+<span class="tok-com">// distinct — bỏ duplicate liên tiếp</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">fromIterable</span>([<span class="tok-num">1</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">3</span>]).<span class="tok-fn">distinct</span>().<span class="tok-fn">listen</span>(<span class="tok-fn">print</span>);
+<span class="tok-com">// 1, 2, 3</span></code></pre>
+
+        <h2 id="subscription">8. <code>StreamSubscription</code> lifecycle</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> sub = stream.<span class="tok-fn">listen</span>(<span class="tok-fn">print</span>);
+
+sub.<span class="tok-fn">pause</span>();              <span class="tok-com">// tạm dừng — value buffer</span>
+sub.<span class="tok-fn">resume</span>();             <span class="tok-com">// tiếp tục — flush buffer</span>
+<span class="tok-kw">await</span> sub.<span class="tok-fn">cancel</span>();       <span class="tok-com">// dừng vĩnh viễn, free resource</span></code></pre>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Flutter dispose pattern</div>
+          <p>
+            StatefulWidget Flutter:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">_MyWidgetState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">MyWidget</span>&gt; {
+  <span class="tok-kw">late</span> <span class="tok-cls">StreamSubscription</span> _sub;
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">initState</span>() {
+    <span class="tok-kw">super</span>.<span class="tok-fn">initState</span>();
+    _sub = service.events.<span class="tok-fn">listen</span>(<span class="tok-fn">_handle</span>);
+  }
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-kw">void</span> <span class="tok-fn">dispose</span>() {
+    _sub.<span class="tok-fn">cancel</span>();           <span class="tok-com">// CRITICAL — không cancel = memory leak</span>
+    <span class="tok-kw">super</span>.<span class="tok-fn">dispose</span>();
+  }
+}</code></pre>
+        </div>
+
+        <h2 id="isolate">9. Isolate intro</h2>
+        <p>
+          Khi cần CPU-bound work (parse JSON 10MB, image process), main isolate sẽ block UI. Cần <strong>isolate riêng</strong>.
+        </p>
+
+        <h3 id="compute"><code>compute()</code> — Flutter shortcut</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Function phải top-level hoặc static</span>
+<span class="tok-type">List</span>&lt;<span class="tok-cls">User</span>&gt; <span class="tok-fn">parseUsers</span>(<span class="tok-type">String</span> json) {
+  <span class="tok-kw">return</span> (<span class="tok-fn">jsonDecode</span>(json) <span class="tok-kw">as</span> <span class="tok-type">List</span>)
+      .<span class="tok-fn">map</span>((j) =&gt; <span class="tok-cls">User</span>.<span class="tok-fn">fromJson</span>(j))
+      .<span class="tok-fn">toList</span>();
+}
+
+<span class="tok-com">// Chạy ở isolate khác main</span>
+<span class="tok-kw">final</span> users = <span class="tok-kw">await</span> <span class="tok-fn">compute</span>(parseUsers, largeJsonString);
+<span class="tok-com">// Main isolate KHÔNG block trong khi parse</span></code></pre>
+
+        <h3 id="isolate-spawn"><code>Isolate.spawn</code> — raw</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">void</span> <span class="tok-fn">heavyWork</span>(<span class="tok-cls">SendPort</span> port) {
+  <span class="tok-kw">final</span> result = ...; <span class="tok-com">// compute heavy</span>
+  port.<span class="tok-fn">send</span>(result);
+}
+
+<span class="tok-kw">final</span> receivePort = <span class="tok-cls">ReceivePort</span>();
+<span class="tok-kw">await</span> <span class="tok-cls">Isolate</span>.<span class="tok-fn">spawn</span>(heavyWork, receivePort.sendPort);
+<span class="tok-kw">final</span> result = <span class="tok-kw">await</span> receivePort.first;</code></pre>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Isolate không share memory</div>
+          <p>
+            Khác Java thread (share heap). Dart isolate có heap riêng — communicate qua message passing (serialize/deserialize).
+            Hệ quả: không có race condition, deadlock. Trade-off: overhead serialize.
+          </p>
+          <p style="margin-top: 8px;">
+            Use case isolate: parse JSON lớn, image process, encryption, ML inference. <strong>Không</strong> dùng cho I/O — I/O đã async nội.
+          </p>
+        </div>
+
+        <h2 id="bai-tap" class="exercises">10. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Sequential vs Parallel fetch</h4>
+          <div class="exercise-body">
+            <p>
+              Viết function <code>Future&lt;String&gt; fetchUser(int id)</code> mock với <code>Future.delayed</code> 1s.
+              Gọi tuần tự 3 lần và parallel 3 lần với <code>Future.wait</code>. Đo thời gian bằng <code>Stopwatch</code>.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">Future&lt;String&gt; fetchUser(int id) async {
+  await Future.delayed(Duration(seconds: 1));
+  return 'user_$id';
+}
+
+Future&lt;void&gt; main() async {
+  final sw = Stopwatch()..start();
+  await fetchUser(1);
+  await fetchUser(2);
+  await fetchUser(3);
+  print('Sequential: ${sw.elapsedMilliseconds}ms');  // ~3000ms
+
+  sw.reset();
+  await Future.wait([fetchUser(1), fetchUser(2), fetchUser(3)]);
+  print('Parallel: ${sw.elapsedMilliseconds}ms');    // ~1000ms
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Countdown timer với Stream.periodic</h4>
+          <div class="exercise-body">
+            <p>
+              Build timer countdown 10→0 dùng <code>Stream.periodic</code> + transform. Print mỗi giây, dừng khi 0.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">Future&lt;void&gt; main() async {
+  final countdown = Stream.periodic(Duration(seconds: 1), (i) =&gt; 10 - i)
+      .take(11);
+  await for (final v in countdown) {
+    print(v);
+  }
+}</code></pre>
+              <p>Hoặc với <code>takeWhile</code>: <code>.takeWhile((v) =&gt; v &gt;= 0)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Retry helper</h4>
+          <div class="exercise-body">
+            <p>
+              Viết <code>Future&lt;T&gt; retry&lt;T&gt;(Future&lt;T&gt; Function() task, {int times = 3, Duration delay = const Duration(seconds: 1)})</code>.
+              Test với function fail 2 lần đầu, thành công lần 3.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">Future&lt;T&gt; retry&lt;T&gt;(
+  Future&lt;T&gt; Function() task, {
+  int times = 3,
+  Duration delay = const Duration(seconds: 1),
+}) async {
+  for (var i = 0; i &lt; times; i++) {
+    try {
+      return await task();
+    } catch (e) {
+      if (i == times - 1) rethrow;
+      await Future.delayed(delay);
+    }
+  }
+  throw StateError('unreachable');
+}
+
+// Test
+var attempts = 0;
+Future&lt;int&gt; flaky() async {
+  attempts++;
+  if (attempts &lt; 3) throw Exception('fail');
+  return 42;
+}
+
+void main() async {
+  print(await retry(flaky));  // 42 after 3 attempts
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Event bus với broadcast stream</h4>
+          <div class="exercise-body">
+            <p>
+              Implement event bus đơn giản dùng <code>StreamController.broadcast</code>. 2 listener cùng nghe, 1 publisher.
+              Demo cả 2 nhận event.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">class EventBus {
+  final _ctrl = StreamController&lt;String&gt;.broadcast();
+
+  Stream&lt;String&gt; get events =&gt; _ctrl.stream;
+
+  void emit(String event) {
+    _ctrl.add(event);
+  }
+
+  void close() {
+    _ctrl.close();
+  }
+}
+
+void main() async {
+  final bus = EventBus();
+  bus.events.listen((e) =&gt; print('A: $e'));
+  bus.events.listen((e) =&gt; print('B: $e'));
+
+  bus.emit('login');
+  bus.emit('purchase');
+  // A: login, B: login, A: purchase, B: purchase
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Refactor .then chain → async/await</h4>
+          <div class="exercise-body">
+            <p>Refactor đoạn code:</p>
+            <pre data-lang="dart"><code class="language-dart">fetchUser(1)
+  .then((user) =&gt; fetchPosts(user.id))
+  .then((posts) =&gt; processPosts(posts))
+  .catchError((e) =&gt; print('Error: $e'))
+  .whenComplete(() =&gt; print('done'));</code></pre>
+            <p>thành <code>async/await</code> + <code>try/catch/finally</code>. So sánh độ dễ đọc.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">Future&lt;void&gt; main() async {
+  try {
+    final user = await fetchUser(1);
+    final posts = await fetchPosts(user.id);
+    final result = await processPosts(posts);
+  } catch (e) {
+    print('Error: $e');
+  } finally {
+    print('done');
+  }
+}</code></pre>
+              <p>Linear, đọc top-down như sync code. Stack trace cũng đẹp hơn.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">11. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>async</code> function trả type gì khi không có <code>await</code>?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Vẫn Future. Chỉ là Future complete synchronously (resolve ngay). Mọi <code>async</code> function trả Future.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>Microtask và event task — cái nào ưu tiên?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Microtask cao hơn. <code>Future.value()</code> schedule microtask, <code>Future.delayed(0ms)</code> schedule event. Drain hết microtask trước khi pick event.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>await Future.wait([f1, f2])</code> — nếu f1 lỗi, f2 còn chạy không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Còn chạy (Dart không cancel f2), nhưng Future.wait trả error ngay, result của f2 bị bỏ. Dùng <code>eagerError: false</code> để đợi tất cả xong rồi mới throw.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>Stream single-subscription <code>.listen</code> 2 lần — chuyện gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Lỗi runtime <code>Bad state: Stream has already been listened to</code>. Cần <code>.asBroadcastStream()</code> trước.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>await for (var v in stream)</code> — body có thể <code>break</code> không?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Có. Break tự cancel subscription, không có leak.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p><code>async*</code> function trả type gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Stream&lt;T&gt;</code>. <code>async</code> trả Future, <code>async*</code> trả Stream, <code>sync*</code> trả Iterable.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p><code>compute(fn, arg)</code> chạy ở đâu?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Isolate khác main isolate. <code>fn</code> phải top-level hoặc static — vì isolate không share closure/state.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>Lưu StreamSubscription vào field rồi dispose ở Flutter — vì sao quan trọng?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Để cancel khi widget unmount. Nếu không, callback có thể gọi <code>setState</code> sau dispose → crash, hoặc giữ reference widget không cho GC → memory leak.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">12. Tổng kết</h2>
+        <ul>
+          <li>✅ Single-threaded event loop + isolate model.</li>
+          <li>✅ <code>Future&lt;T&gt;</code> ≈ JS Promise. <code>async/await</code> sugar.</li>
+          <li>✅ Error: try/catch quanh await idiomatic.</li>
+          <li>✅ <code>Future.wait</code> parallel, <code>Future.any</code> timeout.</li>
+          <li>✅ <code>Stream&lt;T&gt;</code> — Iterable async. Single vs broadcast.</li>
+          <li>✅ Tạo: <code>StreamController</code>, <code>async*</code>/<code>yield</code>, factory.</li>
+          <li>✅ Tiêu thụ: <code>.listen</code>, <code>await for</code>.</li>
+          <li>✅ Transform: <code>.map</code>, <code>.where</code>, <code>.asyncMap</code>, <code>.distinct</code>.</li>
+          <li>✅ <code>StreamSubscription</code> lifecycle — pause/resume/cancel.</li>
+          <li>✅ Isolate intro: <code>compute</code> + <code>Isolate.spawn</code>.</li>
+        </ul>
+
+        <h2 id="ket-noi">13. Kết nối</h2>
+        <ul>
+          <li><a href="chuong8.html"><strong>Chương 8:</strong></a> Generic <code>Future&lt;T&gt;</code> / <code>Stream&lt;T&gt;</code>.</li>
+          <li><strong>Flutter chương 2 — Widget:</strong> FutureBuilder, StreamBuilder.</li>
+          <li><strong>Flutter chương 7 — Bloc:</strong> dựa trên Stream.</li>
+          <li><strong>Flutter chương 10 — Network:</strong> HTTP call async.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong6.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">06 · Collections</div>
+          </a>
+          <a href="chuong8.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">08 · Generics, Extension, Patterns</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#concurrency-model">1. Concurrency model</a></li>
+          <li><a href="#future">2. Future</a></li>
+          <li><a href="#future-error">3. Error async</a></li>
+          <li><a href="#future-wait">Future.wait parallel</a></li>
+          <li><a href="#future-any">Future.any timeout</a></li>
+          <li><a href="#stream">4. Stream</a></li>
+          <li><a href="#create-stream">5. Tạo Stream</a></li>
+          <li><a href="#consume-stream">6. Tiêu thụ Stream</a></li>
+          <li><a href="#transform-stream">7. Transform Stream</a></li>
+          <li><a href="#subscription">8. Subscription lifecycle</a></li>
+          <li><a href="#isolate">9. Isolate intro</a></li>
+          <li><a href="#bai-tap">10. Bài tập</a></li>
+          <li><a href="#quiz">11. Quiz</a></li>
+          <li><a href="#tong-ket">12. Tổng kết</a></li>
+          <li><a href="#ket-noi">13. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Dart Chương 7 · Pillar 9 — IT Basic<br/>
+        <a href="chuong6.html">← Chương 6</a> · <a href="../index.html">Dart sub-pillar</a> · <a href="chuong8.html">Chương 8 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2 — Linux & Shell cho DevOps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 02 · Foundation</div>
+      <h1>Linux & Shell cho DevOps</h1>
+      <p class="subtitle">Linux là <em>nền tảng</em> của mọi server cloud. DevOps engineer phải thuộc systemd, journalctl, ip/ss, cron, SSH, file permissions. Không cần master shell scripting — cần master <em>vận hành</em> Linux: troubleshoot khi server kêu cao CPU, kiểm tra service đang chạy, quản lý log, automate task định kỳ.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why-linux">1. Vì sao Linux thống trị?</a></li>
+        <li><a href="#distro">2. Distros: Ubuntu, RHEL, Alpine</a></li>
+        <li><a href="#systemd">3. systemd — heart of modern Linux</a></li>
+        <li><a href="#user-perm">4. Users, Groups, Permissions</a></li>
+        <li><a href="#process">5. Process & Resource</a></li>
+        <li><a href="#network">6. Network Tools</a></li>
+        <li><a href="#log">7. Log Management & journalctl</a></li>
+        <li><a href="#cron">8. Cron & Scheduled Tasks</a></li>
+        <li><a href="#ssh">9. SSH cho DevOps</a></li>
+        <li><a href="#troubleshoot">10. Troubleshooting Checklist</a></li>
+        <li><a href="#exercises">11. Bài tập</a></li>
+        <li><a href="#quiz">12. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why-linux">
+        <h2>1. Vì sao Linux thống trị server?</h2>
+
+        <p>Hơn 96% top 1 triệu webserver chạy Linux (Netcraft 2024). Mọi cloud (AWS, GCP, Azure) backbone là Linux. Lý do:</p>
+
+        <ul>
+          <li><strong>Free + open source</strong> — không license cost, sửa được kernel.</li>
+          <li><strong>Stability + security</strong> — kernel hardened qua 30 năm, ít attack surface mặc định.</li>
+          <li><strong>Tooling phong phú</strong> — package manager, scripting, container nguyên thủy.</li>
+          <li><strong>Customization</strong> — strip xuống Alpine 5MB cho container, hoặc full RHEL cho enterprise.</li>
+          <li><strong>POSIX standard</strong> — script chạy giữa distros (gần như).</li>
+        </ul>
+
+        <p>DevOps engineer cần <em>fluent</em> Linux — không phải chuyên gia kernel, nhưng đủ để vận hành 24/7. Mục tiêu của chương này: bạn có thể SSH vào 1 server lạ và trong 5 phút biết nó đang chạy gì, có vấn đề gì.</p>
+
+        <h3>1.1. Linux trong DevOps stack</h3>
+        <ul>
+          <li>Container base image: Alpine, Debian-slim, Ubuntu, RHEL UBI.</li>
+          <li>Cloud VM: Amazon Linux 2023, Ubuntu LTS, RHEL.</li>
+          <li>Kubernetes node: Container OS / GKE Container-Optimized OS / Bottlerocket.</li>
+          <li>CI runner: Ubuntu, Alpine.</li>
+        </ul>
+      </section>
+
+      <section id="distro">
+        <h2>2. Distros — Ubuntu, RHEL, Alpine: chọn cái nào?</h2>
+
+        <table>
+          <thead>
+            <tr><th>Distro</th><th>Family</th><th>Package mgr</th><th>Use case DevOps</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ubuntu / Debian</td>
+              <td>Debian</td>
+              <td>apt / dpkg</td>
+              <td>Default cloud VM, dev workstation, CI runner</td>
+            </tr>
+            <tr>
+              <td>RHEL / CentOS Stream / Rocky / AlmaLinux</td>
+              <td>Red Hat</td>
+              <td>dnf / rpm</td>
+              <td>Enterprise, banking, government</td>
+            </tr>
+            <tr>
+              <td>Amazon Linux 2023</td>
+              <td>Red Hat (fork)</td>
+              <td>dnf</td>
+              <td>EC2 default — tích hợp AWS tốt</td>
+            </tr>
+            <tr>
+              <td>Alpine</td>
+              <td>Tự build, musl libc</td>
+              <td>apk</td>
+              <td>Container image (5MB base!), lightweight</td>
+            </tr>
+            <tr>
+              <td>Container-Optimized OS / Bottlerocket</td>
+              <td>Tối giản</td>
+              <td>(immutable, no pkg)</td>
+              <td>K8s node — read-only root, auto-update</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>2.1. Khác biệt apt vs dnf vs apk</h3>
+
+<pre><code class="language-bash"># Debian/Ubuntu (apt)
+sudo apt update                    # refresh package list
+sudo apt install -y nginx          # install (-y: auto yes)
+sudo apt remove nginx              # uninstall (giữ config)
+sudo apt purge nginx               # uninstall + xóa config
+apt list --installed | grep nginx
+apt search nginx                   # tìm package
+
+# RHEL/Amazon Linux (dnf — modern, thay yum)
+sudo dnf install -y nginx
+sudo dnf remove nginx
+sudo dnf update                    # update tất cả
+dnf list installed | grep nginx
+dnf info nginx                     # chi tiết package
+
+# Alpine (apk)
+apk add --no-cache nginx           # install không cache
+apk del nginx                      # uninstall
+apk info -L nginx                  # liệt kê file của package
+</code></pre>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Mẹo Dockerfile</span>
+          Dùng <code>--no-cache</code> với apk hoặc <code>rm -rf /var/lib/apt/lists/*</code> sau apt install để giảm size container 50-100MB.
+        </div>
+
+        <h3>2.2. Alpine — vì sao container thích?</h3>
+        <p>Alpine 3.19: base image chỉ 5MB. So với Ubuntu 22.04 ~78MB, Debian-slim ~28MB. Trong khi đó, vẫn có shell, package manager, đủ runtime cho hầu hết app.</p>
+
+        <p>Lưu ý: Alpine dùng <strong>musl libc</strong> thay vì glibc — đa số app Go/Rust chạy được, nhưng vài binary build cho glibc (Node.js native module, Python với numpy) có thể lỗi. Khi đó dùng <code>python:3.12-slim</code> (Debian-slim) thay vì <code>python:3.12-alpine</code>.</p>
+      </section>
+
+      <section id="systemd">
+        <h2>3. systemd — Hệ thống init hiện đại</h2>
+
+        <p>systemd là PID 1 trên hầu hết Linux distro hiện đại (Ubuntu 16+, RHEL 7+). Nó quản lý:</p>
+        <ul>
+          <li>Service (daemon) — start/stop/restart, dependencies.</li>
+          <li>Timer — thay thế cron với features mạnh hơn.</li>
+          <li>Socket — activate service khi có connection.</li>
+          <li>Logging — qua journald.</li>
+          <li>Network, mount, login session...</li>
+        </ul>
+
+        <h3>3.1. Lệnh systemctl cốt lõi</h3>
+
+<pre><code class="language-bash"># Service status
+sudo systemctl status nginx        # xem chi tiết
+sudo systemctl is-active nginx     # active/inactive (cho script)
+sudo systemctl is-enabled nginx    # enabled/disabled
+
+# Start/stop/restart/reload
+sudo systemctl start nginx
+sudo systemctl stop nginx
+sudo systemctl restart nginx       # full restart
+sudo systemctl reload nginx        # reload config (no downtime)
+
+# Enable/disable (boot start)
+sudo systemctl enable nginx        # tự start khi boot
+sudo systemctl disable nginx
+sudo systemctl enable --now nginx  # enable + start ngay
+
+# Liệt kê
+systemctl list-units --type=service               # service đang chạy
+systemctl list-units --type=service --state=failed   # services failed
+systemctl list-unit-files --type=service          # tất cả service file
+
+# Reset failure
+sudo systemctl reset-failed nginx
+</code></pre>
+
+        <h3>3.2. Viết unit file cho app của bạn</h3>
+
+<pre><code class="language-ini"># /etc/systemd/system/myapp.service
+[Unit]
+Description=My Node.js App
+Documentation=https://github.com/me/myapp
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=appuser
+Group=appuser
+WorkingDirectory=/opt/myapp
+ExecStart=/usr/bin/node /opt/myapp/server.js
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=myapp
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+EnvironmentFile=/etc/myapp/env       # file format KEY=VALUE
+
+# Resource limits
+LimitNOFILE=65536                    # max open files
+MemoryMax=512M                        # OOM-kill nếu vượt
+CPUQuota=50%                          # 50% 1 core
+TasksMax=4096
+
+# Security hardening
+PrivateTmp=true                      # /tmp riêng
+NoNewPrivileges=true
+ProtectSystem=strict                 # /usr, /boot read-only
+ProtectHome=true
+ReadWritePaths=/var/log/myapp /opt/myapp/data
+
+[Install]
+WantedBy=multi-user.target           # khi nào chạy: multi-user (level 3)
+</code></pre>
+
+<pre><code class="language-bash"># Sau khi tạo file:
+sudo systemctl daemon-reload         # reload systemd config
+sudo systemctl enable --now myapp    # enable + start
+
+# Xem log
+sudo journalctl -u myapp -f          # follow live (giống tail -f)
+sudo journalctl -u myapp --since "10 min ago"
+sudo journalctl -u myapp -p err      # chỉ ERROR
+</code></pre>
+
+        <h3>3.3. systemd timer — thay thế cron</h3>
+
+<pre><code class="language-ini"># /etc/systemd/system/backup.service
+[Unit]
+Description=Daily database backup
+
+[Service]
+Type=oneshot
+ExecStart=/opt/scripts/backup.sh
+User=backupuser
+</code></pre>
+
+<pre><code class="language-ini"># /etc/systemd/system/backup.timer
+[Unit]
+Description=Run backup daily at 2am
+Requires=backup.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00            # mỗi ngày 2:00 AM
+RandomizedDelaySec=600               # delay random 0-10 phút (avoid stampede)
+Persistent=true                      # nếu miss (server off), chạy bù khi boot
+
+[Install]
+WantedBy=timers.target
+</code></pre>
+
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl enable --now backup.timer
+
+# Xem timer schedule
+systemctl list-timers --all
+</code></pre>
+
+        <p>Ưu điểm timer so với cron: log tự vào journal, dependency rõ, persistent (chạy bù), random delay tránh stampede.</p>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Nhược điểm systemd timer</span>
+          Khó hơn cron để học. Nhiều admin vẫn quen cron. Trong môi trường mixed (Ubuntu + Alpine), timer không chạy trên Alpine (Alpine dùng OpenRC, không systemd).
+        </div>
+      </section>
+
+      <section id="user-perm">
+        <h2>4. Users, Groups, Permissions — Bảo mật cơ bản</h2>
+
+        <h3>4.1. Quản lý user</h3>
+
+<pre><code class="language-bash"># Tạo user
+sudo useradd -m -s /bin/bash -G sudo,docker alice
+#   -m: tạo home dir
+#   -s: shell mặc định
+#   -G: groups (cộng vào)
+
+# Set password
+sudo passwd alice
+
+# Sửa user
+sudo usermod -aG docker alice         # add to docker group (-a append!)
+sudo usermod -L alice                 # lock (không login được)
+sudo usermod -U alice                 # unlock
+
+# Xóa user
+sudo userdel -r alice                 # -r: xóa luôn home
+
+# Xem user
+id alice                              # uid, gid, groups
+getent passwd alice                   # info từ /etc/passwd
+</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Quan trọng — usermod -aG</span>
+          Luôn dùng <code>-a</code> (append) khi add group. <code>usermod -G docker alice</code> sẽ <em>thay thế</em> tất cả group hiện có chỉ còn docker — alice mất sudo!
+        </div>
+
+        <h3>4.2. File permission — rwx</h3>
+
+<pre><code class="language-bash">$ ls -la
+-rw-r--r--  1 alice users  1024 Jan 15 10:30 file.txt
+drwxr-xr-x  2 alice users  4096 Jan 15 10:30 mydir/
+#  ↑↑↑↑↑↑↑↑↑↑
+#  d rwx rwx rwx
+#  │  │   │   │
+#  │  │   │   └─ others (everyone else)
+#  │  │   └─ group
+#  │  └─ owner (user)
+#  └─ type: d=dir, -=file, l=symlink
+
+# Chmod — change permission
+chmod 755 script.sh                  # rwxr-xr-x — owner full, group/others read+execute
+chmod 644 file.txt                    # rw-r--r-- — owner write, others read
+chmod 600 .ssh/id_rsa                 # rw------- — chỉ owner đọc/ghi
+chmod +x script.sh                    # add execute cho all
+chmod u+x,go-w script.sh              # u=user, g=group, o=others
+
+# Octal cheat sheet
+# 7 = rwx (4+2+1)
+# 6 = rw- (4+2)
+# 5 = r-x (4+1)
+# 4 = r-- (4)
+
+# Chown — change owner
+sudo chown alice:devops file.txt     # owner=alice, group=devops
+sudo chown -R alice /opt/myapp       # recursive
+</code></pre>
+
+        <h3>4.3. Special permissions: setuid, setgid, sticky bit</h3>
+
+<pre><code class="language-bash">ls -l /usr/bin/passwd
+# -rwsr-xr-x  ← s thay x ở user = setuid
+
+ls -ld /tmp
+# drwxrwxrwt  ← t cuối = sticky bit
+
+# setuid (4xxx): chạy file như owner (passwd cần write /etc/shadow → setuid root)
+# setgid (2xxx): chạy như group
+# sticky (1xxx): chỉ owner được xóa file trong dir (dùng cho /tmp)
+
+chmod 4755 binary                    # setuid + 755
+chmod 2755 dir                       # setgid + 755
+chmod 1777 shareddir                 # sticky + 777
+</code></pre>
+
+        <h3>4.4. sudo — leo quyền có kiểm soát</h3>
+
+<pre><code class="language-bash"># Sudo cấp quyền root tạm thời
+sudo command                          # chạy như root
+sudo -u alice command                 # chạy như alice
+sudo -i                               # spawn shell root (login)
+sudo -s                               # shell root (kế thừa env)
+
+# Edit sudoers — KHÔNG sửa /etc/sudoers trực tiếp, dùng:
+sudo visudo                           # validate syntax trước save
+
+# Hoặc thêm file vào /etc/sudoers.d/
+sudo nano /etc/sudoers.d/devops
+# Nội dung:
+#   alice ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart myapp
+# → alice có thể restart myapp mà không cần password
+</code></pre>
+
+        <h3>4.5. ACL — quyền chi tiết hơn rwx</h3>
+
+<pre><code class="language-bash">ls -l /var/www
+# -rw-r--r--+  ← dấu + = có ACL
+
+# Set ACL
+setfacl -m u:bob:rwx /var/www/file   # bob có rwx (ngoài user/group/other)
+setfacl -m g:devops:rx /var/www      # group devops có r-x
+setfacl -d -m u:alice:rwx /var/www   # default ACL — file mới sẽ kế thừa
+
+# Xem ACL
+getfacl /var/www/file
+</code></pre>
+      </section>
+
+      <section id="process">
+        <h2>5. Process & Resource Management</h2>
+
+        <h3>5.1. ps, top, htop</h3>
+
+<pre><code class="language-bash"># ps — snapshot of processes
+ps aux                                 # mọi process, kèm CPU/RAM
+ps -ef | grep nginx                    # filter
+ps aux --sort=-%cpu | head             # top 10 CPU
+ps aux --sort=-%mem | head             # top 10 memory
+
+# top — real-time
+top                                    # default
+top -u alice                          # chỉ user alice
+# Trong top:
+#   M = sort by memory
+#   P = sort by CPU
+#   k = kill PID
+#   1 = show per-CPU stats
+#   q = quit
+
+# htop — colored, interactive (cài: apt install htop)
+htop
+# F2 = setup, F4 = filter, F5 = tree view, F9 = kill
+
+# Btop — modern alternative (apt install btop)
+btop
+</code></pre>
+
+        <h3>5.2. Tìm và kill process</h3>
+
+<pre><code class="language-bash"># Tìm PID
+pidof nginx                           # PID(s) của process tên nginx
+pgrep -f "node server.js"             # tìm theo command line full
+
+# Kill
+kill 1234                             # SIGTERM (graceful, default)
+kill -9 1234                          # SIGKILL (cứng, last resort)
+kill -HUP 1234                        # SIGHUP (reload config — nginx, systemd)
+killall nginx                         # kill tất cả tên nginx
+pkill -f "node server.js"             # kill theo cmdline
+
+# Signal phổ biến
+# SIGTERM (15) — graceful, app cleanup
+# SIGINT  (2)  — Ctrl+C
+# SIGHUP  (1)  — reload config
+# SIGKILL (9)  — không kill được, kernel force kill
+# SIGSTOP/SIGCONT — pause/resume
+</code></pre>
+
+        <h3>5.3. Resource: CPU, Memory, Disk</h3>
+
+<pre><code class="language-bash"># Memory
+free -h                                # human-readable
+#               total   used   free   shared  buff/cache  available
+# Mem:           7.7G   2.1G   3.2G    44M     2.4G        5.3G
+# Swap:          2.0G     0B   2.0G
+
+# Available = free + cached/buffered. Đừng panic khi "free" thấp.
+
+# Disk
+df -h                                  # disk filesystem usage
+df -i                                  # inode usage (file count)
+du -sh /var/log/*                      # size mỗi folder
+du -sh /var/log/* | sort -h            # sort
+
+# I/O
+iostat -x 2 5                          # disk I/O, 2s interval, 5 lần
+iotop                                  # process consuming I/O (need root)
+
+# Load average
+uptime
+# 14:30:01 up 5 days, 3:21, 2 users, load average: 0.52, 0.48, 0.45
+# Load = số process trong runqueue. Nếu &gt; số CPU core → bottleneck.
+</code></pre>
+
+        <h3>5.4. lsof — list open files</h3>
+
+<pre><code class="language-bash">lsof -i :8080                         # process nào đang bind port 8080
+lsof -p 1234                          # files mở bởi PID 1234
+lsof -u alice                         # files của user alice
+lsof /var/log/syslog                  # process nào đang đọc/ghi file này
+lsof -i tcp                           # all TCP sockets
+
+# Tìm process holding deleted file
+lsof | grep deleted
+# Hữu ích khi df cao nhưng du thấp — file deleted vẫn được giữ bởi process
+</code></pre>
+      </section>
+
+      <section id="network">
+        <h2>6. Network Tools — Bộ lệnh phải thuộc</h2>
+
+        <p>Trên server modern (Ubuntu 18+, RHEL 7+), thay <code>ifconfig</code> + <code>netstat</code> bằng <code>ip</code> + <code>ss</code>. Cũ vẫn chạy nhưng deprecated.</p>
+
+        <h3>6.1. IP & Interface</h3>
+
+<pre><code class="language-bash"># Liệt kê interface
+ip addr                                # = ip a (short)
+ip link                                # link state
+ip route                               # routing table
+
+# Check connectivity
+ping -c 4 google.com                   # 4 lần
+ping -c 4 -W 2 google.com              # timeout 2s
+
+# Trace route
+traceroute google.com                  # truyền thống
+mtr google.com                         # tốt hơn — kết hợp ping+traceroute liên tục
+
+# DNS
+dig google.com                         # full DNS lookup
+dig +short google.com                  # gọn
+dig @8.8.8.8 google.com                # query specific server
+host google.com                        # đơn giản hơn dig
+nslookup google.com                    # legacy
+
+# DNS reverse
+dig -x 8.8.8.8                         # PTR record
+</code></pre>
+
+        <h3>6.2. ss — socket statistics</h3>
+
+<pre><code class="language-bash">ss -tuln                               # TCP/UDP listening, không resolve hostname
+#   -t: TCP
+#   -u: UDP
+#   -l: listening
+#   -n: numeric (no DNS lookup, faster)
+
+ss -tn state established                # TCP connections active
+ss -tn dst :443                          # connections to port 443
+ss -p                                    # show process owning socket (need root)
+ss -s                                    # summary stats
+
+# Common questions:
+# "Service nào đang nghe port 8080?"
+sudo ss -tlnp | grep :8080
+
+# "Có connection nào bị stuck SYN_SENT?"
+ss -tn state syn-sent
+</code></pre>
+
+        <h3>6.3. curl — HTTP debug</h3>
+
+<pre><code class="language-bash"># GET đơn giản
+curl https://api.example.com/users/1
+
+# Verbose — thấy headers
+curl -v https://example.com
+
+# Timing breakdown
+curl -w "@-" -o /dev/null -s https://example.com &lt;&lt;'EOF'
+DNS:    %{time_namelookup}s
+Connect: %{time_connect}s
+TLS:    %{time_appconnect}s
+TTFB:   %{time_starttransfer}s
+Total:  %{time_total}s
+EOF
+
+# POST JSON
+curl -X POST https://api.example.com/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"alice","age":30}'
+
+# Upload file
+curl -F "file=@photo.jpg" https://upload.example.com
+
+# Follow redirect, save with original name
+curl -LO https://example.com/file.zip
+
+# Health check ngắn
+curl -fsS http://localhost/health || echo "DOWN"
+#   -f: fail on HTTP error (4xx/5xx)
+#   -s: silent
+#   -S: show error
+</code></pre>
+
+        <h3>6.4. Firewall: ufw, firewalld, iptables</h3>
+
+<pre><code class="language-bash"># UFW (Ubuntu) — đơn giản
+sudo ufw enable
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp                  # SSH
+sudo ufw allow from 10.0.0.0/8 to any port 5432   # postgres từ private network
+sudo ufw status numbered
+sudo ufw delete 3                      # xóa rule số 3
+
+# firewalld (RHEL/Amazon Linux)
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-all
+
+# iptables (low-level — dưới ufw/firewalld)
+sudo iptables -L -n -v                 # list rules
+</code></pre>
+      </section>
+
+      <section id="log">
+        <h2>7. Log Management — journalctl & /var/log</h2>
+
+        <h3>7.1. journalctl (systemd journal)</h3>
+
+<pre><code class="language-bash"># Xem toàn bộ journal
+sudo journalctl                        # paged from oldest
+sudo journalctl -e                     # jump to end
+sudo journalctl -f                     # follow (giống tail -f)
+
+# Filter
+sudo journalctl -u nginx               # service nginx
+sudo journalctl -u nginx --since "1 hour ago"
+sudo journalctl --since "2024-01-15 10:00" --until "2024-01-15 12:00"
+sudo journalctl -p err                  # priority error trở lên
+#   priority: emerg, alert, crit, err, warning, notice, info, debug
+
+# Search
+sudo journalctl -u nginx | grep "500"   # tốt hơn:
+sudo journalctl -u nginx -g "500"       # built-in grep, faster
+
+# Boot
+sudo journalctl -b                      # logs from current boot
+sudo journalctl -b -1                   # previous boot
+sudo journalctl --list-boots            # list all boots
+
+# Disk usage
+journalctl --disk-usage
+sudo journalctl --vacuum-size=500M      # giữ tối đa 500M
+sudo journalctl --vacuum-time=7d        # giữ 7 ngày
+
+# JSON output (cho log shipping)
+sudo journalctl -u nginx -o json
+</code></pre>
+
+        <h3>7.2. Log truyền thống ở /var/log</h3>
+
+        <table>
+          <thead><tr><th>File</th><th>Nội dung</th></tr></thead>
+          <tbody>
+            <tr><td>/var/log/syslog (Ubuntu) / /var/log/messages (RHEL)</td><td>System log chung</td></tr>
+            <tr><td>/var/log/auth.log / /var/log/secure</td><td>Login, sudo, ssh</td></tr>
+            <tr><td>/var/log/kern.log / dmesg</td><td>Kernel messages</td></tr>
+            <tr><td>/var/log/nginx/access.log</td><td>HTTP request log</td></tr>
+            <tr><td>/var/log/nginx/error.log</td><td>nginx error</td></tr>
+            <tr><td>/var/log/dpkg.log / /var/log/yum.log</td><td>Package install/remove</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.3. tail / less / awk — đọc log</h3>
+
+<pre><code class="language-bash"># Theo dõi live
+tail -f /var/log/nginx/access.log
+tail -F file.log                        # -F: re-open nếu file rotate
+
+# Đọc 100 dòng cuối
+tail -n 100 file.log
+tail -100 file.log                      # ngắn hơn
+
+# 100 dòng đầu
+head -n 100 file.log
+
+# Phân trang
+less file.log
+# Trong less: /pattern (search), n (next), G (cuối), 1G (đầu), q (quit)
+
+# Filter với grep
+tail -f access.log | grep "500"         # 500 errors live
+grep -i "error" /var/log/syslog        # case-insensitive
+grep -v "^#" config.conf                # bỏ comment
+grep -E "ERROR|FATAL" app.log           # regex extended (=egrep)
+grep -A 5 -B 2 "exception" app.log      # 5 dòng sau, 2 dòng trước
+
+# Đếm
+grep -c "ERROR" app.log
+
+# awk — extract column
+awk '{print $1}' access.log             # cột 1 (IP nếu Apache/nginx default format)
+awk '$9 == 500' access.log              # rows có status 500
+awk '{count[$1]++} END {for (ip in count) print count[ip], ip}' access.log | sort -rn | head
+# → top 10 IP theo số request
+</code></pre>
+
+        <h3>7.4. Log rotation — logrotate</h3>
+
+<pre><code class="language-bash"># Config thường ở /etc/logrotate.d/
+cat /etc/logrotate.d/nginx
+# /var/log/nginx/*.log {
+#     daily
+#     rotate 14            ← giữ 14 file (= 14 ngày)
+#     compress             ← gzip cũ
+#     delaycompress
+#     missingok
+#     notifempty
+#     create 0640 nginx adm
+#     sharedscripts
+#     postrotate
+#         [ -f /var/run/nginx.pid ] && kill -USR1 `cat /var/run/nginx.pid`
+#     endscript
+# }
+
+# Test config
+sudo logrotate -d /etc/logrotate.d/nginx     # debug, không thực thi
+sudo logrotate -f /etc/logrotate.d/nginx     # force run ngay
+</code></pre>
+
+        <p>Trong môi trường cloud/K8s, log thường ship đến hệ thống tập trung (ELK, Loki, CloudWatch) thay vì giữ local — nhưng vẫn cần biết cơ bản.</p>
+      </section>
+
+      <section id="cron">
+        <h2>8. Cron — Lập lịch task</h2>
+
+        <h3>8.1. Crontab format</h3>
+
+<pre><code>* * * * * command
+│ │ │ │ │
+│ │ │ │ └─ day of week (0-7, 0 và 7 = Sunday)
+│ │ │ └─── month (1-12)
+│ │ └───── day of month (1-31)
+│ └─────── hour (0-23)
+└───────── minute (0-59)
+
+# Ví dụ:
+0 2 * * *      → 02:00 mỗi ngày
+*/5 * * * *    → mỗi 5 phút
+0 */4 * * *    → mỗi 4 giờ
+0 0 * * 0      → 00:00 Chủ nhật hàng tuần
+0 9-17 * * 1-5 → 9-17h thứ Hai-Sáu hàng giờ
+@daily         → 0 0 * * *
+@hourly        → 0 * * * *
+@reboot        → 1 lần khi boot
+</code></pre>
+
+        <h3>8.2. Quản lý crontab</h3>
+
+<pre><code class="language-bash"># Edit crontab cho user hiện tại
+crontab -e                              # mở editor
+crontab -l                              # list
+crontab -r                              # remove (cẩn thận!)
+
+# Crontab cho user khác (cần root)
+sudo crontab -u alice -e
+
+# System cron — /etc/crontab (có thêm field user)
+# m h dom mon dow user command
+0 2 * * * root /usr/local/bin/backup.sh
+
+# Mỗi file ở /etc/cron.d/ là 1 crontab
+# /etc/cron.daily/, /etc/cron.weekly/, /etc/cron.hourly/ — drop script vào
+</code></pre>
+
+        <h3>8.3. Best practice cho cron job</h3>
+
+<pre><code class="language-bash"># 1. Output đi đâu?
+0 2 * * * /opt/scripts/backup.sh > /var/log/backup.log 2>&1
+# Mặc định cron mail output cho user. Redirect để tránh.
+
+# 2. Tránh overlap (nếu job chạy lâu)
+0 * * * * /usr/bin/flock -n /tmp/myjob.lock /opt/scripts/myjob.sh
+# flock: chỉ chạy nếu lock available (không chạy) — tránh 2 instance cùng
+
+# 3. Set PATH (cron chạy với PATH tối thiểu)
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+0 2 * * * /opt/scripts/backup.sh
+
+# 4. Check exit code
+0 2 * * * /opt/scripts/backup.sh || curl -X POST $SLACK_WEBHOOK -d "Backup failed!"
+
+# 5. Use absolute path
+# Đừng: cd ~/myapp && python script.py
+# Nên: /usr/bin/python /home/alice/myapp/script.py
+</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Cron pitfalls phổ biến</span>
+          (1) PATH khác bash interactive — script tìm không thấy command. (2) HOME = / nếu chạy như root. (3) Không có timezone — UTC mặc định trên cloud VM. (4) Không log → không biết job fail. (5) Không lock → 2 instance overlap khi job lâu.
+        </div>
+      </section>
+
+      <section id="ssh">
+        <h2>9. SSH cho DevOps — Phải master</h2>
+
+        <h3>9.1. Tạo và quản lý SSH key</h3>
+
+<pre><code class="language-bash"># Tạo key (Ed25519 — modern, mạnh hơn RSA)
+ssh-keygen -t ed25519 -C "alice@example.com"
+# Mặc định lưu ở ~/.ssh/id_ed25519 (private) và id_ed25519.pub (public)
+
+# Hoặc RSA cũ (compat)
+ssh-keygen -t rsa -b 4096 -C "alice@example.com"
+
+# Permissions BẮT BUỘC
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/id_ed25519
+chmod 644 ~/.ssh/id_ed25519.pub
+chmod 600 ~/.ssh/authorized_keys
+# SSH sẽ refuse key nếu permission quá lỏng
+
+# Copy public key lên server
+ssh-copy-id alice@server.example.com
+# Equivalent: cat ~/.ssh/id_ed25519.pub | ssh alice@server "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+</code></pre>
+
+        <h3>9.2. SSH config — file vàng cho DevOps</h3>
+
+<pre><code class="language-bash"># ~/.ssh/config
+Host bastion
+    HostName bastion.example.com
+    User alice
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+
+Host prod-web
+    HostName 10.0.1.5                # private IP trong VPC
+    User deploy
+    IdentityFile ~/.ssh/deploy_key
+    ProxyJump bastion                # tunnel qua bastion!
+
+Host *.staging.example.com
+    User developer
+    IdentityFile ~/.ssh/staging_key
+    StrictHostKeyChecking accept-new  # auto-accept new hosts
+
+Host github.com
+    HostName ssh.github.com
+    Port 443                          # bypass firewall blocks 22
+    User git
+
+# Sau đó:
+ssh prod-web                          # tự động qua bastion!
+scp file.tar.gz prod-web:/tmp/        # cũng qua bastion
+</code></pre>
+
+        <h3>9.3. ProxyJump (bastion) — pattern phổ biến</h3>
+
+<pre><code class="language-bash"># Bastion (jump host) — server public, qua đó SSH vào private servers
+#
+#   You ──SSH──→ Bastion ──SSH──→ Private Server (10.0.1.x)
+
+# Cách 1: ProxyJump trong config (xem trên)
+
+# Cách 2: command line
+ssh -J alice@bastion deploy@10.0.1.5
+
+# Cách 3 (cũ): ProxyCommand
+ssh -o ProxyCommand="ssh -W %h:%p alice@bastion" deploy@10.0.1.5
+</code></pre>
+
+        <h3>9.4. SSH tunnel / port forwarding</h3>
+
+<pre><code class="language-bash"># Local forward — truy cập DB private qua tunnel
+ssh -L 5432:db.private:5432 alice@bastion
+# Bây giờ localhost:5432 = db.private:5432
+
+psql -h localhost -U appuser mydb     # nối DB qua tunnel
+
+# Remote forward — server kết nối ngược về máy bạn
+ssh -R 8080:localhost:3000 alice@server
+# Server có thể curl localhost:8080 → đến app dev local
+
+# Dynamic SOCKS proxy
+ssh -D 1080 alice@bastion
+# Cấu hình browser SOCKS5 = localhost:1080 → traffic đi qua bastion
+</code></pre>
+
+        <h3>9.5. SSH server hardening</h3>
+
+<pre><code class="language-bash"># /etc/ssh/sshd_config
+PermitRootLogin no                    # không cho root SSH
+PasswordAuthentication no             # bắt buộc key
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+Port 2222                              # đổi port (security by obscurity, ít bot scan)
+MaxAuthTries 3
+ClientAliveInterval 300                # ping client mỗi 5 phút
+ClientAliveCountMax 2                   # disconnect nếu client không phản hồi 2 lần
+AllowUsers alice bob deploy            # whitelist user
+
+# Sau khi sửa:
+sudo systemctl restart sshd
+# TEST trong session khác trước khi đóng session hiện tại!
+# Nếu sai config, mất quyền SSH server.
+
+# fail2ban — auto block IP brute-force
+sudo apt install fail2ban
+# Config /etc/fail2ban/jail.local — set bantime, findtime, maxretry
+</code></pre>
+      </section>
+
+      <section id="troubleshoot">
+        <h2>10. Troubleshooting Checklist — server "có vấn đề"</h2>
+
+        <p>Đây là playbook chuẩn khi nhận pager: <em>"Server X chậm/crash, kiểm tra ngay!"</em></p>
+
+        <ol class="steps">
+          <li><strong>Sống không?</strong>
+<pre><code class="language-bash">ping server                            # ICMP
+ssh server                             # SSH có lên không
+curl -v http://server/health           # HTTP có response không</code></pre>
+          </li>
+
+          <li><strong>Resource overload?</strong>
+<pre><code class="language-bash">uptime                                 # load average
+free -h                                # memory
+df -h                                  # disk full?
+top                                    # process gì ăn CPU/RAM</code></pre>
+          </li>
+
+          <li><strong>Service status?</strong>
+<pre><code class="language-bash">systemctl --failed                     # service nào failed
+systemctl status myapp                 # specific service
+ss -tlnp                               # ports đang listen</code></pre>
+          </li>
+
+          <li><strong>Log gần đây?</strong>
+<pre><code class="language-bash">journalctl --since "10 min ago" -p err
+journalctl -u myapp -n 100
+tail -100 /var/log/syslog
+dmesg | tail                            # kernel — OOM kill, hardware errors</code></pre>
+          </li>
+
+          <li><strong>Network OK?</strong>
+<pre><code class="language-bash">ip a                                   # interfaces UP?
+ip route                               # default route?
+ss -s                                  # connection summary
+ss -tn state established | wc -l       # active connections
+# Nếu &gt;&gt; bình thường → có thể bị flood</code></pre>
+          </li>
+
+          <li><strong>Disk I/O?</strong>
+<pre><code class="language-bash">iostat -x 2 5                          # %util, await
+iotop                                  # process gây I/O cao
+# %util &gt; 80% liên tục = disk bottleneck</code></pre>
+          </li>
+
+          <li><strong>OOM killer?</strong>
+<pre><code class="language-bash">dmesg | grep -i "killed process"
+journalctl -k | grep -i "out of memory"
+# Process bị OOM-kill thường dấu hiệu memory leak</code></pre>
+          </li>
+
+          <li><strong>Recent changes?</strong>
+<pre><code class="language-bash">last -n 20                             # ai login gần đây
+sudo journalctl --since "1 hour ago" | grep -i "started\|failed"
+ls -lt /etc/                           # config thay đổi gần đây
+# 90% incident do change gần nhất → suspect change đầu tiên</code></pre>
+          </li>
+        </ol>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Quy tắc 10 giây</span>
+          Khi vào server xa lạ, chạy <code>uptime; free -h; df -h; systemctl --failed</code> — 1 dòng cho 80% câu trả lời "có vấn đề gì lớn không".
+        </div>
+
+        <h3>10.1. Disk full — không xóa được</h3>
+<pre><code class="language-bash"># Thường gặp: df hiện 100%, nhưng du không tìm thấy file lớn
+# Nguyên nhân: file đã deleted nhưng process vẫn giữ open file descriptor
+
+# Tìm
+sudo lsof | grep deleted
+# Kết quả ví dụ: nginx 1234 ... /var/log/nginx/error.log.1 (deleted)
+
+# Sửa: restart process giữ file
+sudo systemctl restart nginx
+# HOẶC truncate file qua /proc:
+sudo truncate -s 0 /proc/1234/fd/3
+</code></pre>
+
+        <h3>10.2. CPU 100% — process nào?</h3>
+<pre><code class="language-bash"># 1. Top theo CPU
+ps aux --sort=-%cpu | head
+
+# 2. Nếu là Java/Node — thread cụ thể nào?
+top -H -p &lt;PID&gt;                       # threads của process
+# Nhớ TID (thread ID) của thread cao CPU → chuyển sang hex
+printf '%x\n' &lt;TID&gt;
+
+# 3. Java thread dump
+jstack &lt;PID&gt; | grep -A 30 0x&lt;hex_tid&gt;
+
+# 4. Profile (perf)
+sudo perf top -p &lt;PID&gt;
+</code></pre>
+      </section>
+
+      <section id="exercises">
+        <h2>11. Bài tập</h2>
+
+        <ol>
+          <li><strong>Setup VM lab</strong>: spin up Ubuntu 22.04 trên VirtualBox/UTM/Multipass. Cài user mới, set sudo, disable password SSH.</li>
+          <li><strong>Viết systemd service</strong> cho 1 Node.js app: chạy như non-root user, restart on failure, journal log, env vars từ file.</li>
+          <li><strong>Cấu hình journalctl</strong>: giới hạn 500MB, retention 7 ngày. Verify bằng <code>journalctl --disk-usage</code>.</li>
+          <li><strong>Quản lý cron</strong>:
+            <ul>
+              <li>Cron mỗi giờ check disk usage; nếu &gt; 85%, gửi alert qua webhook.</li>
+              <li>Cron lúc 2:00 AM backup database, log result.</li>
+              <li>Convert 1 cron sang systemd timer.</li>
+            </ul>
+          </li>
+          <li><strong>SSH config</strong>: tạo file <code>~/.ssh/config</code> với 3 host: bastion, prod (qua ProxyJump), staging. SSH thành công không gõ user/host dài.</li>
+          <li><strong>Hardening SSH</strong>: tắt PermitRootLogin và PasswordAuthentication. Đổi port 22 → 2222. Test fail2ban block 1 IP brute-force.</li>
+          <li><strong>Tunneling</strong>: dùng SSH tunnel kết nối local <code>psql</code> đến PostgreSQL chạy private trên cloud (qua bastion).</li>
+          <li><strong>Network forensics</strong>: server có 1 process bí ẩn nghe port 9999. Tìm tên process, user owner, executable path, command line đầy đủ.</li>
+          <li><strong>Disk full simulation</strong>: tạo file lớn lấp /var đến 95%. Tìm file đang chiếm. Xóa được không nếu nginx đang ghi vào? Demo lsof | grep deleted.</li>
+          <li><strong>Troubleshooting drill</strong>: bạn nhận incident "API chậm 2 phút trước". Trong 5 phút đầu, chạy commands gì để chẩn đoán? Viết playbook.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>12. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 2</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Lệnh systemctl nào RELOAD config mà KHÔNG restart service?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">systemctl restart nginx</li>
+              <li class="quiz-option">systemctl stop nginx && systemctl start nginx</li>
+              <li class="quiz-option">systemctl reload nginx</li>
+              <li class="quiz-option">systemctl daemon-reload</li>
+            </ul>
+            <div class="quiz-explain">reload gửi SIGHUP cho service — service đọc lại config mà không kill process (no downtime). nginx, sshd hỗ trợ reload. daemon-reload là khác — reload <em>systemd</em> (sau khi sửa unit file), không phải service.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Lệnh ĐÚNG để add user alice vào docker group mà KHÔNG mất các group khác?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">usermod -G docker alice</li>
+              <li class="quiz-option">usermod -aG docker alice</li>
+              <li class="quiz-option">groupadd docker alice</li>
+              <li class="quiz-option">chown docker alice</li>
+            </ul>
+            <div class="quiz-explain"><code>-a</code> (append) là then chốt. Thiếu nó, <code>-G docker</code> sẽ <em>thay thế</em> tất cả group hiện có chỉ còn docker — alice mất sudo, mất group quan trọng khác. Đây là một trong những lỗi phổ biến nhất gây "tự khóa mình".</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Permission octal 600 nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">rwxrw-r--</li>
+              <li class="quiz-option">rwxr-xr-x</li>
+              <li class="quiz-option">rw-r--r--</li>
+              <li class="quiz-option">rw------- (chỉ owner đọc/ghi)</li>
+            </ul>
+            <div class="quiz-explain">6 = rw- (4+2), 0 = no access, 0 = no access. 600 = chỉ owner đọc/ghi, group/others không có quyền. Đây là permission BẮT BUỘC cho <code>~/.ssh/id_rsa</code> và các file private key. SSH sẽ refuse nếu lỏng hơn.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Lệnh nào tìm process đang nghe port 8080?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">sudo ss -tlnp | grep :8080</li>
+              <li class="quiz-option">cat /proc/8080</li>
+              <li class="quiz-option">ps aux | grep 8080</li>
+              <li class="quiz-option">netcat -l 8080</li>
+            </ul>
+            <div class="quiz-explain"><code>ss -tlnp</code>: -t TCP, -l listening, -n numeric (no DNS), -p process. Cần sudo để thấy process tên. Cũ hơn dùng <code>netstat -tlnp</code> nhưng deprecated. <code>ps aux | grep 8080</code> chỉ tìm "8080" trong cmdline — không reliable.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Cron expression "*/15 * * * *" nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">15 phút sau mỗi giờ (xx:15)</li>
+              <li class="quiz-option">Mỗi 15 phút (xx:00, xx:15, xx:30, xx:45)</li>
+              <li class="quiz-option">15:00 mỗi ngày</li>
+              <li class="quiz-option">Ngày 15 hàng tháng</li>
+            </ul>
+            <div class="quiz-explain"><code>*/N</code> trong field minute = "mỗi N phút". <code>15 * * * *</code> (không có <code>/</code>) thì mới là "phút thứ 15 mỗi giờ". <code>0 15 * * *</code> mới là "15:00 mỗi ngày". <code>0 0 15 * *</code> = ngày 15 hàng tháng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">SIGTERM (15) khác SIGKILL (9) như thế nào?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SIGTERM giết process nhanh hơn</li>
+              <li class="quiz-option">Giống nhau, chỉ khác số</li>
+              <li class="quiz-option">SIGTERM gửi tín hiệu graceful (process tự cleanup); SIGKILL kernel force kill, process không thể catch hoặc cleanup</li>
+              <li class="quiz-option">SIGTERM chỉ root dùng được</li>
+            </ul>
+            <div class="quiz-explain">SIGTERM (default của <code>kill</code>) — process nhận signal, có thể catch để cleanup (đóng connection, flush buffer, save state) rồi exit. SIGKILL — kernel direct kill, process không có cơ hội cleanup, có thể để lại lock file/dangling resource. Quy tắc: TERM trước, KILL chỉ khi TERM không tác dụng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">SSH ProxyJump (-J hoặc ProxyJump trong config) dùng để:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SSH vào server private qua bastion (jump host) — kết nối transparent, một lệnh</li>
+              <li class="quiz-option">Tăng tốc SSH</li>
+              <li class="quiz-option">Mã hóa thêm</li>
+              <li class="quiz-option">Forward port</li>
+            </ul>
+            <div class="quiz-explain">Pattern phổ biến: server prod ở private subnet (10.0.x.x), không truy cập từ internet. Bastion là server public, có whitelist IP. ProxyJump cho phép <code>ssh prod-web</code> tự động đi qua bastion. Tốt hơn <code>-A</code> (agent forward) vì không expose key cho bastion.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Khi df -h hiện disk 100% nhưng du -sh /* không tìm ra file lớn:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Disk hỏng</li>
+              <li class="quiz-option">Filesystem corrupt</li>
+              <li class="quiz-option">Du tính sai</li>
+              <li class="quiz-option">Có file đã bị delete nhưng process vẫn giữ open — disk vẫn bị chiếm cho đến khi process đóng/restart</li>
+            </ul>
+            <div class="quiz-explain">Đây là pitfall phổ biến. Process (vd nginx) đang ghi log, log file bị xóa thủ công. File "biến mất" trong <code>ls</code> nhưng inode vẫn live qua file descriptor → disk vẫn bị chiếm. Tìm bằng <code>lsof | grep deleted</code>. Sửa: restart process, hoặc <code>truncate -s 0 /proc/PID/fd/N</code>.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">"Load average 4.5" trên server 4 core nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Server đang dùng 4.5% CPU</li>
+              <li class="quiz-option">Load tốt — dưới ngưỡng</li>
+              <li class="quiz-option">Load cao — trung bình 4.5 process trong runqueue/đang chờ; vượt 4 core → bottleneck</li>
+              <li class="quiz-option">Server đã crash</li>
+            </ul>
+            <div class="quiz-explain">Load average = số process trong runqueue (đang chạy + chờ CPU + chờ I/O) trung bình 1/5/15 phút. Nguyên tắc: load &gt; số core liên tục = bottleneck. 4 core, load 4.5 = đã vượt — process đang queue. Load 1.0 trên 4 core = OK (25% utilization). Load chỉ là 1 indicator — kết hợp với top, iostat để chẩn đoán.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Câu nào ĐÚNG về systemd timer so với cron?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cron tốt hơn vì đơn giản</li>
+              <li class="quiz-option">systemd timer có Persistent (chạy bù khi miss), random delay, log vào journal — cron không có; nhưng cron đơn giản hơn, có sẵn ở mọi distro</li>
+              <li class="quiz-option">systemd timer chỉ chạy được task đơn giản</li>
+              <li class="quiz-option">Hai cái giống hệt nhau</li>
+            </ul>
+            <div class="quiz-explain">systemd timer ưu việt hơn về features: <strong>Persistent=true</strong> (chạy bù sau reboot), <strong>RandomizedDelaySec</strong> (tránh stampede), tự động log vào journal, dependency với service. Nhược: chỉ chạy trên distro có systemd (Alpine không có), syntax phức tạp hơn. Trong K8s, dùng CronJob resource — khác cả hai.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 2. Tiếp theo: <a href="chuong3.html"><strong>Chương 3 — Git & Workflows →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 2 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

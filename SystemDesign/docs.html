@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Giáo trình tổng quan — System Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">System Design</a>
+      <ul class="nav-links">
+        <li><a href="index.html">Lộ trình</a></li>
+        <li><a href="docs.html" class="active">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <div class="badges">
+        <span class="badge">Giáo trình</span>
+        <span class="badge badge-amber">Bản đồ tư duy</span>
+      </div>
+      <h1>Giáo trình tổng quan</h1>
+      <p class="subtitle">
+        System design là môn "tổng hợp" — vận dụng mọi kiến thức đã học (Networking, Database, OOP, OS) vào việc thiết kế
+        hệ thống quy mô lớn. Trang này cho bạn bản đồ tư duy về <em>các nguyên lý cốt lõi</em>, <em>building block phổ biến</em>,
+        và <em>khung tư duy phỏng vấn</em>.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+
+      <h2>1. System Design là gì?</h2>
+      <p>
+        <strong>System design</strong> là quá trình định nghĩa kiến trúc, component, interface và data flow của một hệ thống phần mềm để đáp ứng
+        một tập requirement (functional + non-functional). Khác lập trình algorithm (DSA) — system design quan tâm:
+      </p>
+      <ul>
+        <li><strong>Quy mô</strong> — hệ thống phải xử lý bao nhiêu user, request, data?</li>
+        <li><strong>Latency</strong> — bao nhanh user nhận response?</li>
+        <li><strong>Reliability</strong> — chấp nhận downtime bao nhiêu?</li>
+        <li><strong>Cost</strong> — server, storage, bandwidth tốn bao nhiêu?</li>
+        <li><strong>Trade-off</strong> — không có "best", chỉ có "phù hợp với context".</li>
+      </ul>
+
+      <blockquote>
+        "Có 2 loại hệ thống: hệ thống <em>chưa gặp scale</em>, và hệ thống đang <em>vỡ vì scale</em>."
+      </blockquote>
+
+      <h2>2. Các metric cốt lõi</h2>
+
+      <h3>2.1. Latency vs Throughput</h3>
+      <table>
+        <thead><tr><th>Metric</th><th>Định nghĩa</th><th>Đơn vị</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Latency</strong></td><td>Thời gian xử lý 1 request</td><td>ms (mili-giây)</td></tr>
+          <tr><td><strong>Throughput</strong></td><td>Số request xử lý/giây</td><td>QPS / RPS / TPS</td></tr>
+          <tr><td><strong>Bandwidth</strong></td><td>Lưu lượng data</td><td>Mbps / Gbps</td></tr>
+        </tbody>
+      </table>
+
+      <p>Latency và throughput không cùng nhau. Tăng concurrency → throughput tăng nhưng latency có thể tăng theo (queuing).</p>
+
+      <h3>2.2. Phần trăm latency — P50, P95, P99</h3>
+      <p>Latency trung bình (mean) là metric tệ vì bị skew bởi outlier. Dùng <strong>percentile</strong>:</p>
+      <ul>
+        <li><strong>P50 (median)</strong> — 50% request nhanh hơn giá trị này.</li>
+        <li><strong>P95</strong> — 95% nhanh hơn. Quan tâm "average user experience".</li>
+        <li><strong>P99</strong> — 99% nhanh hơn. Quan tâm "worst-case acceptable".</li>
+        <li><strong>P99.9</strong> — 1/1000 request có thể chậm hơn. Quan trọng với SaaS lớn.</li>
+      </ul>
+
+      <p>Mục tiêu thực tế: P99 &lt; 500ms cho web app, &lt; 100ms cho API quan trọng.</p>
+
+      <h3>2.3. Availability — "9 con số"</h3>
+      <table>
+        <thead><tr><th>Availability</th><th>Downtime/năm</th><th>Downtime/tháng</th></tr></thead>
+        <tbody>
+          <tr><td>99% (2 nines)</td><td>3.65 ngày</td><td>7.2 giờ</td></tr>
+          <tr><td>99.9% (3 nines)</td><td>8.76 giờ</td><td>43.8 phút</td></tr>
+          <tr><td>99.99% (4 nines)</td><td>52.6 phút</td><td>4.32 phút</td></tr>
+          <tr><td>99.999% (5 nines)</td><td>5.26 phút</td><td>25.9 giây</td></tr>
+        </tbody>
+      </table>
+
+      <p>Mỗi "9" thêm — chi phí tăng 10×. Cân nhắc thực tế.</p>
+
+      <h2>3. Bốn nguyên lý cốt lõi</h2>
+
+      <div class="ascii">  ┌────────────────────────────────────────────────────┐
+  │       FOUR PRINCIPLES OF SYSTEM DESIGN              │
+  ├────────────────────────────────────────────────────┤
+  │                                                     │
+  │  1. SCALABILITY                                     │
+  │     Khi load tăng 10×, hệ vẫn hoạt động trơn tru   │
+  │                                                     │
+  │  2. RELIABILITY (FAULT TOLERANCE)                   │
+  │     1 component chết, hệ vẫn chạy                   │
+  │                                                     │
+  │  3. AVAILABILITY                                    │
+  │     Tỉ lệ thời gian hệ hoạt động                    │
+  │                                                     │
+  │  4. PERFORMANCE                                     │
+  │     Latency đáp ứng SLA                             │
+  │                                                     │
+  └────────────────────────────────────────────────────┘</div>
+
+      <p>4 nguyên lý này thường <em>đối nghịch</em> nhau. Ví dụ: Sync replication tăng reliability, giảm performance. Microservice tăng scalability nhưng giảm reliability tổng (nhiều hop, nhiều SPOF tiềm tàng).</p>
+
+      <h2>4. Building Blocks phổ biến</h2>
+
+      <div class="ascii">  ┌────────────────────────────────────────────────────────────┐
+  │              SYSTEM DESIGN BUILDING BLOCKS                  │
+  └────────────────────────────────────────────────────────────┘
+
+   ┌─ EDGE LAYER ───────────────────────────────────────┐
+   │  CDN  ·  WAF  ·  DDoS protection                   │
+   │  Edge cache (CloudFlare, AWS CloudFront)           │
+   └────────────────────────────────────────────────────┘
+                          │
+                          ▼
+   ┌─ ENTRY LAYER ──────────────────────────────────────┐
+   │  Load Balancer (L4/L7)                             │
+   │  API Gateway  ·  Reverse Proxy (nginx)             │
+   │  Rate Limiting  ·  Auth                            │
+   └────────────────────────────────────────────────────┘
+                          │
+                          ▼
+   ┌─ APPLICATION LAYER ────────────────────────────────┐
+   │  Stateless app servers (horizontal scale)          │
+   │  Microservices  ·  Service Mesh                    │
+   │  Worker processes (background jobs)                │
+   └────────────────────────────────────────────────────┘
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+   ┌─ CACHE ──┐  ┌─ MESSAGING ──┐  ┌─ DATA ─────────┐
+   │ Redis    │  │ Kafka, SQS    │  │ Postgres / MySQL│
+   │ Memcached│  │ RabbitMQ      │  │ MongoDB         │
+   │ CDN cache│  │ NATS          │  │ Cassandra       │
+   └──────────┘  └───────────────┘  │ Redis           │
+                                    │ Elasticsearch   │
+                                    │ S3 (object)     │
+                                    └─────────────────┘
+
+   ┌─ OBSERVABILITY ────────────────────────────────────┐
+   │  Logs (ELK, Loki)                                  │
+   │  Metrics (Prometheus, Grafana)                     │
+   │  Traces (Jaeger, Honeycomb, OpenTelemetry)         │
+   └────────────────────────────────────────────────────┘</div>
+
+      <p>System design = ghép các building block này theo requirement cụ thể.</p>
+
+      <h2>5. Back-of-the-envelope math</h2>
+      <p>Kỹ năng quan trọng: <strong>ước lượng nhanh</strong> capacity. Ví dụ Twitter:</p>
+
+      <ul>
+        <li>500M user, 10% active hằng ngày → 50M DAU.</li>
+        <li>Mỗi DAU đọc 100 tweet, post 1 tweet → 5B read, 50M write/ngày.</li>
+        <li>50M write / 86400s ≈ 580 write/s peak ~ 5×580 = 2900/s.</li>
+        <li>Mỗi tweet 280 ký tự + metadata ~ 1KB → 50M × 1KB = 50GB/ngày, 18TB/năm.</li>
+        <li>Read 5B / 86400 ≈ 58k QPS read peak ~ 290k QPS.</li>
+      </ul>
+
+      <p>Số liệu này dẫn đến:</p>
+      <ul>
+        <li>Read-heavy 100×+ → cần cache mạnh + read replica.</li>
+        <li>Write 3k/s → 1 Postgres node thừa sức (Postgres làm 50k+ write/s).</li>
+        <li>50GB/ngày → cần partitioning sau 1-2 năm.</li>
+        <li>Geographic — DAU global → CDN + multi-region read replica.</li>
+      </ul>
+
+      <h3>5.1. Bảng số quan trọng nên thuộc lòng</h3>
+      <table>
+        <thead><tr><th>Operation</th><th>Latency</th></tr></thead>
+        <tbody>
+          <tr><td>L1 cache</td><td>1 ns</td></tr>
+          <tr><td>L2 cache</td><td>4 ns</td></tr>
+          <tr><td>RAM access</td><td>100 ns</td></tr>
+          <tr><td>SSD random read</td><td>50–150 µs</td></tr>
+          <tr><td>HDD seek</td><td>10 ms</td></tr>
+          <tr><td>Network LAN (cùng DC)</td><td>0.5 ms</td></tr>
+          <tr><td>Network cross-DC (cùng region)</td><td>1–5 ms</td></tr>
+          <tr><td>Network cross-region (US ↔ EU)</td><td>50–100 ms</td></tr>
+          <tr><td>Network cross-globe (US ↔ APAC)</td><td>100–300 ms</td></tr>
+        </tbody>
+      </table>
+
+      <h2>6. CAP &amp; PACELC — recap</h2>
+      <p>Đã học ở Database (Ch9). Recap:</p>
+      <ul>
+        <li><strong>CAP</strong>: khi network partition (P), chọn Consistency hoặc Availability.</li>
+        <li><strong>PACELC</strong>: ngay cả khi không partition, vẫn phải chọn giữa Latency và Consistency.</li>
+      </ul>
+
+      <p>System design phải nói rõ chọn gì cho từng operation:</p>
+      <ul>
+        <li>Đăng ký user → CP (consistency).</li>
+        <li>Show profile → AP với cache (eventual OK).</li>
+        <li>Click stream analytics → AP (eventual OK, scale tối đa).</li>
+        <li>Banking transfer → CP, sync replication.</li>
+      </ul>
+
+      <h2>7. Khung tư duy phỏng vấn</h2>
+
+      <ol class="steps">
+        <li><strong>Clarify requirements</strong> — functional (cần làm gì) + non-functional (scale, latency, reliability). Hỏi rất nhiều ở bước này.</li>
+        <li><strong>Capacity estimation</strong> — DAU, QPS read/write, storage/năm, bandwidth.</li>
+        <li><strong>System interface (API)</strong> — endpoint chính, request/response shape.</li>
+        <li><strong>Data model</strong> — schema cho top entity, ước lượng size.</li>
+        <li><strong>High-level architecture</strong> — vẽ box và arrow. Bắt đầu đơn giản (1 server + 1 DB), scale dần.</li>
+        <li><strong>Detailed design</strong> — sharding strategy, cache layer, queue, replication.</li>
+        <li><strong>Identify bottleneck</strong> — đâu là bottleneck đầu tiên khi load tăng 10×?</li>
+        <li><strong>Discuss trade-offs</strong> — mỗi quyết định có cost. Phải nói rõ.</li>
+      </ol>
+
+      <div class="callout callout-tip">
+        <span class="callout-title">Mẹo phỏng vấn</span>
+        Đừng tránh "đơn giản". Bắt đầu bằng kiến trúc đơn giản nhất chạy được (1 app + 1 DB), rồi <em>incremental</em> scale theo từng bottleneck.
+        Senior phỏng vấn quan tâm bạn <em>biết khi nào cần phức tạp</em> hơn nhiều với "tôi biết Kafka".
+      </div>
+
+      <h2>8. Anti-patterns System Design</h2>
+
+      <ul>
+        <li><strong>Premature microservice</strong> — chia microservice khi team &lt; 50 người. Distributed monolith còn tệ hơn monolith.</li>
+        <li><strong>Buzzword stack</strong> — "Kafka + Cassandra + Kubernetes + GraphQL" cho app 100 user.</li>
+        <li><strong>Cargo cult</strong> — dùng "vì FAANG dùng" mà không hiểu lý do. Twitter/Uber có scale không giống bạn.</li>
+        <li><strong>Optimization premature</strong> — tối ưu cho 1B user khi mới có 100. Code đơn giản trước.</li>
+        <li><strong>Single Point of Failure (SPOF)</strong> ẩn — 1 DB master, 1 nginx, 1 cache cluster. Khi chết, cả hệ chết.</li>
+        <li><strong>Bỏ qua observability</strong> — không có logs/metrics/traces → không debug được khi prod chết.</li>
+      </ul>
+
+      <h2>9. Lộ trình học đề xuất</h2>
+      <ol class="steps">
+        <li><strong>Tuần 1:</strong> Ch1+2. Capacity math + LB. Tự tính capacity cho 1 idea app (TODO scale, blog scale).</li>
+        <li><strong>Tuần 2:</strong> Ch3. Caching. Setup Redis + cache-aside cho 1 endpoint, đo latency before/after.</li>
+        <li><strong>Tuần 3:</strong> Ch4+5. Data scaling + queue. Setup local Kafka + producer/consumer.</li>
+        <li><strong>Tuần 4:</strong> Ch6+7. Microservice + edge. Đọc Stripe, Discord, Cloudflare engineering blog.</li>
+        <li><strong>Tuần 5:</strong> Ch8. Case studies. Mỗi ngày 1 case study mock interview.</li>
+      </ol>
+
+      <p style="margin-top:2rem">
+        Sẵn sàng chưa? Bắt đầu từ <a href="chuong/chuong1.html"><strong>Chương 1 — Scalability Fundamentals</strong></a>.
+      </p>
+
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>System Design · <a href="index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="js/copy.js"></script>
+</body>
+</html>

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6: Process &amp; Job control — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong5.html">← Chương 5</a></li>
+        <li><a href="chuong6.html" class="active">Chương 6</a></li>
+        <li><a href="chuong7.html">Chương 7 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 06 — Process &amp; Job control</h1>
+        <p>
+          Mỗi lệnh bạn gõ là một <em>process</em>. Chương này dạy bạn nhìn thấy chúng,
+          điều khiển chúng, dừng chúng đúng cách — và chạy nhiều việc song song
+          mà không cần mở hàng tá tab Terminal.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. Process là gì?</h2>
+      <p>
+        Khi bạn gõ <code>ls</code>, hệ điều hành tạo ra một <strong>process</strong> để chạy chương trình <code>ls</code>.
+        Mỗi process có một số định danh duy nhất gọi là <strong>PID</strong> (Process ID).
+        Khi process kết thúc, PID đó được giải phóng và có thể tái sử dụng cho process khác.
+      </p>
+
+      <h3>Parent &amp; Child — quan hệ cây</h3>
+      <p>
+        Process không tự nhiên xuất hiện. Một process được sinh ra bởi một <em>parent process</em>
+        thông qua hai bước cốt lõi của Unix:
+      </p>
+      <ul>
+        <li><code>fork()</code> — parent tự nhân bản mình thành 2 bản giống nhau (parent + child).</li>
+        <li><code>exec()</code> — child thay thế bộ nhớ của mình bằng chương trình mới (vd: <code>ls</code>).</li>
+      </ul>
+      <p>
+        Vì vậy mọi process đều có <strong>PPID</strong> (Parent PID). Toàn hệ thống là một cây process,
+        gốc là <code>launchd</code> (macOS) hoặc <code>systemd</code> (Linux) với PID = 1.
+      </p>
+
+      <h3>Foreground vs Background</h3>
+      <table>
+        <thead><tr><th>Loại</th><th>Đặc điểm</th><th>Ví dụ</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Foreground</strong></td><td>Chiếm terminal, bạn phải đợi nó xong mới gõ tiếp được</td><td><code>ls</code>, <code>vim file.txt</code></td></tr>
+          <tr><td><strong>Background</strong></td><td>Chạy ngầm, terminal trả prompt ngay để gõ lệnh khác</td><td><code>sleep 100 &amp;</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Mỗi terminal tab = một shell process</div>
+        Khi bạn mở tab Terminal mới, macOS tạo một process <code>zsh</code> (hoặc <code>bash</code>).
+        Mọi lệnh bạn gõ trong tab đó đều là <em>child</em> của shell này. Đóng tab → shell chết → mọi child cũng chết theo (trừ khi bạn dùng <code>nohup</code> / <code>disown</code>).
+      </div>
+    </section>
+
+    <section>
+      <h2>2. <code>ps</code> — list process</h2>
+      <p>Lệnh <code>ps</code> in ra danh sách process đang chạy. Nó có nhiều phong cách flag (BSD vs SysV) hơi rối, nhưng 2 cách phổ biến nhất:</p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">ps</span>                  <span class="comment"># chỉ process của shell hiện tại — ngắn</span>
+<span class="prompt">$ </span><span class="cmd">ps</span> aux              <span class="comment"># BSD style — TẤT CẢ process của mọi user (phổ biến nhất)</span>
+<span class="prompt">$ </span><span class="cmd">ps</span> <span class="flag">-ef</span>              <span class="comment"># SysV style — tương tự, hiển thị PPID rõ hơn</span></code></pre>
+
+      <h3>Đọc cột của <code>ps aux</code></h3>
+      <pre><code><span class="output">USER       PID  %CPU  %MEM      VSZ    RSS   TT  STAT STARTED      TIME COMMAND
+huy        523   2.1   0.4  4789012  65432   ??  S    Mon09AM   0:12.45 /Applications/Firefox.app/...
+huy       1042   0.0   0.1   408765   1234   s001 S+   10:33AM   0:00.04 -zsh
+huy       2891  88.7   3.2  1234567 524288   ??  R    11:02AM   2:14.33 node server.js</span></code></pre>
+
+      <table>
+        <thead><tr><th>Cột</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>USER</code></td><td>Chủ process</td></tr>
+          <tr><td><code>PID</code></td><td>Process ID — dùng để <code>kill</code></td></tr>
+          <tr><td><code>%CPU</code></td><td>% CPU đang dùng (snapshot)</td></tr>
+          <tr><td><code>%MEM</code></td><td>% RAM đang dùng</td></tr>
+          <tr><td><code>STAT</code></td><td>Trạng thái: <code>R</code>=Running, <code>S</code>=Sleeping, <code>Z</code>=Zombie, <code>T</code>=Stopped</td></tr>
+          <tr><td><code>COMMAND</code></td><td>Lệnh đầy đủ đã chạy</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Kết hợp với <code>grep</code> — siêu hữu ích</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ps</span> aux | <span class="cmd">grep</span> node       <span class="comment"># tìm mọi process có chữ "node"</span>
+<span class="prompt">$ </span><span class="cmd">ps</span> aux | <span class="cmd">grep</span> <span class="flag">-i</span> chrome   <span class="comment"># không phân biệt hoa thường</span>
+<span class="prompt">$ </span><span class="cmd">ps</span> aux | <span class="cmd">grep</span> <span class="flag">-v</span> grep      <span class="comment"># bỏ đi dòng grep tự match chính nó</span></code></pre>
+
+      <p class="text-dim">Mánh kinh điển: <code>ps aux | grep [n]ode</code> — dấu ngoặc <code>[]</code> khiến chính grep không match chính nó (vì pattern <code>[n]ode</code> không khớp với chuỗi <code>[n]ode</code> trong dòng grep).</p>
+    </section>
+
+    <section>
+      <h2>3. <code>top</code>, <code>htop</code> — xem realtime</h2>
+      <p>
+        <code>ps</code> chỉ là snapshot 1 thời điểm. Để xem <em>realtime</em>, dùng <code>top</code> (có sẵn) hoặc <code>htop</code> (đẹp hơn nhiều, phải cài).
+      </p>
+
+      <h3><code>top</code> — có sẵn trên macOS</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">top</span>                    <span class="comment"># mở giao diện, q để thoát</span>
+<span class="prompt">$ </span><span class="cmd">top</span> <span class="flag">-o</span> cpu               <span class="comment"># sort theo CPU (macOS)</span>
+<span class="prompt">$ </span><span class="cmd">top</span> <span class="flag">-o</span> mem               <span class="comment"># sort theo memory</span></code></pre>
+
+      <p>Trong <code>top</code> đang chạy, gõ phím:</p>
+      <ul>
+        <li><kbd>P</kbd> — sort theo CPU</li>
+        <li><kbd>M</kbd> — sort theo Memory</li>
+        <li><kbd>q</kbd> — quit</li>
+      </ul>
+
+      <h3><code>htop</code> — phiên bản đẹp &amp; tương tác</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">brew</span> install htop      <span class="comment"># cài 1 lần</span>
+<span class="prompt">$ </span><span class="cmd">htop</span>                   <span class="comment"># mở</span></code></pre>
+
+      <p>
+        <code>htop</code> có màu, scroll được, click chuột được, kill process bằng phím <kbd>F9</kbd>. Một khi đã thử là không muốn quay lại <code>top</code>.
+      </p>
+
+      <h3>So sánh ngắn</h3>
+      <table>
+        <thead><tr><th>Tiêu chí</th><th><code>top</code></th><th><code>htop</code></th></tr></thead>
+        <tbody>
+          <tr><td>Có sẵn</td><td>Có (mặc định)</td><td>Phải <code>brew install</code></td></tr>
+          <tr><td>Màu sắc</td><td>Đơn sắc</td><td>Có màu rõ ràng</td></tr>
+          <tr><td>Scroll danh sách</td><td>Không</td><td>Có (mũi tên / chuột)</td></tr>
+          <tr><td>Kill process</td><td>Gõ <code>k</code> rồi PID</td><td><kbd>F9</kbd> chọn signal</td></tr>
+          <tr><td>Dễ đọc cho beginner</td><td>Trung bình</td><td>Tốt hơn nhiều</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Đọc 3 dòng đầu của <code>top</code></h3>
+      <pre><code><span class="output">Processes: 512 total, 3 running, 509 sleeping, 2451 threads
+Load Avg: 1.85, 2.12, 1.94    CPU usage: 12.4% user, 5.3% sys, 82.3% idle
+PhysMem: 14G used (3G wired), 2G unused.</span></code></pre>
+
+      <ul>
+        <li><strong>Load Avg</strong> 1.85, 2.12, 1.94 = trung bình 1, 5, 15 phút. Trên máy 8 core, nếu vượt 8 nghĩa là đang nghẽn.</li>
+        <li><strong>CPU usage</strong> — phần trăm tổng. <code>idle</code> càng cao càng nhàn.</li>
+        <li><strong>PhysMem</strong> — RAM thật đang dùng.</li>
+      </ul>
+
+      <p class="text-dim">Usecase thật: server bỗng nhiên chậm → <code>htop</code> để xem process nào ngốn CPU/RAM, load avg có cao không. Đây là phản xạ debug đầu tiên.</p>
+    </section>
+
+    <section>
+      <h2>4. <code>kill</code> — gửi signal</h2>
+      <p>
+        <code>kill</code> không chỉ "giết". Tên đầy đủ là <em>send signal</em> — gửi tín hiệu cho process. Tùy signal, process sẽ phản ứng khác nhau.
+      </p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">kill</span> 2891              <span class="comment"># gửi SIGTERM (mặc định) — yêu cầu thoát lịch sự</span>
+<span class="prompt">$ </span><span class="cmd">kill</span> <span class="flag">-15</span> 2891          <span class="comment"># tương đương: -15 = TERM</span>
+<span class="prompt">$ </span><span class="cmd">kill</span> <span class="flag">-9</span> 2891           <span class="comment"># SIGKILL — bắt buộc chết, không cứu vãn</span>
+<span class="prompt">$ </span><span class="cmd">kill</span> <span class="flag">-l</span>                <span class="comment"># liệt kê mọi signal</span></code></pre>
+
+      <h3>Bảng signal phổ biến</h3>
+      <table>
+        <thead><tr><th>Số</th><th>Tên</th><th>Ý nghĩa</th><th>Process có "bắt" được không?</th></tr></thead>
+        <tbody>
+          <tr><td><code>1</code></td><td><code>SIGHUP</code></td><td>Hangup — terminal đóng. Nhiều daemon dùng để reload config.</td><td>Có</td></tr>
+          <tr><td><code>2</code></td><td><code>SIGINT</code></td><td>Interrupt — gửi khi bạn bấm <kbd>Ctrl-C</kbd></td><td>Có</td></tr>
+          <tr><td><code>9</code></td><td><code>SIGKILL</code></td><td>Giết ngay lập tức, không thương lượng</td><td><strong>KHÔNG</strong></td></tr>
+          <tr><td><code>15</code></td><td><code>SIGTERM</code></td><td>Yêu cầu thoát lịch sự (mặc định của <code>kill</code>)</td><td>Có</td></tr>
+          <tr><td><code>18</code></td><td><code>SIGCONT</code></td><td>Tiếp tục process đang stop</td><td>Có</td></tr>
+          <tr><td><code>19</code></td><td><code>SIGSTOP</code></td><td>Tạm dừng process (như <kbd>Ctrl-Z</kbd> nhưng không chặn được)</td><td><strong>KHÔNG</strong></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ <code>kill -9</code> = súng lục chứ không phải dao mổ</div>
+        <code>SIGKILL</code> giết process tức thời, <strong>không cho nó dọn dẹp</strong>: file đang ghi dở có thể hỏng, lock chưa giải phóng, transaction database chưa commit. Luôn thử <code>kill PID</code> (TERM) trước. Chỉ <code>-9</code> khi process treo cứng và TERM không có tác dụng.
+      </div>
+
+      <h3><code>pkill</code> &amp; <code>killall</code> — kill theo tên</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">pkill</span> node              <span class="comment"># kill mọi process có tên chứa "node"</span>
+<span class="prompt">$ </span><span class="cmd">pkill</span> <span class="flag">-f</span> "npm run dev"   <span class="comment"># match cả command-line đầy đủ</span>
+<span class="prompt">$ </span><span class="cmd">killall</span> Chrome           <span class="comment"># kill mọi process tên CHÍNH XÁC là Chrome</span>
+<span class="prompt">$ </span><span class="cmd">killall</span> <span class="flag">-9</span> node           <span class="comment"># force kill</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 <code>pkill</code> vs <code>killall</code> — khác nhau ở đâu?</div>
+        <code>pkill</code> match <em>một phần</em> tên (substring) — <code>pkill node</code> giết cả <code>node-server</code>. <code>killall</code> đòi tên <em>khớp chính xác</em>. Trên macOS, <code>killall</code> còn dùng để restart service hệ thống: <code>killall Finder</code>, <code>killall Dock</code>.
+      </div>
+
+      <h3>Workflow điển hình: app treo cần kill</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ps</span> aux | <span class="cmd">grep</span> node          <span class="comment"># 1. tìm PID</span>
+<span class="output">huy  2891  88.7  3.2  ...  node server.js</span>
+<span class="prompt">$ </span><span class="cmd">kill</span> 2891                     <span class="comment"># 2. thử lịch sự trước</span>
+<span class="prompt">$ </span><span class="cmd">ps</span> aux | <span class="cmd">grep</span> 2891           <span class="comment"># 3. còn không?</span>
+<span class="prompt">$ </span><span class="cmd">kill</span> <span class="flag">-9</span> 2891                  <span class="comment"># 4. nếu còn, mới ép</span></code></pre>
+    </section>
+
+    <section>
+      <h2>5. Job control trong shell</h2>
+      <p>
+        Shell (<code>zsh</code>, <code>bash</code>) cho bạn quản lý nhiều job trong <em>cùng một</em> tab terminal. Đây là trick năng suất rất lớn.
+      </p>
+
+      <h3>Các thao tác cơ bản</h3>
+      <table>
+        <thead><tr><th>Thao tác</th><th>Phím / lệnh</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td>Chạy nền</td><td><code>cmd &amp;</code></td><td>Khởi chạy trực tiếp ở background</td></tr>
+          <tr><td>Suspend</td><td><kbd>Ctrl-Z</kbd></td><td>Tạm dừng job đang foreground</td></tr>
+          <tr><td>List jobs</td><td><code>jobs</code></td><td>Xem danh sách job của shell hiện tại</td></tr>
+          <tr><td>Background</td><td><code>bg %1</code></td><td>Cho job đang stop chạy tiếp ở nền</td></tr>
+          <tr><td>Foreground</td><td><code>fg %1</code></td><td>Mang job về foreground</td></tr>
+          <tr><td>Kill job</td><td><code>kill %1</code></td><td>Giết job số 1 (không cần PID)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Kịch bản đầy đủ</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sleep</span> 100 &amp;             <span class="comment"># chạy ngầm ngay từ đầu</span>
+<span class="output">[1] 4521</span>
+<span class="prompt">$ </span><span class="cmd">sleep</span> 200                <span class="comment"># chạy foreground — terminal bị "khóa"</span>
+^Z                          <span class="comment"># bấm Ctrl-Z → suspend</span>
+<span class="output">[2]+  Stopped    sleep 200</span>
+<span class="prompt">$ </span><span class="cmd">jobs</span>
+<span class="output">[1]-  Running    sleep 100 &amp;
+[2]+  Stopped    sleep 200</span>
+<span class="prompt">$ </span><span class="cmd">bg</span> %2                   <span class="comment"># đẩy job 2 vào nền chạy tiếp</span>
+<span class="prompt">$ </span><span class="cmd">jobs</span>
+<span class="output">[1]-  Running    sleep 100 &amp;
+[2]+  Running    sleep 200 &amp;</span>
+<span class="prompt">$ </span><span class="cmd">fg</span> %1                   <span class="comment"># kéo job 1 lên foreground</span>
+<span class="prompt">$ </span><span class="cmd">kill</span> %2                 <span class="comment"># giết job 2 — dùng %N thay PID</span></code></pre>
+
+      <div class="callout info">
+        <div class="callout-title">📘 <code>%1</code>, <code>%2</code> là job number, KHÔNG phải PID</div>
+        Job number do shell quản lý, chỉ tồn tại trong shell hiện tại. PID là toàn hệ thống. Để xem cả hai cùng lúc: <code>jobs -l</code>.
+      </div>
+    </section>
+
+    <section>
+      <h2>6. <code>nohup</code>, <code>disown</code> — chạy lâu, đóng terminal vẫn sống</h2>
+      <p>
+        Mặc định, khi bạn đóng terminal, shell gửi <code>SIGHUP</code> cho mọi child → chúng chết. Vấn đề: bạn muốn chạy build dài 2 tiếng, không lẽ phải bật terminal cả đêm?
+      </p>
+
+      <h3><code>nohup</code> — "no hangup"</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">nohup</span> ./long-build.sh &amp;
+<span class="output">[1] 6123
+nohup: ignoring input and appending output to 'nohup.out'</span>
+<span class="prompt">$ </span><span class="cmd">exit</span>                       <span class="comment"># đóng terminal — process vẫn sống tiếp</span></code></pre>
+      <p>
+        <code>nohup</code> bọc lệnh sao cho nó <em>bỏ qua SIGHUP</em>. Output được redirect vào file <code>nohup.out</code> (cùng folder).
+      </p>
+
+      <h3><code>disown</code> — đã chạy rồi mới quyết định "thả"</h3>
+      <pre><code><span class="prompt">$ </span>./long-build.sh &amp;            <span class="comment"># đã chạy nền nhưng chưa nohup</span>
+<span class="output">[1] 6789</span>
+<span class="prompt">$ </span><span class="cmd">disown</span> <span class="flag">-h</span> %1                  <span class="comment"># tách job 1 ra, không nhận SIGHUP nữa</span>
+<span class="prompt">$ </span><span class="cmd">exit</span>                         <span class="comment"># đóng terminal — job vẫn sống</span></code></pre>
+
+      <h3>Khi nào dùng cái nào?</h3>
+      <table>
+        <thead><tr><th>Tình huống</th><th>Dùng</th></tr></thead>
+        <tbody>
+          <tr><td>Biết trước sẽ chạy lâu, muốn redirect output sạch</td><td><code>nohup cmd &amp;</code></td></tr>
+          <tr><td>Đã lỡ chạy, giờ mới muốn đóng terminal</td><td><code>disown -h %1</code></td></tr>
+          <tr><td>Cần tương tác trở lại sau khi đóng &amp; mở terminal mới</td><td><code>tmux</code> (Chương 9)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Production thực tế: dùng <code>tmux</code></div>
+        <code>nohup</code> &amp; <code>disown</code> là giải pháp cổ điển. Nhưng usecase thực sự — chạy server, theo dõi log, gắn lại session từ máy khác — thì <code>tmux</code> mạnh hơn rất nhiều. Bạn sẽ học chi tiết ở Chương 9 (Tmux &amp; SSH).
+      </div>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>Một số kịch bản nên gõ tay qua một lượt:</p>
+      <ol>
+        <li>Xem process đang chạy: <code>ps aux | head</code></li>
+        <li>Tìm process tên "node": <code>ps aux | grep node</code></li>
+        <li>Khởi động sleep nền: <code>sleep 60 &amp;</code></li>
+        <li>Liệt kê job: <code>jobs</code></li>
+        <li>Mang về foreground: <code>fg %1</code></li>
+        <li>Suspend bằng <kbd>Ctrl-Z</kbd>, sau đó <code>bg %1</code></li>
+        <li>Giết job: <code>kill %1</code></li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong6 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Trên Terminal thật, làm tuần tự:</p>
+      <ol>
+        <li>Chạy <code>ps aux</code> rồi đếm có bao nhiêu process tổng cộng (gợi ý: pipe sang <code>wc -l</code>).</li>
+        <li>Tìm 5 process tốn CPU nhất bằng <code>ps aux | sort -k3 -nr | head -5</code>. Đọc cột <code>%CPU</code> và <code>COMMAND</code>.</li>
+        <li>Mở <code>top</code> hoặc <code>htop</code>, nhận diện process đang ngốn CPU/RAM nhiều nhất, ghi PID lại, rồi <code>kill PID</code> (chọn process <em>vô hại</em>, vd một tab Chrome bạn không cần).</li>
+        <li>Chạy <code>sleep 300 &amp;</code> 3 lần liên tiếp. Gõ <code>jobs</code> — bạn có 3 job. Dùng <code>kill %2</code> để giết job số 2.</li>
+        <li>Chạy <code>sleep 200</code> ở foreground. Bấm <kbd>Ctrl-Z</kbd>. Gõ <code>jobs</code>, sau đó <code>bg %1</code>. Cuối cùng <code>fg %1</code> để mang trở lại.</li>
+        <li>Mở 1 tab terminal mới, chạy <code>nohup sleep 600 &amp;</code>, đóng tab. Mở tab khác, dùng <code>ps aux | grep sleep</code> để kiểm tra process <code>sleep 600</code> còn sống. Sau đó <code>kill</code> nó.</li>
+        <li>Phân biệt: gửi <code>kill -15</code> và <code>kill -9</code> cho 2 lệnh <code>sleep 100 &amp;</code> khác nhau. Xem có khác biệt gì không (gợi ý: cả hai đều chết — nhưng với app phức tạp, khác biệt rất lớn).</li>
+        <li>Dùng <code>pkill -f sleep</code> để giết mọi process có "sleep" trong command line. So với <code>killall sleep</code>, kết quả có khác?</li>
+        <li>Bonus: viết 1 dòng tìm và in ra PID của process Firefox (nếu có): <code>ps aux | grep -i firefox | grep -v grep | awk '{print $2}'</code> — đoán xem mỗi đoạn làm gì.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ Mỗi process có PID; sinh ra qua <code>fork</code> + <code>exec</code> từ parent.</li>
+        <li>✅ Liệt kê: <code>ps aux</code>, <code>ps aux | grep name</code>, realtime với <code>top</code> / <code>htop</code>.</li>
+        <li>✅ Đọc <code>%CPU</code>, <code>%MEM</code>, <code>STAT</code> để chẩn đoán.</li>
+        <li>✅ <code>kill PID</code> = TERM (lịch sự) — luôn thử trước. <code>kill -9</code> = KILL (ép) — chỉ khi treo cứng.</li>
+        <li>✅ Job control: <code>&amp;</code>, <kbd>Ctrl-Z</kbd>, <code>jobs</code>, <code>bg</code>, <code>fg</code>, <code>kill %N</code>.</li>
+        <li>✅ Chạy lâu: <code>nohup cmd &amp;</code> hoặc <code>disown -h %1</code>; usecase thật → <code>tmux</code>.</li>
+        <li>✅ <code>pkill</code> match substring; <code>killall</code> match chính xác tên.</li>
+      </ul>
+      <p class="text-dim">Chương 7 ta sẽ học <em>Shell scripting</em> — gói mọi mẹo CLI bạn vừa học vào file <code>.sh</code> tự động chạy: vòng lặp, biến, hàm, điều kiện. Đây là bước biến bạn từ "user CLI" thành "tự viết tool".</p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong5.html">
+        <span class="label">Trước</span>
+        ← Chương 05: Tìm kiếm &amp; lọc
+      </a>
+      <a href="chuong7.html">
+        <span class="label">Tiếp theo</span>
+        Chương 07: Shell scripting →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 06
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Khác biệt cốt lõi giữa kill -15 (SIGTERM) và kill -9 (SIGKILL) là gì?",
+        options: [
+          "Không khác gì, chỉ là số khác nhau",
+          "-15 nhanh hơn -9",
+          "-15 yêu cầu lịch sự để process tự dọn dẹp; -9 ép chết ngay, không cleanup được",
+          "-9 chỉ kill được process của user khác"
+        ],
+        correct: 2,
+        explain: "SIGTERM (15) báo cho process: 'hãy thoát'. Process có thể bắt signal, đóng file, lưu state, rồi tự thoát. SIGKILL (9) bỏ qua process — kernel giết tức thời. Hậu quả: file dở, lock chưa giải phóng, dữ liệu có thể hỏng. Luôn thử -15 trước, chỉ -9 khi treo cứng."
+      },
+      {
+        q: "Trong output 'ps aux', cột nào là Process ID dùng để kill?",
+        options: ["USER", "PID", "%CPU", "COMMAND"],
+        correct: 1,
+        explain: "PID (cột thứ 2 trong ps aux) là số định danh duy nhất của process. Đó là số bạn truyền cho kill <PID>. %CPU là phần trăm CPU, USER là chủ process, COMMAND là dòng lệnh."
+      },
+      {
+        q: "Bạn vừa chạy 'sleep 300' ở foreground và muốn giữ nó chạy nhưng tiếp tục dùng terminal. Trình tự nào đúng?",
+        options: [
+          "Bấm Ctrl-C, rồi chạy 'sleep 300 &'",
+          "Bấm Ctrl-Z (suspend), rồi gõ 'bg' để cho chạy nền tiếp",
+          "Bấm Ctrl-D, rồi 'fg'",
+          "Gõ 'jobs' rồi 'kill %1'"
+        ],
+        correct: 1,
+        explain: "Ctrl-Z suspend job đang foreground (trạng thái Stopped). 'bg' (background) cho job tiếp tục chạy ở nền. Ctrl-C giết hẳn process — bạn sẽ phải chạy lại từ đầu. Ctrl-D là EOF, không liên quan."
+      },
+      {
+        q: "Bạn cần chạy script build 2 giờ, đóng terminal rồi đi ngủ, mai về kiểm tra kết quả. Cách phù hợp nhất trong các lựa chọn:",
+        options: [
+          "./build.sh &",
+          "./build.sh trong tab mới",
+          "nohup ./build.sh &",
+          "kill ./build.sh"
+        ],
+        correct: 2,
+        explain: "Chỉ '&' không đủ — đóng terminal sẽ gửi SIGHUP và process chết. 'nohup' khiến process bỏ qua SIGHUP, đồng thời redirect output vào nohup.out. (Production thật thì nên dùng tmux — chương 9.)"
+      },
+      {
+        q: "Bạn đã chạy './build.sh &' rồi mới nhận ra cần đóng terminal. Cách 'cứu' để job không chết?",
+        options: [
+          "Phải kill rồi chạy lại với nohup",
+          "disown -h %1 để tách job khỏi shell, không nhận SIGHUP nữa",
+          "Mở thêm tab terminal là đủ",
+          "Gõ 'jobs' để job tự sống sót"
+        ],
+        correct: 1,
+        explain: "disown -h %1 đánh dấu job không nhận SIGHUP — bạn có thể đóng terminal và job vẫn sống. Đây chính là điểm khác biệt với nohup: nohup phải bọc TỪ ĐẦU, disown thì cứu được sau khi đã chạy."
+      },
+      {
+        q: "Khác biệt giữa 'pkill node' và 'killall node'?",
+        options: [
+          "Không khác gì",
+          "pkill chỉ kill 1 process, killall kill nhiều",
+          "pkill match substring (sẽ kill cả 'node-server'), killall đòi tên khớp chính xác",
+          "killall cần sudo còn pkill không"
+        ],
+        correct: 2,
+        explain: "pkill node sẽ match cả node, node-server, my-node-app... vì là substring. killall node CHỈ giết process tên đúng 'node'. Cả hai có thể kill nhiều process cùng lúc — không phải khác biệt nằm ở số lượng."
+      },
+      {
+        q: "Trong 'ps aux', cột STAT hiển thị 'Z'. Nghĩa là gì?",
+        options: [
+          "Process đang chạy bình thường",
+          "Process đã sleep",
+          "Zombie — process đã chết nhưng parent chưa 'reap', vẫn chiếm slot trong process table",
+          "Process bị khóa"
+        ],
+        correct: 2,
+        explain: "Z = Zombie. Process đã exit nhưng parent chưa gọi wait() để dọn entry trong process table. Zombie không tốn CPU/RAM nhưng chiếm PID. Thường do parent bị bug. Cách fix: kill parent — init/launchd sẽ adopt và clean."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

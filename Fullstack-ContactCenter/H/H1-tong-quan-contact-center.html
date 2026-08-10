@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H1 · Tổng quan Contact Center</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-h">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">H1 · Tổng quan Contact Center</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần H · Nghiệp vụ & Thiết kế</div>
+      <nav class="nav">
+        <a href="H1-tong-quan-contact-center.html" class="active">H1 · Tổng quan Contact Center</a>
+        <a href="H2-call-center-acd.html">H2 · Call Center: ACD, IVR</a>
+        <a href="H3-live-chat-omnichannel.html">H3 · Live Chat Omnichannel</a>
+        <a href="H4-crm-dashboard.html">H4 · CRM & Dashboard realtime</a>
+        <a href="H5-rbac-workflow.html">H5 · Phân quyền + Workflow</a>
+        <a href="H6-multi-tenancy.html">H6 · SaaS Multi-tenancy</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#whatis">① Contact Center là gì</a>
+        <a href="#components">② Các thành phần</a>
+        <a href="#actors">③ Tác nhân & vai trò</a>
+        <a href="#architecture">④ Kiến trúc SaaS tổng thể</a>
+        <a href="#flows">⑤ Luồng nghiệp vụ chính</a>
+        <a href="#challenges">⑥ Thách thức kỹ thuật</a>
+        <a href="#mapping">⑦ Ánh xạ công nghệ</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần H · Nghiệp vụ & Thiết kế &nbsp;›&nbsp; <b>H1 · Tổng quan Contact Center</b></div>
+      <div class="live-pill"><span class="blink"></span> system map</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần H · Chương 1</span>
+        <h1>Tổng quan Kiến trúc SaaS Contact Center</h1>
+        <p class="lead">Bức tranh toàn cảnh: một nền tảng SaaS Contact Center gồm những thành phần nào, ai dùng, luồng nghiệp vụ ra sao và thách thức kỹ thuật ở đâu. Khởi đầu của tư duy thiết kế hệ thống.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phân biệt <b>Call Center</b> (chỉ thoại) với <b>Contact Center</b> (đa kênh: thoại, chat, email, mạng xã hội).</p>
+        <p>• Liệt kê và giải thích vai trò của <b>các thành phần lõi</b>: telephony/media, routing/ACD, agent workspace, CRM, supervisor dashboard, reporting, admin/config, workflow.</p>
+        <p>• Vẽ được <b>kiến trúc SaaS tổng thể</b> (gateway, các service, tầng realtime, DB, queue, cache, storage) và lý do phân tách.</p>
+        <p>• Mô tả 3 luồng nghiệp vụ cốt lõi: cuộc gọi vào, phiên chat, vòng đời ticket.</p>
+        <p>• Nhận diện 5 nhóm <b>thách thức kỹ thuật</b> đặc trưng: realtime, scale, độ tin cậy, multi-tenancy, tích hợp.</p>
+        <p>• Có <b>tư duy phân rã</b> một hệ thống lớn thành các service có ranh giới rõ — nền tảng để trả lời câu hỏi system design.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế</div>
+        <p>Hãy hình dung một trung tâm dịch vụ khách hàng của một ngân hàng hoặc một sàn thương mại điện tử: hàng trăm tổng đài viên ngồi trước màn hình, khách gọi điện / nhắn chat / gửi email cùng lúc, người giám sát theo dõi bảng số liệu cập nhật từng giây. Toàn bộ "sân khấu" đó được vận hành bởi một nền tảng phần mềm — chính là thứ bạn sẽ thiết kế trong Phần H này. Từng chương sau (<a href="H2-call-center-acd.html">H2</a> → <a href="H6-multi-tenancy.html">H6</a>) sẽ đào sâu từng mảnh; chương H1 này là <b>bản đồ tổng</b> để bạn không lạc.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="whatis"><span class="ico">①</span> Contact Center là gì?</h2>
+      <p>Một <strong>Contact Center</strong> (trung tâm liên lạc) là một nền tảng phần mềm điều phối mọi <b>tương tác</b> giữa khách hàng và doanh nghiệp qua nhiều kênh, đồng thời cung cấp công cụ làm việc cho tổng đài viên (agent) và công cụ giám sát/báo cáo cho quản lý. Mục tiêu: <em>đưa đúng khách hàng tới đúng agent vào đúng thời điểm</em>, và ghi lại toàn bộ để đo lường & cải thiện chất lượng dịch vụ.</p>
+
+      <h3>Call Center vs Contact Center</h3>
+      <p>Hai khái niệm thường bị dùng lẫn lộn, nhưng phỏng vấn rất thích hỏi để xem bạn có nhìn đúng phạm vi hệ thống không:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>Call Center (Tổng đài)</th><th>Contact Center (Trung tâm liên lạc)</th></tr></thead>
+          <tbody>
+            <tr><td><b>Kênh</b></td><td>Chỉ <b>thoại</b> (gọi vào/ra)</td><td><b>Đa kênh</b> (omnichannel): thoại, live chat, email, SMS, mạng xã hội, video</td></tr>
+            <tr><td><b>Trọng tâm</b></td><td>Phân phối cuộc gọi (ACD), IVR</td><td>Tương tác hợp nhất theo <b>ngữ cảnh khách hàng</b> xuyên kênh</td></tr>
+            <tr><td><b>Hồ sơ khách</b></td><td>Thường tách rời, theo từng cuộc</td><td>Gắn vào <b>CRM</b>, lịch sử thống nhất 360°</td></tr>
+            <tr><td><b>Tự động hóa</b></td><td>Cây IVR đơn giản</td><td>Bot/chatbot, định tuyến theo kỹ năng, workflow, gợi ý cho agent</td></tr>
+            <tr><td><b>Độ phức tạp kỹ thuật</b></td><td>Vừa</td><td>Cao — phải đồng bộ trạng thái realtime xuyên nhiều kênh</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Một câu để nhớ</div>
+        <p>Call Center là tập con của Contact Center. <b>Mọi Contact Center đều có khả năng của Call Center, nhưng không ngược lại.</b> Khi nói "thiết kế Contact Center", mặc định bạn đang nói về hệ thống <b>omnichannel</b>.</p>
+      </div>
+
+      <h3>Các kênh tương tác (channels)</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">📞</span> Thoại (voice)</div><p>Cuộc gọi qua PSTN/SIP/WebRTC. Đòi hỏi độ trễ cực thấp, media server, ghi âm. Đây là kênh "khó" nhất về kỹ thuật.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">💬</span> Live chat</div><p>Tin nhắn thời gian thực qua WebSocket. Một agent có thể phục vụ nhiều phiên chat song song (khác với thoại 1-1).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✉️</span> Email / ticket</div><p>Kênh <b>bất đồng bộ</b>: không cần trả lời tức thì, gom thành ticket có vòng đời (mở → xử lý → đóng).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🌐</span> Mạng xã hội / SMS</div><p>Tích hợp qua API bên thứ ba (Facebook, Zalo, WhatsApp, SMS gateway). Chuẩn hóa về một mô hình "message" chung.</p></div>
+      </div>
+      <p>Mấu chốt thiết kế: dù kênh khác nhau về giao thức, hệ thống nên trừu tượng hóa chúng về một khái niệm chung — một <code>Interaction</code> (tương tác) có thuộc tính kênh, khách hàng, agent, trạng thái. Nhờ vậy phần định tuyến và báo cáo dùng chung được logic.</p>
+
+      <!-- 2 -->
+      <h2 id="components"><span class="ico">②</span> Các thành phần của một Contact Center</h2>
+      <p>Một nền tảng Contact Center có thể chia thành các <strong>khối chức năng (functional components)</strong> sau. Hiểu rõ ranh giới từng khối chính là bước đầu của tư duy phân rã hệ thống.</p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">📡</span> Telephony / Media</div><p>Xử lý tín hiệu thoại: SIP/WebRTC, cầu nối media, ghi âm, IVR. Đẩy <b>sự kiện cuộc gọi</b> (ringing, answered, hangup) vào hệ thống.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔀</span> Routing / ACD</div><p>"Bộ não" phân phối: nhận tương tác → chọn hàng đợi → chọn agent phù hợp (theo kỹ năng, độ ưu tiên, tải). Xem <a href="H2-call-center-acd.html">H2</a>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🖥️</span> Agent Workspace</div><p>Giao diện làm việc của agent: trả lời, đổi trạng thái (Available/Busy/ACW), xem thông tin khách, ghi chú, chuyển/hội nghị.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🗂️</span> CRM / Customer 360</div><p>Hồ sơ khách hàng, lịch sử tương tác thống nhất xuyên kênh, ticket. Nguồn ngữ cảnh để agent phục vụ. Xem <a href="H4-crm-dashboard.html">H4</a>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📊</span> Supervisor Dashboard</div><p>Bảng giám sát realtime: bao nhiêu cuộc đang chờ, agent nào rảnh/bận, SLA, hàng đợi. Cho phép can thiệp (barge-in, whisper).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📈</span> Reporting / Analytics</div><p>Báo cáo lịch sử: AHT, ASA, abandon rate, hiệu suất agent. Thường tách khỏi đường realtime (xem mục thách thức).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⚙️</span> Admin / Config</div><p>Cấu hình hàng đợi, kỹ năng, cây IVR, giờ làm việc, người dùng, phân quyền. Thay đổi config tác động trực tiếp routing.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🤖</span> Workflow / Automation</div><p>Bot/chatbot, quy tắc tự động (auto-assign, escalation), webhook tích hợp, kịch bản. Xem <a href="H5-rbac-workflow.html">H5</a>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔐</span> Identity / RBAC</div><p>Xác thực người dùng và phân quyền theo vai trò (agent/supervisor/admin). Nền tảng bảo mật của mọi thao tác.</p></div>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Đừng nhầm "thành phần chức năng" với "service"</div>
+        <p>Một khối chức năng <b>không nhất thiết</b> là một microservice riêng. Ở giai đoạn đầu, nhiều khối có thể nằm chung một service (modular monolith); khi quy mô tăng mới tách. Việc nhận diện <b>ranh giới chức năng</b> trước, tách triển khai sau, là tư duy chuẩn — đừng vẽ 15 microservice cho một sản phẩm mới.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="actors"><span class="ico">③</span> Tác nhân & vai trò</h2>
+      <p>Trước khi thiết kế, hãy xác định <strong>ai dùng hệ thống</strong> và họ cần gì. Mỗi tác nhân quyết định một bộ tính năng, một mô hình quyền hạn và một loại giao diện riêng.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tác nhân</th><th>Mục tiêu</th><th>Tương tác chính với hệ thống</th></tr></thead>
+          <tbody>
+            <tr><td><b>Khách hàng (Customer)</b></td><td>Được giải quyết vấn đề nhanh nhất</td><td>Gọi vào, mở chat trên web/app, gửi email, nhắn social. Thường <b>không đăng nhập</b> vào hệ thống nội bộ.</td></tr>
+            <tr><td><b>Tổng đài viên (Agent)</b></td><td>Xử lý tương tác hiệu quả, đúng SLA</td><td>Đăng nhập workspace, đổi trạng thái, nhận/trả lời tương tác, ghi chú, tạo/cập nhật ticket, chuyển/hội nghị.</td></tr>
+            <tr><td><b>Giám sát (Supervisor / Team Lead)</b></td><td>Theo dõi & đảm bảo chất lượng đội</td><td>Xem dashboard realtime, nghe lén/nhắc (whisper)/chen vào (barge-in), điều phối lại agent, xem báo cáo nhóm.</td></tr>
+            <tr><td><b>Quản trị (Admin)</b></td><td>Cấu hình & vận hành nền tảng</td><td>Tạo hàng đợi, kỹ năng, IVR, giờ làm việc; quản lý người dùng & phân quyền; cấu hình tích hợp.</td></tr>
+            <tr><td><b>Tích hợp (System / Bot)</b></td><td>Tự động hóa, đồng bộ dữ liệu</td><td>Gọi API, nhận webhook, chatbot trả lời tự động, đồng bộ với CRM/ERP bên ngoài.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Vai trò định hình quyền và UI</div>
+        <p>Cùng một dữ liệu "cuộc gọi đang chờ", agent chỉ thấy cuộc thuộc hàng đợi của mình, supervisor thấy toàn đội, admin thấy cấu hình hàng đợi. Đây là lý do <b>RBAC</b> (phân quyền theo vai trò) là một khối lõi — sẽ học sâu ở <a href="H5-rbac-workflow.html">H5</a>. Khi trả lời phỏng vấn, luôn bắt đầu thiết kế bằng việc liệt kê tác nhân: nó cho thấy bạn nghĩ từ <b>nghiệp vụ</b> ra, không phải từ công nghệ vào.</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="architecture"><span class="ico">④</span> Kiến trúc SaaS tổng thể</h2>
+      <p>Bây giờ ghép các khối chức năng vào một <strong>kiến trúc triển khai</strong>. Đây là góc nhìn của một hệ thống <b>SaaS multi-tenant</b> (nhiều khách hàng doanh nghiệp dùng chung nền tảng — xem <a href="H6-multi-tenancy.html">H6</a>), chạy trên hạ tầng đám mây.</p>
+
+      <h3>Yêu cầu định hình kiến trúc</h3>
+      <ul>
+        <li><b>Realtime trước hết:</b> trạng thái agent, hàng đợi, tin nhắn phải lan tỏa trong mili-giây.</li>
+        <li><b>Co giãn theo tải:</b> giờ cao điểm gấp nhiều lần giờ thường; cần scale ngang các tầng độc lập.</li>
+        <li><b>Độ tin cậy cao:</b> rớt một cuộc gọi = mất khách thật; cần không-mất-dữ-liệu cho tương tác.</li>
+        <li><b>Cách ly tenant:</b> dữ liệu của doanh nghiệp A tuyệt đối không lọt sang B.</li>
+        <li><b>Tích hợp mở:</b> webhook, API, kết nối CRM/ERP ngoài, telephony provider.</li>
+      </ul>
+
+      <h3>Sơ đồ tầng (high-level)</h3>
+      <div class="flow">
+        <span class="node">Khách hàng / Agent (Web, App, Phone)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">API Gateway / Load Balancer</span>
+      </div>
+      <div class="flow">
+        <span class="node" style="border-color:var(--cyan)">Gateway / LB</span><span class="arr">→</span>
+        <span class="node">Auth Service</span>
+        <span class="node">Routing / ACD</span>
+        <span class="node">Interaction Service</span>
+        <span class="node">CRM Service</span>
+        <span class="node">Telephony Bridge</span>
+        <span class="node">Realtime Gateway (WS)</span>
+      </div>
+      <div class="flow">
+        <span class="node">Các service</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--violet)">Message Queue (Kafka/Rabbit/BullMQ)</span><span class="arr">→</span>
+        <span class="node">Worker (ghi âm, email, báo cáo)</span>
+      </div>
+      <div class="flow">
+        <span class="node">Các service</span><span class="arr">→</span>
+        <span class="node">DB (PostgreSQL)</span>
+        <span class="node">Cache / PubSub (Redis)</span>
+        <span class="node">Object Storage (S3: ghi âm, file)</span>
+        <span class="node">Analytics DB (warehouse)</span>
+      </div>
+
+      <h3>Vai trò từng tầng</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tầng</th><th>Trách nhiệm</th><th>Vì sao tách ra</th></tr></thead>
+          <tbody>
+            <tr><td><b>API Gateway / LB</b></td><td>Điểm vào duy nhất: TLS, rate limit, định tuyến request, xác thực sơ bộ, sticky session cho WebSocket</td><td>Che giấu cấu trúc nội bộ, một nơi áp dụng chính sách chung</td></tr>
+            <tr><td><b>Auth / Identity</b></td><td>Đăng nhập, phát JWT, phân quyền RBAC, ngữ cảnh tenant</td><td>Bảo mật là mối quan tâm xuyên suốt, nên tập trung</td></tr>
+            <tr><td><b>Routing / ACD</b></td><td>Quản lý hàng đợi, chọn agent, áp luật ưu tiên/kỹ năng</td><td>Logic nghiệp vụ phức tạp, thay đổi thường xuyên, cần scale riêng</td></tr>
+            <tr><td><b>Interaction Service</b></td><td>Vòng đời tương tác (call/chat/ticket): tạo, gán, cập nhật trạng thái</td><td>Trừu tượng hóa đa kênh về một mô hình chung</td></tr>
+            <tr><td><b>Realtime Gateway</b></td><td>Giữ kết nối WebSocket với agent/khách, đẩy sự kiện (presence, message, queue)</td><td>Kết nối <b>stateful</b>, scale khác với service REST <b>stateless</b></td></tr>
+            <tr><td><b>Telephony Bridge</b></td><td>Cầu nối SIP/WebRTC, sự kiện cuộc gọi, điều khiển media/ghi âm</td><td>Giao thức đặc thù, đôi khi dùng phần mềm chuyên (FreeSWITCH/Asterisk)</td></tr>
+            <tr><td><b>Message Queue</b></td><td>Tách việc nền & giao tiếp bất đồng bộ giữa service</td><td>Đệm tải đột biến, đảm bảo không mất việc, nới lỏng ghép nối</td></tr>
+            <tr><td><b>DB / Cache / Storage</b></td><td>PostgreSQL (dữ liệu giao dịch), Redis (cache + pub/sub presence), S3 (ghi âm/file), warehouse (báo cáo)</td><td>Mỗi loại dữ liệu có mẫu truy cập & yêu cầu khác nhau</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Bẫy kinh điển: nhồi mọi thứ vào một service realtime</div>
+        <p>Người mới hay để service WebSocket vừa giữ kết nối, vừa chạy logic routing, vừa ghi DB. Khi scale, vì WebSocket là <b>stateful</b> (mỗi kết nối "dính" một instance), bạn không thể nhân bản tự do mà không có <b>Redis pub/sub / adapter</b> để đồng bộ giữa các node. Hãy tách <b>tầng giữ kết nối</b> khỏi <b>tầng xử lý nghiệp vụ</b> ngay từ đầu (xem <a href="../F/F5-scaling-realtime.html">F5</a>).</p>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">interaction.model.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Mô hình "Interaction" thống nhất cho mọi kênh — nền tảng để</span>
+<span class="tok-com">// routing, dashboard, reporting dùng chung logic.</span>
+<span class="tok-key">type</span> <span class="tok-typ">Channel</span> = <span class="tok-str">'voice'</span> | <span class="tok-str">'chat'</span> | <span class="tok-str">'email'</span> | <span class="tok-str">'social'</span>;
+<span class="tok-key">type</span> <span class="tok-typ">InteractionState</span> =
+  | <span class="tok-str">'queued'</span>      <span class="tok-com">// đã vào hàng đợi, chờ agent</span>
+  | <span class="tok-str">'assigned'</span>    <span class="tok-com">// đã gán cho agent</span>
+  | <span class="tok-str">'active'</span>      <span class="tok-com">// đang xử lý</span>
+  | <span class="tok-str">'wrapup'</span>      <span class="tok-com">// after-call work (ghi chú sau cuộc)</span>
+  | <span class="tok-str">'closed'</span>;     <span class="tok-com">// kết thúc</span>
+
+<span class="tok-key">interface</span> <span class="tok-typ">Interaction</span> {
+  id: <span class="tok-typ">string</span>;
+  tenantId: <span class="tok-typ">string</span>;        <span class="tok-com">// cách ly multi-tenant</span>
+  channel: <span class="tok-typ">Channel</span>;
+  customerId: <span class="tok-typ">string</span>;
+  queueId: <span class="tok-typ">string</span>;
+  agentId?: <span class="tok-typ">string</span>;        <span class="tok-com">// chưa có khi đang queued</span>
+  state: <span class="tok-typ">InteractionState</span>;
+  priority: <span class="tok-typ">number</span>;
+  createdAt: <span class="tok-typ">Date</span>;
+  metadata: <span class="tok-typ">Record</span>&lt;<span class="tok-typ">string</span>, <span class="tok-typ">unknown</span>&gt;; <span class="tok-com">// dữ liệu riêng theo kênh</span>
+}</code></pre>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="flows"><span class="ico">⑤</span> Luồng nghiệp vụ chính</h2>
+      <p>Kiến trúc chỉ "sống" khi ta theo dõi dữ liệu chảy qua nó. Dưới đây là ba luồng cốt lõi — nắm vững là đủ để mô tả 80% hệ thống trong phỏng vấn.</p>
+
+      <h3>Luồng 1 — Cuộc gọi vào (inbound voice)</h3>
+      <div class="flow">
+        <span class="node">📞 Khách gọi</span><span class="arr">→</span>
+        <span class="node">Telephony Bridge</span><span class="arr">→</span>
+        <span class="node">IVR (menu)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Routing/ACD chọn hàng đợi</span><span class="arr">→</span>
+        <span class="node">Hàng đợi (queue)</span>
+      </div>
+      <div class="flow">
+        <span class="node">Hàng đợi</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Chọn agent rảnh + đủ kỹ năng</span><span class="arr">→</span>
+        <span class="node">Đổ chuông agent</span><span class="arr">→</span>
+        <span class="node">Agent nhận → đàm thoại</span><span class="arr">→</span>
+        <span class="node">Hangup</span><span class="arr">→</span>
+        <span class="node">Wrap-up (ACW)</span><span class="arr">→</span>
+        <span class="node">Ghi âm + log + báo cáo</span>
+      </div>
+      <p>Điểm kỹ thuật đáng chú ý: bước "chọn agent" là <b>realtime & cạnh tranh</b> — nếu hai cuộc cùng nhắm một agent rảnh, phải có khóa/atomic để tránh gán đôi. Sau hangup, các việc nặng (lưu file ghi âm, tính chỉ số) được đẩy sang <b>queue</b> chứ không chặn luồng.</p>
+
+      <h3>Luồng 2 — Phiên chat (live chat)</h3>
+      <div class="flow">
+        <span class="node">💬 Khách mở chat</span><span class="arr">→</span>
+        <span class="node">Realtime Gateway (WS)</span><span class="arr">→</span>
+        <span class="node">Tạo Interaction (queued)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Routing gán agent</span><span class="arr">→</span>
+        <span class="node">Phòng chat (room)</span>
+      </div>
+      <div class="flow">
+        <span class="node">Tin nhắn 2 chiều</span><span class="arr">→</span>
+        <span class="node">Lưu DB + đẩy qua WS</span><span class="arr">→</span>
+        <span class="node">Typing / read receipt</span><span class="arr">→</span>
+        <span class="node">Đóng phiên</span><span class="arr">→</span>
+        <span class="node">Gắn vào lịch sử CRM</span>
+      </div>
+      <p>Khác biệt then chốt với thoại: <b>một agent phục vụ nhiều phiên chat song song</b> (concurrency), nên routing tính tải theo số phiên đang mở, không phải "bận/rảnh" nhị phân. Chi tiết ở <a href="H3-live-chat-omnichannel.html">H3</a> và nền tảng realtime ở <a href="../F/F1-websocket-socketio.html">F1</a>.</p>
+
+      <h3>Luồng 3 — Vòng đời ticket (email/case bất đồng bộ)</h3>
+      <div class="flow">
+        <span class="node">✉️ Email/yêu cầu vào</span><span class="arr">→</span>
+        <span class="node">Tạo Ticket (open)</span><span class="arr">→</span>
+        <span class="node">Gán theo luật/kỹ năng</span><span class="arr">→</span>
+        <span class="node">Agent xử lý (in&nbsp;progress)</span><span class="arr">→</span>
+        <span class="node">Chờ khách (pending)</span><span class="arr">→</span>
+        <span class="node">Giải quyết (resolved)</span><span class="arr">→</span>
+        <span class="node">Đóng (closed)</span>
+      </div>
+      <p>Ticket là kênh <b>bất đồng bộ</b>: không có khái niệm "agent đang chờ máy". Routing có thể gán theo lô, theo round-robin, hoặc để agent tự nhận từ hàng đợi. Có SLA theo thời gian phản hồi/giải quyết; quá hạn thì <b>escalation</b> tự động (workflow — <a href="H5-rbac-workflow.html">H5</a>).</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">routing.service.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-com">// Chọn agent cho một tương tác — phần "não" của ACD.</span>
+<span class="tok-com">// Phải atomic để không gán cùng agent cho 2 tương tác.</span>
+<span class="tok-key">async</span> <span class="tok-key">function</span> <span class="tok-fn">assignAgent</span>(interaction: <span class="tok-typ">Interaction</span>) {
+  <span class="tok-key">const</span> candidates = <span class="tok-key">await</span> <span class="tok-fn">findAvailableAgents</span>({
+    tenantId: interaction.tenantId,
+    queueId:  interaction.queueId,
+    skills:   interaction.metadata.requiredSkills,
+  });
+
+  <span class="tok-com">// Sắp xếp theo tải hiện tại (chat: số phiên; voice: rảnh/bận)</span>
+  candidates.<span class="tok-fn">sort</span>((a, b) =&gt; a.currentLoad - b.currentLoad);
+
+  <span class="tok-key">for</span> (<span class="tok-key">const</span> agent <span class="tok-key">of</span> candidates) {
+    <span class="tok-com">// Khóa atomic trong Redis: chỉ 1 tương tác chiếm được slot</span>
+    <span class="tok-key">const</span> ok = <span class="tok-key">await</span> redis.<span class="tok-fn">set</span>(
+      <span class="tok-str">`lock:agent:</span>${agent.id}<span class="tok-str">`</span>,
+      interaction.id,
+      <span class="tok-str">'NX'</span>, <span class="tok-str">'EX'</span>, <span class="tok-num">10</span>,   <span class="tok-com">// hết hạn 10s nếu agent không nhận</span>
+    );
+    <span class="tok-key">if</span> (ok) {
+      <span class="tok-key">await</span> <span class="tok-fn">offerToAgent</span>(agent.id, interaction.id);
+      <span class="tok-key">return</span> agent.id;
+    }
+  }
+  <span class="tok-key">return</span> <span class="tok-key">null</span>; <span class="tok-com">// không có ai rảnh → giữ trong hàng đợi</span>
+}</code></pre>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="challenges"><span class="ico">⑥</span> Thách thức kỹ thuật</h2>
+      <p>Đây là phần phỏng vấn đào sâu nhất. Một Contact Center hội tụ gần như mọi bài toán khó của hệ thống realtime quy mô lớn. Nắm năm nhóm sau:</p>
+
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">⚡</span> 1. Realtime & độ trễ</div><p>Presence agent, hàng đợi, tin nhắn, media phải cập nhật trong mili-giây. WebSocket stateful, đồng bộ trạng thái xuyên nhiều node là bài toán cốt lõi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📈</span> 2. Scale & tải đột biến</div><p>Giờ cao điểm gấp nhiều lần. Phải scale ngang từng tầng độc lập; tầng kết nối (WS) cần sticky session + pub/sub adapter; tầng REST stateless dễ nhân bản.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🛡️</span> 3. Độ tin cậy & nhất quán</div><p>Mất một tương tác = mất khách thật. Cần idempotency, retry, không-mất-việc qua queue, và xử lý "split brain" khi một node WS chết giữa cuộc.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🏢</span> 4. Multi-tenancy</div><p>Nhiều doanh nghiệp dùng chung nền tảng. Cách ly dữ liệu, giới hạn tài nguyên (noisy neighbor), cấu hình riêng từng tenant. Xem <a href="H6-multi-tenancy.html">H6</a>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔌</span> 5. Tích hợp</div><p>Telephony provider, CRM/ERP ngoài, social API, webhook. Mỗi tích hợp có giao thức, độ tin cậy, rate limit riêng — cần lớp chống lỗi (circuit breaker).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔭</span> 6. Quan trắc (observability)</div><p>Khi cuộc gọi rớt lúc 2h sáng, phải truy vết được. Cần log có correlation id, metrics, tracing xuyên service.</p></div>
+      </div>
+
+      <h3>Đồng bộ vs bất đồng bộ — chọn ở đâu?</h3>
+      <p>Một câu hỏi thiết kế trọng yếu. Nguyên tắc: <b>đồng bộ cho thứ người dùng đang chờ; bất đồng bộ cho mọi việc còn lại.</b></p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Hoạt động</th><th>Đồng bộ hay bất đồng bộ?</th><th>Lý do</th></tr></thead>
+          <tbody>
+            <tr><td>Đẩy tin nhắn chat tới agent</td><td><b>Đồng bộ</b> (realtime WS)</td><td>Người dùng đang chờ thấy ngay; độ trễ cảm nhận được</td></tr>
+            <tr><td>Chọn & gán agent</td><td><b>Đồng bộ</b> (nhưng nhanh)</td><td>Quyết định ngay để không bắt khách chờ lâu</td></tr>
+            <tr><td>Lưu file ghi âm cuộc gọi</td><td><b>Bất đồng bộ</b> (queue → worker)</td><td>File nặng, không nên chặn kết thúc cuộc</td></tr>
+            <tr><td>Gửi email xác nhận / khảo sát</td><td><b>Bất đồng bộ</b></td><td>Không cấp thiết, có thể retry</td></tr>
+            <tr><td>Tổng hợp báo cáo, tính KPI</td><td><b>Bất đồng bộ</b> (batch/stream → warehouse)</td><td>Tải nặng, tách khỏi đường nóng để không ảnh hưởng realtime</td></tr>
+            <tr><td>Đồng bộ ticket sang CRM ngoài</td><td><b>Bất đồng bộ</b> (queue + retry)</td><td>Hệ thống ngoài có thể chậm/lỗi; không để nó kéo sập mình</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Nền tảng kỹ thuật đã học</div>
+        <p>Tầng bất đồng bộ này chính là lý do bạn học message queue (<a href="../F/F4-bullmq-queue.html">F4 · BullMQ</a>) và các mẫu realtime (<a href="../F/F2-realtime-patterns.html">F2</a>). Tư duy "đường nóng vs đường nguội" (hot path vs cold path) là chìa khóa để hệ thống vừa nhanh vừa chịu tải.</p>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="mapping"><span class="ico">⑦</span> Ánh xạ sang stack đã học</h2>
+      <p>Toàn bộ kiến thức Phần A–G hội tụ tại đây. Bảng dưới nối từng nhu cầu nghiệp vụ với công nghệ tương ứng — giúp bạn trả lời "phần đó dùng gì, vì sao".</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Nhu cầu Contact Center</th><th>Công nghệ / mẫu</th><th>Học ở</th></tr></thead>
+          <tbody>
+            <tr><td>Service xử lý nhiều kết nối I/O đồng thời</td><td>Node.js (Event Loop, non-blocking)</td><td><a href="../B/B1-kien-truc-nodejs.html">B1</a></td></tr>
+            <tr><td>API REST cho cấu hình, CRUD ticket</td><td>Express/NestJS, HTTP</td><td><a href="../B/B4-http-rest-co-ban.html">B4</a></td></tr>
+            <tr><td>Realtime chat, presence, dashboard</td><td>WebSocket / Socket.IO</td><td><a href="../F/F1-websocket-socketio.html">F1</a></td></tr>
+            <tr><td>Đồng bộ trạng thái xuyên nhiều node WS</td><td>Redis pub/sub adapter, sticky session</td><td><a href="../F/F5-scaling-realtime.html">F5</a></td></tr>
+            <tr><td>Việc nền: ghi âm, email, báo cáo</td><td>Message queue (BullMQ/Kafka)</td><td><a href="../F/F4-bullmq-queue.html">F4</a></td></tr>
+            <tr><td>Lưu dữ liệu giao dịch (ticket, user)</td><td>PostgreSQL (quan hệ, giao dịch)</td><td>Phần D</td></tr>
+            <tr><td>Cache, khóa atomic, presence</td><td>Redis</td><td>Phần E</td></tr>
+            <tr><td>Giao diện agent/supervisor realtime</td><td>React + state realtime</td><td><a href="../G/G1-react-core.html">G1</a></td></tr>
+            <tr><td>Xác thực & phân quyền theo vai trò</td><td>JWT + RBAC</td><td><a href="H5-rbac-workflow.html">H5</a></td></tr>
+            <tr><td>Cách ly nhiều khách hàng doanh nghiệp</td><td>Multi-tenancy (tenantId, schema/DB tách)</td><td><a href="H6-multi-tenancy.html">H6</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout info">
+        <div class="c-title">🧭 Tư duy thiết kế: phân rã hệ thống lớn</div>
+        <p>Quy trình chuẩn khi đối diện một hệ thống lớn trong phỏng vấn: <b>(1)</b> Làm rõ yêu cầu & quy mô (bao nhiêu agent, bao nhiêu cuộc/giây). <b>(2)</b> Liệt kê tác nhân & use case. <b>(3)</b> Nhận diện ranh giới chức năng (các khối ở mục ②). <b>(4)</b> Vạch luồng dữ liệu chính. <b>(5)</b> Đặt câu hỏi đánh đổi: đồng bộ/bất đồng bộ, nhất quán/sẵn sàng, monolith/microservice. <b>(6)</b> Chọn công nghệ theo từng tầng và <b>giải thích lý do</b>. Đừng nhảy ngay vào "tôi dùng Kafka" — hãy đi từ yêu cầu.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Coi Contact Center = Call Center</div><p>Bỏ quên kênh chat/email/social và yêu cầu omnichannel. Luôn trừu tượng hóa về <code>Interaction</code> chung.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Vẽ 15 microservice từ đầu</div><p>Quá tách nhỏ khi sản phẩm chưa lớn → chi phí vận hành cao. Bắt đầu từ modular monolith, tách theo điểm đau thực tế.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Gộp tầng kết nối & nghiệp vụ</div><p>Service WS vừa giữ socket vừa chạy routing → không scale được. Tách stateful khỏi stateless.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Chặn đường nóng bằng việc nặng</div><p>Lưu ghi âm/báo cáo ngay trong handler cuộc gọi. Đẩy sang queue, giữ hot path nhẹ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên cách ly tenant</div><p>Thiếu <code>tenantId</code> trong truy vấn → rò rỉ dữ liệu chéo. Áp dụng ở tầng nền (middleware/row-level).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Thiết kế từ tác nhân & luồng</div><p>Bắt đầu bằng "ai dùng, làm gì" trước khi chọn công nghệ. Đây là dấu hiệu của ứng viên Senior.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Phân rã thành phần</div>
+        <p>Cho yêu cầu: "Khách nhắn tin qua Facebook, một agent trả lời, sau đó tạo ticket theo dõi". Hãy liệt kê các <b>khối chức năng</b> được kích hoạt theo thứ tự và nói rõ khối nào realtime, khối nào bất đồng bộ.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Social Integration (nhận message) → Interaction Service (tạo interaction kênh <code>social</code>) → Routing/ACD (gán agent) → Realtime Gateway (đẩy tin tới agent, <b>realtime</b>) → Agent Workspace (trả lời) → CRM (tạo ticket, lưu lịch sử) → Workflow (đặt SLA, escalation — <b>bất đồng bộ</b>) → Reporting (cập nhật chỉ số qua queue — <b>bất đồng bộ</b>).</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Đồng bộ hay bất đồng bộ?</div>
+        <p>Với mỗi hoạt động sau, quyết định đồng bộ hay bất đồng bộ và giải thích: (a) hiển thị "agent đang gõ", (b) lưu transcript chat, (c) tính điểm CSAT cuối ngày, (d) gọi API tra cứu số dư tài khoản khách trong lúc gọi.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">(a) <b>Đồng bộ</b> realtime — người dùng chờ thấy ngay. (b) Có thể <b>đồng bộ-nhẹ</b> (ghi từng tin) hoặc <b>bất đồng bộ</b> (gom rồi flush) tùy yêu cầu mất mát; thường lưu ngay để không mất dữ liệu. (c) <b>Bất đồng bộ</b> batch. (d) <b>Đồng bộ</b> nhưng phải có timeout + circuit breaker để hệ thống ngoài chậm không treo cuộc gọi.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Tránh gán đôi agent</div>
+        <p>Hai cuộc gọi cùng lúc nhắm tới một agent vừa rảnh. Mô tả cơ chế đảm bảo chỉ một cuộc được gán. Điều gì xảy ra nếu agent không bấm nhận trong 10 giây?</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Dùng khóa atomic (vd Redis <code>SET key val NX EX 10</code>): chỉ thao tác đầu tiên chiếm được khóa mới được offer cuộc cho agent. Cuộc còn lại quay về hàng đợi thử agent khác. Nếu agent không nhận trong 10s, khóa hết hạn (EX) → cuộc được re-route (no-answer handling), và có thể đánh dấu agent trạng thái bất thường.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Khác biệt cốt lõi giữa Call Center và Contact Center là?</div>
+          <div class="opt">Contact Center rẻ hơn</div>
+          <div class="opt" data-correct="true">Contact Center hỗ trợ đa kênh (omnichannel), Call Center chỉ thoại</div>
+          <div class="opt">Call Center dùng cloud, Contact Center thì không</div>
+          <div class="explain"><b>Đa kênh.</b> Call Center là tập con (chỉ voice) của Contact Center.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Khối nào là "bộ não" quyết định đưa tương tác tới agent nào?</div>
+          <div class="opt">CRM</div>
+          <div class="opt" data-correct="true">Routing / ACD</div>
+          <div class="opt">Reporting</div>
+          <div class="explain"><b>Routing/ACD.</b> Nó chọn hàng đợi và agent theo kỹ năng, tải, ưu tiên.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Việc nào nên đặt ở đường <b>bất đồng bộ</b> (queue)?</div>
+          <div class="opt">Đẩy tin nhắn chat tới agent</div>
+          <div class="opt" data-correct="true">Lưu file ghi âm và tổng hợp báo cáo cuối cuộc gọi</div>
+          <div class="opt">Hiển thị danh sách hàng đợi realtime</div>
+          <div class="explain"><b>Ghi âm & báo cáo.</b> Việc nặng, không nên chặn hot path mà người dùng đang chờ.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Vì sao tầng giữ kết nối WebSocket khó scale hơn service REST?</div>
+          <div class="opt">Vì WebSocket chậm hơn HTTP</div>
+          <div class="opt" data-correct="true">Vì kết nối WS là stateful (dính một node), cần sticky session + pub/sub để đồng bộ</div>
+          <div class="opt">Vì WebSocket không hỗ trợ TLS</div>
+          <div class="explain"><b>Stateful.</b> REST stateless nhân bản tự do; WS phải đồng bộ trạng thái xuyên node qua Redis adapter.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Bước đầu tiên đúng đắn khi thiết kế hệ thống trong phỏng vấn là?</div>
+          <div class="opt">Chọn ngay Kafka và microservices</div>
+          <div class="opt" data-correct="true">Làm rõ yêu cầu, quy mô và liệt kê tác nhân / use case</div>
+          <div class="opt">Vẽ schema database trước</div>
+          <div class="explain"><b>Yêu cầu & tác nhân trước.</b> Thiết kế đi từ nghiệp vụ ra, công nghệ là hệ quả.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Tổng quan hệ thống Contact Center — nền tảng để bước vào câu hỏi system design.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Contact Center là gì? Khác Call Center thế nào?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Contact Center là nền tảng điều phối tương tác khách hàng qua <b>nhiều kênh</b> (thoại, chat, email, mạng xã hội), gắn với CRM và công cụ giám sát/báo cáo. Call Center là tập con, chỉ xử lý kênh <b>thoại</b>. Khi nói "thiết kế Contact Center" mặc định là hệ thống omnichannel, phức tạp hơn về đồng bộ trạng thái realtime xuyên kênh.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Liệt kê các thành phần chính của một Contact Center.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Telephony/Media (xử lý thoại), Routing/ACD (phân phối), Agent Workspace (giao diện làm việc), CRM/Customer 360 (hồ sơ & lịch sử), Supervisor Dashboard (giám sát realtime), Reporting/Analytics (báo cáo lịch sử), Admin/Config (cấu hình hàng đợi, IVR, người dùng), Workflow/Automation (bot, escalation), và Identity/RBAC (xác thực & phân quyền). Lưu ý: đây là khối <b>chức năng</b>, không nhất thiết mỗi khối là một microservice.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Hãy thiết kế một Contact Center ở mức cao tầng.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Bắt đầu bằng làm rõ quy mô (số agent, cuộc/giây) và tác nhân. Kiến trúc: client → API Gateway/LB → các service (Auth, Routing/ACD, Interaction, CRM, Telephony Bridge) + một Realtime Gateway WebSocket riêng. Dữ liệu: PostgreSQL (giao dịch), Redis (cache + pub/sub presence + khóa atomic), object storage (ghi âm), warehouse (báo cáo). Message queue cho việc nền. Tách <b>tầng giữ kết nối stateful</b> khỏi <b>logic nghiệp vụ stateless</b>; đường nóng (realtime) nhẹ, việc nặng đẩy queue. Cách ly multi-tenant bằng <code>tenantId</code> xuyên suốt.</p>
+        <p class="trap">⚠️ Bẫy: nhảy thẳng vào "dùng Kafka, dùng K8s" mà không nêu yêu cầu và đánh đổi. Hãy đi từ requirement.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Phần nào của hệ thống là realtime, phần nào không?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Realtime (đường nóng): presence/trạng thái agent, hàng đợi, tin nhắn chat, sự kiện cuộc gọi, dashboard giám sát — đẩy qua WebSocket. Không realtime (đường nguội, bất đồng bộ): lưu ghi âm, gửi email/khảo sát, đồng bộ CRM ngoài, tổng hợp báo cáo/KPI — đẩy qua message queue và worker. Nguyên tắc: realtime cho thứ người dùng đang chờ; bất đồng bộ cho việc nặng/không cấp thiết.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Bạn phân rã hệ thống lớn này thành các service thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Phân rã theo <b>ranh giới nghiệp vụ (bounded context)</b>, không theo tầng kỹ thuật. Ứng viên cho service riêng: Auth/Identity, Routing/ACD (logic phức tạp, scale riêng), Interaction (vòng đời tương tác), Realtime Gateway (stateful, scale khác hẳn), Telephony Bridge (giao thức đặc thù), Reporting (tải nặng, tách khỏi đường nóng). Tiêu chí tách: tốc độ thay đổi khác nhau, mô hình scale khác nhau, ranh giới dữ liệu rõ. Khởi đầu nên là modular monolith, tách dần theo điểm đau thực tế thay vì vẽ sẵn 15 service.</p>
+        <p class="trap">⚠️ Bẫy: tách quá sớm/quá nhỏ gây phình chi phí vận hành và độ trễ mạng giữa service.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Thách thức kỹ thuật lớn nhất của Contact Center là gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Đồng bộ <b>trạng thái realtime ở quy mô lớn</b>: presence agent, hàng đợi, tin nhắn phải nhất quán xuyên nhiều node WebSocket trong mili-giây, trong khi tải đột biến và yêu cầu không-mất-tương-tác. Đi kèm là độ tin cậy (rớt cuộc = mất khách thật), multi-tenancy (cách ly dữ liệu) và tích hợp với hệ thống ngoài kém ổn định. Tôi xếp realtime + reliability lên đầu vì chúng ảnh hưởng trực tiếp trải nghiệm khách.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Mô tả luồng một cuộc gọi vào từ lúc đổ chuông đến khi kết thúc.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Khách gọi → Telephony Bridge nhận → IVR dẫn menu → Routing/ACD chọn hàng đợi theo lựa chọn/kỹ năng → vào hàng đợi → chọn agent rảnh đủ kỹ năng (atomic để tránh gán đôi) → đổ chuông → agent nhận, đàm thoại → hangup → wrap-up/ACW (agent ghi chú) → đẩy queue lưu ghi âm + log + cập nhật báo cáo. Bước chọn agent là realtime & cạnh tranh; việc sau hangup là bất đồng bộ.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Tại sao một agent có thể xử lý nhiều chat nhưng chỉ một cuộc gọi?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Thoại là kênh đồng bộ liên tục (full-duplex audio) — con người không thể nói với hai khách cùng lúc, nên 1-1. Chat là kênh tin nhắn rời rạc, có khoảng nghỉ giữa các lượt, nên một agent có thể đan xen nhiều phiên. Do đó routing tính tải chat theo <b>số phiên đang mở</b> (concurrency), còn thoại theo trạng thái <b>rảnh/bận nhị phân</b>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Làm sao đảm bảo một tương tác không bị mất khi một node WebSocket chết giữa chừng?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Không lưu trạng thái tương tác chỉ trong bộ nhớ của node WS. Trạng thái nguồn-sự-thật nằm ở store dùng chung (PostgreSQL/Redis); node WS chỉ là tầng vận chuyển. Khi node chết, client tự reconnect (qua LB) tới node khác, lấy lại trạng thái từ store và replay sự kiện chưa nhận (dùng offset/last-event-id). Tin nhắn được ghi bền + đẩy qua pub/sub nên không phụ thuộc một node. Heartbeat phát hiện node chết để re-route các tương tác đang treo.</p>
+        <p class="trap">⚠️ Bẫy: coi bộ nhớ của node WS là nguồn sự thật → mất trạng thái khi node rớt.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Vì sao Node.js là lựa chọn hợp lý cho hệ thống này?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Contact Center là hệ thống <b>I/O-bound</b> với rất nhiều kết nối đồng thời (chat, presence, dashboard). Mô hình Event Loop non-blocking của Node phục vụ tốt hồ sơ này, và hệ sinh thái WebSocket/Socket.IO trưởng thành. Lưu ý: tác vụ CPU nặng (xử lý media, mã hóa lớn) nên tách sang Worker Threads, queue hoặc dịch vụ chuyên dụng để không chặn Event Loop. Xem thêm <a href="../B/B1-kien-truc-nodejs.html">B1</a>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Multi-tenancy ảnh hưởng kiến trúc ra sao?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Mọi truy vấn, sự kiện realtime, file lưu trữ đều phải gắn <code>tenantId</code> và lọc theo nó ở tầng nền (middleware, row-level security). Phải chống "noisy neighbor" bằng giới hạn tài nguyên/quota theo tenant. Cấu hình (hàng đợi, IVR, branding) tách theo tenant. Có nhiều mức cách ly: shared DB + tenantId, schema riêng, hoặc DB riêng — đánh đổi giữa chi phí và mức cách ly. Chi tiết ở <a href="H6-multi-tenancy.html">H6</a>.</p>
+        <p class="trap">⚠️ Bẫy: quên gắn tenantId vào kênh realtime/pub-sub → rò rỉ sự kiện chéo tenant.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Khi tích hợp với telephony/CRM bên ngoài, bạn phòng vệ thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Coi hệ thống ngoài là không đáng tin: dùng timeout chặt, retry có backoff cho thao tác bất đồng bộ, <b>circuit breaker</b> để không kéo sập mình khi đối tác chết, và idempotency key để retry an toàn. Tách lớp adapter riêng cho mỗi tích hợp để chuẩn hóa dữ liệu và cách ly thay đổi. Với webhook đến, xác thực chữ ký và xử lý qua queue để chịu tải đột biến.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương H1</button>
+      </div>
+
+      <div class="pager">
+        <a href="../G/G6-realtime-ui.html"><span class="dir">← Phần G</span><span class="ttl">G6 · Realtime UI</span></a>
+        <a href="H2-call-center-acd.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">H2 · Call Center: ACD, IVR</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='H1',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành H1 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương H1'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 01 — OSI & TCP/IP Models · Networking Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">net-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong1.html" class="active">Ch.01</a></li>
+        <li><a href="chuong2.html">Ch.02 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 01 · FOUNDATION · ~90 phút</div>
+      <h1>OSI &amp; TCP/IP<br/><span class="text-accent">Models — bộ khung của mọi thứ</span></h1>
+      <p class="lead">
+        Trước khi học bất kỳ giao thức nào, phải hiểu <strong>mô hình layer</strong>. OSI 7 tầng và TCP/IP 4 tầng là 2 cách
+        nhóm các giao thức theo chức năng. Hiểu chương này, bạn nắm được "vị trí" của mọi giao thức (HTTP, TCP, IP, Ethernet)
+        và phân biệt L4 vs L7 load balancer — câu kinh điển trong phỏng vấn.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#why">1.1 Tại sao cần model layer?</a></li>
+          <li><a href="#osi">1.2 OSI 7 layers</a></li>
+          <li><a href="#tcpip">1.3 TCP/IP 4 layers</a></li>
+          <li><a href="#compare">1.4 OSI vs TCP/IP</a></li>
+          <li><a href="#encap">1.5 Encapsulation</a></li>
+          <li><a href="#protocols">1.6 Mapping protocols</a></li>
+          <li><a href="#l4-l7">1.7 L4 vs L7 LB</a></li>
+          <li><a href="#tools">1.8 Quan sát thực tế</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 1.1 -->
+        <section id="why">
+          <h2>1.1 Tại sao cần model layer?</h2>
+
+          <p>
+            Networking liên quan đến nhiều thứ: tín hiệu điện trên dây, địa chỉ IP, phiên kết nối, mã hoá, dữ liệu HTTP...
+            Nếu mọi thứ trộn vào nhau thì phức tạp khủng khiếp. Giải pháp: <strong>chia tầng</strong>.
+          </p>
+
+          <p>Mỗi tầng:</p>
+          <ul>
+            <li><strong>Có một trách nhiệm rõ ràng</strong> (đơn nhiệm)</li>
+            <li><strong>Chỉ giao tiếp với tầng kề trên/dưới</strong> qua interface chuẩn</li>
+            <li><strong>Có thể thay đổi implementation</strong> mà không ảnh hưởng tầng khác</li>
+          </ul>
+
+          <p>Vd: chuyển từ Wi-Fi sang Ethernet (đổi L1/L2) — HTTP (L7) vẫn chạy như thường. Đó là sức mạnh của layering.</p>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Triết lý kiến trúc</div>
+            Đây là <strong>separation of concerns</strong> ở quy mô lớn nhất. Cùng triết lý với MVC, microservices, layered architecture trong app dev.
+          </div>
+        </section>
+
+        <!-- 1.2 -->
+        <section id="osi">
+          <h2>1.2 OSI Model — 7 layers (chuẩn ISO 1984)</h2>
+
+          <p>OSI = Open Systems Interconnection. Là <strong>chuẩn lý thuyết</strong> — đẹp về mặt giáo dục, không 100% match thực tế.</p>
+
+          <div class="ascii-art">
+   ┌──────────────────────────────────────────────────────┐
+   │  7. <span class="text-violet">Application</span>   │ HTTP, FTP, SMTP, DNS, SSH         │
+   │     (giao tiếp với user, ứng dụng cuối)            │
+   ├──────────────────────────────────────────────────────┤
+   │  6. <span class="text-cyan">Presentation</span>  │ TLS/SSL, encryption, compression  │
+   │     (mã hoá, nén, format data)                     │
+   ├──────────────────────────────────────────────────────┤
+   │  5. <span class="text-green">Session</span>       │ NetBIOS, RPC                       │
+   │     (quản lý phiên giao tiếp)                      │
+   ├──────────────────────────────────────────────────────┤
+   │  4. <span class="text-accent">Transport</span>     │ TCP, UDP                           │
+   │     (delivery: reliable / unreliable, port)        │
+   ├──────────────────────────────────────────────────────┤
+   │  3. <span class="text-yellow">Network</span>       │ IP, ICMP, OSPF, BGP                │
+   │     (routing giữa networks, IP address)            │
+   ├──────────────────────────────────────────────────────┤
+   │  2. <span class="text-red">Data Link</span>     │ Ethernet, Wi-Fi, ARP, MAC         │
+   │     (frame trong cùng LAN, MAC address)           │
+   ├──────────────────────────────────────────────────────┤
+   │  1. <span class="text-dim">Physical</span>      │ Cáp đồng, fiber, radio, voltage   │
+   │     (tín hiệu điện/quang/sóng)                    │
+   └──────────────────────────────────────────────────────┘
+          </div>
+
+          <h3>Mnemonic để nhớ (từ trên xuống)</h3>
+          <ul>
+            <li><strong>All People Seem To Need Data Processing</strong></li>
+            <li>(<em>Application, Presentation, Session, Transport, Network, Data link, Physical</em>)</li>
+          </ul>
+
+          <h3>Vai trò mỗi layer (đi từ user xuống)</h3>
+
+          <p><strong>L7 — Application:</strong> giao tiếp với user app. Đây là layer mà developer thường làm việc nhất. HTTP, FTP, SMTP đều ở đây.</p>
+
+          <p><strong>L6 — Presentation:</strong> dịch format data, mã hoá, nén. TLS/SSL nằm ở đây (lý thuyết). Trong thực tế TCP/IP gộp vào L7.</p>
+
+          <p><strong>L5 — Session:</strong> quản lý phiên — mở, duy trì, đóng kết nối. RPC nằm đây. Layer này hiếm khi đề cập trong dev hằng ngày.</p>
+
+          <p><strong>L4 — Transport:</strong> đảm bảo data đến đúng app trong máy đích (qua port). TCP (đáng tin) hoặc UDP (nhẹ). Đây là layer phỏng vấn hỏi nhiều.</p>
+
+          <p><strong>L3 — Network:</strong> routing giữa các mạng. IP address, packet, gateway, router. Internet = liên kết các mạng (inter-net) ở layer này.</p>
+
+          <p><strong>L2 — Data Link:</strong> truyền frame trong cùng 1 LAN. MAC address. Ethernet, Wi-Fi.</p>
+
+          <p><strong>L1 — Physical:</strong> tín hiệu thô — điện trong cáp, photon trong fiber, sóng radio. Bit 0/1.</p>
+        </section>
+
+        <!-- 1.3 -->
+        <section id="tcpip">
+          <h2>1.3 TCP/IP Model — 4 layers (chuẩn thực tế)</h2>
+
+          <p>TCP/IP ra đời năm 1970, là chuẩn <em>thực tế</em> chạy Internet ngày nay. Đơn giản hơn OSI.</p>
+
+          <div class="ascii-art">
+   ┌──────────────────────────────────────────────────────┐
+   │  4. <span class="text-violet">Application</span>   │ HTTP, DNS, TLS, SSH, SMTP       │
+   │     (gộp L5+L6+L7 của OSI)                         │
+   ├──────────────────────────────────────────────────────┤
+   │  3. <span class="text-accent">Transport</span>     │ TCP, UDP                         │
+   ├──────────────────────────────────────────────────────┤
+   │  2. <span class="text-yellow">Internet</span>      │ IP, ICMP                         │
+   │     (= Network của OSI)                            │
+   ├──────────────────────────────────────────────────────┤
+   │  1. <span class="text-red">Link</span>          │ Ethernet, Wi-Fi, MAC, Physical   │
+   │     (gộp L1+L2 của OSI)                            │
+   └──────────────────────────────────────────────────────┘
+          </div>
+
+          <p>Đôi khi gọi 5-layer (tách Link thành Physical + Data Link). Đại đa số tài liệu hiện đại dùng <strong>4 hoặc 5 layer</strong>, chứ không 7.</p>
+
+          <h3>Tại sao TCP/IP "thắng" OSI?</h3>
+          <ul>
+            <li>Đơn giản hơn — dev dễ hiểu</li>
+            <li>Implement được trước (TCP/IP đã chạy ARPANET trước khi OSI hoàn thiện)</li>
+            <li>Open source — chấp nhận rộng rãi</li>
+            <li>L5/L6 của OSI ít có nội dung thực tế tách biệt</li>
+          </ul>
+
+          <p>OSI vẫn được dạy vì: (1) thuật ngữ "L4/L7" vẫn dùng, (2) framework tốt cho học, (3) 1 số protocol cũ tham chiếu nó.</p>
+        </section>
+
+        <!-- 1.4 -->
+        <section id="compare">
+          <h2>1.4 So sánh OSI vs TCP/IP</h2>
+
+          <table>
+            <thead>
+              <tr><th>OSI Layer</th><th>TCP/IP Layer</th><th>Protocols</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>7. Application</td><td rowspan="3">4. Application</td><td>HTTP, DNS, FTP, SSH</td></tr>
+              <tr><td>6. Presentation</td><td>TLS/SSL, JPEG, MIME</td></tr>
+              <tr><td>5. Session</td><td>RPC, NetBIOS</td></tr>
+              <tr><td>4. Transport</td><td>3. Transport</td><td>TCP, UDP</td></tr>
+              <tr><td>3. Network</td><td>2. Internet</td><td>IP, ICMP, ARP</td></tr>
+              <tr><td>2. Data Link</td><td rowspan="2">1. Link</td><td>Ethernet, Wi-Fi, MAC</td></tr>
+              <tr><td>1. Physical</td><td>Cable, fiber, radio</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Số "Layer" trong industry</div>
+            Khi devops/SRE nói "L7 load balancer" hay "L4 routing", họ dùng <strong>OSI layer numbering</strong>. Đây là quy ước universal.
+            Vd: L7 = Application = nhìn HTTP request. L4 = Transport = chỉ nhìn TCP packet.
+          </div>
+        </section>
+
+        <!-- 1.5 -->
+        <section id="encap">
+          <h2>1.5 Encapsulation — cách data đi qua layer</h2>
+
+          <p>Khi bạn gửi 1 HTTP request, data đi <strong>xuống</strong> qua các layer ở client, mỗi layer thêm <em>header</em> (gói lại). Ở server, đi <strong>lên</strong> ngược lại, mỗi layer bóc header.</p>
+
+          <div class="ascii-art">
+   CLIENT (encapsulation đi xuống)        SERVER (decapsulation đi lên)
+
+   App: GET / HTTP/1.1                     App: GET / HTTP/1.1
+        Host: example.com                       Host: example.com
+            │                                       ▲
+            ▼                                       │
+   L4: [TCP header][HTTP data]              L4: [TCP header][HTTP data]
+       src=54321, dst=80                        bóc TCP, lấy HTTP
+            │                                       ▲
+            ▼                                       │
+   L3: [IP hdr][TCP][HTTP]                  L3: [IP hdr][TCP][HTTP]
+       src=1.2.3.4, dst=5.6.7.8                 bóc IP, lấy TCP
+            │                                       ▲
+            ▼                                       │
+   L2: [Eth][IP][TCP][HTTP]                 L2: [Eth][IP][TCP][HTTP]
+       src=MAC1, dst=MAC2                       bóc Ethernet
+            │                                       ▲
+            ▼                                       │
+   L1: bit 0101010101...  ────cáp/sóng───▶  L1: bit 0101010101...
+          </div>
+
+          <h3>Tên gọi data unit ở mỗi layer</h3>
+          <table>
+            <thead><tr><th>Layer</th><th>Đơn vị</th></tr></thead>
+            <tbody>
+              <tr><td>Application</td><td>Message / Data</td></tr>
+              <tr><td>Transport</td><td>Segment (TCP) / Datagram (UDP)</td></tr>
+              <tr><td>Network</td><td>Packet</td></tr>
+              <tr><td>Data Link</td><td>Frame</td></tr>
+              <tr><td>Physical</td><td>Bit</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Overhead</h3>
+          <p>Mỗi layer thêm vài chục byte header. HTTP response nhỏ chỉ 1KB nhưng khi đi qua mạng có thể thành ~1.1KB do header. Đó là lý do tối ưu hoá tránh quá nhiều request nhỏ.</p>
+        </section>
+
+        <!-- 1.6 -->
+        <section id="protocols">
+          <h2>1.6 Mapping các protocol vào layer đúng</h2>
+
+          <p>Đây là bảng <strong>phải thuộc</strong> trước khi phỏng vấn:</p>
+
+          <table>
+            <thead>
+              <tr><th>Layer</th><th>Protocol</th><th>Vai trò</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="layer-tag l7">L7</span></td><td>HTTP / HTTPS</td><td>Web</td></tr>
+              <tr><td><span class="layer-tag l7">L7</span></td><td>FTP</td><td>File transfer</td></tr>
+              <tr><td><span class="layer-tag l7">L7</span></td><td>SMTP / IMAP / POP3</td><td>Email</td></tr>
+              <tr><td><span class="layer-tag l7">L7</span></td><td>DNS</td><td>Name resolution</td></tr>
+              <tr><td><span class="layer-tag l7">L7</span></td><td>SSH</td><td>Remote shell</td></tr>
+              <tr><td><span class="layer-tag l6">L6</span></td><td>TLS / SSL</td><td>Encryption + auth (lý thuyết L6, thực tế giữa L4 và L7)</td></tr>
+              <tr><td><span class="layer-tag l4">L4</span></td><td>TCP</td><td>Reliable, ordered transport</td></tr>
+              <tr><td><span class="layer-tag l4">L4</span></td><td>UDP</td><td>Unreliable, fast transport</td></tr>
+              <tr><td><span class="layer-tag l3">L3</span></td><td>IP (v4, v6)</td><td>Routing, addressing</td></tr>
+              <tr><td><span class="layer-tag l3">L3</span></td><td>ICMP</td><td>Ping, error report</td></tr>
+              <tr><td><span class="layer-tag l3">L3</span></td><td>OSPF, BGP</td><td>Routing protocols</td></tr>
+              <tr><td><span class="layer-tag l2">L2</span></td><td>Ethernet, Wi-Fi (802.11)</td><td>LAN frame</td></tr>
+              <tr><td><span class="layer-tag l2">L2</span></td><td>ARP</td><td>IP → MAC</td></tr>
+              <tr><td><span class="layer-tag l2">L2</span></td><td>MAC address</td><td>NIC hardware ID</td></tr>
+              <tr><td><span class="layer-tag l1">L1</span></td><td>Cáp đồng, fiber, radio</td><td>Vật lý</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Bẫy phỏng vấn — TLS ở layer nào?</div>
+            <p>
+              Theo OSI thuần: TLS ở L6. Trong thực tế: TLS hoạt động <strong>giữa</strong> L4 (TCP) và L7 (HTTP).
+              Nhiều người nói "TLS ở L7" cũng OK vì nó trông như application protocol. Tránh tranh cãi —
+              câu trả lời an toàn: <em>"TLS nằm giữa Transport và Application; lý thuyết OSI xếp ở L6 (Presentation)."</em>
+            </p>
+          </div>
+        </section>
+
+        <!-- 1.7 -->
+        <section id="l4-l7">
+          <h2>1.7 L4 vs L7 Load Balancer — câu kinh điển</h2>
+
+          <p>Phỏng vấn DevOps/Backend rất hay hỏi: "Phân biệt L4 và L7 LB?". Hiểu chương này đã đủ trả lời.</p>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-accent">L4 Load Balancer</h4>
+              <ul>
+                <li>Hoạt động ở Transport (TCP/UDP)</li>
+                <li>Chỉ thấy: IP source/dest, port</li>
+                <li><strong>Không decode HTTP</strong> — không biết đó là GET hay POST</li>
+                <li>Cực nhanh — không cần parse application data</li>
+                <li>Có thể LB cho non-HTTP (database, MQ, video)</li>
+                <li>Vd: AWS NLB, HAProxy ở mode TCP</li>
+              </ul>
+            </div>
+            <div class="good">
+              <h4 class="text-violet">L7 Load Balancer</h4>
+              <ul>
+                <li>Hoạt động ở Application (HTTP)</li>
+                <li>Thấy: URL, headers, cookies, method</li>
+                <li><strong>Decode HTTP</strong> — quyết định route theo URL/header</li>
+                <li>Chậm hơn nhưng linh hoạt hơn</li>
+                <li>Có thể: rewrite URL, set header, content-based routing, sticky session</li>
+                <li>Vd: AWS ALB, nginx, HAProxy mode HTTP, Cloudflare</li>
+              </ul>
+            </div>
+          </div>
+
+          <h3>Khi nào dùng cái nào?</h3>
+          <ul>
+            <li><strong>L7</strong> cho web app HTTP/HTTPS — cần routing theo path (<code>/api</code> vs <code>/static</code>)</li>
+            <li><strong>L4</strong> cho database, gRPC, WebSocket khối lượng lớn — cần performance tối đa</li>
+            <li>Nhiều kiến trúc dùng <strong>cả hai</strong>: L4 ở edge cho throughput, L7 phía sau cho routing thông minh</li>
+          </ul>
+
+          <h3>Ví dụ thực tế nginx config</h3>
+
+          <pre data-lang="nginx"><code># L7 — content-based routing
+upstream api_backend { server 10.0.0.1:8080; }
+upstream static_backend { server 10.0.0.2:8080; }
+
+server {
+  listen 80;
+  location /api/ {       # routing dựa vào URL path → L7
+    proxy_pass http://api_backend;
+  }
+  location /static/ {
+    proxy_pass http://static_backend;
+  }
+}
+
+# L4 — TCP/UDP load balancing (stream block)
+stream {
+  upstream postgres {
+    server db1:5432;
+    server db2:5432;
+  }
+  server {
+    listen 5432;
+    proxy_pass postgres;
+  }
+}</code></pre>
+        </section>
+
+        <!-- 1.8 -->
+        <section id="tools">
+          <h2>1.8 Quan sát layer trên thực tế</h2>
+
+          <h3>Wireshark — bắt packet</h3>
+          <p>Wireshark cho phép bạn <em>thấy tận mắt</em> các layer. Mở Wireshark, browse 1 trang web, sẽ thấy:</p>
+          <ul>
+            <li>Frame: Ethernet header (L2)</li>
+            <li>Internet Protocol Version 4: IP header (L3)</li>
+            <li>Transmission Control Protocol: TCP header (L4)</li>
+            <li>Hypertext Transfer Protocol: HTTP request/response (L7)</li>
+          </ul>
+          <p>Mỗi packet được expand ra theo từng layer. Đây là cách trực quan nhất để học networking.</p>
+
+          <h3>curl -v — quan sát HTTP</h3>
+          <pre data-lang="bash"><code>curl -v https://example.com
+# * Connected to example.com (93.184.216.34) port 443    ← L3 (IP), L4 (port)
+# * SSL connection using TLSv1.3                          ← TLS
+# &gt; GET / HTTP/2                                          ← L7
+# &gt; Host: example.com
+# &lt; HTTP/2 200
+# &lt; content-type: text/html</code></pre>
+
+          <h3>tcpdump (Linux/macOS)</h3>
+          <pre data-lang="bash"><code>sudo tcpdump -i any -nn 'port 80' -c 10
+# Bắt 10 packet trên port 80, không resolve DNS</code></pre>
+
+          <h3>ss / netstat</h3>
+          <pre data-lang="bash"><code>ss -tunp                # show TCP/UDP connections + process
+netstat -tnap | head    # cũ hơn, vẫn dùng được</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Mapping protocol</div>
+            <p>Ghép từng protocol vào đúng layer (OSI): SSH, ARP, IP, TCP, HTTP, Ethernet, MAC, ICMP, TLS, DNS, UDP, BGP.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Encapsulation thực tế</div>
+            <p>Cài Wireshark. Bắt 1 HTTP request đến example.com. Trong Wireshark, expand các layer của packet. Identify L2/L3/L4/L7 header.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — curl -v đọc layer</div>
+            <p>Chạy <code>curl -v https://github.com</code>. Đọc output, xác định: IP nào (L3), port nào (L4), HTTP method/status (L7).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — L4 vs L7 LB scenario</div>
+            <p>3 scenario sau, dùng L4 hay L7 LB? (a) HTTP API có nhiều microservices route theo path; (b) PostgreSQL primary + replica đọc; (c) gRPC streaming với 1 backend pool đồng nhất.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Tại sao 7 layer thừa?</div>
+            <p>Nêu lý do TCP/IP 4 layer thay thế OSI 7 layer trong thực tế. L5 và L6 thường được làm ở đâu trong app modern?</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> OSI có bao nhiêu layer và TCP/IP có bao nhiêu layer?</p>
+              <ul class="quiz-options">
+                <li>OSI 4, TCP/IP 7</li>
+                <li>Cả hai 5</li>
+                <li>OSI 7, TCP/IP 4 (hoặc 5 tuỳ định nghĩa)</li>
+                <li>OSI 5, TCP/IP 4</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: OSI 7, TCP/IP 4.</strong> TCP/IP gộp L5+L6+L7 thành Application, gộp L1+L2 thành Link.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> HTTP nằm ở layer nào (OSI)?</p>
+              <ul class="quiz-options">
+                <li>L7 (Application)</li>
+                <li>L4 (Transport)</li>
+                <li>L3 (Network)</li>
+                <li>L2 (Data Link)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: L7.</strong> HTTP là application protocol — chạy trên TCP (L4).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 3.</strong> TCP và UDP nằm ở layer nào?</p>
+              <ul class="quiz-options">
+                <li>L3</li>
+                <li>L4 (Transport)</li>
+                <li>L5</li>
+                <li>L7</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: L4.</strong> Transport layer — chuyển data tới đúng app trong máy đích qua port number.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Encapsulation là gì?</p>
+              <ul class="quiz-options">
+                <li>Mã hoá data</li>
+                <li>Compress data</li>
+                <li>Mỗi layer thêm header (đôi khi trailer) khi data đi xuống — tạo packet hoàn chỉnh để gửi qua mạng</li>
+                <li>Chia data thành chunks</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: thêm header mỗi layer.</strong> Vd: HTTP → +TCP header → +IP header → +Ethernet header → bit trên dây.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 5.</strong> L7 Load Balancer hơn L4 ở đâu?</p>
+              <ul class="quiz-options">
+                <li>Nhanh hơn</li>
+                <li>Decode HTTP — có thể route theo URL/header/cookie, rewrite, content-based</li>
+                <li>Tốn ít CPU hơn</li>
+                <li>Hoạt động trên mọi protocol</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: decode HTTP.</strong> L4 chỉ thấy IP+port. L7 thấy URL/header → routing thông minh hơn nhưng chậm hơn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 6.</strong> Đơn vị data ở L4 (Transport) gọi là?</p>
+              <ul class="quiz-options">
+                <li>Segment (TCP) / Datagram (UDP)</li>
+                <li>Packet</li>
+                <li>Frame</li>
+                <li>Bit</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Segment / Datagram.</strong> Packet = L3, Frame = L2, Bit = L1.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Mô hình nào "thắng" trong thực tế chạy Internet ngày nay?</p>
+              <ul class="quiz-options">
+                <li>OSI</li>
+                <li>Cả hai chia đôi</li>
+                <li>TCP/IP — đơn giản hơn, implement trước, ARPANET → Internet</li>
+                <li>SNA (IBM)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: TCP/IP.</strong> OSI vẫn được dạy vì terminology (L4/L7) và cấu trúc giáo dục tốt.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> Trong câu "L4 LB" hay "L7 LB", "L" viết tắt theo mô hình nào?</p>
+              <ul class="quiz-options">
+                <li>TCP/IP layer</li>
+                <li>Linux layer</li>
+                <li>OSI Layer</li>
+                <li>"Load" layer</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: OSI Layer.</strong> Industry dùng OSI numbering. L4 = Transport (TCP/UDP), L7 = Application (HTTP).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 1</h2>
+          <ul>
+            <li>✅ Layer hoá = separation of concerns. Đổi 1 layer không ảnh hưởng layer khác.</li>
+            <li>✅ <strong>OSI 7 layers</strong>: Physical → Data Link → Network → Transport → Session → Presentation → Application</li>
+            <li>✅ <strong>TCP/IP 4 layers</strong>: Link → Internet → Transport → Application — chuẩn thực tế</li>
+            <li>✅ <strong>Encapsulation</strong>: data đi xuống, mỗi layer thêm header. Đi lên ở server, mỗi layer bóc.</li>
+            <li>✅ Phải thuộc mapping: HTTP/DNS/SSH = L7, TLS = L6 (lý thuyết), TCP/UDP = L4, IP = L3, Ethernet/MAC = L2</li>
+            <li>✅ <strong>L4 vs L7 LB</strong>: L4 chỉ thấy TCP (nhanh, không HTTP-aware); L7 decode HTTP (linh hoạt, slower)</li>
+            <li>✅ Tools quan sát: <strong>Wireshark</strong> (bắt packet), <code>curl -v</code>, <code>tcpdump</code>, <code>ss</code></li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="../index.html">
+        <span class="label">← Quay lại</span>
+        Trang chủ Networking
+      </a>
+      <a href="chuong2.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 02: IP, Subnet, Routing →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◆</span> Networking Mastery · Chương 01 · OSI &amp; TCP/IP Models
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

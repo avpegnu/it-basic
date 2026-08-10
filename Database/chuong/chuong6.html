@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6 — Transactions & ACID Isolation Levels</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 06 · ACID & Isolation</div>
+      <h1>Transactions & ACID Isolation Levels</h1>
+      <p class="subtitle">Tính nguyên tử, nhất quán, cô lập, bền vững. Bốn isolation level và các anomaly tương ứng. Postgres implementation và hands-on demo.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#what">1. Transaction là gì?</a></li>
+        <li><a href="#acid">2. ACID — đầy đủ</a></li>
+        <li><a href="#atomic">3. Atomicity</a></li>
+        <li><a href="#consistency">4. Consistency</a></li>
+        <li><a href="#durability">5. Durability — WAL</a></li>
+        <li><a href="#anomalies">6. Read anomalies</a></li>
+        <li><a href="#levels">7. Bốn isolation level</a></li>
+        <li><a href="#postgres">8. Postgres reality</a></li>
+        <li><a href="#demo">9. Hands-on demo</a></li>
+        <li><a href="#patterns">10. Anti-patterns</a></li>
+        <li><a href="#exercises">11. Bài tập</a></li>
+        <li><a href="#quiz">12. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="what">
+        <h2>1. Transaction là gì?</h2>
+        <p>Một <strong>transaction</strong> (giao dịch) là một <em>chuỗi các thao tác</em> được DB xử lý như một <strong>đơn vị nguyên tử duy nhất</strong>. Hoặc tất cả thành công và được commit, hoặc tất cả thất bại và rollback.</p>
+
+        <p>Ví dụ kinh điển: chuyển tiền từ A sang B.</p>
+<pre><code class="language-sql">BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;  -- A
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;  -- B
+COMMIT;</code></pre>
+
+        <p>Nếu giữa 2 UPDATE server crash, hoặc UPDATE thứ 2 lỗi (account #2 không tồn tại), <strong>cả 2</strong> phải hoàn tác. Không thể có trường hợp tiền A bị trừ mà B không nhận.</p>
+
+        <h3>1.1. Vòng đời transaction</h3>
+
+        <div class="ascii">  ┌─────────┐                           ┌──────────┐
+  │  IDLE   │  ─── BEGIN ───►          │ COMMITTED│ ← thành công
+  └─────────┘                          └──────────┘
+                                            ▲
+        ┌──── BEGIN ────►   ACTIVE ─── COMMIT
+        │                       │
+        │                       └─── ROLLBACK
+        │                              │
+        │                              ▼
+        │                         ┌────────────┐
+        │                         │ ABORTED    │ ← rollback
+        │                         └────────────┘
+        │                              │
+        │                              ▼
+        │                       ┌──────────────┐
+        └────────────────────── │ FAILED       │ ← lỗi tự động
+                                └──────────────┘</div>
+
+        <h3>1.2. Cú pháp</h3>
+<pre><code class="language-sql">-- Bắt đầu:
+BEGIN;          -- hoặc START TRANSACTION;
+
+-- Trong transaction:
+UPDATE ...;
+INSERT ...;
+
+-- Kết thúc:
+COMMIT;         -- xác nhận, dữ liệu lưu
+-- HOẶC
+ROLLBACK;       -- hủy, mọi thay đổi hoàn tác
+
+-- Đánh mốc:
+SAVEPOINT s1;
+ROLLBACK TO SAVEPOINT s1;
+RELEASE SAVEPOINT s1;</code></pre>
+      </section>
+
+      <section id="acid">
+        <h2>2. ACID — bốn chữ định nghĩa "đáng tin"</h2>
+
+        <table>
+          <thead><tr><th>Chữ</th><th>Tên</th><th>Đảm bảo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>A</strong></td><td>Atomicity</td><td>Tất-cả-hoặc-không-gì-cả. Không có "thành công nửa chừng".</td></tr>
+            <tr><td><strong>C</strong></td><td>Consistency</td><td>Sau transaction, mọi constraint (FK/CHECK/UNIQUE) thỏa mãn.</td></tr>
+            <tr><td><strong>I</strong></td><td>Isolation</td><td>Transactions chạy đồng thời như chạy tuần tự (ở mức cao nhất).</td></tr>
+            <tr><td><strong>D</strong></td><td>Durability</td><td>Sau COMMIT, dữ liệu sống sót qua mọi crash.</td></tr>
+          </tbody>
+        </table>
+
+        <p>4 tính chất này không độc lập — chúng phụ thuộc nhau. Hệ phân tán phải đánh đổi (CAP). Single-node Postgres/MySQL/Oracle đều hỗ trợ ACID đầy đủ.</p>
+
+        <p>Ngược lại, nhiều NoSQL chỉ <strong>BASE</strong>: Basically Available, Soft state, Eventual consistency — nhanh hơn, scale tốt hơn, nhưng dữ liệu có thể "hơi sai" trong khoảng ngắn (xem Ch9).</p>
+      </section>
+
+      <section id="atomic">
+        <h2>3. Atomicity — implementation</h2>
+        <p>Postgres triển khai atomicity qua <strong>WAL (Write-Ahead Log)</strong> + <strong>MVCC</strong>:</p>
+
+        <ol>
+          <li>Mỗi transaction có 1 transaction ID (XID).</li>
+          <li>UPDATE thực ra <em>tạo phiên bản mới</em> của row (dead tuple cũ giữ lại tạm).</li>
+          <li>Mọi thay đổi ghi WAL trước khi áp vào data file.</li>
+          <li>COMMIT ghi 1 record "commit record" vào WAL → fsync để đảm bảo durability.</li>
+          <li>ROLLBACK chỉ cần <em>không ghi commit record</em> → các phiên bản mới sẽ bị vacuum dọn.</li>
+        </ol>
+
+        <p>Ý nghĩa: ROLLBACK không "undo" theo nghĩa sửa lại data. Nó chỉ <em>đánh dấu xid là aborted</em> — các tuple version có xid đó tự động bị bỏ qua.</p>
+
+        <h3>3.1. Implicit transaction</h3>
+        <p>Mỗi câu SQL đơn lẻ ngoài <code>BEGIN</code> tự động chạy trong 1 transaction ngầm + auto-commit. Nghĩa là:</p>
+<pre><code class="language-sql">UPDATE users SET name = 'X' WHERE id = 1;
+-- Tương đương:
+-- BEGIN; UPDATE ...; COMMIT;</code></pre>
+
+        <p>Để bao 1 nhóm thao tác, phải explicit BEGIN.</p>
+      </section>
+
+      <section id="consistency">
+        <h2>4. Consistency — vai trò của constraint</h2>
+        <p>Consistency nói: <em>"Sau khi transaction commit, mọi ràng buộc dữ liệu (FK, UNIQUE, CHECK, NOT NULL) đều thỏa."</em></p>
+        <p>Đây là tính chất <strong>nửa app, nửa DB</strong>:</p>
+        <ul>
+          <li>DB enforce mọi constraint declaratively. Nếu vi phạm → tự động ROLLBACK transaction.</li>
+          <li>App có nhiệm vụ chỉ commit khi data hợp lý nghiệp vụ.</li>
+        </ul>
+
+        <p>Constraint enforcement có thể là <strong>IMMEDIATE</strong> (default — check sau mỗi statement) hoặc <strong>DEFERRED</strong> (check ở COMMIT) cho FK:</p>
+<pre><code class="language-sql">CREATE TABLE orders (
+  id INT PRIMARY KEY,
+  user_id INT REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED
+);
+
+BEGIN;
+INSERT INTO orders (id, user_id) VALUES (1, 100);  -- user 100 chưa tồn tại, OK
+INSERT INTO users (id, ...) VALUES (100, ...);     -- giờ tạo user
+COMMIT;  -- ở đây mới check FK</code></pre>
+
+        <p>Hữu ích cho seed data / circular FK.</p>
+      </section>
+
+      <section id="durability">
+        <h2>5. Durability — Write-Ahead Log (WAL)</h2>
+        <p>Khi DB nói "COMMIT thành công", dữ liệu phải tồn tại sau khi mất điện ngay sau đó.</p>
+
+        <h3>5.1. WAL là gì?</h3>
+        <p>WAL (Write-Ahead Log) = log file ghi <em>trước</em> mọi thay đổi vào data file. Trình tự:</p>
+
+        <div class="ascii">  Client          Postgres                Disk
+    │   COMMIT         │                       │
+    │ ────────────────►│                       │
+    │                  │ 1. Append commit       │
+    │                  │    record vào WAL      │
+    │                  │ 2. fsync(WAL) ─────────►│  ← phải xuống disk thật
+    │                  │ 3. fsync trả về        │
+    │                  │ 4. Ack COMMIT          │
+    │ ◄────────────────│                       │
+    │                  │ 5. Async: bg writer    │
+    │                  │    flush data page     │
+    │                  │    sang disk (sau)     │</div>
+
+        <p>Sau crash, restart:</p>
+        <ol>
+          <li>Đọc lại WAL từ điểm checkpoint cuối.</li>
+          <li>Replay mọi commit record vào data file.</li>
+          <li>Ignore mọi xid chưa commit.</li>
+          <li>DB lên trạng thái nhất quán.</li>
+        </ol>
+
+        <h3>5.2. Vì sao WAL nhanh?</h3>
+        <ul>
+          <li>WAL ghi <strong>tuần tự</strong> (sequential write) — disk fast nhất.</li>
+          <li>Data files có thể flush <strong>asynchronous</strong> sau, không cản đường commit.</li>
+          <li>1 fsync WAL có thể "đóng gói" commit của nhiều transaction (group commit).</li>
+        </ul>
+
+        <h3>5.3. Replication và backup dùng WAL</h3>
+        <p>WAL stream sang server khác → replication realtime. Lưu WAL archive → Point-in-Time Recovery. Sẽ học ở Ch10 và Ch12.</p>
+
+        <h3>5.4. <code>synchronous_commit</code> tradeoff</h3>
+<pre><code class="language-sql">-- Default ON: chờ fsync trước khi ack COMMIT (an toàn)
+SET synchronous_commit = on;
+
+-- OFF: ack COMMIT trước, fsync sau (nhanh, có nguy cơ mất vài ms commit gần nhất nếu crash)
+SET synchronous_commit = off;</code></pre>
+
+        <p>Trade-off: nếu tolerate mất vài commit (log, analytics), set off để tăng throughput. Tài chính/đặt hàng — luôn để on.</p>
+      </section>
+
+      <section id="anomalies">
+        <h2>6. Read Anomalies — vì sao cần Isolation</h2>
+        <p>Khi nhiều transaction chạy đồng thời, nếu không có isolation, các <strong>anomaly</strong> sau có thể xảy ra:</p>
+
+        <h3>6.1. Dirty Read</h3>
+        <p>T1 đọc dữ liệu T2 đã ghi nhưng <em>chưa commit</em>. Sau đó T2 rollback → T1 đã đọc dữ liệu "ma".</p>
+
+        <div class="ascii">  T1                            T2
+   │                              │
+   │                          UPDATE balance = 100
+   │   SELECT balance → 100       │  (chưa commit)
+   │   (đọc dirty)                │
+   │                          ROLLBACK
+   │                              │
+   ▼                              ▼  ← thật ra balance là cũ
+   T1 đã quyết định dựa trên giá trị KHÔNG TỒN TẠI</div>
+
+        <h3>6.2. Non-Repeatable Read (Fuzzy Read)</h3>
+        <p>T1 đọc cùng row 2 lần trong 1 transaction, kết quả khác nhau vì T2 đã commit update giữa chừng.</p>
+
+        <div class="ascii">  T1                            T2
+   │                              │
+   SELECT balance → 50            │
+   │                          UPDATE balance = 100
+   │                          COMMIT
+   SELECT balance → 100           │
+   │                              │
+   ▼                              ▼
+   T1 đọc 50 và 100 trong cùng transaction — không nhất quán</div>
+
+        <h3>6.3. Phantom Read</h3>
+        <p>T1 chạy cùng SELECT 2 lần với điều kiện range, lần 2 thấy dòng MỚI xuất hiện do T2 INSERT + commit.</p>
+
+        <div class="ascii">  T1                            T2
+   │                              │
+   SELECT * WHERE age &gt; 18 → 5 dòng
+   │                          INSERT (age=25)
+   │                          COMMIT
+   SELECT * WHERE age &gt; 18 → 6 dòng
+   │                              │
+   ▼                              ▼
+   "Phantom" xuất hiện</div>
+
+        <h3>6.4. Lost Update</h3>
+        <p>2 transaction cùng read-modify-write 1 row. Update sau đè lên update trước — cập nhật đầu tiên bị mất.</p>
+
+        <div class="ascii">  T1                            T2
+   │                              │
+   SELECT balance → 50            │
+   │                          SELECT balance → 50
+   UPDATE balance = 50 + 10       │
+   COMMIT  (balance = 60)         │
+   │                          UPDATE balance = 50 + 20
+   │                          COMMIT (balance = 70 — chèn lên 60)
+   ▼                              ▼
+   Mất 10$ của T1!</div>
+
+        <h3>6.5. Write Skew</h3>
+        <p>Phức tạp hơn: 2 transaction read overlap rồi write disjoint, mỗi cái đúng riêng nhưng tổ hợp vi phạm constraint.</p>
+
+        <p>Ví dụ: bệnh viện yêu cầu "luôn có ≥ 1 bác sĩ trực". 2 bác sĩ cùng nghỉ:</p>
+
+        <div class="ascii">  Dr.A                          Dr.B
+   │                              │
+   SELECT COUNT(*) on_duty → 2    │
+   │                          SELECT COUNT(*) on_duty → 2
+   "OK, mình có thể nghỉ"         │
+   UPDATE A.on_duty = false       │
+   │                          "OK, mình có thể nghỉ"
+   │                          UPDATE B.on_duty = false
+   COMMIT                         │
+   │                          COMMIT
+   ▼                              ▼
+   Không còn bác sĩ trực — vi phạm constraint!</div>
+      </section>
+
+      <section id="levels">
+        <h2>7. Bốn Isolation Level (SQL Standard)</h2>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Level</th>
+              <th>Dirty Read</th>
+              <th>Non-Repeatable</th>
+              <th>Phantom</th>
+              <th>Lost Update</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>READ UNCOMMITTED</strong></td><td>✗ có thể</td><td>✗ có thể</td><td>✗ có thể</td><td>✗ có thể</td></tr>
+            <tr><td><strong>READ COMMITTED</strong></td><td>✓ ngăn</td><td>✗ có thể</td><td>✗ có thể</td><td>✗ có thể</td></tr>
+            <tr><td><strong>REPEATABLE READ</strong></td><td>✓ ngăn</td><td>✓ ngăn</td><td>✗ có thể*</td><td>✓ ngăn (Postgres)</td></tr>
+            <tr><td><strong>SERIALIZABLE</strong></td><td>✓ ngăn</td><td>✓ ngăn</td><td>✓ ngăn</td><td>✓ ngăn</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:0.85rem;color:var(--text-muted)">* Postgres REPEATABLE READ cũng ngăn được Phantom (snapshot isolation chặt). Standard nói "có thể có".</p>
+
+        <h3>7.1. READ UNCOMMITTED</h3>
+        <p>Cho phép đọc dữ liệu chưa commit. <strong>Không có DB phổ biến nào thực sự dùng level này</strong>:</p>
+        <ul>
+          <li>Postgres KHÔNG hỗ trợ — set thành READ COMMITTED.</li>
+          <li>MySQL hỗ trợ nhưng ít ai dùng.</li>
+        </ul>
+
+        <h3>7.2. READ COMMITTED (default đa số DB)</h3>
+        <p>Mỗi statement chỉ thấy dữ liệu đã commit ở thời điểm <em>statement đó bắt đầu</em>.</p>
+        <p>Dirty read: ngăn. Non-repeatable read: VẪN CÓ (2 SELECT trong 1 transaction có thể khác nhau).</p>
+        <p>Đây là default của Postgres và Oracle. Đủ cho 90% workload OLTP.</p>
+
+        <h3>7.3. REPEATABLE READ</h3>
+        <p>Snapshot xác lập ở <em>thời điểm transaction bắt đầu</em>. Mọi SELECT trong transaction thấy cùng snapshot, dù người khác commit gì.</p>
+        <p>Postgres dùng <strong>Snapshot Isolation</strong>: lấy snapshot xid ở BEGIN, chỉ thấy version row có xid &lt; snapshot và đã commit.</p>
+
+        <h3>7.4. SERIALIZABLE</h3>
+        <p>"As if" các transaction chạy tuần tự. Ngăn mọi anomaly bao gồm write skew.</p>
+        <p>Postgres triển khai bằng <strong>SSI (Serializable Snapshot Isolation)</strong> — phát hiện chu trình rw-conflict, abort 1 transaction.</p>
+        <p>Đảm bảo cao nhất, nhưng có thể có nhiều ROLLBACK do conflict → app phải retry.</p>
+
+<pre><code class="language-sql">SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+-- hoặc:
+BEGIN ISOLATION LEVEL SERIALIZABLE;</code></pre>
+      </section>
+
+      <section id="postgres">
+        <h2>8. Postgres reality — MVCC & SSI</h2>
+
+        <h3>8.1. MVCC — Multi-Version Concurrency Control</h3>
+        <p>Postgres KHÔNG dùng read locks. Thay vào đó:</p>
+        <ul>
+          <li>Mỗi UPDATE tạo <strong>version mới</strong> của tuple (old version còn).</li>
+          <li>Mỗi transaction có 1 snapshot xid → chỉ thấy version visible với snapshot.</li>
+          <li>Read và write không block nhau.</li>
+          <li>Vacuum định kỳ dọn dead tuple.</li>
+        </ul>
+
+        <p>MVCC là lý do Postgres có concurrency cực mạnh nhưng cần <strong>vacuum</strong> để tránh table bloat. Sẽ học sâu ở Ch7.</p>
+
+        <h3>8.2. Postgres isolation thực tế</h3>
+        <table>
+          <thead><tr><th>Level Postgres</th><th>Tương đương</th><th>Phantom?</th><th>Write skew?</th></tr></thead>
+          <tbody>
+            <tr><td>READ COMMITTED (default)</td><td>SQL READ COMMITTED</td><td>Có thể</td><td>Có thể</td></tr>
+            <tr><td>REPEATABLE READ</td><td>Snapshot Isolation (chặt hơn standard)</td><td>Ngăn</td><td>Có thể</td></tr>
+            <tr><td>SERIALIZABLE</td><td>SSI</td><td>Ngăn</td><td>Ngăn</td></tr>
+          </tbody>
+        </table>
+
+        <h3>8.3. Set isolation</h3>
+<pre><code class="language-sql">-- Mức transaction:
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+-- ...
+COMMIT;
+
+-- Mức session:
+SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+-- Read-only optimize:
+BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;</code></pre>
+      </section>
+
+      <section id="demo">
+        <h2>9. Hands-on demo — mở 2 client psql</h2>
+        <p>Setup:</p>
+<pre><code class="language-sql">CREATE TABLE accounts (id INT PRIMARY KEY, balance INT);
+INSERT INTO accounts VALUES (1, 100), (2, 100);</code></pre>
+
+        <h3>9.1. Demo non-repeatable read (READ COMMITTED)</h3>
+
+        <div class="compare">
+          <div>
+            <h4>Session A</h4>
+<pre><code class="language-sql">BEGIN;
+SELECT balance FROM accounts WHERE id=1;
+-- 100
+
+
+
+
+-- (sau B commit)
+SELECT balance FROM accounts WHERE id=1;
+-- 200  ← Khác kết quả lần đầu!
+COMMIT;</code></pre>
+          </div>
+          <div>
+            <h4>Session B</h4>
+<pre><code class="language-sql">
+
+BEGIN;
+UPDATE accounts SET balance = 200
+  WHERE id = 1;
+COMMIT;
+
+
+
+
+</code></pre>
+          </div>
+        </div>
+
+        <h3>9.2. Demo Snapshot Isolation (REPEATABLE READ)</h3>
+        <p>Thay đổi: Session A dùng <code>BEGIN ISOLATION LEVEL REPEATABLE READ;</code></p>
+
+        <div class="compare">
+          <div>
+            <h4>Session A</h4>
+<pre><code class="language-sql">BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT balance FROM accounts WHERE id=1;
+-- 100
+
+
+
+
+-- (sau B commit)
+SELECT balance FROM accounts WHERE id=1;
+-- 100  ← Vẫn snapshot ban đầu ✓
+COMMIT;</code></pre>
+          </div>
+          <div>
+            <h4>Session B</h4>
+<pre><code class="language-sql">
+
+BEGIN;
+UPDATE accounts SET balance = 200
+  WHERE id = 1;
+COMMIT;
+
+
+
+
+</code></pre>
+          </div>
+        </div>
+
+        <h3>9.3. Demo lost update (READ COMMITTED) → fix bằng SELECT FOR UPDATE</h3>
+
+        <div class="compare">
+          <div>
+            <h4>Session A — chưa fix</h4>
+<pre><code class="language-sql">BEGIN;
+SELECT balance FROM accounts WHERE id=1;
+-- 100
+
+-- App tính: new = 100 + 10 = 110
+
+UPDATE accounts SET balance = 110
+  WHERE id = 1;
+COMMIT;
+-- balance bây giờ là 110 ❌
+-- nhưng B vừa cộng 20 đã mất</code></pre>
+          </div>
+          <div>
+            <h4>Session B — chưa fix</h4>
+<pre><code class="language-sql">
+BEGIN;
+SELECT balance FROM accounts WHERE id=1;
+-- 100
+-- App tính: 100 + 20 = 120
+UPDATE accounts SET balance = 120
+  WHERE id = 1;
+COMMIT;  -- giả sử commit TRƯỚC A
+-- balance = 120, sau đó A đè lên 110
+
+</code></pre>
+          </div>
+        </div>
+
+        <p>Fix bằng <strong>SELECT FOR UPDATE</strong> (xem Ch7) hoặc <strong>UPDATE atomic</strong>:</p>
+<pre><code class="language-sql">-- Tốt nhất nếu logic đơn giản:
+UPDATE accounts SET balance = balance + 10 WHERE id = 1;
+UPDATE accounts SET balance = balance + 20 WHERE id = 1;
+-- Mỗi UPDATE đều atomic, kết quả: 130 đúng</code></pre>
+
+        <h3>9.4. Demo Write Skew (cần SERIALIZABLE)</h3>
+        <p>Setup constraint: "ít nhất 1 bác sĩ trực".</p>
+
+        <div class="compare">
+          <div>
+            <h4>Dr A — REPEATABLE READ</h4>
+<pre><code class="language-sql">BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT COUNT(*) FROM doctors
+  WHERE on_duty = TRUE;
+-- 2
+
+UPDATE doctors SET on_duty = FALSE
+  WHERE id = 1;
+COMMIT;</code></pre>
+          </div>
+          <div>
+            <h4>Dr B — REPEATABLE READ</h4>
+<pre><code class="language-sql">BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT COUNT(*) FROM doctors
+  WHERE on_duty = TRUE;
+-- 2
+
+UPDATE doctors SET on_duty = FALSE
+  WHERE id = 2;
+COMMIT;
+-- Cả 2 commit thành công, 0 bác sĩ trực ❌</code></pre>
+          </div>
+        </div>
+
+        <p>Với SERIALIZABLE, Postgres sẽ phát hiện rw-conflict và abort 1 transaction. App retry.</p>
+      </section>
+
+      <section id="patterns">
+        <h2>10. Anti-patterns & Best practices</h2>
+
+        <h3>10.1. Long-running transactions</h3>
+        <p>Giữ transaction mở 30 phút → giữ snapshot, ngăn vacuum, gây bloat. Giữ transaction ngắn nhất có thể. Đừng:</p>
+        <ul>
+          <li>Mở transaction trước khi gọi API ngoài.</li>
+          <li>Mở transaction để đọc/sleep/render UI.</li>
+          <li>Bỏ quên transaction trong code (rồi exception).</li>
+        </ul>
+
+        <h3>10.2. Wrap mỗi câu trong BEGIN/COMMIT thừa thãi</h3>
+        <p>Nếu chỉ chạy 1 SELECT, không cần BEGIN/COMMIT — auto-commit đã đủ.</p>
+
+        <h3>10.3. Không retry trên SERIALIZABLE</h3>
+        <p>SERIALIZABLE có thể abort do conflict → app phải retry với backoff. Code phải có wrap retry.</p>
+
+<pre><code class="language-typescript">async function withRetry&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;, maxRetry = 3): Promise&lt;T&gt; {
+  for (let i = 0; i &lt; maxRetry; i++) {
+    try { return await fn(); }
+    catch (e: any) {
+      if (e.code === '40001') {  // serialization_failure
+        await sleep(2 ** i * 50);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error('max retry');
+}</code></pre>
+
+        <h3>10.4. Đếm sai trong transaction</h3>
+<pre><code class="language-sql">-- ❌ Race condition (lost update style):
+BEGIN;
+SELECT balance FROM accounts WHERE id=1;  -- 100
+-- app tính 100 + 50 = 150
+UPDATE accounts SET balance = 150 WHERE id=1;
+COMMIT;
+
+-- ✓ Atomic update:
+UPDATE accounts SET balance = balance + 50 WHERE id=1;</code></pre>
+
+        <h3>10.5. Transaction lồng (nested)</h3>
+        <p>SQL không có transaction lồng thật. <code>BEGIN ... BEGIN ... </code> bỏ qua BEGIN thứ 2. Dùng SAVEPOINT thay thế.</p>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Quy tắc vàng</span>
+          Mặc định READ COMMITTED — đủ cho 90% workload. Nâng lên REPEATABLE READ khi cần snapshot ổn định trong báo cáo. Dùng SERIALIZABLE khi có constraint kiểu "tổng/đếm" mà không thể enforce qua DB constraint thường.
+        </div>
+      </section>
+
+      <section id="exercises">
+        <h2>11. Bài tập</h2>
+        <p>Cài Postgres local, mở 2 cửa sổ <code>psql</code>:</p>
+
+        <ol>
+          <li>Reproduce non-repeatable read ở READ COMMITTED. Sau đó chuyển sang REPEATABLE READ và verify ngăn được.</li>
+          <li>Tạo bảng <code>seats(id, available BOOLEAN)</code>. 2 user cùng book ghế cuối cùng. Demo lost update. Sửa bằng <code>SELECT FOR UPDATE</code>.</li>
+          <li>Demo write skew với 2 doctors như mục 9.4. Chuyển sang SERIALIZABLE, observe abort.</li>
+          <li>Viết hàm Node.js (hoặc TS) chạy chuyển tiền giữa 2 account, retry tự động khi gặp serialization failure.</li>
+          <li>Vì sao long-running transaction nguy hiểm với MVCC? Hệ quả về vacuum, table bloat?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>12. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 6</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Atomicity nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Mỗi câu SQL không tách được</li>
+              <li class="quiz-option">Dữ liệu lưu trong RAM</li>
+              <li class="quiz-option">Tất cả hoặc không gì cả — transaction commit hết hoặc rollback hết</li>
+              <li class="quiz-option">DB không có constraint</li>
+            </ul>
+            <div class="quiz-explain">Atomicity = "indivisible". Mọi thao tác trong 1 transaction là 1 đơn vị nguyên tử. Postgres triển khai bằng cách đánh dấu xid commit/abort, các tuple version có xid aborted bị coi như chưa từng có.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Default isolation level của Postgres và Oracle là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">READ UNCOMMITTED</li>
+              <li class="quiz-option">READ COMMITTED</li>
+              <li class="quiz-option">REPEATABLE READ</li>
+              <li class="quiz-option">SERIALIZABLE</li>
+            </ul>
+            <div class="quiz-explain">Postgres và Oracle mặc định READ COMMITTED — đủ cho hầu hết OLTP. MySQL mặc định REPEATABLE READ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Phantom Read xảy ra khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">App crash</li>
+              <li class="quiz-option">Read uncommitted data</li>
+              <li class="quiz-option">Cùng row đọc 2 lần khác nhau</li>
+              <li class="quiz-option">Cùng query với range condition đọc 2 lần, lần 2 thấy dòng MỚI xuất hiện</li>
+            </ul>
+            <div class="quiz-explain">Phantom = dòng "ma" mới xuất hiện do INSERT của transaction khác commit giữa chừng. Ngăn được bằng REPEATABLE READ ở Postgres (snapshot isolation), hoặc SERIALIZABLE chuẩn.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Postgres dùng MVCC nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không hỗ trợ ACID</li>
+              <li class="quiz-option">Read và write block nhau</li>
+              <li class="quiz-option">Mỗi UPDATE tạo version mới của tuple, snapshot quyết định version nào visible</li>
+              <li class="quiz-option">DB là single-threaded</li>
+            </ul>
+            <div class="quiz-explain">MVCC giữ nhiều phiên bản (version) của row. Transaction có snapshot xid → chỉ thấy version có xid hợp lệ. Read không cần lock, write chỉ lock row đang update. Vacuum dọn version cũ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Cách an toàn để cộng thêm 10 vào balance:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">UPDATE accounts SET balance = balance + 10 WHERE id = 1;</li>
+              <li class="quiz-option">SELECT balance; rồi UPDATE balance = old + 10;</li>
+              <li class="quiz-option">Thực hiện trong app rồi UPDATE absolute value</li>
+              <li class="quiz-option">Dùng READ UNCOMMITTED</li>
+            </ul>
+            <div class="quiz-explain">UPDATE atomic <code>balance = balance + N</code> tránh lost update vì DB tự lock row trong UPDATE. Read-then-write trong app gặp race nếu không có FOR UPDATE.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Write skew chỉ ngăn được hoàn toàn ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">READ COMMITTED</li>
+              <li class="quiz-option">REPEATABLE READ</li>
+              <li class="quiz-option">Snapshot Isolation</li>
+              <li class="quiz-option">SERIALIZABLE (qua SSI ở Postgres)</li>
+            </ul>
+            <div class="quiz-explain">Write skew là rw-anti-dependency cycle. Snapshot Isolation thuần (REPEATABLE READ Postgres) KHÔNG ngăn. Cần SSI (Serializable Snapshot Isolation) — phát hiện cycle, abort 1 transaction.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">WAL (Write-Ahead Log) đảm bảo tính:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Atomicity duy nhất</li>
+              <li class="quiz-option">Durability — sau crash có thể replay để khôi phục state</li>
+              <li class="quiz-option">Isolation</li>
+              <li class="quiz-option">Encryption</li>
+            </ul>
+            <div class="quiz-explain">WAL ghi mọi thay đổi vào log file trước khi áp vào data file. Sau crash, replay WAL từ checkpoint cuối → DB nhất quán. Đó là Durability. WAL cũng hỗ trợ replication và PITR.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Transaction kéo dài 30 phút trong Postgres gây vấn đề gì?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tăng performance</li>
+              <li class="quiz-option">Không có vấn đề</li>
+              <li class="quiz-option">Giữ snapshot, ngăn vacuum dọn dead tuple → table bloat, query chậm dần</li>
+              <li class="quiz-option">DB tự kill</li>
+            </ul>
+            <div class="quiz-explain">Vacuum chỉ dọn được tuple version mà KHÔNG transaction nào còn đang giữ snapshot tham chiếu. Long-running tx → snapshot cũ hold mãi → bloat tăng. Đặt timeout, dùng <code>idle_in_transaction_session_timeout</code>.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 6. Tiếp theo: <a href="chuong7.html"><strong>Chương 7 — Concurrency Control: Locking & MVCC →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 6 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

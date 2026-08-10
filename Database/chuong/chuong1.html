@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 1 — Database Fundamentals & Relational Model</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 01 · Foundations</div>
+      <h1>Database Fundamentals & Relational Model</h1>
+      <p class="subtitle">Tại sao chúng ta cần Database? Mô hình quan hệ của Codd, các loại key, constraint, data type — và kiểu NULL khó nhằn.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why-db">1. Vì sao có Database?</a></li>
+        <li><a href="#history">2. Lịch sử các mô hình</a></li>
+        <li><a href="#relational">3. Mô hình quan hệ (Codd)</a></li>
+        <li><a href="#terms">4. Thuật ngữ chính</a></li>
+        <li><a href="#keys">5. Keys — 6 loại</a></li>
+        <li><a href="#constraints">6. Constraints</a></li>
+        <li><a href="#types">7. Data types</a></li>
+        <li><a href="#null">8. NULL — Ba giá trị</a></li>
+        <li><a href="#hands-on">9. Hands-on: Postgres</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why-db">
+        <h2>1. Vì sao có Database?</h2>
+        <p>
+          Hãy tưởng tượng bạn xây 1 app to-do list cho riêng mình. Bạn lưu mọi task vào file <code>tasks.json</code>:
+        </p>
+<pre><code>[
+  { "id": 1, "title": "Học SQL", "done": false },
+  { "id": 2, "title": "Đi siêu thị", "done": true }
+]</code></pre>
+        <p>
+          App chạy ngon. Một mình bạn dùng. Nhưng giờ tưởng tượng:
+        </p>
+        <ul>
+          <li>Có 1000 user — file phải lưu task của ai? Tách 1000 file? Hay 1 file khổng lồ?</li>
+          <li>Hai tab cùng mở — A đánh dấu task #5 done, B sửa title task #5. Ai ghi sau, ai thắng?</li>
+          <li>Bạn muốn báo cáo: "User nào hoàn thành nhiều task nhất tháng này?" — bạn phải <em>load toàn bộ file vào RAM</em> rồi loop.</li>
+          <li>Server crash giữa lúc đang ghi — file bị cắt nửa, JSON parse lỗi, mất sạch dữ liệu.</li>
+          <li>Khi file lên 10GB, mở mất 30 giây.</li>
+        </ul>
+        <p>
+          Mỗi vấn đề trên là một <strong>tính năng cốt lõi</strong> mà DBMS đã giải quyết:
+        </p>
+
+        <table>
+          <thead><tr><th>Vấn đề</th><th>Tính năng DBMS</th></tr></thead>
+          <tbody>
+            <tr><td>Truy vấn nhanh trên dữ liệu lớn</td><td>Index (B-tree, Hash...)</td></tr>
+            <tr><td>Nhiều client cùng ghi</td><td>Transactions, Locking, MVCC</td></tr>
+            <tr><td>Crash an toàn</td><td>Write-Ahead Log (WAL), Atomic commit</td></tr>
+            <tr><td>Truy vấn linh hoạt</td><td>SQL declarative + Query Optimizer</td></tr>
+            <tr><td>Đảm bảo ràng buộc dữ liệu</td><td>Constraints (FK, UNIQUE, CHECK)</td></tr>
+            <tr><td>Khôi phục dữ liệu cũ</td><td>Backup + Point-in-Time Recovery</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Định nghĩa ngắn</span>
+          <strong>Database (CSDL):</strong> tập dữ liệu có tổ chức.
+          <strong>DBMS:</strong> phần mềm quản lý DB (Postgres, MySQL, MongoDB...).
+          Khi nói "dùng database X" thực ra ý nói "dùng DBMS X". Nhưng quen miệng vẫn gọi DB.
+        </div>
+      </section>
+
+      <section id="history">
+        <h2>2. Lịch sử các mô hình dữ liệu</h2>
+        <p>Hiểu vì sao mô hình quan hệ thắng, ta cần biết các mô hình trước nó:</p>
+
+        <h3>2.1. File systems (1950s–60s)</h3>
+        <p>Mỗi app tự quản lý file phẳng. Không có cấu trúc chung. Hai app cùng đọc → conflict. Khó query.</p>
+
+        <h3>2.2. Hierarchical model (IBM IMS, 1966)</h3>
+        <p>Dữ liệu hình cây cha-con. Tốt cho dữ liệu phân cấp tự nhiên (org chart, file system) nhưng <strong>cứng nhắc</strong> — đổi quan hệ là phải refactor cấu trúc.</p>
+
+        <div class="ascii">      Company
+       /     \
+   Dept-A   Dept-B
+    / \      |
+  Emp1 Emp2 Emp3   ← 1 employee chỉ thuộc 1 department, không thể nhiều</div>
+
+        <h3>2.3. Network model (CODASYL, 1971)</h3>
+        <p>Cải tiến: cho phép nhiều quan hệ (n-n). Mỗi record kết nối qua "set" pointer. Mạnh hơn nhưng <strong>navigation phức tạp</strong> — phải code đường đi cụ thể từng truy vấn.</p>
+
+        <h3>2.4. Relational model (Codd, 1970)</h3>
+        <p>
+          Edgar F. Codd, nhà toán học làm tại IBM, đề xuất mô hình quan hệ trong bài báo <em>"A Relational Model of Data for Large Shared Data Banks"</em>.
+          Ý tưởng cách mạng: <strong>tất cả dữ liệu đều biểu diễn được bằng <em>các bảng</em></strong>, và truy vấn là phép toán đại số trên bảng (đại số quan hệ).
+        </p>
+        <p>3 lợi thế then chốt:</p>
+        <ul>
+          <li><strong>Đơn giản</strong> — bảng có dòng và cột. Ai cũng hiểu.</li>
+          <li><strong>Declarative</strong> — bạn nói cần gì, không cần nói cách nào. DB tự tối ưu.</li>
+          <li><strong>Linh hoạt</strong> — JOIN cho phép tổ hợp bảng theo ý muốn mà không cần biết trước trong thiết kế.</li>
+        </ul>
+
+        <h3>2.5. Object-Oriented (1990s)</h3>
+        <p>Cố nhét OOP vào DB: Object = row. Phổ biến chỉ trong giới Java/C++ một thời. Hiện tại dùng ORM (Object-Relational Mapping) là cách phổ biến hơn.</p>
+
+        <h3>2.6. NoSQL (2009+)</h3>
+        <p>Khi web scale (Google, Amazon) cần nhiều TB và millions QPS, mô hình quan hệ + JOIN bị bottleneck. NoSQL hy sinh JOIN/ACID đổi lấy scale ngang. Có 4 họ: Key-Value, Document, Wide-column, Graph (sẽ học ở Ch9).</p>
+
+        <h3>2.7. NewSQL (2012+)</h3>
+        <p>"Có cách nào của cả hai thế giới không?" — Spanner, CockroachDB, YugabyteDB: scale ngang như NoSQL, đảm bảo ACID + SQL như Postgres. Phức tạp hơn, đắt hơn, dùng khi thực sự cần.</p>
+
+        <div class="callout callout-note">
+          <span class="callout-title">Bài học lịch sử</span>
+          Đừng nghĩ NoSQL "thay thế" SQL. Sau 15 năm hype, các công ty lớn (Uber, Airbnb, Stripe) <strong>quay về Postgres</strong> cho hầu hết workload, chỉ dùng NoSQL cho cache/log/search. Hiểu sâu mô hình quan hệ là vốn dài hạn.
+        </div>
+      </section>
+
+      <section id="relational">
+        <h2>3. Mô hình quan hệ — đại số trên bảng</h2>
+        <p>
+          Trong lý thuyết, một <strong>relation</strong> là một <em>tập</em> các <em>tuple</em> tuân theo cùng một <em>schema</em>.
+          Trong thực hành, đó là một <strong>bảng</strong>:
+        </p>
+
+<pre><code>users:
+┌────┬───────────────────┬────────────┐
+│ id │ email             │ created_at │
+├────┼───────────────────┼────────────┤
+│  1 │ alice@example.com │ 2026-01-15 │
+│  2 │ bob@example.com   │ 2026-02-03 │
+│  3 │ carol@example.com │ 2026-02-20 │
+└────┴───────────────────┴────────────┘</code></pre>
+
+        <p>Vậy relation có 6 phép toán cơ bản (đại số quan hệ):</p>
+
+        <table>
+          <thead><tr><th>Phép</th><th>Ký hiệu</th><th>Mô tả</th><th>SQL tương ứng</th></tr></thead>
+          <tbody>
+            <tr><td>Selection</td><td>σ</td><td>Lọc dòng theo điều kiện</td><td><code>WHERE</code></td></tr>
+            <tr><td>Projection</td><td>π</td><td>Chọn các cột</td><td><code>SELECT col1, col2</code></td></tr>
+            <tr><td>Union</td><td>∪</td><td>Hợp 2 bảng (cùng schema)</td><td><code>UNION</code></td></tr>
+            <tr><td>Difference</td><td>−</td><td>Hiệu 2 bảng</td><td><code>EXCEPT</code></td></tr>
+            <tr><td>Cartesian Product</td><td>×</td><td>Tích Đề-các 2 bảng</td><td><code>CROSS JOIN</code></td></tr>
+            <tr><td>Rename</td><td>ρ</td><td>Đổi tên bảng/cột</td><td><code>AS</code></td></tr>
+          </tbody>
+        </table>
+
+        <p>Các phép phụ (derived) — kết hợp từ 6 phép trên:</p>
+        <ul>
+          <li><strong>Intersection</strong> (∩) — giao 2 bảng → <code>INTERSECT</code></li>
+          <li><strong>Join</strong> (⋈) — Cartesian + Selection → <code>JOIN ... ON</code></li>
+          <li><strong>Division</strong> (÷) — "tất cả X có quan hệ với mọi Y" — phức tạp hiếm gặp</li>
+        </ul>
+
+        <p>
+          <strong>Ý nghĩa thực tế:</strong> mọi câu SQL phức tạp đều có thể chuyển về một biểu thức đại số quan hệ. Đó là cách query optimizer biến đổi và tối ưu query mà vẫn giữ kết quả đúng.
+        </p>
+
+        <h3>3.1. Codd's 12 rules (1985)</h3>
+        <p>Codd liệt kê 12 quy tắc để gọi 1 DB là "thực sự quan hệ". Tóm gọn 5 ý quan trọng:</p>
+        <ol>
+          <li><strong>Information rule</strong> — mọi dữ liệu (bao gồm metadata) lưu dưới dạng giá trị trong bảng.</li>
+          <li><strong>Guaranteed access</strong> — mọi giá trị truy cập được qua (table, primary key, column).</li>
+          <li><strong>Systematic NULL</strong> — NULL là giá trị riêng biệt với "0" hay "rỗng".</li>
+          <li><strong>Catalog</strong> — metadata cũng nằm trong bảng (thư mục hệ thống).</li>
+          <li><strong>Integrity independence</strong> — constraint ràng buộc lưu trong DB, không phụ thuộc app.</li>
+        </ol>
+        <p>Lưu ý: <em>không DBMS thương mại nào</em> tuân thủ 100% 12 rules này. Nhưng Postgres rất gần.</p>
+      </section>
+
+      <section id="terms">
+        <h2>4. Thuật ngữ chính</h2>
+
+        <table>
+          <thead><tr><th>Thuật ngữ học thuật</th><th>Tên thực hành</th><th>Ví dụ</th></tr></thead>
+          <tbody>
+            <tr><td>Relation</td><td>Table</td><td>users, orders</td></tr>
+            <tr><td>Tuple</td><td>Row / Record</td><td>(1, 'alice@…', '2026-01-15')</td></tr>
+            <tr><td>Attribute</td><td>Column / Field</td><td>id, email, created_at</td></tr>
+            <tr><td>Domain</td><td>Data type</td><td>INTEGER, VARCHAR(255)</td></tr>
+            <tr><td>Cardinality</td><td>Số dòng</td><td>3 (bảng users ở trên)</td></tr>
+            <tr><td>Degree (arity)</td><td>Số cột</td><td>3 cột → degree = 3</td></tr>
+            <tr><td>Schema</td><td>Cấu trúc bảng</td><td>users(id INT, email VARCHAR, created_at TIMESTAMP)</td></tr>
+            <tr><td>Instance</td><td>Tập dòng tại 1 thời điểm</td><td>3 dòng cụ thể trong bảng</td></tr>
+          </tbody>
+        </table>
+
+        <p>
+          <strong>Schema</strong> ổn định, ít đổi. <strong>Instance</strong> đổi liên tục mỗi giây mỗi giờ.
+          Khi thiết kế DB, ta thiết kế <em>schema</em>. Khi vận hành, ta thao tác trên <em>instance</em>.
+        </p>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Một thuật ngữ dễ lẫn</span>
+          "Database schema" có 2 nghĩa: (a) toàn bộ cấu trúc DB (mọi bảng + quan hệ), (b) trong Postgres, "schema" còn là <em>namespace</em> chứa nhóm bảng (giống package). Khi nói chuyện rõ ngữ cảnh để tránh hiểu nhầm.
+        </div>
+      </section>
+
+      <section id="keys">
+        <h2>5. Keys — sáu loại bạn cần phân biệt</h2>
+
+        <h3>5.1. Super key</h3>
+        <p>Tập cột mà <strong>kết hợp lại đủ để xác định duy nhất một dòng</strong>. Có thể là siêu tập nhiều cột không cần thiết.</p>
+        <p>Ví dụ bảng <code>users(id, email, name, phone)</code>: <code>{id}</code>, <code>{id, email}</code>, <code>{id, email, name}</code>... đều là super keys.</p>
+
+        <h3>5.2. Candidate key</h3>
+        <p>Super key <strong>tối giản</strong> — bỏ bất kỳ cột nào thì không còn unique. Ví dụ: <code>{id}</code> và <code>{email}</code> đều có thể là candidate.</p>
+
+        <h3>5.3. Primary key (PK)</h3>
+        <p>Một <strong>candidate key được chọn</strong> làm khóa chính. Mỗi bảng chỉ có 1 PK. PK <em>không được NULL</em>, <em>không được trùng</em>.</p>
+
+<pre><code class="language-sql">CREATE TABLE users (
+  id    BIGSERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE
+);</code></pre>
+
+        <h3>5.4. Alternate (Secondary) key</h3>
+        <p>Các candidate key <em>không</em> được chọn làm PK. Trong ví dụ trên, <code>email</code> là alternate key (vẫn UNIQUE).</p>
+
+        <h3>5.5. Foreign key (FK)</h3>
+        <p>Một (hoặc nhiều) cột <strong>tham chiếu PK của bảng khác</strong>. Đây là cách mô hình quan hệ "kết nối" các bảng.</p>
+
+<pre><code class="language-sql">CREATE TABLE orders (
+  id      BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id),
+  total   DECIMAL(10,2) NOT NULL
+);</code></pre>
+
+        <p>FK đảm bảo <strong>referential integrity</strong> — không thể có order trỏ đến user_id không tồn tại.</p>
+
+        <p>Khi xóa user mà có order trỏ tới? Bạn chọn 1 trong các <code>ON DELETE</code> action:</p>
+        <ul>
+          <li><code>NO ACTION</code> / <code>RESTRICT</code> — báo lỗi, không cho xóa (mặc định).</li>
+          <li><code>CASCADE</code> — xóa user → xóa luôn mọi order của user đó.</li>
+          <li><code>SET NULL</code> — xóa user → orders.user_id = NULL.</li>
+          <li><code>SET DEFAULT</code> — xóa user → orders.user_id về giá trị default.</li>
+        </ul>
+
+        <h3>5.6. Composite key</h3>
+        <p>PK gồm <strong>nhiều cột</strong>. Thường thấy ở bảng nối many-to-many:</p>
+
+<pre><code class="language-sql">CREATE TABLE order_items (
+  order_id   BIGINT NOT NULL REFERENCES orders(id),
+  product_id BIGINT NOT NULL REFERENCES products(id),
+  qty        INT NOT NULL DEFAULT 1,
+  PRIMARY KEY (order_id, product_id)  -- composite PK
+);</code></pre>
+
+        <h3>5.7. Surrogate key vs Natural key</h3>
+        <div class="compare">
+          <div>
+            <h4>Surrogate key</h4>
+            <p>Khóa nhân tạo do DB sinh — thường <code>BIGSERIAL</code>, UUID. Không có ý nghĩa nghiệp vụ.</p>
+            <p><strong>Ưu:</strong> luôn ổn định (không đổi), gọn (8 byte), nhanh.</p>
+            <p><strong>Nhược:</strong> không tự mô tả; cần JOIN để biết nghĩa.</p>
+          </div>
+          <div>
+            <h4>Natural key</h4>
+            <p>Khóa từ dữ liệu thật — email, số CCCD, mã sản phẩm SKU.</p>
+            <p><strong>Ưu:</strong> có ý nghĩa, dễ debug.</p>
+            <p><strong>Nhược:</strong> có thể đổi (user đổi email!), thường dài/chậm hơn surrogate.</p>
+          </div>
+        </div>
+        <p><strong>Khuyến nghị thực hành:</strong> dùng surrogate key (<code>id BIGSERIAL</code> hoặc UUID v7) cho PK, đồng thời thêm UNIQUE cho natural key (như email).</p>
+      </section>
+
+      <section id="constraints">
+        <h2>6. Constraints — luật bất biến của dữ liệu</h2>
+        <p>Constraint là <strong>quy tắc</strong> mà mọi row trong bảng phải tuân theo. DB tự enforce, app không cần check (và không nên tin app).</p>
+
+        <h3>6.1. NOT NULL</h3>
+        <p>Cột không được phép NULL.</p>
+<pre><code class="language-sql">CREATE TABLE users (
+  id    BIGSERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  name  VARCHAR(100)              -- có thể NULL
+);</code></pre>
+
+        <h3>6.2. UNIQUE</h3>
+        <p>Đảm bảo mọi dòng có giá trị khác nhau ở cột đó (NULL được coi là khác mọi NULL khác — Postgres mặc định cho phép nhiều NULL).</p>
+<pre><code class="language-sql">ALTER TABLE users ADD CONSTRAINT users_email_uniq UNIQUE (email);
+-- Composite unique:
+ALTER TABLE addresses ADD UNIQUE (user_id, label);  -- 1 user có nhiều label, mỗi label duy nhất</code></pre>
+
+        <h3>6.3. PRIMARY KEY</h3>
+        <p>NOT NULL + UNIQUE + tự tạo index. Mỗi bảng 1 PK duy nhất.</p>
+
+        <h3>6.4. FOREIGN KEY</h3>
+        <p>Đã trình bày ở 5.5.</p>
+
+        <h3>6.5. CHECK</h3>
+        <p>Biểu thức boolean phải đúng cho mọi dòng:</p>
+<pre><code class="language-sql">CREATE TABLE products (
+  id    BIGSERIAL PRIMARY KEY,
+  name  VARCHAR(255) NOT NULL,
+  price DECIMAL(10,2) NOT NULL CHECK (price >= 0),
+  stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0)
+);
+
+-- Check phức tạp:
+ALTER TABLE orders ADD CONSTRAINT valid_status
+  CHECK (status IN ('pending','paid','shipped','delivered','cancelled'));</code></pre>
+
+        <h3>6.6. DEFAULT</h3>
+        <p>Giá trị tự gán nếu INSERT bỏ qua cột:</p>
+<pre><code class="language-sql">created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+status     VARCHAR(20) NOT NULL DEFAULT 'pending',
+uuid       UUID NOT NULL DEFAULT gen_random_uuid()</code></pre>
+
+        <h3>6.7. EXCLUSION (Postgres-only, ít gặp)</h3>
+        <p>Tổng quát hóa UNIQUE — đảm bảo không có 2 dòng "xung đột" theo bất kỳ phép so sánh nào, ví dụ không 2 booking trùng khoảng thời gian:</p>
+<pre><code class="language-sql">CREATE TABLE bookings (
+  room_id INT,
+  during  tstzrange,
+  EXCLUDE USING gist (room_id WITH =, during WITH &amp;&amp;)
+);</code></pre>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Quy tắc vàng</span>
+          Đặt constraint ở DB layer, không chỉ app layer. Một ngày app sẽ có bug, có script SQL chạy tay, có dev mới chạy migration sai — chỉ DB là <em>tuyến phòng thủ cuối cùng</em> bảo vệ tính toàn vẹn dữ liệu.
+        </div>
+      </section>
+
+      <section id="types">
+        <h2>7. Data types — chọn đúng kiểu, đúng kích cỡ</h2>
+
+        <h3>7.1. Numeric</h3>
+        <table>
+          <thead><tr><th>Type</th><th>Phạm vi</th><th>Khi nào dùng</th></tr></thead>
+          <tbody>
+            <tr><td>SMALLINT</td><td>−32 768 → 32 767 (2 byte)</td><td>Tuổi, level, status code nhỏ</td></tr>
+            <tr><td>INTEGER (INT)</td><td>±2.1 tỷ (4 byte)</td><td>ID nhỏ, count thông thường</td></tr>
+            <tr><td>BIGINT</td><td>±9.2 × 10¹⁸ (8 byte)</td><td>ID hệ lớn, timestamp ms</td></tr>
+            <tr><td>DECIMAL(p,s) / NUMERIC</td><td>Chính xác (variable)</td><td>Tiền tệ, ratio cần đúng tuyệt đối</td></tr>
+            <tr><td>REAL / FLOAT4</td><td>~7 chữ số (4 byte)</td><td>Tọa độ, dữ liệu khoa học</td></tr>
+            <tr><td>DOUBLE PRECISION / FLOAT8</td><td>~15 chữ số (8 byte)</td><td>Khoa học, ML feature</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Lưu ý: tiền tệ</span>
+          <strong>Không bao giờ dùng FLOAT cho tiền.</strong> <code>0.1 + 0.2 ≠ 0.3</code> trong float. Dùng <code>DECIMAL(10,2)</code> hoặc lưu cents dưới dạng INT/BIGINT (số nguyên cents).
+        </div>
+
+        <h3>7.2. Text</h3>
+        <table>
+          <thead><tr><th>Type</th><th>Mô tả</th></tr></thead>
+          <tbody>
+            <tr><td>CHAR(n)</td><td>Cố định n ký tự, padding bằng space. Hiếm dùng.</td></tr>
+            <tr><td>VARCHAR(n)</td><td>Tối đa n ký tự, không pad. Phổ biến.</td></tr>
+            <tr><td>TEXT</td><td>Không giới hạn (lên TB). Postgres khuyên dùng TEXT thay VARCHAR khi không cần limit cứng.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.3. Date & Time</h3>
+        <table>
+          <tbody>
+            <tr><td>DATE</td><td>Chỉ ngày: 2026-05-09</td></tr>
+            <tr><td>TIME</td><td>Chỉ giờ: 14:30:00</td></tr>
+            <tr><td>TIMESTAMP</td><td>Ngày + giờ, KHÔNG timezone</td></tr>
+            <tr><td>TIMESTAMPTZ</td><td>Ngày + giờ + timezone (lưu UTC, hiển thị theo client tz). Khuyên dùng.</td></tr>
+            <tr><td>INTERVAL</td><td>Khoảng thời gian: '3 days', '1 hour 30 minutes'</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.4. Binary & JSON</h3>
+        <ul>
+          <li><strong>BYTEA</strong> — binary blob (file nhỏ, hash). File lớn nên lưu S3, DB chỉ giữ URL.</li>
+          <li><strong>JSON / JSONB</strong> (Postgres) — JSONB là binary nén + index được + nhanh hơn JSON text.</li>
+          <li><strong>UUID</strong> — 16 byte, format <code>550e8400-e29b-41d4-a716-446655440000</code>.</li>
+        </ul>
+
+        <h3>7.5. Special (Postgres)</h3>
+        <ul>
+          <li><strong>ARRAY</strong> — <code>INTEGER[]</code>, <code>TEXT[]</code>. Tiện cho tag, list nhỏ.</li>
+          <li><strong>ENUM</strong> — kiểu liệt kê: <code>CREATE TYPE order_status AS ENUM ('pending','paid','shipped')</code>.</li>
+          <li><strong>RANGE</strong> — <code>tstzrange</code> cho khoảng thời gian, <code>int4range</code> cho khoảng số.</li>
+          <li><strong>GEOMETRY/GEOGRAPHY</strong> (PostGIS) — bản đồ, khoảng cách, polygon.</li>
+        </ul>
+      </section>
+
+      <section id="null">
+        <h2>8. NULL — giá trị "không biết"</h2>
+        <p>NULL là một trong những concept khó nhất với người mới. Vì:</p>
+        <ul>
+          <li>NULL <strong>không phải 0</strong>, không phải chuỗi rỗng <code>''</code>, không phải false.</li>
+          <li>NULL có nghĩa là <em>"chưa biết"</em> hoặc <em>"không áp dụng"</em>.</li>
+          <li>Mọi phép toán với NULL → kết quả NULL: <code>NULL + 5 = NULL</code>, <code>NULL = NULL → UNKNOWN</code> (không true!).</li>
+        </ul>
+
+        <h3>8.1. Logic 3 giá trị</h3>
+        <p>SQL không phải 2-valued (TRUE/FALSE) mà là <strong>3-valued</strong>: TRUE / FALSE / UNKNOWN.</p>
+
+        <table>
+          <thead><tr><th>x</th><th>x = NULL</th><th>x IS NULL</th><th>NOT (x = NULL)</th></tr></thead>
+          <tbody>
+            <tr><td>5</td><td>UNKNOWN</td><td>FALSE</td><td>UNKNOWN</td></tr>
+            <tr><td>NULL</td><td>UNKNOWN</td><td>TRUE</td><td>UNKNOWN</td></tr>
+          </tbody>
+        </table>
+
+        <p>Cẩn thận: <code>WHERE col != 5</code> sẽ <strong>bỏ qua</strong> dòng có col = NULL! Vì <code>NULL != 5 → UNKNOWN</code>, không phải TRUE.</p>
+
+<pre><code class="language-sql">-- Lấy users không có email = 'spam@x':
+SELECT * FROM users WHERE email != 'spam@x';
+-- ❌ Bỏ qua user có email NULL
+
+SELECT * FROM users WHERE email != 'spam@x' OR email IS NULL;
+-- ✓ Đầy đủ</code></pre>
+
+        <h3>8.2. Hàm xử lý NULL</h3>
+
+<pre><code class="language-sql">-- COALESCE: trả về tham số đầu tiên không NULL
+SELECT COALESCE(nickname, full_name, 'Unknown') FROM users;
+
+-- NULLIF: trả NULL nếu hai tham số bằng nhau
+SELECT NULLIF(divisor, 0);  -- tránh chia 0
+
+-- IS NULL / IS NOT NULL
+WHERE deleted_at IS NULL  -- chỉ lấy chưa xóa</code></pre>
+
+        <h3>8.3. NULL trong aggregate</h3>
+        <p><code>COUNT(*)</code> đếm cả dòng NULL. <code>COUNT(col)</code> bỏ qua dòng có col NULL. <code>SUM/AVG</code> bỏ qua NULL.</p>
+
+<pre><code class="language-sql">-- Bảng users có 100 dòng, 30 dòng email NULL
+SELECT COUNT(*) FROM users;        -- 100
+SELECT COUNT(email) FROM users;    -- 70
+SELECT COUNT(DISTINCT email) FROM users;  -- số email khác nhau, NULL bị loại</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Tranh cãi muôn thuở</span>
+          Một số senior khuyên <strong>tránh NULL hoàn toàn</strong> — dùng <em>NOT NULL + DEFAULT</em>. Nó tránh được 90% bug, nhưng đôi khi NULL <em>thực sự</em> là cách đúng để biểu diễn "chưa có dữ liệu". Hãy chọn có ý thức, không mặc định.
+        </div>
+      </section>
+
+      <section id="hands-on">
+        <h2>9. Hands-on — cài Postgres và tạo bảng đầu tiên</h2>
+
+        <h3>9.1. Cài Postgres bằng Docker (khuyên dùng)</h3>
+<pre><code class="language-bash"># File docker-compose.yml
+version: '3.8'
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: learning
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+volumes:
+  pg_data:</code></pre>
+
+<pre><code class="language-bash">docker compose up -d
+docker compose exec db psql -U postgres -d learning</code></pre>
+
+        <h3>9.2. Tạo bảng đầu tiên</h3>
+<pre><code class="language-sql">CREATE TABLE users (
+  id         BIGSERIAL PRIMARY KEY,
+  email      VARCHAR(255) NOT NULL UNIQUE,
+  name       VARCHAR(100),
+  role       VARCHAR(20)  NOT NULL DEFAULT 'user'
+                         CHECK (role IN ('user','admin','moderator')),
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+
+INSERT INTO users (email, name) VALUES
+  ('alice@example.com', 'Alice'),
+  ('bob@example.com',   'Bob'),
+  ('carol@example.com', 'Carol');
+
+SELECT * FROM users;</code></pre>
+
+        <h3>9.3. Thử vi phạm constraint — xem DB chặn lại</h3>
+<pre><code class="language-sql">-- Trùng email (UNIQUE)
+INSERT INTO users (email, name) VALUES ('alice@example.com', 'Alice 2');
+-- ERROR: duplicate key value violates unique constraint "users_email_key"
+
+-- NULL ở cột NOT NULL
+INSERT INTO users (email) VALUES (NULL);
+-- ERROR: null value in column "email" violates not-null constraint
+
+-- CHECK fail
+INSERT INTO users (email, role) VALUES ('x@x.com', 'super-admin');
+-- ERROR: new row for relation "users" violates check constraint</code></pre>
+
+        <p>Đây là DB <strong>bảo vệ</strong> bạn. Nếu app bug và cố ghi dữ liệu sai, DB từ chối — đảm bảo dữ liệu luôn nhất quán.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <p><strong>Bài 1.</strong> Cho bảng <code>products(id, sku, name, price, stock, created_at)</code>:</p>
+        <ul>
+          <li>Đặt PK phù hợp.</li>
+          <li>SKU phải duy nhất, dạng VARCHAR(50).</li>
+          <li>Price không âm, stock không âm.</li>
+          <li>created_at tự động lấy thời điểm INSERT.</li>
+          <li>Viết CREATE TABLE đầy đủ.</li>
+        </ul>
+
+        <p><strong>Bài 2.</strong> Thiết kế schema cho hệ thống Blog:</p>
+        <ul>
+          <li>users(id, email, name, password_hash, created_at)</li>
+          <li>posts(id, author_id, title, body, published_at, status)</li>
+          <li>comments(id, post_id, author_id, body, created_at)</li>
+          <li>likes(user_id, post_id, created_at) — composite PK</li>
+        </ul>
+        <p>Viết đầy đủ CREATE TABLE với FK, các constraint hợp lý.</p>
+
+        <p><strong>Bài 3.</strong> Cho query: <code>SELECT name FROM users WHERE deleted_at != NOW();</code> — vì sao kết quả luôn rỗng? Sửa lại đúng ý "lấy user chưa bị xóa".</p>
+
+        <p><strong>Bài 4.</strong> Phân biệt:</p>
+        <ul>
+          <li>Super key vs Candidate key vs Primary key</li>
+          <li>Surrogate key vs Natural key</li>
+          <li>UNIQUE vs PRIMARY KEY</li>
+        </ul>
+
+        <p><strong>Bài 5.</strong> ON DELETE thuộc các loại nào? Cho ví dụ thực tế khi nên chọn CASCADE, khi nên chọn RESTRICT, khi nên chọn SET NULL.</p>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz — kiểm tra hiểu bài</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 1</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Phát biểu nào ĐÚNG về NULL trong SQL?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">NULL = 0 trong số học</li>
+              <li class="quiz-option">NULL = NULL trả về UNKNOWN, không phải TRUE</li>
+              <li class="quiz-option">NULL không thể gán cho cột bất kỳ</li>
+              <li class="quiz-option">COUNT(*) bỏ qua dòng có giá trị NULL</li>
+            </ul>
+            <div class="quiz-explain">SQL dùng logic 3 giá trị (TRUE/FALSE/UNKNOWN). NULL = NULL trả về UNKNOWN. Đó là lý do phải dùng <code>IS NULL</code> để kiểm tra. <code>COUNT(*)</code> đếm cả dòng có NULL; <code>COUNT(col)</code> mới bỏ qua NULL.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Một bảng có thể có:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Nhiều PRIMARY KEY</li>
+              <li class="quiz-option">Một PRIMARY KEY và không có UNIQUE nào</li>
+              <li class="quiz-option">Một PRIMARY KEY và nhiều UNIQUE</li>
+              <li class="quiz-option">Không có PRIMARY KEY là không hợp lệ</li>
+            </ul>
+            <div class="quiz-explain">Mỗi bảng tối đa 1 PRIMARY KEY, nhưng có thể có nhiều UNIQUE. Bảng không có PK là hợp lệ về mặt cú pháp (Postgres cho phép) nhưng không khuyến nghị.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">FK <code>ON DELETE CASCADE</code> nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Xóa parent → các child trỏ đến cũng bị xóa theo</li>
+              <li class="quiz-option">Xóa parent → child bị set về NULL</li>
+              <li class="quiz-option">Không cho phép xóa parent nếu còn child</li>
+              <li class="quiz-option">Khi child bị xóa, parent cũng xóa</li>
+            </ul>
+            <div class="quiz-explain">CASCADE lan truyền việc xóa từ parent sang child. Phù hợp cho quan hệ "phụ thuộc hoàn toàn" (vd: xóa order → xóa order_items). KHÔNG phù hợp khi child có ý nghĩa độc lập (vd: xóa user → KHÔNG nên xóa post của user, dùng SET NULL hoặc anonymize).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Vì sao không dùng FLOAT để lưu tiền?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">FLOAT chiếm nhiều dung lượng hơn DECIMAL</li>
+              <li class="quiz-option">FLOAT không hỗ trợ phép cộng</li>
+              <li class="quiz-option">FLOAT có lỗi làm tròn nhị phân (0.1 + 0.2 ≠ 0.3)</li>
+              <li class="quiz-option">FLOAT không có thứ tự sắp xếp</li>
+            </ul>
+            <div class="quiz-explain">FLOAT/DOUBLE dùng IEEE 754 binary, không biểu diễn chính xác số thập phân như 0.1. Tích lũy lỗi sẽ tạo sai số tiền tệ (mất xu, lệch sổ sách). Dùng DECIMAL(p,s) hoặc lưu cents dạng INTEGER.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Edgar F. Codd đề xuất mô hình quan hệ năm:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">1995</li>
+              <li class="quiz-option">1985</li>
+              <li class="quiz-option">1980</li>
+              <li class="quiz-option">1970</li>
+            </ul>
+            <div class="quiz-explain">Codd publish bài báo "A Relational Model of Data for Large Shared Data Banks" năm 1970. 12 rules đến năm 1985. Mô hình tồn tại 50+ năm và vẫn là chuẩn vàng.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Trong các phát biểu sau, đâu là TRUE về relation (bảng)?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Thứ tự dòng quan trọng — dòng 1 khác dòng 2 đảo ngược</li>
+              <li class="quiz-option">Relation là một TẬP các tuple — không có thứ tự, không trùng lặp</li>
+              <li class="quiz-option">Một relation có thể có nhiều tuple giống hệt nhau</li>
+              <li class="quiz-option">Relation phải có ít nhất 1 cột FK</li>
+            </ul>
+            <div class="quiz-explain">Theo lý thuyết quan hệ, relation = tập các tuple. Tập không có thứ tự, không trùng lặp. Trong thực hành SQL, không có PK/UNIQUE thì DB cho phép dòng trùng — đó là lệch khỏi lý thuyết thuần. PK đảm bảo tính tập hợp đúng nghĩa.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Bạn có bảng <code>users(id, email)</code> với 100 dòng, trong đó 30 dòng email = NULL. Câu nào sai?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SELECT COUNT(*) FROM users → 100</li>
+              <li class="quiz-option">SELECT COUNT(email) FROM users → 70</li>
+              <li class="quiz-option">SELECT * FROM users WHERE email != 'a@x.com' → trả 70 dòng (giả sử 0 dòng có email='a@x.com')</li>
+              <li class="quiz-option">SELECT * FROM users WHERE email IS NULL → 30 dòng</li>
+            </ul>
+            <div class="quiz-explain">Câu 3 SAI. <code>email != 'a@x.com'</code> với email NULL trả về UNKNOWN, không phải TRUE. WHERE chỉ giữ TRUE → 30 dòng NULL bị loại. Kết quả là 70, không phải 100. Phải bổ sung <code>OR email IS NULL</code> nếu muốn lấy đầy đủ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Composite primary key:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Là PK gồm nhiều cột; thường gặp ở bảng nối many-to-many</li>
+              <li class="quiz-option">Là PK gồm một cột UUID</li>
+              <li class="quiz-option">Là PK do app tự sinh thay vì DB</li>
+              <li class="quiz-option">Là alias của UNIQUE constraint</li>
+            </ul>
+            <div class="quiz-explain">Composite PK (khóa chính phức) dùng nhiều cột làm khóa chính. Phổ biến: bảng <code>order_items(order_id, product_id)</code>, <code>likes(user_id, post_id)</code>. Mỗi tổ hợp duy nhất.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 1. Tiếp theo: <a href="chuong2.html"><strong>Chương 2 — SQL Cơ Bản (DDL/DML/DQL/DCL/TCL) →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 1 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

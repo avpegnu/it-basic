@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3 — Functions, Scope &amp; Closures · JavaScript Sub-pillar</title>
+  <meta name="description" content="4 cách định nghĩa function, first-class function, arrow vs regular, this binding 4 rule, scope chain, hoisting, closure patterns và IIFE — nền tảng để hiểu mọi JS code." />
+  <meta name="theme-color" content="#c8961a" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-js">JS</span>
+        JavaScript · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 3</span>
+      </div>
+      <div class="chapter-num">Chương 03 · Functions, Scope &amp; Closures</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Hàm, phạm vi và bao đóng
+      </h1>
+      <p class="lead">
+        Function là <strong>first-class citizen</strong> của JavaScript — có thể gán biến, truyền tham số,
+        trả về từ function khác. Mỗi function "ghi nhớ" scope nơi nó được tạo, tạo ra <strong>closure</strong> —
+        công cụ mạnh nhất nhưng cũng dễ gây bug nhất của ngôn ngữ. Chương này gỡ rối 4 cách viết function,
+        4 rule của <code>this</code> và scope chain.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~950 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-2</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Biết 4 cách định nghĩa function và phân biệt rõ qua bảng so sánh: hoisting, <code>this</code>, <code>arguments</code>, <code>new</code>, <code>prototype</code>.</li>
+            <li>Hiểu "function là first-class" — gán biến, truyền argument, return, lưu trong cấu trúc dữ liệu.</li>
+            <li>Master parameters modern: default, rest <code>...args</code>, destructuring params.</li>
+            <li>Phân biệt arrow function với function thường — 4 điểm khác biệt then chốt.</li>
+            <li>Master <code>this</code> binding 4 rule: default, implicit, explicit, <code>new</code> — và ngoại lệ arrow function.</li>
+            <li>Hiểu scope chain, hoisting và Temporal Dead Zone trên function declaration vs expression.</li>
+            <li>Định nghĩa <strong>closure</strong> chính xác và áp dụng 5 pattern: data privacy, factory, memoization, once, currying.</li>
+            <li>Biết IIFE — vẫn còn trong code legacy, đôi khi cần.</li>
+          </ul>
+        </div>
+
+        <h2 id="bon-cach-dinh-nghia">1. Bốn cách định nghĩa function</h2>
+
+        <p>
+          JavaScript cho phép viết function theo ít nhất 4 cú pháp, mỗi cú pháp có hành vi khác nhau. Hiểu khác biệt
+          là điều kiện tiên quyết để đọc bất kỳ codebase nào.
+        </p>
+
+        <h3 id="declaration">1.1. Function declaration</h3>
+
+        <p>Cú pháp truyền thống. Bắt đầu bằng keyword <code>function</code> ở vị trí statement.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Function declaration</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">add</span>(a, b) {
+  <span class="tok-kw">return</span> a + b;
+}
+
+<span class="tok-fn">add</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>);  <span class="tok-com">// 5</span>
+
+<span class="tok-com">// Hoisted toàn bộ — gọi trước dòng khai báo vẫn chạy:</span>
+<span class="tok-fn">sayHi</span>();          <span class="tok-com">// 'Xin chào!' ← vẫn chạy</span>
+<span class="tok-kw">function</span> <span class="tok-fn">sayHi</span>() {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Xin chào!'</span>);
+}</code></pre>
+        </div>
+
+        <h3 id="expression">1.2. Function expression</h3>
+
+        <p>
+          Function nằm ở vị trí biểu thức (ví dụ vế phải của <code>=</code>). Có thể named hoặc anonymous.
+          Không hoisted như declaration.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Function expression</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Anonymous</span>
+<span class="tok-kw">const</span> add = <span class="tok-kw">function</span>(a, b) {
+  <span class="tok-kw">return</span> a + b;
+};
+
+<span class="tok-com">// Named (tên chỉ dùng được bên trong function — hữu ích cho recursion + debug)</span>
+<span class="tok-kw">const</span> fact = <span class="tok-kw">function</span> <span class="tok-fn">factorial</span>(n) {
+  <span class="tok-kw">return</span> n &lt;= <span class="tok-num">1</span> ? <span class="tok-num">1</span> : n * <span class="tok-fn">factorial</span>(n - <span class="tok-num">1</span>);
+};
+
+<span class="tok-com">// KHÔNG hoisted — gọi trước dòng khai báo lỗi:</span>
+<span class="tok-fn">greet</span>();  <span class="tok-com">// ReferenceError (let/const) hoặc TypeError (var)</span>
+<span class="tok-kw">const</span> greet = <span class="tok-kw">function</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'hi'</span>); };</code></pre>
+        </div>
+
+        <h3 id="arrow">1.3. Arrow function</h3>
+
+        <p>
+          Cú pháp ES6, ngắn gọn. Khác function thường ở 4 điểm: không có <code>this</code> riêng, không có
+          <code>arguments</code>, không <code>new</code> được, không có <code>prototype</code>. Chi tiết ở
+          mục 4.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Arrow function syntax</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Body block</span>
+<span class="tok-kw">const</span> add = (a, b) =&gt; {
+  <span class="tok-kw">return</span> a + b;
+};
+
+<span class="tok-com">// Body biểu thức — implicit return (không cần `return` keyword)</span>
+<span class="tok-kw">const</span> add2 = (a, b) =&gt; a + b;
+
+<span class="tok-com">// 1 tham số — bỏ ngoặc</span>
+<span class="tok-kw">const</span> square = x =&gt; x * x;
+
+<span class="tok-com">// 0 tham số — vẫn cần ngoặc rỗng</span>
+<span class="tok-kw">const</span> hi = () =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'hi'</span>);
+
+<span class="tok-com">// Trả về object literal — phải bọc ngoặc tròn để JS không hiểu là block</span>
+<span class="tok-kw">const</span> point = (x, y) =&gt; ({ x, y });
+
+<span class="tok-com">// Multi-line body block:</span>
+<span class="tok-kw">const</span> processUser = (user) =&gt; {
+  <span class="tok-kw">const</span> name = user.name.<span class="tok-fn">trim</span>();
+  <span class="tok-kw">const</span> age = user.age ?? <span class="tok-num">0</span>;
+  <span class="tok-kw">return</span> { name, age };
+};</code></pre>
+        </div>
+
+        <h3 id="method-shorthand">1.4. Method shorthand (object &amp; class)</h3>
+
+        <p>
+          Cú pháp ES6 viết method gọn trong object literal hoặc class body. Hành vi giống function expression
+          thường, chỉ khác cách viết.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Method shorthand</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Cách cũ:</span>
+<span class="tok-kw">const</span> user = {
+  name: <span class="tok-str">'An'</span>,
+  greet: <span class="tok-kw">function</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name); }
+};
+
+<span class="tok-com">// Shorthand ES6:</span>
+<span class="tok-kw">const</span> user2 = {
+  name: <span class="tok-str">'An'</span>,
+  <span class="tok-fn">greet</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name); }   <span class="tok-com">// ← bỏ `: function`</span>
+};
+
+<span class="tok-com">// Trong class:</span>
+<span class="tok-kw">class</span> <span class="tok-cls">User</span> {
+  <span class="tok-fn">constructor</span>(name) { <span class="tok-kw">this</span>.name = name; }
+  <span class="tok-fn">greet</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name); }
+}</code></pre>
+        </div>
+
+        <h3 id="so-sanh-4-cach">1.5. Bảng so sánh 4 cách</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>—</th>
+                <th>Declaration</th>
+                <th>Expression</th>
+                <th>Arrow</th>
+                <th>Method shorthand</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Hoisting</td><td>Full (cả tên + body)</td><td>Chỉ tên biến (var = undefined; let/const TDZ)</td><td>Như expression</td><td>N/A (nằm trong object)</td></tr>
+              <tr><td><code>this</code> riêng</td><td>Có</td><td>Có</td><td><strong>Không</strong> (lexical)</td><td>Có</td></tr>
+              <tr><td><code>arguments</code></td><td>Có</td><td>Có</td><td><strong>Không</strong></td><td>Có</td></tr>
+              <tr><td><code>new</code> được</td><td>Có</td><td>Có</td><td><strong>Không</strong></td><td>Có</td></tr>
+              <tr><td><code>prototype</code></td><td>Có</td><td>Có</td><td><strong>Không</strong></td><td>Có</td></tr>
+              <tr><td>Có tên cho stack trace</td><td>Có</td><td>Khi named hoặc gán biến</td><td>Khi gán biến</td><td>Có</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — chọn cú pháp nào</div>
+          <ul>
+            <li><strong>Top-level helper</strong> dùng nhiều chỗ → <code>function declaration</code> (hoisted, dễ debug).</li>
+            <li><strong>Callback ngắn</strong> truyền vào <code>map</code>/<code>filter</code>/<code>setTimeout</code> → arrow.</li>
+            <li><strong>Method của object/class</strong> cần <code>this</code> → method shorthand.</li>
+            <li><strong>Function gán điều kiện</strong> (vd: <code>const fn = cond ? a : b</code>) → expression.</li>
+          </ul>
+        </div>
+
+        <h2 id="first-class">2. Function là first-class citizen</h2>
+
+        <p>
+          Trong JS, function là <strong>giá trị</strong> như string hay number. Có thể:
+        </p>
+        <ul>
+          <li>Gán cho biến.</li>
+          <li>Truyền làm argument cho function khác.</li>
+          <li>Trả về từ function (higher-order function).</li>
+          <li>Lưu trong array, object, Map.</li>
+        </ul>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>First-class examples</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// 1. Gán cho biến</span>
+<span class="tok-kw">const</span> double = x =&gt; x * <span class="tok-num">2</span>;
+
+<span class="tok-com">// 2. Truyền làm argument — callback</span>
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>].<span class="tok-fn">map</span>(double);   <span class="tok-com">// [2, 4, 6]</span>
+
+<span class="tok-com">// 3. Return function — higher-order function</span>
+<span class="tok-kw">function</span> <span class="tok-fn">multiplier</span>(n) {
+  <span class="tok-kw">return</span> x =&gt; x * n;     <span class="tok-com">// trả về function</span>
+}
+<span class="tok-kw">const</span> triple = <span class="tok-fn">multiplier</span>(<span class="tok-num">3</span>);
+<span class="tok-fn">triple</span>(<span class="tok-num">10</span>);  <span class="tok-com">// 30</span>
+
+<span class="tok-com">// 4. Lưu trong array/object</span>
+<span class="tok-kw">const</span> ops = [
+  x =&gt; x + <span class="tok-num">1</span>,
+  x =&gt; x * <span class="tok-num">2</span>,
+  x =&gt; x - <span class="tok-num">3</span>,
+];
+<span class="tok-kw">const</span> result = ops.<span class="tok-fn">reduce</span>((acc, fn) =&gt; <span class="tok-fn">fn</span>(acc), <span class="tok-num">10</span>);
+<span class="tok-com">// (10+1)*2 - 3 = 19</span>
+
+<span class="tok-kw">const</span> handlers = {
+  onClick: () =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'click'</span>),
+  onHover: () =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'hover'</span>),
+};
+handlers.<span class="tok-fn">onClick</span>();</code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So sánh với Dart &amp; Python</div>
+          <p>
+            <strong>Dart</strong> cũng coi function là first-class — có type <code>Function</code> và arrow
+            <code>(x) =&gt; x * 2</code>. Tuy nhiên Dart phân biệt rõ tham số kiểu <code>num Function(num)</code>.
+          </p>
+          <p>
+            <strong>Python</strong> tương tự (<code>def</code> hoặc <code>lambda</code>), function là object —
+            có thể gán, truyền, trả về. Nhưng <code>lambda</code> Python chỉ chứa 1 biểu thức.
+          </p>
+        </div>
+
+        <h2 id="parameters">3. Parameters: default, rest, destructuring</h2>
+
+        <p>ES6 thêm 3 cú pháp parameter rất tiện. Cần master cả 3.</p>
+
+        <h3 id="default-params">3.1. Default parameter</h3>
+
+        <p>Gán giá trị mặc định khi argument là <code>undefined</code>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Default parameter</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">greet</span>(name = <span class="tok-str">'khách'</span>, greeting = <span class="tok-str">'Xin chào'</span>) {
+  <span class="tok-kw">return</span> <span class="tok-str">`</span><span class="tok-op">${</span>greeting<span class="tok-op">}</span><span class="tok-str">, </span><span class="tok-op">${</span>name<span class="tok-op">}</span><span class="tok-str">!`</span>;
+}
+
+<span class="tok-fn">greet</span>();                <span class="tok-com">// 'Xin chào, khách!'</span>
+<span class="tok-fn">greet</span>(<span class="tok-str">'An'</span>);            <span class="tok-com">// 'Xin chào, An!'</span>
+<span class="tok-fn">greet</span>(<span class="tok-str">'An'</span>, <span class="tok-str">'Chào'</span>);    <span class="tok-com">// 'Chào, An!'</span>
+
+<span class="tok-com">// Quan trọng: default chỉ áp dụng với `undefined`, KHÔNG với `null`</span>
+<span class="tok-fn">greet</span>(<span class="tok-kw">null</span>);            <span class="tok-com">// 'Xin chào, null!' 🔥 (null không trigger default)</span>
+<span class="tok-fn">greet</span>(<span class="tok-kw">undefined</span>);       <span class="tok-com">// 'Xin chào, khách!'</span>
+
+<span class="tok-com">// Default có thể là biểu thức, thậm chí gọi function khác:</span>
+<span class="tok-kw">function</span> <span class="tok-fn">log</span>(msg, time = <span class="tok-cls">Date</span>.<span class="tok-fn">now</span>()) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(time, msg);
+}</code></pre>
+        </div>
+
+        <h3 id="rest-params">3.2. Rest parameter <code>...args</code></h3>
+
+        <p>
+          Gom các argument còn lại thành 1 array. Khác <code>arguments</code> cũ (không phải array thực, không
+          có trong arrow function).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Rest parameter</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">sum</span>(...nums) {
+  <span class="tok-kw">return</span> nums.<span class="tok-fn">reduce</span>((a, b) =&gt; a + b, <span class="tok-num">0</span>);
+}
+
+<span class="tok-fn">sum</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>);          <span class="tok-com">// 6</span>
+<span class="tok-fn">sum</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>);    <span class="tok-com">// 15</span>
+
+<span class="tok-com">// Kết hợp tham số thường + rest (rest phải ở CUỐI):</span>
+<span class="tok-kw">function</span> <span class="tok-fn">tag</span>(label, ...items) {
+  <span class="tok-kw">return</span> <span class="tok-str">`</span><span class="tok-op">${</span>label<span class="tok-op">}</span><span class="tok-str">: </span><span class="tok-op">${</span>items.<span class="tok-fn">join</span>(<span class="tok-str">', '</span>)<span class="tok-op">}</span><span class="tok-str">`</span>;
+}
+<span class="tok-fn">tag</span>(<span class="tok-str">'fruits'</span>, <span class="tok-str">'apple'</span>, <span class="tok-str">'banana'</span>);  <span class="tok-com">// 'fruits: apple, banana'</span>
+
+<span class="tok-com">// So với arguments cũ:</span>
+<span class="tok-kw">function</span> <span class="tok-fn">oldSum</span>() {
+  <span class="tok-com">// arguments là array-like, không có .reduce/.map</span>
+  <span class="tok-kw">const</span> arr = <span class="tok-cls">Array</span>.<span class="tok-fn">from</span>(<span class="tok-kw">arguments</span>);
+  <span class="tok-kw">return</span> arr.<span class="tok-fn">reduce</span>((a, b) =&gt; a + b, <span class="tok-num">0</span>);
+}</code></pre>
+        </div>
+
+        <h3 id="destructuring-params">3.3. Destructuring parameter</h3>
+
+        <p>"Tháo dỡ" object/array ngay tại signature. Cực kỳ tiện cho config object.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Destructuring parameter</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Object destructuring</span>
+<span class="tok-kw">function</span> <span class="tok-fn">createUser</span>({ name, age = <span class="tok-num">18</span>, role = <span class="tok-str">'user'</span> }) {
+  <span class="tok-kw">return</span> { name, age, role };
+}
+
+<span class="tok-fn">createUser</span>({ name: <span class="tok-str">'An'</span>, age: <span class="tok-num">25</span> });
+<span class="tok-com">// { name: 'An', age: 25, role: 'user' }</span>
+
+<span class="tok-com">// Default cho cả object (tránh lỗi destructure undefined)</span>
+<span class="tok-kw">function</span> <span class="tok-fn">init</span>({ debug = <span class="tok-kw">false</span> } = {}) {
+  <span class="tok-kw">return</span> debug;
+}
+<span class="tok-fn">init</span>();           <span class="tok-com">// false (không lỗi nhờ `= {}`)</span>
+
+<span class="tok-com">// Array destructuring</span>
+<span class="tok-kw">function</span> <span class="tok-fn">swap</span>([a, b]) {
+  <span class="tok-kw">return</span> [b, a];
+}
+<span class="tok-fn">swap</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>]);   <span class="tok-com">// [2, 1]
+
+</span><span class="tok-com">// Rename khi destructure</span>
+<span class="tok-kw">function</span> <span class="tok-fn">printName</span>({ name: fullName }) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(fullName);
+}</code></pre>
+        </div>
+
+        <h2 id="arrow-vs-regular">4. Arrow function vs function thường</h2>
+
+        <p>
+          Arrow function trông giống "function viết gọn" nhưng <strong>khác về 4 điểm hành vi</strong>.
+          Hiểu kỹ là điều bắt buộc.
+        </p>
+
+        <h3 id="arrow-this">4.1. Không có <code>this</code> riêng — lexical <code>this</code></h3>
+
+        <p>
+          Arrow function <strong>không tạo binding <code>this</code> mới</strong>. Nó "thừa kế" <code>this</code>
+          từ scope bao ngoài tại thời điểm định nghĩa (lexical).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Lexical this</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> user = {
+  name: <span class="tok-str">'An'</span>,
+  hobbies: [<span class="tok-str">'code'</span>, <span class="tok-str">'gym'</span>],
+
+  <span class="tok-com">// ❌ Function thường: this = undefined trong callback</span>
+  <span class="tok-fn">printBad</span>() {
+    <span class="tok-kw">this</span>.hobbies.<span class="tok-fn">forEach</span>(<span class="tok-kw">function</span>(h) {
+      <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name, h);  <span class="tok-com">// `this` ở đây ≠ user</span>
+    });
+  },
+
+  <span class="tok-com">// ✅ Arrow: kế thừa this từ printGood</span>
+  <span class="tok-fn">printGood</span>() {
+    <span class="tok-kw">this</span>.hobbies.<span class="tok-fn">forEach</span>(h =&gt; {
+      <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name, h);  <span class="tok-com">// `this` = user</span>
+    });
+  },
+};</code></pre>
+        </div>
+
+        <h3 id="arrow-arguments">4.2. Không có <code>arguments</code></h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">normal</span>() {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">arguments</span>);  <span class="tok-com">// Arguments(3) [1, 2, 3]</span>
+}
+<span class="tok-fn">normal</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>);
+
+<span class="tok-kw">const</span> arrow = () =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">arguments</span>);  <span class="tok-com">// ReferenceError (hoặc kế thừa từ scope ngoài nếu có)</span>
+};
+
+<span class="tok-com">// Thay thế: dùng rest params</span>
+<span class="tok-kw">const</span> arrowFix = (...args) =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(args);
+<span class="tok-fn">arrowFix</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>);  <span class="tok-com">// [1, 2, 3] (array thực)</span></code></pre>
+        </div>
+
+        <h3 id="arrow-new">4.3. Không <code>new</code> được</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">Point</span>(x, y) {
+  <span class="tok-kw">this</span>.x = x;
+  <span class="tok-kw">this</span>.y = y;
+}
+<span class="tok-kw">const</span> p = <span class="tok-kw">new</span> <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>);  <span class="tok-com">// OK</span>
+
+<span class="tok-kw">const</span> ArrowPoint = (x, y) =&gt; {
+  <span class="tok-kw">this</span>.x = x;
+};
+<span class="tok-kw">new</span> <span class="tok-fn">ArrowPoint</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>);  <span class="tok-com">// ❌ TypeError: ArrowPoint is not a constructor</span></code></pre>
+        </div>
+
+        <h3 id="arrow-prototype">4.4. Không có <code>prototype</code></h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">foo</span>() {}
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(foo.prototype);    <span class="tok-com">// { constructor: foo }</span>
+
+<span class="tok-kw">const</span> bar = () =&gt; {};
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(bar.prototype);    <span class="tok-com">// undefined</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Khi nào dùng arrow, khi nào dùng function</div>
+          <ul>
+            <li><strong>Arrow</strong>: callback ngắn (<code>map</code>, <code>filter</code>, <code>setTimeout</code>),
+            khi muốn giữ <code>this</code> của scope ngoài, function không cần <code>new</code>.</li>
+            <li><strong>Function thường</strong>: method của object/class (cần <code>this</code> riêng), constructor,
+            khi cần hoisting, khi cần <code>arguments</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="this-binding">5. <code>this</code> binding — 4 rule</h2>
+
+        <p>
+          <code>this</code> trong JavaScript <strong>không phải</strong> "instance của class hiện tại" như Java.
+          Nó được quyết định <strong>tại thời điểm gọi function</strong>, dựa trên <em>cách</em> gọi. Có 4 rule
+          theo thứ tự ưu tiên:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Ưu tiên</th><th>Rule</th><th>Cú pháp</th><th><code>this</code> là gì</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1 (cao nhất)</td><td><code>new</code> binding</td><td><code>new Foo()</code></td><td>Object mới được tạo</td></tr>
+              <tr><td>2</td><td>Explicit binding</td><td><code>fn.call(obj)</code>, <code>fn.apply(obj)</code>, <code>fn.bind(obj)()</code></td><td>Object truyền vào</td></tr>
+              <tr><td>3</td><td>Implicit binding</td><td><code>obj.fn()</code></td><td>Object trước dấu chấm</td></tr>
+              <tr><td>4 (mặc định)</td><td>Default binding</td><td><code>fn()</code> độc lập</td><td><code>undefined</code> (strict mode) hoặc <code>globalThis</code> (sloppy)</td></tr>
+              <tr><td>Ngoại lệ</td><td>Arrow function</td><td>Không tạo binding mới</td><td>Kế thừa từ scope bao ngoài (lexical)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="rule-default">5.1. Default binding</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Default binding</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-str">'use strict'</span>;
+
+<span class="tok-kw">function</span> <span class="tok-fn">show</span>() {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>);
+}
+
+<span class="tok-fn">show</span>();   <span class="tok-com">// strict: undefined; sloppy: window/global</span>
+
+<span class="tok-com">// Hidden case — vẫn là default binding:</span>
+<span class="tok-kw">const</span> obj = {
+  name: <span class="tok-str">'An'</span>,
+  <span class="tok-fn">greet</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>); }
+};
+<span class="tok-kw">const</span> fn = obj.greet;
+<span class="tok-fn">fn</span>();    <span class="tok-com">// undefined — vì không có obj. trước fn()</span></code></pre>
+        </div>
+
+        <h3 id="rule-implicit">5.2. Implicit binding</h3>
+
+        <p>Khi gọi với cú pháp <code>obj.method()</code>, <code>this</code> = <code>obj</code> (object trước dấu chấm).</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">const</span> user = {
+  name: <span class="tok-str">'An'</span>,
+  <span class="tok-fn">greet</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name); }
+};
+
+user.<span class="tok-fn">greet</span>();   <span class="tok-com">// 'An' (this = user)</span>
+
+<span class="tok-com">// Chain — `this` luôn là object cuối cùng trước dấu chấm:</span>
+<span class="tok-kw">const</span> a = { name: <span class="tok-str">'A'</span>, fn: user.greet };
+<span class="tok-kw">const</span> b = { name: <span class="tok-str">'B'</span>, inner: a };
+
+b.inner.<span class="tok-fn">fn</span>();  <span class="tok-com">// 'A' (this = a, không phải b)</span></code></pre>
+        </div>
+
+        <h3 id="rule-explicit">5.3. Explicit binding — <code>call</code>/<code>apply</code>/<code>bind</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>call / apply / bind</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">greet</span>(greeting, punct) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">`</span><span class="tok-op">${</span>greeting<span class="tok-op">}</span><span class="tok-str">, </span><span class="tok-op">${</span><span class="tok-kw">this</span>.name<span class="tok-op">}</span><span class="tok-op">${</span>punct<span class="tok-op">}</span><span class="tok-str">`</span>);
+}
+
+<span class="tok-kw">const</span> user = { name: <span class="tok-str">'An'</span> };
+
+<span class="tok-com">// call(thisArg, ...args)</span>
+greet.<span class="tok-fn">call</span>(user, <span class="tok-str">'Xin chào'</span>, <span class="tok-str">'!'</span>);  <span class="tok-com">// 'Xin chào, An!'</span>
+
+<span class="tok-com">// apply(thisArg, [args])</span>
+greet.<span class="tok-fn">apply</span>(user, [<span class="tok-str">'Chào'</span>, <span class="tok-str">'.'</span>]);    <span class="tok-com">// 'Chào, An.'</span>
+
+<span class="tok-com">// bind(thisArg, ...args) — trả về function MỚI, không gọi ngay</span>
+<span class="tok-kw">const</span> greetAn = greet.<span class="tok-fn">bind</span>(user, <span class="tok-str">'Hi'</span>);
+<span class="tok-fn">greetAn</span>(<span class="tok-str">'?'</span>);   <span class="tok-com">// 'Hi, An?'</span>
+<span class="tok-fn">greetAn</span>(<span class="tok-str">'!'</span>);   <span class="tok-com">// 'Hi, An!' (this đã bị "khóa" với user vĩnh viễn)</span></code></pre>
+        </div>
+
+        <h3 id="rule-new">5.4. <code>new</code> binding</h3>
+
+        <p>Khi gọi với <code>new</code>, JS thực hiện 4 bước:</p>
+        <ol>
+          <li>Tạo object mới rỗng.</li>
+          <li>Link <code>__proto__</code> của object mới tới <code>Foo.prototype</code>.</li>
+          <li>Gán <code>this</code> = object mới, chạy body function.</li>
+          <li>Nếu function không <code>return</code> object, tự động return object mới.</li>
+        </ol>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">User</span>(name) {
+  <span class="tok-com">// this = {} mới</span>
+  <span class="tok-kw">this</span>.name = name;
+  <span class="tok-com">// return this ngầm</span>
+}
+
+<span class="tok-kw">const</span> u = <span class="tok-kw">new</span> <span class="tok-fn">User</span>(<span class="tok-str">'An'</span>);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(u);  <span class="tok-com">// User { name: 'An' }</span></code></pre>
+        </div>
+
+        <h3 id="arrow-this-exception">5.5. Ngoại lệ: arrow function</h3>
+
+        <p>
+          Arrow function <strong>bỏ qua mọi rule trên</strong>. <code>this</code> luôn lấy từ scope bao ngoài
+          tại thời điểm định nghĩa.
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">const</span> obj = {
+  name: <span class="tok-str">'An'</span>,
+  arrow: () =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>?.name),
+  <span class="tok-fn">regular</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>.name); }
+};
+
+obj.<span class="tok-fn">arrow</span>();    <span class="tok-com">// undefined (this kế thừa từ global, không phải obj)</span>
+obj.<span class="tok-fn">regular</span>();  <span class="tok-com">// 'An'</span>
+
+<span class="tok-com">// Cả bind cũng KHÔNG đổi được this của arrow:</span>
+<span class="tok-kw">const</span> bound = obj.arrow.<span class="tok-fn">bind</span>({ name: <span class="tok-str">'B'</span> });
+<span class="tok-fn">bound</span>();           <span class="tok-com">// vẫn undefined</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — tách method khỏi object</div>
+          <p>
+            Mọi lúc gán <code>const fn = obj.method</code> rồi gọi <code>fn()</code>, bạn <strong>mất implicit
+            binding</strong>. Đây là nguồn bug kinh điển.
+          </p>
+          <p>3 cách fix:</p>
+          <ol>
+            <li><code>const fn = obj.method.bind(obj)</code></li>
+            <li><code>const fn = () =&gt; obj.method()</code> (closure)</li>
+            <li>Trong class, gán method trong constructor: <code>this.method = this.method.bind(this)</code></li>
+          </ol>
+        </div>
+
+        <h2 id="scope">6. Scope: global, function, block</h2>
+
+        <p>"Scope" = vùng nhìn thấy biến. JavaScript có 3 loại:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Scope</th><th>Tạo bởi</th><th>Áp dụng cho</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Global</td><td>Top-level của script/module</td><td>Mọi khai báo top-level</td></tr>
+              <tr><td>Function</td><td>Mỗi function body</td><td><code>var</code>, function declaration, parameters, <code>this</code>, <code>arguments</code></td></tr>
+              <tr><td>Block</td><td><code>{ }</code> — if, for, while, block thường</td><td>Chỉ <code>let</code>, <code>const</code>, <code>class</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Scope demo</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> g = <span class="tok-str">'global'</span>;          <span class="tok-com">// global scope</span>
+
+<span class="tok-kw">function</span> <span class="tok-fn">outer</span>() {
+  <span class="tok-kw">const</span> f = <span class="tok-str">'function'</span>;      <span class="tok-com">// function scope</span>
+
+  <span class="tok-kw">if</span> (<span class="tok-kw">true</span>) {
+    <span class="tok-kw">var</span>   v = <span class="tok-str">'var-in-block'</span>;  <span class="tok-com">// FUNCTION scope (var ignore block!)</span>
+    <span class="tok-kw">let</span>   l = <span class="tok-str">'let-in-block'</span>;  <span class="tok-com">// block scope</span>
+    <span class="tok-kw">const</span> c = <span class="tok-str">'const-in-block'</span>; <span class="tok-com">// block scope</span>
+  }
+
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(v);  <span class="tok-com">// 'var-in-block' ← var leak ra function</span>
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(l);  <span class="tok-com">// ReferenceError</span>
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(c);  <span class="tok-com">// ReferenceError</span>
+}</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — scope chain</div>
+          <p>
+            Mỗi scope có "tham chiếu" tới scope cha. Khi truy cập biến, JS tìm theo chuỗi:
+            <strong>local scope → parent scope → ... → global scope</strong>. Tìm thấy ở đâu thì dùng ở đó,
+            không tìm thấy thì throw <code>ReferenceError</code>.
+          </p>
+          <p>Quan trọng: scope chain xác định <strong>tại thời điểm định nghĩa</strong>, không phải khi gọi (lexical scoping).</p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Scope chain</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> a = <span class="tok-num">1</span>;          <span class="tok-com">// global</span>
+
+<span class="tok-kw">function</span> <span class="tok-fn">outer</span>() {
+  <span class="tok-kw">const</span> b = <span class="tok-num">2</span>;        <span class="tok-com">// outer</span>
+
+  <span class="tok-kw">function</span> <span class="tok-fn">inner</span>() {
+    <span class="tok-kw">const</span> c = <span class="tok-num">3</span>;      <span class="tok-com">// inner</span>
+    <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(a, b, c);  <span class="tok-com">// 1 2 3 — chain: inner → outer → global</span>
+  }
+  <span class="tok-fn">inner</span>();
+}
+<span class="tok-fn">outer</span>();</code></pre>
+        </div>
+
+        <h2 id="hoisting">7. Scope chain &amp; hoisting</h2>
+
+        <p>
+          Hoisting = JS engine "đẩy" khai báo lên đầu scope <strong>trước khi chạy code</strong>. Nhưng cách hoist
+          khác nhau giữa các loại khai báo.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Khai báo</th><th>Hoisted</th><th>Init value khi hoist</th><th>Truy cập trước dòng khai báo</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>function fn() {}</code></td><td><strong>Full</strong> (cả body)</td><td>function object</td><td>OK, chạy được</td></tr>
+              <tr><td><code>var x</code></td><td>Có</td><td><code>undefined</code></td><td>Trả <code>undefined</code> (không lỗi)</td></tr>
+              <tr><td><code>let x</code> / <code>const x</code></td><td>Có</td><td>(không init)</td><td><code>ReferenceError</code> (TDZ)</td></tr>
+              <tr><td><code>var fn = function(){}</code></td><td>Chỉ tên var</td><td><code>undefined</code></td><td><code>TypeError: fn is not a function</code></td></tr>
+              <tr><td><code>const fn = () =&gt; {}</code></td><td>Chỉ tên const, TDZ</td><td>(không init)</td><td><code>ReferenceError</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Hoisting demo</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ✅ Function declaration — hoist full</span>
+<span class="tok-fn">sayHi</span>();   <span class="tok-com">// 'hi'</span>
+<span class="tok-kw">function</span> <span class="tok-fn">sayHi</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'hi'</span>); }
+
+<span class="tok-com">// ⚠️  var + function expression — chỉ hoist tên</span>
+<span class="tok-fn">sayHo</span>();   <span class="tok-com">// ❌ TypeError: sayHo is not a function</span>
+<span class="tok-kw">var</span> sayHo = <span class="tok-kw">function</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'ho'</span>); };
+<span class="tok-com">// Lúc gọi: sayHo là undefined → undefined() → TypeError</span>
+
+<span class="tok-com">// ❌ const/let arrow — TDZ</span>
+<span class="tok-fn">sayHey</span>();  <span class="tok-com">// ❌ ReferenceError: Cannot access 'sayHey' before initialization</span>
+<span class="tok-kw">const</span> sayHey = () =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'hey'</span>);</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Quy tắc thực dụng</div>
+          <p>
+            Khai báo trước khi dùng — luôn đúng dù ngôn ngữ nào. Đừng dựa vào function hoisting để viết code
+            "gọi trước, định nghĩa sau", rất khó đọc.
+          </p>
+        </div>
+
+        <h2 id="closure">8. Closure — function nhớ scope nó được tạo</h2>
+
+        <p>
+          <strong>Closure</strong> = function + reference tới scope nơi nó được tạo ra. Khi function được trả ra
+          khỏi scope cha, scope đó <strong>không bị thu hồi</strong> — function vẫn truy cập được các biến bên trong.
+        </p>
+
+        <p>Ví dụ kinh điển — counter:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>makeCounter</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">makeCounter</span>() {
+  <span class="tok-kw">let</span> n = <span class="tok-num">0</span>;             <span class="tok-com">// biến local của makeCounter</span>
+  <span class="tok-kw">return</span> () =&gt; ++n;     <span class="tok-com">// inner function "đóng gói" biến n</span>
+}
+
+<span class="tok-kw">const</span> c1 = <span class="tok-fn">makeCounter</span>();
+<span class="tok-fn">c1</span>();  <span class="tok-com">// 1</span>
+<span class="tok-fn">c1</span>();  <span class="tok-com">// 2</span>
+<span class="tok-fn">c1</span>();  <span class="tok-com">// 3 — n vẫn tồn tại sau khi makeCounter return!</span>
+
+<span class="tok-kw">const</span> c2 = <span class="tok-fn">makeCounter</span>();  <span class="tok-com">// scope mới, n mới</span>
+<span class="tok-fn">c2</span>();  <span class="tok-com">// 1 — c1 và c2 độc lập</span>
+<span class="tok-fn">c1</span>();  <span class="tok-com">// 4</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — vì sao closure tồn tại</div>
+          <p>
+            Trong garbage-collected language, biến bị thu hồi khi <strong>không còn ai tham chiếu</strong>.
+            Khi <code>makeCounter</code> return, biến <code>n</code> vẫn được inner function tham chiếu — nên
+            không bị thu hồi.
+          </p>
+          <p>
+            Đây <strong>không phải</strong> "leak". Khi biến <code>c1</code> bị gán giá trị khác hoặc ra khỏi
+            scope, inner function bị thu hồi → <code>n</code> mới được thu hồi.
+          </p>
+        </div>
+
+        <h2 id="closure-patterns">9. Closure patterns</h2>
+
+        <h3 id="data-privacy">9.1. Data privacy — biến private</h3>
+
+        <p>Trước class field <code>#private</code> (ES2022), closure là cách duy nhất tạo state thật sự private.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Data privacy</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">createAccount</span>(initialBalance) {
+  <span class="tok-kw">let</span> balance = initialBalance;   <span class="tok-com">// private — không cách nào truy cập trực tiếp</span>
+
+  <span class="tok-kw">return</span> {
+    <span class="tok-fn">deposit</span>(amount) { balance += amount; },
+    <span class="tok-fn">withdraw</span>(amount) {
+      <span class="tok-kw">if</span> (amount &gt; balance) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-fn">Error</span>(<span class="tok-str">'Insufficient'</span>);
+      balance -= amount;
+    },
+    <span class="tok-fn">getBalance</span>() { <span class="tok-kw">return</span> balance; }
+  };
+}
+
+<span class="tok-kw">const</span> acc = <span class="tok-fn">createAccount</span>(<span class="tok-num">100</span>);
+acc.<span class="tok-fn">deposit</span>(<span class="tok-num">50</span>);
+acc.<span class="tok-fn">getBalance</span>();   <span class="tok-com">// 150</span>
+acc.balance;        <span class="tok-com">// undefined — không có property này</span></code></pre>
+        </div>
+
+        <h3 id="factory">9.2. Factory function</h3>
+
+        <p>Tạo nhiều function "biến thể" từ 1 template.</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">multiplier</span>(factor) {
+  <span class="tok-kw">return</span> x =&gt; x * factor;
+}
+
+<span class="tok-kw">const</span> double = <span class="tok-fn">multiplier</span>(<span class="tok-num">2</span>);
+<span class="tok-kw">const</span> triple = <span class="tok-fn">multiplier</span>(<span class="tok-num">3</span>);
+<span class="tok-kw">const</span> half   = <span class="tok-fn">multiplier</span>(<span class="tok-num">0.5</span>);
+
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>].<span class="tok-fn">map</span>(double);  <span class="tok-com">// [2, 4, 6]</span>
+[<span class="tok-num">10</span>, <span class="tok-num">20</span>].<span class="tok-fn">map</span>(half);     <span class="tok-com">// [5, 10]</span></code></pre>
+        </div>
+
+        <h3 id="memoization">9.3. Memoization — cache kết quả</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>memoize</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">memoize</span>(fn) {
+  <span class="tok-kw">const</span> cache = <span class="tok-kw">new</span> <span class="tok-cls">Map</span>();   <span class="tok-com">// private cache, sống cùng wrapped fn</span>
+  <span class="tok-kw">return</span> (...args) =&gt; {
+    <span class="tok-kw">const</span> key = <span class="tok-cls">JSON</span>.<span class="tok-fn">stringify</span>(args);
+    <span class="tok-kw">if</span> (cache.<span class="tok-fn">has</span>(key)) <span class="tok-kw">return</span> cache.<span class="tok-fn">get</span>(key);
+    <span class="tok-kw">const</span> result = <span class="tok-fn">fn</span>(...args);
+    cache.<span class="tok-fn">set</span>(key, result);
+    <span class="tok-kw">return</span> result;
+  };
+}
+
+<span class="tok-kw">const</span> slowSquare = (n) =&gt; {
+  <span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">1e7</span>; i++) {}  <span class="tok-com">// giả lập chậm</span>
+  <span class="tok-kw">return</span> n * n;
+};
+
+<span class="tok-kw">const</span> fastSquare = <span class="tok-fn">memoize</span>(slowSquare);
+<span class="tok-fn">fastSquare</span>(<span class="tok-num">5</span>);   <span class="tok-com">// chậm lần đầu</span>
+<span class="tok-fn">fastSquare</span>(<span class="tok-num">5</span>);   <span class="tok-com">// instant — đọc cache</span></code></pre>
+        </div>
+
+        <h3 id="once">9.4. Once — gọi 1 lần duy nhất</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">once</span>(fn) {
+  <span class="tok-kw">let</span> called = <span class="tok-kw">false</span>;
+  <span class="tok-kw">let</span> result;
+  <span class="tok-kw">return</span> (...args) =&gt; {
+    <span class="tok-kw">if</span> (!called) {
+      result = <span class="tok-fn">fn</span>(...args);
+      called = <span class="tok-kw">true</span>;
+    }
+    <span class="tok-kw">return</span> result;
+  };
+}
+
+<span class="tok-kw">const</span> init = <span class="tok-fn">once</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Khởi tạo'</span>));
+<span class="tok-fn">init</span>();   <span class="tok-com">// 'Khởi tạo'</span>
+<span class="tok-fn">init</span>();   <span class="tok-com">// (không in gì, trả lại undefined cached)</span></code></pre>
+        </div>
+
+        <h3 id="currying">9.5. Currying</h3>
+
+        <p>Chuyển <code>fn(a, b, c)</code> thành <code>fn(a)(b)(c)</code>. Cho phép partial application.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>curry</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Curry thủ công cho 3 tham số:</span>
+<span class="tok-kw">const</span> add = a =&gt; b =&gt; c =&gt; a + b + c;
+<span class="tok-fn">add</span>(<span class="tok-num">1</span>)(<span class="tok-num">2</span>)(<span class="tok-num">3</span>);   <span class="tok-com">// 6</span>
+
+<span class="tok-com">// Curry tự động cho bất kỳ arity:</span>
+<span class="tok-kw">function</span> <span class="tok-fn">curry</span>(fn) {
+  <span class="tok-kw">return</span> <span class="tok-kw">function</span> <span class="tok-fn">curried</span>(...args) {
+    <span class="tok-kw">if</span> (args.length &gt;= fn.length) {
+      <span class="tok-kw">return</span> <span class="tok-fn">fn</span>(...args);
+    }
+    <span class="tok-kw">return</span> (...next) =&gt; <span class="tok-fn">curried</span>(...args, ...next);
+  };
+}
+
+<span class="tok-kw">const</span> sum3 = (a, b, c) =&gt; a + b + c;
+<span class="tok-kw">const</span> curriedSum = <span class="tok-fn">curry</span>(sum3);
+
+<span class="tok-fn">curriedSum</span>(<span class="tok-num">1</span>)(<span class="tok-num">2</span>)(<span class="tok-num">3</span>);   <span class="tok-com">// 6</span>
+<span class="tok-fn">curriedSum</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>)(<span class="tok-num">3</span>);   <span class="tok-com">// 6</span>
+<span class="tok-fn">curriedSum</span>(<span class="tok-num">1</span>)(<span class="tok-num">2</span>, <span class="tok-num">3</span>);   <span class="tok-com">// 6</span>
+<span class="tok-fn">curriedSum</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>);   <span class="tok-com">// 6</span></code></pre>
+        </div>
+
+        <h2 id="iife">10. IIFE — Immediately Invoked Function Expression</h2>
+
+        <p>Function được "định nghĩa và gọi ngay lập tức". Trước ES6 module, đây là cách phổ biến để tạo scope riêng.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>IIFE</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Cú pháp truyền thống — bọc trong ngoặc</span>
+(<span class="tok-kw">function</span>() {
+  <span class="tok-kw">const</span> secret = <span class="tok-num">42</span>;   <span class="tok-com">// scope riêng, không leak ra global</span>
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(secret);
+})();
+
+<span class="tok-com">// Arrow IIFE</span>
+(() =&gt; {
+  <span class="tok-kw">const</span> x = <span class="tok-num">1</span>;
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x);
+})();
+
+<span class="tok-com">// Truyền argument vào IIFE</span>
+((name) =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">`Hello </span><span class="tok-op">${</span>name<span class="tok-op">}</span><span class="tok-str">`</span>);
+})(<span class="tok-str">'JS'</span>);
+
+<span class="tok-com">// Trả về giá trị</span>
+<span class="tok-kw">const</span> config = (() =&gt; {
+  <span class="tok-kw">const</span> env = process.env.NODE_ENV;
+  <span class="tok-kw">return</span> { debug: env !== <span class="tok-str">'production'</span> };
+})();</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 IIFE thời đại module</div>
+          <p>
+            Trước ES6, JS không có module — tất cả script chia sẻ global scope. IIFE giải quyết bằng cách tạo
+            scope riêng. Bây giờ với <code>import</code>/<code>export</code> (chương 8), mỗi module đã có
+            scope riêng → IIFE ít cần thiết. Tuy vậy vẫn hữu ích cho:
+          </p>
+          <ul>
+            <li>Async top-level cũ: <code>(async () =&gt; { await ... })()</code> (trước top-level await).</li>
+            <li>Khởi tạo có logic: <code>const value = (() =&gt; { ... return ...; })();</code></li>
+            <li>Code phải chạy trong <code>&lt;script&gt;</code> tag không có <code>type="module"</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — 3 cách viết <code>add</code> + hoisting</h4>
+            <div class="exercise-body">
+              <p>Viết function <code>add(a, b)</code> theo cả 3 cách: function declaration, function expression
+              (gán <code>const</code>), arrow function. Trong mỗi file/snippet, thử <strong>gọi trước dòng khai báo</strong>
+              và quan sát:</p>
+              <ul>
+                <li>Cách nào chạy được, cách nào throw, throw lỗi gì?</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com">// 1. Declaration — hoisted full, gọi trước OK</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-fn">add1</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>));   <span class="tok-com">// 5</span>
+<span class="tok-kw">function</span> <span class="tok-fn">add1</span>(a, b) { <span class="tok-kw">return</span> a + b; }
+
+<span class="tok-com">// 2. Expression với const — TDZ, gọi trước → ReferenceError</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-fn">add2</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>));   <span class="tok-com">// ReferenceError: Cannot access 'add2' before initialization</span>
+<span class="tok-kw">const</span> add2 = <span class="tok-kw">function</span>(a, b) { <span class="tok-kw">return</span> a + b; };
+
+<span class="tok-com">// 3. Arrow với const — cũng TDZ → ReferenceError</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-fn">add3</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>));   <span class="tok-com">// ReferenceError</span>
+<span class="tok-kw">const</span> add3 = (a, b) =&gt; a + b;</code></pre>
+                  <p>
+                    Mẹo: nếu thay <code>const</code> bằng <code>var</code> ở case 2 và 3, lỗi sẽ thành
+                    <code>TypeError: add2 is not a function</code> (vì <code>var</code> hoist tên với value
+                    <code>undefined</code>, gọi <code>undefined(2,3)</code> sinh TypeError).
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — Mất <code>this</code> và 3 cách fix</h4>
+            <div class="exercise-body">
+              <p>Cho:</p>
+<pre><code><span class="tok-kw">const</span> user = {
+  name: <span class="tok-str">'An'</span>,
+  <span class="tok-fn">greet</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">`Hi, </span><span class="tok-op">${</span><span class="tok-kw">this</span>.name<span class="tok-op">}</span><span class="tok-str">`</span>); }
+};
+
+<span class="tok-kw">const</span> fn = user.greet;
+<span class="tok-fn">fn</span>();   <span class="tok-com">// ?</span></code></pre>
+              <p>
+                Hỏi: <code>this</code> trong <code>fn()</code> là gì? Fix bằng 3 cách độc lập:
+                bind, arrow wrapper, closure capture.
+              </p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+                  <p><strong><code>this</code></strong> = <code>undefined</code> (strict mode) hoặc <code>globalThis</code>
+                  (sloppy). Khi tách method khỏi object, mất implicit binding.</p>
+                  <p><strong>Fix 1 — bind:</strong></p>
+<pre><code><span class="tok-kw">const</span> fn = user.greet.<span class="tok-fn">bind</span>(user);
+<span class="tok-fn">fn</span>();  <span class="tok-com">// 'Hi, An'</span></code></pre>
+                  <p><strong>Fix 2 — arrow wrapper:</strong></p>
+<pre><code><span class="tok-kw">const</span> fn = () =&gt; user.<span class="tok-fn">greet</span>();
+<span class="tok-fn">fn</span>();  <span class="tok-com">// 'Hi, An' (arrow giữ this=user qua implicit call)</span></code></pre>
+                  <p><strong>Fix 3 — closure capture:</strong></p>
+<pre><code><span class="tok-kw">const</span> fn = <span class="tok-kw">function</span>() {
+  <span class="tok-kw">const</span> self = user;       <span class="tok-com">// capture qua closure</span>
+  self.<span class="tok-fn">greet</span>();
+};
+<span class="tok-fn">fn</span>();  <span class="tok-com">// 'Hi, An'</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — <code>once(fn)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết <code>once(fn)</code>: trả function chỉ chạy <code>fn</code> lần đầu, các lần sau trả
+                kết quả đã cache. Test với:
+              </p>
+<pre><code><span class="tok-kw">const</span> init = <span class="tok-fn">once</span>(() =&gt; {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'init!'</span>);
+  <span class="tok-kw">return</span> { ready: <span class="tok-kw">true</span> };
+});
+
+<span class="tok-fn">init</span>();  <span class="tok-com">// in 'init!', trả { ready: true }</span>
+<span class="tok-fn">init</span>();  <span class="tok-com">// KHÔNG in, trả { ready: true } đã cache</span>
+<span class="tok-fn">init</span>();  <span class="tok-com">// idem</span></code></pre>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">once</span>(fn) {
+  <span class="tok-kw">let</span> called = <span class="tok-kw">false</span>;
+  <span class="tok-kw">let</span> result;
+  <span class="tok-kw">return</span> <span class="tok-kw">function</span>(...args) {
+    <span class="tok-kw">if</span> (!called) {
+      result = fn.<span class="tok-fn">apply</span>(<span class="tok-kw">this</span>, args);
+      called = <span class="tok-kw">true</span>;
+    }
+    <span class="tok-kw">return</span> result;
+  };
+}</code></pre>
+                  <p>
+                    Mẹo: dùng <code>function</code> thường + <code>fn.apply(this, args)</code> để pass-through
+                    <code>this</code> nếu caller gọi như method. Nếu không cần, arrow + <code>fn(...args)</code>
+                    đủ.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — <code>curry(fn)</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết <code>curry(fn)</code> chuyển <code>fn(a, b, c)</code> thành dạng có thể gọi
+                <code>fn(a)(b)(c)</code>, <code>fn(a, b)(c)</code>, <code>fn(a)(b, c)</code> hay
+                <code>fn(a, b, c)</code> đều ra kết quả.
+              </p>
+              <p>Hint: dùng <code>fn.length</code> (arity) và đệ quy.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">curry</span>(fn) {
+  <span class="tok-kw">return</span> <span class="tok-kw">function</span> <span class="tok-fn">curried</span>(...args) {
+    <span class="tok-kw">if</span> (args.length &gt;= fn.length) {
+      <span class="tok-kw">return</span> fn.<span class="tok-fn">apply</span>(<span class="tok-kw">this</span>, args);
+    }
+    <span class="tok-kw">return</span> (...next) =&gt; <span class="tok-fn">curried</span>.<span class="tok-fn">apply</span>(<span class="tok-kw">this</span>, [...args, ...next]);
+  };
+}
+
+<span class="tok-kw">const</span> sum = (a, b, c) =&gt; a + b + c;
+<span class="tok-kw">const</span> c = <span class="tok-fn">curry</span>(sum);
+
+<span class="tok-fn">c</span>(<span class="tok-num">1</span>)(<span class="tok-num">2</span>)(<span class="tok-num">3</span>);    <span class="tok-com">// 6</span>
+<span class="tok-fn">c</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>)(<span class="tok-num">3</span>);    <span class="tok-com">// 6</span>
+<span class="tok-fn">c</span>(<span class="tok-num">1</span>)(<span class="tok-num">2</span>, <span class="tok-num">3</span>);    <span class="tok-com">// 6</span>
+<span class="tok-fn">c</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>);    <span class="tok-com">// 6</span></code></pre>
+                  <p>Ý tưởng: gom args qua mỗi lần gọi, khi nào đủ arity thì gọi <code>fn</code>.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Fix bug <code>var i</code> trong <code>setTimeout</code></h4>
+            <div class="exercise-body">
+              <p>Code dưới in <code>3 3 3</code> thay vì <code>0 1 2</code>. Giải thích vì sao và fix bằng <strong>2 cách</strong>:</p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(i), <span class="tok-num">0</span>);
+}</code></pre>
+              <details class="exercise-hint">
+                <summary>Giải thích + 2 cách fix</summary>
+                <div class="hint-content">
+                  <p><strong>Vì sao</strong>: <code>var i</code> là function scope (hoặc global), không phải block.
+                  Cả 3 callback <code>setTimeout</code> chia sẻ <strong>cùng 1 binding <code>i</code></strong>.
+                  Khi loop kết thúc, <code>i === 3</code>. Sau đó callback chạy, đọc <code>i</code> hiện tại
+                  → in <code>3 3 3</code>.</p>
+
+                  <p><strong>Fix 1 — đổi <code>var</code> sang <code>let</code>:</strong></p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(i), <span class="tok-num">0</span>);
+}
+<span class="tok-com">// 0 1 2 — let tạo binding MỚI mỗi iteration</span></code></pre>
+                  <p>
+                    Lý do: <code>let</code> trong header <code>for</code> được spec đặc biệt — mỗi iteration
+                    tạo binding mới. Closure capture binding riêng → in đúng.
+                  </p>
+
+                  <p><strong>Fix 2 — IIFE tạo scope riêng:</strong></p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  ((j) =&gt; {
+    <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(j), <span class="tok-num">0</span>);
+  })(i);
+}
+<span class="tok-com">// 0 1 2 — mỗi iteration IIFE tạo `j` mới</span></code></pre>
+                  <p>
+                    Cách 3 dùng <code>setTimeout(fn, ms, ...extraArgs)</code>: <code>setTimeout((j) =&gt;
+                    console.log(j), 0, i)</code> — capture qua tham số runtime.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Function declaration và function expression khác nhau gì về hoisting?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Function declaration</strong> được hoist <em>toàn bộ</em> (cả tên + body) — có thể gọi
+                trước dòng khai báo.
+              </p>
+              <p>
+                <strong>Function expression</strong> chỉ hoist <em>tên biến</em> (theo rule của <code>var</code>/<code>let</code>/<code>const</code>).
+                Body chưa tồn tại. Gọi trước dòng khai báo:
+                <code>var</code> → <code>TypeError</code> (undefined không phải function),
+                <code>let</code>/<code>const</code> → <code>ReferenceError</code> (TDZ).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Arrow function có <code>this</code> riêng không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. Arrow function không tạo binding <code>this</code> mới — nó dùng
+                <code>this</code> của scope bao ngoài tại thời điểm định nghĩa (lexical <code>this</code>).
+              </p>
+              <p>
+                Hệ quả: <code>call</code>/<code>apply</code>/<code>bind</code> <em>không thay đổi được</em>
+                <code>this</code> của arrow. Cũng không thể dùng <code>new</code> với arrow.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text">
+              <p>Code sau in gì (strict mode)?</p>
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">foo</span>() { <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">this</span>); }
+<span class="tok-fn">foo</span>();</code></pre>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>undefined</code>. Đây là default binding — gọi function độc lập (không qua
+                <code>obj.fn()</code>, <code>new</code>, <code>call</code>/<code>apply</code>/<code>bind</code>)
+                trong strict mode thì <code>this</code> = <code>undefined</code>.
+              </p>
+              <p>Trong sloppy mode (không có <code>'use strict'</code>), <code>this</code> = <code>globalThis</code> (window trong browser).</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Closure có giải phóng biến của scope cha sau khi function cha trả về không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong> — chừng nào inner function vẫn còn được tham chiếu, các biến trong scope
+                cha mà nó "đóng gói" vẫn còn sống. Đó chính là cơ chế closure.
+              </p>
+              <p>
+                Khi inner function bị thu hồi (mất hết reference), scope cha mới được garbage collector dọn dẹp.
+                Engine hiện đại (V8) còn tối ưu hơn: chỉ giữ <em>các biến thực sự được closure tham chiếu</em>,
+                không giữ toàn bộ scope.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text">
+              <p>Code sau in gì?</p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(i), <span class="tok-num">0</span>);
+}</code></pre>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>0 1 2</code>. <code>let</code> trong header <code>for</code> tạo <strong>binding mới
+                mỗi iteration</strong> — mỗi callback closure capture binding riêng → in giá trị đúng.
+              </p>
+              <p>
+                Đổi sang <code>var</code> sẽ in <code>3 3 3</code> vì cả 3 callback chia sẻ cùng 1 biến.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Dùng <code>new</code> với arrow function được không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không</strong>. Arrow function không có <code>[[Construct]]</code> internal slot, không có
+                <code>prototype</code> property, không tạo <code>this</code> binding. <code>new</code> trên arrow
+                throw <code>TypeError: X is not a constructor</code>.
+              </p>
+              <p>Để tạo constructor, dùng function declaration/expression hoặc <code>class</code> (chương 4).</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text">
+              <p><code>const fn = obj.method; fn.call(obj)</code> và <code>obj.method()</code> khác nhau gì?</p>
+            </div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Về kết quả</strong>: giống nhau — <code>this</code> trong cả 2 đều là <code>obj</code>.
+              </p>
+              <p>
+                <strong>Về cơ chế</strong>: <code>obj.method()</code> dùng <em>implicit binding</em> (rule 3) — JS
+                tự set <code>this</code> = object trước dấu chấm. <code>fn.call(obj)</code> dùng
+                <em>explicit binding</em> (rule 2) — bạn truyền tay <code>obj</code> vào.
+              </p>
+              <p>
+                Khác biệt thực tế: nếu chỉ gọi <code>fn()</code> (không có <code>.call</code>), bạn sẽ mất
+                <code>this</code> → default binding (undefined trong strict mode). Đây là lý do
+                <code>const fn = obj.method; fn()</code> hay sinh bug.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 3, bạn nên đã master:</p>
+        <ul>
+          <li><strong>4 cách định nghĩa function</strong>: declaration, expression, arrow, method shorthand — và bảng so sánh hoisting/<code>this</code>/<code>arguments</code>/<code>new</code>/<code>prototype</code>.</li>
+          <li><strong>First-class function</strong>: gán biến, truyền arg, return, lưu trong cấu trúc.</li>
+          <li><strong>Parameters modern</strong>: default (chỉ áp dụng cho <code>undefined</code>), rest <code>...args</code> (mảng thực), destructuring trực tiếp ở signature.</li>
+          <li><strong>Arrow vs regular</strong>: 4 khác biệt — không <code>this</code>, không <code>arguments</code>, không <code>new</code>, không <code>prototype</code>.</li>
+          <li><strong>4 rule của <code>this</code></strong>: <code>new</code> &gt; explicit &gt; implicit &gt; default; arrow là ngoại lệ (lexical).</li>
+          <li><strong>Scope</strong>: global / function / block; <code>var</code> ignore block scope.</li>
+          <li><strong>Hoisting</strong>: declaration hoist full; expression chỉ hoist tên; <code>let</code>/<code>const</code> ở TDZ.</li>
+          <li><strong>Closure</strong> = function + scope nó được tạo. Counter, data privacy, memoize, once, curry.</li>
+          <li><strong>IIFE</strong> — dù module hiện đại đã giảm vai trò, vẫn xuất hiện trong code base lớn.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 2 (Variables, Types)</strong> — củng cố hiểu biết về <code>var</code>/<code>let</code>/<code>const</code> và TDZ trước khi đào sâu hoisting ở đây.</li>
+          <li><strong>Chương 4 (Objects, Prototypes &amp; Classes)</strong> — <code>this</code> binding áp dụng vào method của class; <code>new</code> binding kết nối với prototype chain.</li>
+          <li><strong>Chương 6 (Async)</strong> — callback và Promise chain dựa hoàn toàn vào closure và arrow function để giữ <code>this</code>.</li>
+          <li><strong>Chương 9 (TypeScript)</strong> — type signature của function (<code>(a: number) =&gt; number</code>) và overload phụ thuộc cú pháp ở đây.</li>
+          <li><strong>Dart Chương 3</strong> — Dart cũng có closure và arrow, nhưng <code>this</code> đơn giản hơn (không có 4 rule). So sánh để thấy JS phức tạp ở đâu và vì sao.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong2.html" class="prev">
+            <div class="dir">← Chương 2</div>
+            <div class="label">Variables, Types &amp; Coercion</div>
+          </a>
+          <a href="chuong4.html" class="next">
+            <div class="dir">Chương 4 →</div>
+            <div class="label">Objects, Prototypes &amp; Classes</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#bon-cach-dinh-nghia">1. Bốn cách định nghĩa function</a></li>
+          <li class="level-3"><a href="#declaration">1.1. Function declaration</a></li>
+          <li class="level-3"><a href="#expression">1.2. Function expression</a></li>
+          <li class="level-3"><a href="#arrow">1.3. Arrow function</a></li>
+          <li class="level-3"><a href="#method-shorthand">1.4. Method shorthand</a></li>
+          <li class="level-3"><a href="#so-sanh-4-cach">1.5. Bảng so sánh</a></li>
+          <li><a href="#first-class">2. First-class function</a></li>
+          <li><a href="#parameters">3. Parameters</a></li>
+          <li class="level-3"><a href="#default-params">3.1. Default</a></li>
+          <li class="level-3"><a href="#rest-params">3.2. Rest ...args</a></li>
+          <li class="level-3"><a href="#destructuring-params">3.3. Destructuring</a></li>
+          <li><a href="#arrow-vs-regular">4. Arrow vs regular</a></li>
+          <li class="level-3"><a href="#arrow-this">4.1. Lexical this</a></li>
+          <li class="level-3"><a href="#arrow-arguments">4.2. Không arguments</a></li>
+          <li class="level-3"><a href="#arrow-new">4.3. Không new</a></li>
+          <li class="level-3"><a href="#arrow-prototype">4.4. Không prototype</a></li>
+          <li><a href="#this-binding">5. this binding 4 rule</a></li>
+          <li class="level-3"><a href="#rule-default">5.1. Default</a></li>
+          <li class="level-3"><a href="#rule-implicit">5.2. Implicit</a></li>
+          <li class="level-3"><a href="#rule-explicit">5.3. Explicit</a></li>
+          <li class="level-3"><a href="#rule-new">5.4. new</a></li>
+          <li class="level-3"><a href="#arrow-this-exception">5.5. Arrow ngoại lệ</a></li>
+          <li><a href="#scope">6. Scope</a></li>
+          <li><a href="#hoisting">7. Hoisting</a></li>
+          <li><a href="#closure">8. Closure</a></li>
+          <li><a href="#closure-patterns">9. Closure patterns</a></li>
+          <li class="level-3"><a href="#data-privacy">9.1. Data privacy</a></li>
+          <li class="level-3"><a href="#factory">9.2. Factory</a></li>
+          <li class="level-3"><a href="#memoization">9.3. Memoize</a></li>
+          <li class="level-3"><a href="#once">9.4. Once</a></li>
+          <li class="level-3"><a href="#currying">9.5. Currying</a></li>
+          <li><a href="#iife">10. IIFE</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 3 — Functions, Scope &amp; Closures · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong2.html">← Chương 2</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong4.html">Chương 4 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

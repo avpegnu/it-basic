@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 8 — Query Optimization & Execution Plan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">Database Mastery</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 08 · Optimization</div>
+      <h1>Query Optimization & Execution Plan</h1>
+      <p class="subtitle">DB xử lý 1 câu query qua những bước nào. Cost-based optimizer. Đọc EXPLAIN ANALYZE. Tuning checklist thực chiến.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#pipeline">1. Pipeline xử lý query</a></li>
+        <li><a href="#cost">2. Cost-based optimizer</a></li>
+        <li><a href="#stats">3. Statistics</a></li>
+        <li><a href="#explain">4. EXPLAIN cú pháp</a></li>
+        <li><a href="#nodes">5. Plan nodes</a></li>
+        <li><a href="#joins">6. Join algorithms</a></li>
+        <li><a href="#analyze">7. EXPLAIN ANALYZE đọc</a></li>
+        <li><a href="#smells">8. Slow query smells</a></li>
+        <li><a href="#tuning">9. Tuning checklist</a></li>
+        <li><a href="#hints">10. Set & Hint</a></li>
+        <li><a href="#walkthrough">11. Walkthrough thực tế</a></li>
+        <li><a href="#exercises">12. Bài tập</a></li>
+        <li><a href="#quiz">13. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="pipeline">
+        <h2>1. Pipeline DB xử lý 1 query</h2>
+
+        <div class="ascii">  SQL string
+       │
+       ▼
+  ┌─────────────┐
+  │ 1. PARSER   │  Tokenize + parse → AST (parse tree)
+  └──────┬──────┘  Lỗi syntax bắt ở đây
+         ▼
+  ┌─────────────┐
+  │ 2. ANALYZER │  Phân giải tên (table, column), check quyền
+  └──────┬──────┘  Lỗi tham chiếu (col không tồn tại) bắt ở đây
+         ▼
+  ┌──────────────┐
+  │ 3. REWRITER  │  Áp dụng VIEW, RULE, expansion
+  └──────┬───────┘
+         ▼
+  ┌──────────────┐
+  │ 4. PLANNER   │  Sinh nhiều plan, ước tính COST mỗi plan
+  └──────┬───────┘  Chọn plan rẻ nhất → execution tree
+         ▼
+  ┌──────────────┐
+  │ 5. EXECUTOR  │  Chạy plan node-by-node, trả kết quả
+  └──────────────┘</div>
+
+        <p>Parser/Analyzer/Rewriter cố định, ít chi phí. <strong>Planner</strong> là phần "thông minh", tốn 90% nỗ lực và là nguồn gốc của mọi vấn đề performance.</p>
+      </section>
+
+      <section id="cost">
+        <h2>2. Cost-based Optimizer</h2>
+        <p>Postgres dùng <strong>cost-based optimizer (CBO)</strong> — không phải rule-based. Nghĩa là planner ước tính <em>chi phí ước lượng</em> của mỗi plan và chọn plan rẻ nhất.</p>
+
+        <p>"Cost" ≠ thời gian thật, mà là <strong>đơn vị tương đối</strong>:</p>
+
+        <table>
+          <thead><tr><th>GUC parameter</th><th>Ý nghĩa</th><th>Default</th></tr></thead>
+          <tbody>
+            <tr><td><code>seq_page_cost</code></td><td>Chi phí đọc 1 page tuần tự</td><td>1.0</td></tr>
+            <tr><td><code>random_page_cost</code></td><td>Chi phí đọc 1 page ngẫu nhiên</td><td>4.0 (HDD) — chỉnh xuống 1.1 cho SSD</td></tr>
+            <tr><td><code>cpu_tuple_cost</code></td><td>Chi phí xử lý 1 row</td><td>0.01</td></tr>
+            <tr><td><code>cpu_index_tuple_cost</code></td><td>1 entry index</td><td>0.005</td></tr>
+            <tr><td><code>cpu_operator_cost</code></td><td>1 operator/function call</td><td>0.0025</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.1. Vì sao "Seq Scan" đôi khi nhanh hơn Index Scan?</h3>
+        <p>Khi query trả ~5–20% bảng:</p>
+        <ul>
+          <li>Seq Scan = đọc N page tuần tự (cost = N × seq_page_cost).</li>
+          <li>Index Scan = đọc M page index + M page heap NGẪU NHIÊN (cost = M × random_page_cost cao hơn nhiều).</li>
+        </ul>
+        <p>Trên SSD, random thực ra không chậm hơn nhiều seq → set <code>random_page_cost = 1.1</code> để planner ưu tiên index hơn.</p>
+      </section>
+
+      <section id="stats">
+        <h2>3. Statistics — bộ não của planner</h2>
+        <p>Planner ước tính cost dựa trên <strong>statistics</strong> được thu thập bởi <code>ANALYZE</code> (autovacuum cũng tự chạy).</p>
+
+        <h3>3.1. Xem statistics</h3>
+<pre><code class="language-sql">SELECT
+  attname, n_distinct, most_common_vals, most_common_freqs, histogram_bounds, correlation
+FROM pg_stats
+WHERE tablename = 'users' AND attname = 'country';</code></pre>
+
+        <p>Output ví dụ:</p>
+<pre><code>attname   = 'country'
+n_distinct = 50          -- ước lượng 50 country khác nhau
+most_common_vals = {VN,US,UK,JP,SG}
+most_common_freqs = {0.30, 0.20, 0.15, 0.10, 0.05}
+histogram_bounds = {AR, AU, BR, ...}     -- 100 bucket cho range estimation
+correlation = 0.05       -- thấp = không sorted</code></pre>
+
+        <h3>3.2. Khi statistics outdated</h3>
+        <p>Sau bulk INSERT/UPDATE lớn, autovacuum chưa kịp ANALYZE → planner ước lượng sai → chọn plan tệ.</p>
+
+<pre><code class="language-sql">-- Manual:
+ANALYZE users;
+ANALYZE users (country);
+
+-- Tăng độ chính xác (default = 100):
+ALTER TABLE users ALTER COLUMN country SET STATISTICS 1000;
+ANALYZE users;</code></pre>
+
+        <h3>3.3. Multivariate statistics (Postgres 10+)</h3>
+        <p>Khi 2 cột correlated (vd: city và country), planner default tính độc lập → ước lượng sai. Tạo extended statistic:</p>
+<pre><code class="language-sql">CREATE STATISTICS users_city_country (dependencies)
+  ON city, country FROM users;
+ANALYZE users;</code></pre>
+      </section>
+
+      <section id="explain">
+        <h2>4. EXPLAIN — cú pháp và options</h2>
+
+<pre><code class="language-sql">-- Cơ bản (không chạy thật):
+EXPLAIN SELECT * FROM users WHERE country = 'VN';
+
+-- Chạy thật + đo:
+EXPLAIN ANALYZE SELECT * FROM users WHERE country = 'VN';
+
+-- Đầy đủ output:
+EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON)
+SELECT * FROM users WHERE country = 'VN';</code></pre>
+
+        <table>
+          <thead><tr><th>Option</th><th>Tác dụng</th></tr></thead>
+          <tbody>
+            <tr><td>ANALYZE</td><td>Chạy thật, đo actual time/rows. CẨN THẬN với UPDATE/DELETE — sẽ thực thi! Bọc trong <code>BEGIN; ... ROLLBACK</code>.</td></tr>
+            <tr><td>BUFFERS</td><td>Hiện số page đọc từ shared_buffers vs disk → debug cache miss.</td></tr>
+            <tr><td>VERBOSE</td><td>In thêm metadata, full qualified column.</td></tr>
+            <tr><td>SETTINGS</td><td>Liệt kê các GUC khác mặc định.</td></tr>
+            <tr><td>WAL</td><td>(Postgres 13+) Đo WAL ghi.</td></tr>
+            <tr><td>FORMAT</td><td>TEXT (default) | JSON | XML | YAML.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="nodes">
+        <h2>5. Plan Nodes — các loại</h2>
+
+        <h3>5.1. Scan nodes</h3>
+        <ul>
+          <li><strong>Seq Scan</strong> — đọc tuần tự toàn bảng. Tốt khi cần &gt; ~10% bảng hoặc bảng nhỏ.</li>
+          <li><strong>Index Scan</strong> — duyệt B-tree, follow heap pointer. Tốt cho selective query.</li>
+          <li><strong>Index Only Scan</strong> — không cần đọc heap, lấy đủ từ index (covering). Cực nhanh.</li>
+          <li><strong>Bitmap Index Scan + Bitmap Heap Scan</strong> — khi index không quá selective hoặc cần combine nhiều index.</li>
+          <li><strong>TID Scan</strong> — đọc tuple theo TID (system column).</li>
+        </ul>
+
+        <h3>5.2. Modifier nodes</h3>
+        <ul>
+          <li><strong>Sort</strong> — sắp xếp. Có thể disk-spill nếu vượt <code>work_mem</code>.</li>
+          <li><strong>Limit</strong> — cắt N dòng đầu.</li>
+          <li><strong>Aggregate / HashAggregate / GroupAggregate</strong> — gom nhóm.</li>
+          <li><strong>Hash</strong> — build hash table cho join.</li>
+          <li><strong>Materialize</strong> — cache subquery vào RAM.</li>
+          <li><strong>WindowAgg</strong> — window function.</li>
+          <li><strong>Unique</strong> — DISTINCT.</li>
+        </ul>
+
+        <h3>5.3. Set ops</h3>
+        <ul>
+          <li><strong>Append</strong> — UNION ALL.</li>
+          <li><strong>Merge Append</strong> — UNION ALL với sorted inputs.</li>
+        </ul>
+      </section>
+
+      <section id="joins">
+        <h2>6. Join Algorithms — 3 kiểu</h2>
+
+        <h3>6.1. Nested Loop Join</h3>
+        <p>Cho mỗi row bên ngoài, scan bảng trong tìm match.</p>
+<pre><code>For each row in outer:
+  For each row in inner:
+    if match: emit</code></pre>
+
+        <p><strong>Cost:</strong> O(N × M). Nhưng nếu inner có index trên cột join → mỗi lookup là O(log M) → tốt cho <em>outer nhỏ + inner index</em>.</p>
+
+        <h3>6.2. Hash Join</h3>
+        <p>Build hash table từ bảng nhỏ hơn (build side), probe bằng bảng lớn (probe side).</p>
+<pre><code>1. Build hash table on smaller table by join key
+2. For each row in larger table: hash lookup → match</code></pre>
+
+        <p><strong>Cost:</strong> O(N + M). Tốt cho join lớn, không có index. Cần đủ <code>work_mem</code> để hold hash table.</p>
+
+        <h3>6.3. Merge Join</h3>
+        <p>Hai input đều sorted, "zipper" qua nhau.</p>
+
+        <p><strong>Cost:</strong> O(N + M) sau sort. Tốt khi hai input đã sorted (nhờ index hoặc ORDER BY).</p>
+
+        <h3>6.4. So sánh khi nào</h3>
+        <table>
+          <thead><tr><th>Tình huống</th><th>Algorithm</th></tr></thead>
+          <tbody>
+            <tr><td>Outer nhỏ (vài nghìn) + inner có index</td><td>Nested Loop với Index Scan</td></tr>
+            <tr><td>Hai bảng vừa, không sorted</td><td>Hash Join</td></tr>
+            <tr><td>Hai bảng đều có index trên cột join (hoặc đã sorted)</td><td>Merge Join</td></tr>
+            <tr><td>Equality join</td><td>Hash hoặc Merge — không Nested Loop</td></tr>
+            <tr><td>Range / non-equi join</td><td>Nested Loop</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="analyze">
+        <h2>7. Đọc EXPLAIN ANALYZE — ví dụ thực tế</h2>
+
+<pre><code>EXPLAIN (ANALYZE, BUFFERS)
+SELECT u.email, COUNT(o.id) AS order_count
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.country = 'VN'
+GROUP BY u.email
+ORDER BY order_count DESC
+LIMIT 10;
+
+                                  QUERY PLAN
+─────────────────────────────────────────────────────────────────────────
+ Limit  (cost=12450.32..12450.35 rows=10 width=42)
+        (actual time=85.12..85.15 rows=10 loops=1)
+   Buffers: shared hit=8240 read=120
+   ->  Sort  (cost=12450.32..12500.40 rows=20030 width=42)
+             (actual time=85.10..85.12 rows=10 loops=1)
+         Sort Key: (count(o.id)) DESC
+         Sort Method: top-N heapsort  Memory: 25kB
+         ->  HashAggregate (cost=11800.10..12000.40 rows=20030 width=42)
+                          (actual time=80.20..82.40 rows=20030 loops=1)
+               Group Key: u.email
+               ->  Hash Right Join  (cost=850.00..11000.00 rows=160000)
+                                   (actual time=10.45..70.10 rows=160000)
+                     Hash Cond: (o.user_id = u.id)
+                     ->  Seq Scan on orders o
+                                       (cost=0..6000 rows=400000 actual=0.02..30.10)
+                     ->  Hash
+                         ->  Index Scan using idx_users_country on users u
+                              Index Cond: (country='VN')
+                              actual time=0.05..2.40 rows=20030 loops=1
+ Planning Time: 0.5 ms
+ Execution Time: 85.20 ms</code></pre>
+
+        <p><strong>Đọc từ trong ra ngoài</strong> (innermost child first):</p>
+        <ol>
+          <li>Index Scan trên users theo country = 'VN' → 20k user.</li>
+          <li>Build hash table từ user → Hash node.</li>
+          <li>Seq Scan trên orders (400k dòng) → probe hash → Hash Right Join, ra 160k row.</li>
+          <li>HashAggregate gom theo email → 20k group.</li>
+          <li>Sort top-10 (heapsort).</li>
+          <li>Limit 10.</li>
+        </ol>
+
+        <h3>7.1. Các thông số then chốt</h3>
+        <ul>
+          <li><strong>cost=A..B</strong> — A = startup cost (đến khi sẵn row đầu), B = total cost.</li>
+          <li><strong>rows=N</strong> — ước lượng. So sánh với <em>actual rows</em>: lệch quá → statistics outdated.</li>
+          <li><strong>actual time=A..B</strong> — ms để bắt đầu trả row đầu / trả hết. <strong>Nhân với loops!</strong></li>
+          <li><strong>loops=N</strong> — số lần node chạy (trong nested loop).</li>
+          <li><strong>Buffers: shared hit=X read=Y</strong> — X page từ cache, Y phải đọc từ disk. Read cao = cache miss.</li>
+        </ul>
+
+        <h3>7.2. Lệch ước lượng (estimation error)</h3>
+
+<pre><code>->  Seq Scan on orders  (cost=0..6000 rows=400 actual=0.02..30.10 rows=400000)
+                                          ^estimate            ^actual
+                                          400 vs 400000 = lệch 1000×</code></pre>
+
+        <p>Lệch 10× chấp nhận được, lệch 100× hoặc 1000× → dấu hiệu cần ANALYZE hoặc tạo extended statistics.</p>
+      </section>
+
+      <section id="smells">
+        <h2>8. Slow query smells — patterns nguy hiểm</h2>
+
+        <h3>8.1. Seq Scan trên bảng lớn với selectivity thấp</h3>
+        <p>Có thể index thiếu, function trên cột, type mismatch. Cách kiểm tra: kiểm tra mệnh đề WHERE, xem có cột nào "ép" planner skip index không.</p>
+
+        <h3>8.2. Nested Loop với inner Seq Scan loops=N rất lớn</h3>
+        <p>Inner cần index. Hoặc outer trả quá nhiều row.</p>
+
+        <h3>8.3. Sort Method: external merge Disk: ...</h3>
+        <p>Sort spill ra disk khi vượt <code>work_mem</code> (default 4MB). Tăng work_mem cho session:</p>
+<pre><code class="language-sql">SET work_mem = '64MB';</code></pre>
+
+        <h3>8.4. Hash Batches &gt; 1</h3>
+        <p>Hash table không vừa work_mem → spill ra disk multiple batches. Tăng work_mem.</p>
+
+        <h3>8.5. Rows estimate sai 100×+</h3>
+        <p>Statistics outdated. Hoặc cần multivariate stats. Hoặc query có biểu thức phức tạp planner không estimate được.</p>
+
+        <h3>8.6. OFFSET lớn</h3>
+<pre><code class="language-sql">-- ❌ Chậm trên page sâu:
+SELECT * FROM posts ORDER BY id LIMIT 20 OFFSET 100000;
+
+-- ✓ Keyset pagination:
+SELECT * FROM posts WHERE id &gt; $last_seen_id ORDER BY id LIMIT 20;</code></pre>
+
+        <h3>8.7. N+1 query</h3>
+        <p>App pattern: lấy 100 user, rồi mỗi user query 1 lần lấy email/order → 101 query thay vì 1.</p>
+<pre><code class="language-typescript">// ❌ N+1:
+const users = await db.query('SELECT * FROM users LIMIT 100');
+for (const u of users) {
+  u.orders = await db.query('SELECT * FROM orders WHERE user_id = $1', [u.id]);
+}
+
+// ✓ JOIN hoặc IN:
+const users = await db.query('SELECT * FROM users LIMIT 100');
+const orders = await db.query(
+  'SELECT * FROM orders WHERE user_id = ANY($1)',
+  [users.map(u =&gt; u.id)]
+);</code></pre>
+      </section>
+
+      <section id="tuning">
+        <h2>9. Tuning checklist — 10 bước</h2>
+
+        <ol class="steps">
+          <li>Reproduce query với <code>EXPLAIN (ANALYZE, BUFFERS)</code>.</li>
+          <li>So sánh estimate vs actual rows. Lệch quá → <code>ANALYZE</code>.</li>
+          <li>Tìm Seq Scan trên bảng lớn → kiểm tra index, function trên cột.</li>
+          <li>Kiểm tra index có được dùng không. Nếu không, EXPLAIN có nói "Seq Scan" thay vì "Index Scan".</li>
+          <li>Đọc Buffers — nếu read cao, cache miss. Cân nhắc tăng <code>shared_buffers</code>.</li>
+          <li>Sort spill disk → tăng <code>work_mem</code> hoặc tránh ORDER BY (dùng index sorted).</li>
+          <li>Hash Batches &gt; 1 → tăng work_mem.</li>
+          <li>Loops cao trong Nested Loop → cần index trên inner.</li>
+          <li>OFFSET lớn → keyset pagination.</li>
+          <li>Loại N+1 ở app — JOIN hoặc IN list.</li>
+        </ol>
+
+        <h3>9.1. Quan sát query thực tế qua <code>pg_stat_statements</code></h3>
+<pre><code class="language-sql">-- Cài extension (1 lần):
+CREATE EXTENSION pg_stat_statements;
+
+-- Top 10 query tốn thời gian nhất:
+SELECT
+  ROUND(total_exec_time / 1000) AS total_sec,
+  calls,
+  ROUND(mean_exec_time, 2) AS mean_ms,
+  ROUND((100 * total_exec_time / SUM(total_exec_time) OVER ())::numeric, 1) AS pct,
+  query
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;</code></pre>
+      </section>
+
+      <section id="hints">
+        <h2>10. SET parameter & Hint</h2>
+
+        <p>Postgres KHÔNG có hint kiểu Oracle (<code>/*+ INDEX(t idx) */</code>). Thay vào đó, dùng GUC để "thuyết phục" planner:</p>
+
+<pre><code class="language-sql">-- Tắt seq scan (force index nếu có):
+SET enable_seqscan = OFF;
+
+-- Tắt nested loop:
+SET enable_nestloop = OFF;
+
+-- Cho 1 transaction thôi:
+BEGIN;
+SET LOCAL enable_seqscan = OFF;
+SELECT ...;
+COMMIT;</code></pre>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Cảnh báo</span>
+          Chỉ dùng để debug, KHÔNG để production. Nếu planner không chọn index, nguyên nhân là statistics hoặc cost — fix gốc, không bypass. Có extension <code>pg_hint_plan</code> nếu thực sự cần hint.
+        </div>
+
+        <h3>10.1. Quan trọng nhất: tune cho SSD</h3>
+<pre><code class="language-sql">-- postgresql.conf:
+random_page_cost = 1.1     # default 4.0, SSD nên ~1.1
+effective_cache_size = '8GB'  # ước lượng cache OS + Postgres
+shared_buffers = '2GB'    # 25% RAM
+work_mem = '32MB'         # per operation per connection
+maintenance_work_mem = '1GB'  # cho VACUUM, CREATE INDEX</code></pre>
+      </section>
+
+      <section id="walkthrough">
+        <h2>11. Walkthrough thực tế — tối ưu từ 5s xuống 5ms</h2>
+
+        <p>Query gốc:</p>
+<pre><code class="language-sql">SELECT u.email, COUNT(*) AS recent_orders
+FROM users u
+JOIN orders o ON o.user_id = u.id
+WHERE o.created_at &gt; NOW() - INTERVAL '7 days'
+  AND u.country = 'VN'
+GROUP BY u.email
+ORDER BY recent_orders DESC
+LIMIT 20;</code></pre>
+
+        <p>EXPLAIN cho thấy: Seq Scan trên 100M dòng orders, lọc rồi mới JOIN. Lệch estimate. Mất 5s.</p>
+
+        <p><strong>Bước 1:</strong> tạo composite index trên orders:</p>
+<pre><code class="language-sql">CREATE INDEX CONCURRENTLY idx_orders_created_user
+  ON orders(created_at DESC, user_id);</code></pre>
+
+        <p>Plan đổi sang Index Scan trên orders → 200ms.</p>
+
+        <p><strong>Bước 2:</strong> tạo index trên users:</p>
+<pre><code class="language-sql">CREATE INDEX CONCURRENTLY idx_users_country ON users(country);</code></pre>
+
+        <p>200ms → 80ms.</p>
+
+        <p><strong>Bước 3:</strong> covering index để Index Only Scan:</p>
+<pre><code class="language-sql">CREATE INDEX CONCURRENTLY idx_users_country_inc
+  ON users(country) INCLUDE (id, email);</code></pre>
+
+        <p>80ms → 30ms.</p>
+
+        <p><strong>Bước 4:</strong> partial index — vì query luôn lọc 7 ngày, không cần index toàn bộ orders:</p>
+<pre><code class="language-sql">-- Postgres không hỗ trợ NOW() trong WHERE của partial index (immutable).
+-- Workaround: monthly partition + index.
+CREATE INDEX idx_orders_recent ON orders(user_id)
+  WHERE created_at &gt; '2026-05-01';
+-- Recreate hàng tuần (script).</code></pre>
+
+        <p>30ms → 5ms.</p>
+
+        <p>Đó là tinh thần tuning: từng bước, đo từng lần, áp đúng index cho đúng query.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>12. Bài tập</h2>
+
+        <ol>
+          <li>Cho query: <code>SELECT * FROM logs WHERE level='ERROR' AND created_at &gt; NOW() - INTERVAL '1h' ORDER BY created_at DESC LIMIT 100;</code> trên bảng 1 tỉ dòng. Đề xuất index + giải thích.</li>
+          <li>Đọc EXPLAIN sau và xác định bottleneck: <code>Seq Scan on orders (cost=0..50000 actual time=0.5..3500 rows=100000 loops=1)</code>. Đề xuất tối ưu.</li>
+          <li>Vì sao OFFSET 100000 chậm? Cách thay thế?</li>
+          <li>Khi nào planner chọn Hash Join thay vì Nested Loop? Demo bằng EXPLAIN trên bảng test.</li>
+          <li>Bảng <code>pg_stat_statements</code> dùng để làm gì? Cài extension và dùng tìm top 5 query chậm nhất trong DB của bạn.</li>
+          <li>Phân biệt <code>shared_buffers</code> và <code>work_mem</code>. Nếu RAM 16GB, đặt 2 thông số này thế nào?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>13. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 8</h3>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Trong EXPLAIN ANALYZE, "estimate rows" lệch "actual rows" 1000× nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">DB bị crash</li>
+              <li class="quiz-option">Statistics outdated hoặc planner không estimate được biểu thức → cần ANALYZE / extended stats</li>
+              <li class="quiz-option">Index hỏng</li>
+              <li class="quiz-option">Bình thường</li>
+            </ul>
+            <div class="quiz-explain">Planner dựa vào pg_stats để ước lượng. Sau bulk INSERT/UPDATE, ANALYZE chưa kịp chạy → ước lượng sai. Hoặc query có biểu thức phức tạp (function, JSON path) planner không có thống kê → guess. Sửa: chạy ANALYZE, hoặc tạo CREATE STATISTICS multivariate.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Khi nào Seq Scan tốt HƠN Index Scan?</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không bao giờ</li>
+              <li class="quiz-option">Bảng lớn</li>
+              <li class="quiz-option">Khi query trả về &gt; ~10% bảng — đọc tuần tự rẻ hơn random IO của index</li>
+              <li class="quiz-option">Khi index thiếu</li>
+            </ul>
+            <div class="quiz-explain">Đọc tuần tự đĩa nhanh hơn random nhiều. Khi cần đọc nhiều dòng, nhảy index → heap nhiều lần đắt hơn quét tuần tự. SSD giảm khác biệt nhưng vẫn còn. Đó là lý do <code>random_page_cost</code> default 4× <code>seq_page_cost</code>.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Hash Join phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Hai bảng vừa, equality join, không có index sorted</li>
+              <li class="quiz-option">Range join</li>
+              <li class="quiz-option">Bảng &lt; 100 row</li>
+              <li class="quiz-option">Khi cần sort kết quả</li>
+            </ul>
+            <div class="quiz-explain">Hash Join build hash table từ bảng nhỏ hơn, probe bằng bảng lớn → O(N+M). Tốt cho equality không có index. Range join → Nested Loop. Bảng tí xíu → Nested Loop cũng nhanh.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">"Sort Method: external merge Disk: 200MB" trong EXPLAIN nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Bug DB</li>
+              <li class="quiz-option">Index hỏng</li>
+              <li class="quiz-option">Bình thường, tối ưu</li>
+              <li class="quiz-option">Sort spill ra disk vì vượt work_mem → tăng work_mem hoặc dùng index sorted</li>
+            </ul>
+            <div class="quiz-explain">Khi sort vượt work_mem, Postgres ghi tạm ra disk → chậm 10-100×. Tăng work_mem (per session) hoặc thiết kế query tận dụng index đã sorted.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">N+1 query là pattern:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tốt vì query nhỏ</li>
+              <li class="quiz-option">App fetch parent → loop fetch child từng cái → N+1 round-trip; sửa bằng JOIN hoặc IN list</li>
+              <li class="quiz-option">Bug của DB</li>
+              <li class="quiz-option">Pattern bắt buộc của ORM</li>
+            </ul>
+            <div class="quiz-explain">Mỗi query có overhead network + parse + plan. 100 query nhỏ chậm hơn 1 query JOIN/IN gấp 10-100 lần. Phổ biến với ORM lazy loading. Phòng tránh: prefetch / eager load / dataloader pattern.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">OFFSET 100000 chậm vì:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">DB crash</li>
+              <li class="quiz-option">Lock toàn bảng</li>
+              <li class="quiz-option">Phải scan + bỏ qua 100k row trước → keyset pagination tốt hơn</li>
+              <li class="quiz-option">Tạo file tạm</li>
+            </ul>
+            <div class="quiz-explain">OFFSET không "skip" theo cách miễn phí. Phải đọc và bỏ 100k row, page càng sâu càng chậm tuyến tính. Keyset pagination (<code>WHERE id &gt; last LIMIT 20</code>) chỉ đọc 20 row mỗi page.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">SSD nên set:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">random_page_cost = 1.1 (gần seq_page_cost) để planner ưu tiên index hơn</li>
+              <li class="quiz-option">random_page_cost = 100 (rất cao)</li>
+              <li class="quiz-option">enable_seqscan = OFF</li>
+              <li class="quiz-option">work_mem = '8KB'</li>
+            </ul>
+            <div class="quiz-explain">Default random_page_cost = 4 (HDD). SSD random gần seq → set ~1.1 hoặc 1.5. Hệ quả: planner hay chọn Index Scan / Bitmap Scan hơn Seq Scan trên bảng vừa.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Để xác định query nào chậm nhất trong DB production, dùng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">EXPLAIN ANALYZE từng query</li>
+              <li class="quiz-option">Đoán</li>
+              <li class="quiz-option">Đọc code app</li>
+              <li class="quiz-option">pg_stat_statements — extension thống kê tổng thời gian / số gọi / mean latency theo query</li>
+            </ul>
+            <div class="quiz-explain"><code>pg_stat_statements</code> tổng hợp mỗi query (đã chuẩn hóa) với calls, total_exec_time, mean_exec_time. Sort theo total_exec_time để tìm query "tốn tổng nhiều giờ nhất" — top 10 thường chiếm 80% load.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px dashed var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 8. Tiếp theo: <a href="chuong9.html"><strong>Chương 9 — NoSQL: Key-Value, Document, Wide-column, Graph →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Database Mastery · Chương 8 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2 — Variables, Types &amp; Coercion · JavaScript Sub-pillar</title>
+  <meta name="description" content="let/const/var, 7 primitive types, type coercion gotcha, == vs ===, truthy/falsy, NaN/0.1+0.2/typeof null — những thứ khiến JS confusing." />
+  <meta name="theme-color" content="#c8961a" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-js">JS</span>
+        JavaScript · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 2</span>
+      </div>
+      <div class="chapter-num">Chương 02 · Variables, Types &amp; Coercion</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Biến, kiểu dữ liệu và type coercion
+      </h1>
+      <p class="lead">
+        JavaScript là <strong>dynamic typed</strong> — biến không có type cố định, giá trị mới có. Khi 2 type khác nhau gặp
+        nhau ở toán tử, JS dùng <strong>type coercion</strong> để convert ngầm. Hiểu rule này = không bị bug
+        <code>[] == ![]</code> hay <code>'5' - 3 === 2</code>.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~850 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu 3 cách khai báo biến: <code>var</code>, <code>let</code>, <code>const</code> và khi nào dùng cái nào.</li>
+            <li>Biết 7 primitive types và <code>typeof</code> trả về gì cho từng cái.</li>
+            <li>Phân biệt <code>null</code> vs <code>undefined</code> — khi nào JS sinh cái nào.</li>
+            <li>Master type coercion: implicit (<code>+</code>, <code>==</code>, <code>if</code>) vs explicit (<code>Number()</code>, <code>String()</code>, <code>Boolean()</code>).</li>
+            <li>Tránh gotcha kinh điển: <code>NaN !== NaN</code>, <code>0.1 + 0.2</code>, <code>typeof null === 'object'</code>.</li>
+            <li>Hiểu truthy/falsy và 6 falsy values.</li>
+          </ul>
+        </div>
+
+        <h2 id="khai-bao-bien">1. Khai báo biến: <code>var</code>, <code>let</code>, <code>const</code></h2>
+
+        <p>JavaScript có 3 keyword khai báo biến. Hiểu khác nhau là quan trọng:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>—</th><th><code>var</code></th><th><code>let</code></th><th><code>const</code></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Phiên bản</td><td>Từ ES1 (1997)</td><td>ES6 (2015)</td><td>ES6 (2015)</td></tr>
+              <tr><td>Scope</td><td>Function scope</td><td>Block scope</td><td>Block scope</td></tr>
+              <tr><td>Hoisting</td><td>Có, init = <code>undefined</code></td><td>Có nhưng ở TDZ</td><td>Có nhưng ở TDZ</td></tr>
+              <tr><td>Reassign</td><td>OK</td><td>OK</td><td>❌ (lỗi)</td></tr>
+              <tr><td>Redeclare cùng scope</td><td>OK (silent)</td><td>❌ (lỗi)</td><td>❌ (lỗi)</td></tr>
+              <tr><td>Khuyến nghị</td><td>Tránh</td><td>Khi cần reassign</td><td><strong>Mặc định</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Demo block scope:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Scope demo</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">if</span> (<span class="tok-kw">true</span>) {
+  <span class="tok-kw">var</span> a = <span class="tok-num">1</span>;
+  <span class="tok-kw">let</span> b = <span class="tok-num">2</span>;
+  <span class="tok-kw">const</span> c = <span class="tok-num">3</span>;
+}
+
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(a); <span class="tok-com">// 1   ← var "leak" ra ngoài block</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(b); <span class="tok-com">// ReferenceError: b is not defined</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(c); <span class="tok-com">// ReferenceError: c is not defined</span></code></pre>
+        </div>
+
+        <p>Demo hoisting + TDZ (Temporal Dead Zone):</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Hoisting demo</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// var — hoisted với value = undefined</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x); <span class="tok-com">// undefined (không lỗi)</span>
+<span class="tok-kw">var</span> x = <span class="tok-num">5</span>;
+
+<span class="tok-com">// let — hoisted nhưng ở TDZ → lỗi khi truy cập</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(y); <span class="tok-com">// ReferenceError: Cannot access 'y' before initialization</span>
+<span class="tok-kw">let</span> y = <span class="tok-num">5</span>;</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — TDZ</div>
+          <p>
+            Tưởng tượng JS đọc code 2 lượt. Lượt 1: ghi nhận mọi khai báo (var/let/const/function) — "có 1 biến tên x ở đây".
+            Lượt 2: chạy code thật. Giữa "lượt 1 đã thấy" và "lượt 2 đến dòng khai báo" là <strong>TDZ</strong>.
+          </p>
+          <p style="margin-top: 10px;">
+            <code>var</code> trong TDZ có value <code>undefined</code> (không lỗi). <code>let</code>/<code>const</code> trong
+            TDZ throw ReferenceError. Mục đích: ép developer khai báo trước khi dùng.
+          </p>
+        </div>
+
+        <p><strong>Quy tắc cho code mới (2026):</strong></p>
+        <ul>
+          <li>Mặc định <code>const</code>. Hầu hết biến không cần reassign.</li>
+          <li>Đổi sang <code>let</code> chỉ khi <em>thật sự</em> cần reassign (counter loop, accumulator).</li>
+          <li>Không dùng <code>var</code>. Đọc code cũ thì biết là gì, nhưng đừng viết mới.</li>
+        </ul>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — <code>const</code> không freeze object</div>
+          <p>
+            <code>const</code> chỉ chặn <strong>reassign biến</strong>, không chặn <strong>mutate object/array</strong>.
+          </p>
+<pre><code><span class="tok-kw">const</span> obj = { a: <span class="tok-num">1</span> };
+obj.a = <span class="tok-num">2</span>;        <span class="tok-com">// OK! mutate property</span>
+obj.b = <span class="tok-num">3</span>;        <span class="tok-com">// OK! thêm property</span>
+obj = {};         <span class="tok-com">// ❌ TypeError: Assignment to constant variable</span></code></pre>
+          <p style="margin-top: 8px;">
+            Muốn freeze object thật sự: <code>Object.freeze(obj)</code>. Nhưng nó chỉ shallow — nested object vẫn mutate được.
+          </p>
+        </div>
+
+        <h2 id="primitive-types">2. 7 Primitive types</h2>
+
+        <p>JavaScript có 7 primitive types + 1 không-phải-primitive (Object). Primitive là <strong>immutable</strong> — bạn không thể "sửa" 1 primitive, chỉ tạo cái mới.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Type</th><th>Ví dụ</th><th><code>typeof</code></th><th>Ghi chú</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>string</code></td><td><code>'abc'</code>, <code>"hi"</code>, <code>`hello`</code></td><td><code>'string'</code></td><td>UTF-16 internal</td></tr>
+              <tr><td><code>number</code></td><td><code>42</code>, <code>3.14</code>, <code>NaN</code>, <code>Infinity</code></td><td><code>'number'</code></td><td>IEEE 754 double</td></tr>
+              <tr><td><code>bigint</code></td><td><code>9007199254740993n</code></td><td><code>'bigint'</code></td><td>ES2020. Cho số &gt; MAX_SAFE_INTEGER</td></tr>
+              <tr><td><code>boolean</code></td><td><code>true</code>, <code>false</code></td><td><code>'boolean'</code></td><td>Chỉ 2 giá trị</td></tr>
+              <tr><td><code>undefined</code></td><td><code>undefined</code></td><td><code>'undefined'</code></td><td>JS tự sinh khi biến chưa init</td></tr>
+              <tr><td><code>null</code></td><td><code>null</code></td><td><code>'object'</code> 🔥</td><td>Developer explicit gán</td></tr>
+              <tr><td><code>symbol</code></td><td><code>Symbol('id')</code></td><td><code>'symbol'</code></td><td>ES6. Unique identifier</td></tr>
+              <tr><td>Object</td><td><code>{}</code>, <code>[]</code>, <code>function</code></td><td><code>'object'</code> / <code>'function'</code></td><td>Mọi thứ còn lại</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha lịch sử — <code>typeof null</code></div>
+          <p>
+            <code>typeof null === 'object'</code> là một bug từ JavaScript 1995. Brendan Eich biết về nó nhưng không thể fix
+            vì sẽ break web — quá nhiều code đã rely on bug này.
+          </p>
+          <p>Để check null: <code>x === null</code> hoặc <code>x == null</code> (cũng match undefined).</p>
+        </div>
+
+        <h3 id="number">2.1. <code>number</code> — chỉ có 1 type số</h3>
+
+        <p>
+          Khác Dart (<code>int</code>, <code>double</code>) hoặc Python (<code>int</code> arbitrary precision, <code>float</code>),
+          JavaScript chỉ có <strong>1 type duy nhất</strong> cho cả số nguyên và thập phân — <code>number</code>. Internal
+          là IEEE 754 double-precision floating point (64-bit).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Number facts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">typeof</span> <span class="tok-num">42</span>;        <span class="tok-com">// 'number'</span>
+<span class="tok-kw">typeof</span> <span class="tok-num">3.14</span>;      <span class="tok-com">// 'number' — không có 'float' riêng</span>
+<span class="tok-kw">typeof</span> <span class="tok-cls">NaN</span>;       <span class="tok-com">// 'number' 🔥 (NaN là một loại number)</span>
+<span class="tok-kw">typeof</span> <span class="tok-cls">Infinity</span>;  <span class="tok-com">// 'number'</span>
+
+<span class="tok-cls">Number</span>.<span class="tok-cls">MAX_SAFE_INTEGER</span>;  <span class="tok-com">// 9007199254740991 (2^53 - 1)</span>
+<span class="tok-cls">Number</span>.<span class="tok-cls">MIN_SAFE_INTEGER</span>;  <span class="tok-com">// -9007199254740991</span>
+<span class="tok-cls">Number</span>.<span class="tok-cls">EPSILON</span>;           <span class="tok-com">// 2.220446049250313e-16</span>
+
+<span class="tok-com">// Vượt MAX_SAFE_INTEGER → mất độ chính xác</span>
+<span class="tok-num">9007199254740993</span> === <span class="tok-num">9007199254740992</span>;  <span class="tok-com">// true (!!)</span></code></pre>
+        </div>
+
+        <p>
+          Cho số lớn hơn <code>MAX_SAFE_INTEGER</code> (vd: id của Twitter, financial calculation), dùng <code>BigInt</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>BigInt</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> big = <span class="tok-num">9007199254740993n</span>;  <span class="tok-com">// hậu tố `n`</span>
+<span class="tok-kw">const</span> big2 = <span class="tok-cls">BigInt</span>(<span class="tok-str">"9007199254740993"</span>);
+
+<span class="tok-com">// Không thể trộn BigInt với Number</span>
+big + <span class="tok-num">1</span>;     <span class="tok-com">// ❌ TypeError</span>
+big + <span class="tok-num">1n</span>;    <span class="tok-com">// ✅ 9007199254740994n</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — 0.1 + 0.2</div>
+          <p>
+            <code>0.1 + 0.2 === 0.3</code> trả về <strong>false</strong>. Vì IEEE 754 không biểu diễn được chính xác
+            <code>0.1</code> hay <code>0.2</code> trong binary.
+          </p>
+<pre><code><span class="tok-num">0.1</span> + <span class="tok-num">0.2</span>;                              <span class="tok-com">// 0.30000000000000004</span>
+<span class="tok-num">0.1</span> + <span class="tok-num">0.2</span> === <span class="tok-num">0.3</span>;                       <span class="tok-com">// false</span>
+
+<span class="tok-com">// Cách so sánh đúng:</span>
+<span class="tok-cls">Math</span>.<span class="tok-fn">abs</span>((<span class="tok-num">0.1</span> + <span class="tok-num">0.2</span>) - <span class="tok-num">0.3</span>) &lt; <span class="tok-cls">Number</span>.<span class="tok-cls">EPSILON</span>;  <span class="tok-com">// true</span>
+
+<span class="tok-com">// Hoặc dùng toFixed():</span>
+(<span class="tok-num">0.1</span> + <span class="tok-num">0.2</span>).<span class="tok-fn">toFixed</span>(<span class="tok-num">2</span>);                  <span class="tok-com">// '0.30' (string)</span></code></pre>
+          <p>
+            Cho tính tiền chính xác, dùng thư viện <code>decimal.js</code>, <code>big.js</code> hoặc <code>Decimal</code> của
+            Money library (vd <code>dinero.js</code>).
+          </p>
+        </div>
+
+        <h3 id="string">2.2. <code>string</code> và template literal</h3>
+
+        <p>3 cách tạo string. Backtick có khả năng đặc biệt:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>String literals</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> a = <span class="tok-str">'single quote'</span>;
+<span class="tok-kw">const</span> b = <span class="tok-str">"double quote"</span>;
+<span class="tok-kw">const</span> c = <span class="tok-str">`template literal`</span>;
+
+<span class="tok-com">// Template literal hỗ trợ:</span>
+<span class="tok-com">// 1. Interpolation</span>
+<span class="tok-kw">const</span> name = <span class="tok-str">'Việt'</span>;
+<span class="tok-kw">const</span> greet = <span class="tok-str">`Xin chào, </span><span class="tok-op">${</span>name<span class="tok-op">}</span><span class="tok-str">!`</span>;  <span class="tok-com">// 'Xin chào, Việt!'</span>
+
+<span class="tok-com">// 2. Multiline</span>
+<span class="tok-kw">const</span> text = <span class="tok-str">`Dòng 1
+Dòng 2
+Dòng 3`</span>;
+
+<span class="tok-com">// 3. Expression bên trong</span>
+<span class="tok-kw">const</span> sum = <span class="tok-str">`</span><span class="tok-op">${</span><span class="tok-num">2</span> + <span class="tok-num">3</span><span class="tok-op">}</span><span class="tok-str">`</span>;  <span class="tok-com">// '5'</span>
+
+<span class="tok-com">// 4. Function call</span>
+<span class="tok-kw">const</span> upper = <span class="tok-str">`</span><span class="tok-op">${</span>name.<span class="tok-fn">toUpperCase</span>()<span class="tok-op">}</span><span class="tok-str">`</span>;  <span class="tok-com">// 'VIỆT'</span></code></pre>
+        </div>
+
+        <p>String immutable — không sửa được ký tự, chỉ tạo string mới:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">const</span> s = <span class="tok-str">'abc'</span>;
+s[<span class="tok-num">0</span>] = <span class="tok-str">'z'</span>;  <span class="tok-com">// silent fail (strict mode: lỗi)</span>
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(s); <span class="tok-com">// 'abc' — không đổi</span>
+
+<span class="tok-com">// Phải tạo mới:</span>
+<span class="tok-kw">const</span> s2 = <span class="tok-str">'z'</span> + s.<span class="tok-fn">slice</span>(<span class="tok-num">1</span>);  <span class="tok-com">// 'zbc'</span></code></pre>
+        </div>
+
+        <h3 id="null-vs-undefined">2.3. <code>null</code> vs <code>undefined</code> — khi nào cái nào</h3>
+
+        <p>Hai giá trị "rỗng" của JS. Quy ước:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>—</th><th><code>undefined</code></th><th><code>null</code></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ai sinh</td><td>JS tự sinh</td><td>Developer explicit gán</td></tr>
+              <tr><td>Khi nào xuất hiện</td><td>Biến khai báo chưa init, missing arg, missing property, return ngầm</td><td>Khi muốn "explicit empty"</td></tr>
+              <tr><td><code>typeof</code></td><td><code>'undefined'</code></td><td><code>'object'</code> 🔥</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>undefined examples</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">let</span> x;
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(x); <span class="tok-com">// undefined (chưa init)</span>
+
+<span class="tok-kw">function</span> <span class="tok-fn">foo</span>(a, b) { <span class="tok-kw">return</span> [a, b]; }
+<span class="tok-fn">foo</span>(<span class="tok-num">1</span>);          <span class="tok-com">// [1, undefined] — missing arg</span>
+
+<span class="tok-kw">const</span> obj = { a: <span class="tok-num">1</span> };
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(obj.b); <span class="tok-com">// undefined — missing property</span>
+
+<span class="tok-kw">function</span> <span class="tok-fn">noReturn</span>() {}
+<span class="tok-fn">noReturn</span>();          <span class="tok-com">// undefined — implicit return</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>null examples</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// document.getElementById trả null nếu không tìm thấy</span>
+<span class="tok-kw">const</span> el = document.<span class="tok-fn">getElementById</span>(<span class="tok-str">'foo'</span>);
+<span class="tok-kw">if</span> (el === <span class="tok-kw">null</span>) { <span class="tok-com">/* xử lý */</span> }
+
+<span class="tok-com">// Explicit set: "tôi cố ý không có value"</span>
+<span class="tok-kw">let</span> selectedUser = <span class="tok-kw">null</span>;
+<span class="tok-com">// ... sau này:</span>
+selectedUser = { id: <span class="tok-num">1</span>, name: <span class="tok-str">'An'</span> };</code></pre>
+        </div>
+
+        <p>Check cả 2 cùng lúc với <code>== null</code> (chấp nhận coercion cho 1 case duy nhất):</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com">// x == null match cả null và undefined</span>
+<span class="tok-kw">if</span> (x == <span class="tok-kw">null</span>) { <span class="tok-com">/* x là null hoặc undefined */</span> }
+
+<span class="tok-com">// Tương đương:</span>
+<span class="tok-kw">if</span> (x === <span class="tok-kw">null</span> || x === <span class="tok-kw">undefined</span>) { }</code></pre>
+        </div>
+
+        <h2 id="truthy-falsy">3. Truthy / Falsy</h2>
+
+        <p>Khi JS cần boolean (vd: <code>if</code>, <code>!</code>, <code>&amp;&amp;</code>, <code>||</code>), nó coerce value qua <code>Boolean(value)</code>. Có <strong>6 giá trị falsy</strong>:</p>
+
+        <ol>
+          <li><code>false</code></li>
+          <li><code>0</code> (và <code>-0</code>, <code>0n</code> BigInt)</li>
+          <li><code>''</code> (empty string)</li>
+          <li><code>null</code></li>
+          <li><code>undefined</code></li>
+          <li><code>NaN</code></li>
+        </ol>
+
+        <p>Mọi giá trị khác đều truthy, kể cả những trường hợp dễ nhầm:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Truthy gotcha</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">Boolean</span>([]);        <span class="tok-com">// true 🔥 (array rỗng vẫn truthy)</span>
+<span class="tok-cls">Boolean</span>({});        <span class="tok-com">// true 🔥 (object rỗng vẫn truthy)</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-str">'0'</span>);       <span class="tok-com">// true (string '0' truthy, khác number 0)</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-str">'false'</span>);   <span class="tok-com">// true (string 'false' truthy)</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-cls">Infinity</span>);  <span class="tok-com">// true</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-fn">function</span>(){});  <span class="tok-com">// true (function là object)</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Bẫy hay gặp</div>
+<pre><code><span class="tok-com">// Bug: muốn check array có phần tử</span>
+<span class="tok-kw">const</span> arr = [];
+<span class="tok-kw">if</span> (arr) {
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'có phần tử'</span>);  <span class="tok-com">// chạy! vì [] truthy</span>
+}
+
+<span class="tok-com">// Đúng: check length</span>
+<span class="tok-kw">if</span> (arr.length &gt; <span class="tok-num">0</span>) { }</code></pre>
+        </div>
+
+        <h2 id="type-coercion">4. Type Coercion — implicit conversion</h2>
+
+        <p>Là nguồn chính của bug "weird JS". Có 3 ngữ cảnh implicit coerce:</p>
+
+        <ol>
+          <li><strong>String context</strong> — <code>+</code> với string, template literal, <code>String()</code>.</li>
+          <li><strong>Number context</strong> — toán tử số (<code>-</code>, <code>*</code>, <code>/</code>, <code>%</code>), so sánh (<code>&lt;</code>, <code>&gt;</code>).</li>
+          <li><strong>Boolean context</strong> — <code>if</code>, <code>!</code>, <code>&amp;&amp;</code>, <code>||</code>, ternary.</li>
+        </ol>
+
+        <h3 id="coercion-add">4.1. Toán tử <code>+</code> — string hay number?</h3>
+
+        <p>Quy tắc: nếu <strong>bất kỳ</strong> operand là string, kết quả là string (concat). Còn lại thì number.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Plus coercion</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-num">1</span> + <span class="tok-num">2</span>;         <span class="tok-com">// 3</span>
+<span class="tok-num">1</span> + <span class="tok-str">'2'</span>;       <span class="tok-com">// '12' 🔥 (number → string, concat)</span>
+<span class="tok-str">'1'</span> + <span class="tok-num">2</span>;       <span class="tok-com">// '12'</span>
+<span class="tok-str">'1'</span> + <span class="tok-str">'2'</span>;     <span class="tok-com">// '12'</span>
+
+<span class="tok-num">1</span> + <span class="tok-kw">true</span>;      <span class="tok-com">// 2  (true → 1)</span>
+<span class="tok-num">1</span> + <span class="tok-kw">false</span>;     <span class="tok-com">// 1  (false → 0)</span>
+<span class="tok-num">1</span> + <span class="tok-kw">null</span>;      <span class="tok-com">// 1  (null → 0)</span>
+<span class="tok-num">1</span> + <span class="tok-kw">undefined</span>; <span class="tok-com">// NaN (undefined → NaN)</span>
+
+<span class="tok-com">// Trick: convert sang number bằng `+`</span>
++<span class="tok-str">'42'</span>;          <span class="tok-com">// 42 (number)</span>
++<span class="tok-str">'42px'</span>;        <span class="tok-com">// NaN</span></code></pre>
+        </div>
+
+        <h3 id="coercion-other">4.2. Toán tử khác — luôn number</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-str">'5'</span> - <span class="tok-num">3</span>;     <span class="tok-com">// 2  ('5' → 5)</span>
+<span class="tok-str">'5'</span> * <span class="tok-str">'2'</span>;   <span class="tok-com">// 10 (cả 2 → number)</span>
+<span class="tok-str">'10'</span> / <span class="tok-num">2</span>;    <span class="tok-com">// 5</span>
+<span class="tok-str">'abc'</span> - <span class="tok-num">1</span>;   <span class="tok-com">// NaN (abc không là number hợp lệ)</span></code></pre>
+        </div>
+
+        <h3 id="coercion-equality">4.3. <code>==</code> vs <code>===</code> — Đẳng thức</h3>
+
+        <p>
+          <code>===</code> (strict): so sánh value + type. Không coerce.
+          <code>==</code> (loose): coerce trước khi so sánh. <strong>Rules phức tạp</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Equality comparison</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-num">1</span> === <span class="tok-num">1</span>;      <span class="tok-com">// true</span>
+<span class="tok-num">1</span> === <span class="tok-str">'1'</span>;    <span class="tok-com">// false (type khác)</span>
+<span class="tok-num">1</span> == <span class="tok-str">'1'</span>;     <span class="tok-com">// true ('1' → 1, sau đó 1 == 1)</span>
+
+<span class="tok-num">0</span> == <span class="tok-kw">false</span>;   <span class="tok-com">// true (false → 0)</span>
+<span class="tok-num">0</span> == <span class="tok-str">''</span>;      <span class="tok-com">// true ('' → 0)</span>
+<span class="tok-num">0</span> == <span class="tok-str">'0'</span>;     <span class="tok-com">// true</span>
+
+<span class="tok-kw">null</span> == <span class="tok-kw">undefined</span>;  <span class="tok-com">// true (chỉ 2 cái này == nhau)</span>
+<span class="tok-kw">null</span> === <span class="tok-kw">undefined</span>; <span class="tok-com">// false</span>
+<span class="tok-kw">null</span> == <span class="tok-num">0</span>;         <span class="tok-com">// false 🔥 (null không coerce sang 0 trong ==)</span></code></pre>
+        </div>
+
+        <p>Bảng coercion <code>==</code> đầy đủ:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>—</th><th>undefined</th><th>null</th><th>number</th><th>string</th><th>boolean</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>undefined</th><td>true</td><td>true</td><td>false</td><td>false</td><td>false</td></tr>
+              <tr><th>null</th><td>true</td><td>true</td><td>false</td><td>false</td><td>false</td></tr>
+              <tr><th>number</th><td>false</td><td>false</td><td>so sánh value</td><td>convert string → number</td><td>convert boolean → number</td></tr>
+              <tr><th>string</th><td>false</td><td>false</td><td>convert string → number</td><td>so sánh value</td><td>cả 2 → number</td></tr>
+              <tr><th>boolean</th><td>false</td><td>false</td><td>convert boolean → number</td><td>cả 2 → number</td><td>so sánh value</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Quy tắc thực dụng</div>
+          <p>
+            <strong>Luôn dùng <code>===</code></strong>. Chỉ ngoại lệ: <code>x == null</code> để check đồng thời null và
+            undefined (vẫn có người không thích, viết <code>x === null || x === undefined</code> cho rõ ràng).
+          </p>
+          <p>ESLint rule <code>eqeqeq</code> sẽ catch <code>==</code> tự động.</p>
+        </div>
+
+        <h2 id="explicit-coercion">5. Explicit coercion — convert tường minh</h2>
+
+        <p>3 function global:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Explicit conversion</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// String() — convert sang string</span>
+<span class="tok-cls">String</span>(<span class="tok-num">42</span>);          <span class="tok-com">// '42'</span>
+<span class="tok-cls">String</span>(<span class="tok-kw">true</span>);        <span class="tok-com">// 'true'</span>
+<span class="tok-cls">String</span>(<span class="tok-kw">null</span>);        <span class="tok-com">// 'null'</span>
+<span class="tok-cls">String</span>(<span class="tok-kw">undefined</span>);   <span class="tok-com">// 'undefined'</span>
+<span class="tok-cls">String</span>([<span class="tok-num">1</span>,<span class="tok-num">2</span>,<span class="tok-num">3</span>]);     <span class="tok-com">// '1,2,3'</span>
+<span class="tok-cls">String</span>({a:<span class="tok-num">1</span>});       <span class="tok-com">// '[object Object]' 🔥</span>
+
+<span class="tok-com">// Number() — convert sang number</span>
+<span class="tok-cls">Number</span>(<span class="tok-str">'42'</span>);        <span class="tok-com">// 42</span>
+<span class="tok-cls">Number</span>(<span class="tok-str">'42.5'</span>);      <span class="tok-com">// 42.5</span>
+<span class="tok-cls">Number</span>(<span class="tok-str">'42px'</span>);      <span class="tok-com">// NaN (không parse partial)</span>
+<span class="tok-cls">Number</span>(<span class="tok-str">''</span>);          <span class="tok-com">// 0 🔥</span>
+<span class="tok-cls">Number</span>(<span class="tok-str">' '</span>);         <span class="tok-com">// 0 🔥 (whitespace → 0)</span>
+<span class="tok-cls">Number</span>(<span class="tok-kw">null</span>);        <span class="tok-com">// 0</span>
+<span class="tok-cls">Number</span>(<span class="tok-kw">undefined</span>);   <span class="tok-com">// NaN</span>
+<span class="tok-cls">Number</span>([]);          <span class="tok-com">// 0 🔥</span>
+<span class="tok-cls">Number</span>([<span class="tok-num">42</span>]);        <span class="tok-com">// 42 (array 1 phần tử)</span>
+<span class="tok-cls">Number</span>([<span class="tok-num">1</span>,<span class="tok-num">2</span>]);       <span class="tok-com">// NaN</span>
+
+<span class="tok-com">// Boolean() — convert sang boolean (theo rule truthy/falsy)</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-num">0</span>);         <span class="tok-com">// false</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-str">''</span>);        <span class="tok-com">// false</span>
+<span class="tok-cls">Boolean</span>(<span class="tok-str">'0'</span>);       <span class="tok-com">// true (string '0' truthy)</span>
+
+<span class="tok-com">// parseInt / parseFloat — parse partial</span>
+<span class="tok-fn">parseInt</span>(<span class="tok-str">'42px'</span>);     <span class="tok-com">// 42 (parse số đầu, ignore phần còn lại)</span>
+<span class="tok-fn">parseFloat</span>(<span class="tok-str">'3.14em'</span>); <span class="tok-com">// 3.14</span>
+<span class="tok-fn">parseInt</span>(<span class="tok-str">'abc'</span>);      <span class="tok-com">// NaN</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Trick ngắn</div>
+<pre><code>+x;          <span class="tok-com">// = Number(x)</span>
+<span class="tok-str">''</span> + x;     <span class="tok-com">// = String(x)</span>
+!!x;         <span class="tok-com">// = Boolean(x)</span></code></pre>
+          <p>Ngắn gọn, nhưng <em>hơi cryptic</em>. Trong code production khuyên dùng full function name.</p>
+        </div>
+
+        <h2 id="nan">6. <code>NaN</code> — "Not a Number" nhưng là number</h2>
+
+        <p>NaN là kết quả của phép toán không hợp lệ. Tính chất đặc biệt: <strong>không bằng chính nó</strong>.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>NaN gotchas</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">NaN</span> === <span class="tok-cls">NaN</span>;    <span class="tok-com">// false 🔥</span>
+<span class="tok-cls">NaN</span> == <span class="tok-cls">NaN</span>;     <span class="tok-com">// false</span>
+<span class="tok-kw">typeof</span> <span class="tok-cls">NaN</span>;     <span class="tok-com">// 'number' 🔥</span>
+
+<span class="tok-com">// Khi NaN xuất hiện</span>
+<span class="tok-num">0</span> / <span class="tok-num">0</span>;            <span class="tok-com">// NaN</span>
+<span class="tok-cls">Math</span>.<span class="tok-fn">sqrt</span>(-<span class="tok-num">1</span>);    <span class="tok-com">// NaN</span>
+<span class="tok-cls">Number</span>(<span class="tok-str">'abc'</span>);    <span class="tok-com">// NaN</span>
+<span class="tok-kw">undefined</span> + <span class="tok-num">1</span>;    <span class="tok-com">// NaN</span>
+
+<span class="tok-com">// Check NaN — dùng Number.isNaN (chính xác hơn isNaN cũ)</span>
+<span class="tok-cls">Number</span>.<span class="tok-fn">isNaN</span>(<span class="tok-cls">NaN</span>);          <span class="tok-com">// true</span>
+<span class="tok-cls">Number</span>.<span class="tok-fn">isNaN</span>(<span class="tok-str">'abc'</span>);        <span class="tok-com">// false 🔥 ('abc' không phải NaN, nó là string)</span>
+<span class="tok-fn">isNaN</span>(<span class="tok-str">'abc'</span>);              <span class="tok-com">// true ❌ (global isNaN coerce trước → bug)</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>isNaN</code> vs <code>Number.isNaN</code></div>
+          <p>
+            Global <code>isNaN(x)</code> chạy <code>Number(x)</code> trước rồi check NaN — gây false positive.
+            <code>Number.isNaN(x)</code> (ES6) check chính xác: chỉ true khi <code>x</code> thực sự là NaN.
+          </p>
+          <p>Luôn dùng <code>Number.isNaN</code>.</p>
+        </div>
+
+        <h2 id="optional-nullish">7. Optional chaining <code>?.</code> và Nullish coalescing <code>??</code></h2>
+
+        <p>2 toán tử ES2020 cực kỳ hữu ích, tránh được rất nhiều bug.</p>
+
+        <h3 id="optional">7.1. <code>?.</code> — Optional chaining</h3>
+
+        <p>Truy cập property/method an toàn. Nếu giữa chừng có <code>null</code>/<code>undefined</code>, kết quả là <code>undefined</code> thay vì throw.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Optional chaining</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">const</span> user = { name: <span class="tok-str">'An'</span>, address: { city: <span class="tok-str">'Hà Nội'</span> } };
+<span class="tok-kw">const</span> user2 = { name: <span class="tok-str">'Bình'</span> };
+
+<span class="tok-com">// Cũ (verbose):</span>
+<span class="tok-kw">const</span> city = user2 &amp;&amp; user2.address &amp;&amp; user2.address.city;
+
+<span class="tok-com">// Mới:</span>
+<span class="tok-kw">const</span> city2 = user2?.address?.city;  <span class="tok-com">// undefined (không throw)</span>
+
+<span class="tok-com">// Áp dụng cho method call</span>
+user.<span class="tok-fn">greet</span>?.();          <span class="tok-com">// nếu greet không tồn tại, không lỗi</span>
+
+<span class="tok-com">// Áp dụng cho array index</span>
+<span class="tok-kw">const</span> arr = <span class="tok-kw">null</span>;
+<span class="tok-kw">const</span> first = arr?.[<span class="tok-num">0</span>];     <span class="tok-com">// undefined</span></code></pre>
+        </div>
+
+        <h3 id="nullish">7.2. <code>??</code> — Nullish coalescing</h3>
+
+        <p>Trả vế phải <strong>chỉ khi</strong> vế trái là <code>null</code> hoặc <code>undefined</code>. Khác <code>||</code> ở chỗ <code>||</code> còn match mọi falsy (<code>0</code>, <code>''</code>, <code>false</code>).</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>?? vs ||</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Default value pattern</span>
+<span class="tok-kw">const</span> count = userInput ?? <span class="tok-num">0</span>;
+<span class="tok-kw">const</span> name = userName ?? <span class="tok-str">'Anonymous'</span>;
+
+<span class="tok-com">// Khác || ở case 0, '', false:</span>
+<span class="tok-num">0</span> || <span class="tok-num">5</span>;       <span class="tok-com">// 5  (0 falsy)</span>
+<span class="tok-num">0</span> ?? <span class="tok-num">5</span>;       <span class="tok-com">// 0  (0 không phải null/undefined)</span>
+
+<span class="tok-str">''</span> || <span class="tok-str">'x'</span>;   <span class="tok-com">// 'x'</span>
+<span class="tok-str">''</span> ?? <span class="tok-str">'x'</span>;   <span class="tok-com">// ''</span>
+
+<span class="tok-kw">false</span> || <span class="tok-kw">true</span>; <span class="tok-com">// true</span>
+<span class="tok-kw">false</span> ?? <span class="tok-kw">true</span>; <span class="tok-com">// false</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Default value — chọn cái nào?</div>
+          <p>
+            Khi <strong>0</strong>, <strong>''</strong>, <strong>false</strong> là giá trị hợp lệ (vd: count = 0, prefix rỗng) — dùng <code>??</code>.
+            Khi muốn fallback cho tất cả falsy — dùng <code>||</code>. Trong app modern, <code>??</code> phù hợp hơn 90% case.
+          </p>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — Đoán typeof</h4>
+            <div class="exercise-body">
+              <p>Không chạy, đoán kết quả của:</p>
+<pre><code><span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> <span class="tok-kw">null</span>);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> <span class="tok-kw">undefined</span>);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> <span class="tok-cls">NaN</span>);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> []);
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> <span class="tok-fn">function</span>(){});
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> <span class="tok-cls">Symbol</span>());
+<span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-kw">typeof</span> <span class="tok-num">42n</span>);</code></pre>
+              <p>Sau đó chạy thử và đối chiếu.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+                  <ul>
+                    <li><code>typeof null === 'object'</code> 🔥 (bug lịch sử)</li>
+                    <li><code>typeof undefined === 'undefined'</code></li>
+                    <li><code>typeof NaN === 'number'</code> 🔥 (NaN là number)</li>
+                    <li><code>typeof [] === 'object'</code> (array là object)</li>
+                    <li><code>typeof function(){} === 'function'</code> (special)</li>
+                    <li><code>typeof Symbol() === 'symbol'</code></li>
+                    <li><code>typeof 42n === 'bigint'</code></li>
+                  </ul>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — isEmpty function</h4>
+            <div class="exercise-body">
+              <p>Viết function <code>isEmpty(value)</code> trả <code>true</code> nếu value là:</p>
+              <ul>
+                <li><code>null</code> hoặc <code>undefined</code></li>
+                <li>String rỗng <code>''</code></li>
+                <li>Array rỗng <code>[]</code></li>
+                <li>Object rỗng <code>{}</code></li>
+              </ul>
+              <p>Test với ít nhất 10 case, bao gồm cả truthy (<code>0</code>, <code>false</code>) — không nên match.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án mẫu</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">isEmpty</span>(value) {
+  <span class="tok-kw">if</span> (value == <span class="tok-kw">null</span>) <span class="tok-kw">return</span> <span class="tok-kw">true</span>;          <span class="tok-com">// null hoặc undefined</span>
+  <span class="tok-kw">if</span> (<span class="tok-kw">typeof</span> value === <span class="tok-str">'string'</span>) <span class="tok-kw">return</span> value === <span class="tok-str">''</span>;
+  <span class="tok-kw">if</span> (<span class="tok-cls">Array</span>.<span class="tok-fn">isArray</span>(value)) <span class="tok-kw">return</span> value.length === <span class="tok-num">0</span>;
+  <span class="tok-kw">if</span> (<span class="tok-kw">typeof</span> value === <span class="tok-str">'object'</span>) {
+    <span class="tok-kw">return</span> <span class="tok-cls">Object</span>.<span class="tok-fn">keys</span>(value).length === <span class="tok-num">0</span>;
+  }
+  <span class="tok-kw">return</span> <span class="tok-kw">false</span>;  <span class="tok-com">// number, boolean, function: không "empty"</span>
+}
+
+<span class="tok-fn">isEmpty</span>(<span class="tok-kw">null</span>);       <span class="tok-com">// true</span>
+<span class="tok-fn">isEmpty</span>(<span class="tok-kw">undefined</span>);  <span class="tok-com">// true</span>
+<span class="tok-fn">isEmpty</span>(<span class="tok-str">''</span>);         <span class="tok-com">// true</span>
+<span class="tok-fn">isEmpty</span>([]);         <span class="tok-com">// true</span>
+<span class="tok-fn">isEmpty</span>({});         <span class="tok-com">// true</span>
+<span class="tok-fn">isEmpty</span>(<span class="tok-num">0</span>);          <span class="tok-com">// false</span>
+<span class="tok-fn">isEmpty</span>(<span class="tok-kw">false</span>);      <span class="tok-com">// false</span>
+<span class="tok-fn">isEmpty</span>(<span class="tok-str">'0'</span>);        <span class="tok-com">// false</span>
+<span class="tok-fn">isEmpty</span>([<span class="tok-num">0</span>]);        <span class="tok-com">// false</span>
+<span class="tok-fn">isEmpty</span>({a:<span class="tok-num">1</span>});      <span class="tok-com">// false</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Strict integer check</h4>
+            <div class="exercise-body">
+              <p>Viết function <code>isStrictInteger(x)</code> trả <code>true</code> chỉ khi <code>x</code> là số nguyên thật sự (không phải string số, không phải float).</p>
+              <p>Test:</p>
+              <ul>
+                <li><code>isStrictInteger(5)</code> → true</li>
+                <li><code>isStrictInteger(5.0)</code> → true (vì 5.0 === 5)</li>
+                <li><code>isStrictInteger(5.5)</code> → false</li>
+                <li><code>isStrictInteger('5')</code> → false</li>
+                <li><code>isStrictInteger(NaN)</code> → false</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">isStrictInteger</span>(x) {
+  <span class="tok-kw">return</span> <span class="tok-cls">Number</span>.<span class="tok-fn">isInteger</span>(x);
+}
+
+<span class="tok-com">// Number.isInteger là method ES6, kiểm tra:</span>
+<span class="tok-com">// - type number</span>
+<span class="tok-com">// - không phải NaN/Infinity</span>
+<span class="tok-com">// - là integer (không phần thập phân)</span></code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Loop và closure</h4>
+            <div class="exercise-body">
+              <p>Code dưới in ra <code>3 3 3</code> sau 1 giây. Sửa thành <code>0 1 2</code> bằng 2 cách độc lập.</p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(i), <span class="tok-num">1000</span>);
+}</code></pre>
+              <details class="exercise-hint">
+                <summary>2 cách fix</summary>
+                <div class="hint-content">
+                  <p>Cách 1: đổi <code>var</code> → <code>let</code>. <code>let</code> tạo binding mới mỗi iteration → closure capture đúng giá trị.</p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">let</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(i), <span class="tok-num">1000</span>);
+}</code></pre>
+                  <p>Cách 2: IIFE để tạo scope riêng cho từng iteration.</p>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) {
+  (<span class="tok-fn">function</span>(j) {
+    <span class="tok-fn">setTimeout</span>(() =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(j), <span class="tok-num">1000</span>);
+  })(i);
+}</code></pre>
+                  <p>Chi tiết closure ở chương 3.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — safeJsonParse</h4>
+            <div class="exercise-body">
+              <p>Viết <code>safeJsonParse(str)</code> parse JSON, nếu lỗi trả <code>null</code>.</p>
+              <p>Thử với:</p>
+              <ul>
+                <li><code>safeJsonParse('{"a": 1}')</code> → <code>{ a: 1 }</code></li>
+                <li><code>safeJsonParse('invalid')</code> → <code>null</code></li>
+                <li><code>safeJsonParse('null')</code> → ?</li>
+                <li><code>safeJsonParse('undefined')</code> → ?</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Đáp án + giải thích</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">function</span> <span class="tok-fn">safeJsonParse</span>(str) {
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">return</span> <span class="tok-cls">JSON</span>.<span class="tok-fn">parse</span>(str);
+  } <span class="tok-kw">catch</span> {
+    <span class="tok-kw">return</span> <span class="tok-kw">null</span>;
+  }
+}</code></pre>
+                  <ul>
+                    <li><code>'null'</code> → <code>null</code> (JSON parse hợp lệ, kết quả null).</li>
+                    <li><code>'undefined'</code> → <strong>null</strong> (vì <code>undefined</code> không phải JSON hợp lệ → throw → catch → return null).</li>
+                  </ul>
+                  <p>Lưu ý: trả null cho cả "parse fail" và "parse được null" — caller không phân biệt. Pattern Result type (chương 7) giải quyết.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>typeof null</code> trả về gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>'object'</code>. Đây là bug từ JavaScript 1995 không thể fix vì backward compat. Cách check null đúng: <code>x === null</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>[] == false</code> trả về gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>true</code>. Coercion: <code>[]</code> → <code>''</code> → <code>0</code>; <code>false</code> → <code>0</code>; cuối cùng <code>0 == 0</code>. Đây là lý do nên dùng <code>===</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>const obj = { a: 1 }; obj.a = 2;</code> có lỗi không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Không. <code>const</code> chỉ chặn reassign biến (<code>obj = ...</code>), không chặn mutate property bên trong. Muốn freeze: <code>Object.freeze(obj)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p><code>if (x)</code> với <code>x = []</code> — chạy nhánh nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Nhánh <code>true</code>. <code>[]</code> là object, mọi object đều truthy. Để check array có phần tử: <code>arr.length &gt; 0</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>NaN === NaN</code> trả về gì? Vì sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>false</code>. NaN là "không xác định" — IEEE 754 rule: NaN không bằng bất kỳ thứ gì, kể cả chính nó. Check NaN: <code>Number.isNaN(x)</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Khác nhau giữa <code>x || 'default'</code> và <code>x ?? 'default'</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>||</code> trả vế phải khi vế trái <strong>falsy</strong> (0, '', false, null, undefined, NaN). <code>??</code> trả vế phải <strong>chỉ khi</strong> null hoặc undefined.</p>
+              <p>Ví dụ: <code>0 || 5 === 5</code> nhưng <code>0 ?? 5 === 0</code>. Khi <code>0</code>/<code>''</code> là giá trị hợp lệ, dùng <code>??</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Khi nào nên dùng <code>==</code> thay <code>===</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Gần như không bao giờ. Một ngoại lệ hợp lý: <code>x == null</code> để check cả <code>null</code> và <code>undefined</code> cùng lúc (loose equality giữa null và undefined là true). Nhưng nhiều code base vẫn cấm tuyệt đối qua ESLint rule <code>eqeqeq</code>.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 2, bạn nên đã master:</p>
+        <ul>
+          <li><strong>3 keyword khai báo</strong>: default <code>const</code>, fallback <code>let</code>, tránh <code>var</code>.</li>
+          <li><strong>7 primitive types</strong> + 1 Object. <code>typeof null</code> là gotcha.</li>
+          <li><strong>null vs undefined</strong>: undefined là JS sinh, null là explicit.</li>
+          <li><strong>Truthy/falsy</strong>: 6 falsy values, mọi thứ khác truthy (kể cả <code>[]</code>, <code>{}</code>).</li>
+          <li><strong>Type coercion</strong>: implicit <code>+</code>/<code>==</code>/<code>if</code> phức tạp; ưu tiên explicit <code>Number()</code>/<code>String()</code>/<code>Boolean()</code>.</li>
+          <li><strong>NaN</strong> là number, không bằng chính nó — check bằng <code>Number.isNaN</code>.</li>
+          <li><strong><code>?.</code> và <code>??</code></strong>: tools modern để handle null an toàn.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 3 (Functions)</strong> — đào sâu hoisting và TDZ qua function declaration.</li>
+          <li><strong>Chương 4 (Objects)</strong> — phân biệt primitive vs object reference rõ ràng.</li>
+          <li><strong>Chương 9 (TS Types)</strong> — type của TypeScript đối chiếu với type runtime JS.</li>
+          <li><strong>Dart Chương 2</strong> — đối chiếu sound null safety Dart vs strict mode TS.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong1.html" class="prev">
+            <div class="dir">← Chương 1</div>
+            <div class="label">Hello JavaScript</div>
+          </a>
+          <a href="chuong3.html" class="next">
+            <div class="dir">Chương 3 →</div>
+            <div class="label">Functions, Scope &amp; Closures</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#khai-bao-bien">1. var/let/const</a></li>
+          <li><a href="#primitive-types">2. 7 Primitive types</a></li>
+          <li class="level-3"><a href="#number">2.1. number</a></li>
+          <li class="level-3"><a href="#string">2.2. string</a></li>
+          <li class="level-3"><a href="#null-vs-undefined">2.3. null vs undefined</a></li>
+          <li><a href="#truthy-falsy">3. Truthy/Falsy</a></li>
+          <li><a href="#type-coercion">4. Type Coercion</a></li>
+          <li class="level-3"><a href="#coercion-add">4.1. Toán tử +</a></li>
+          <li class="level-3"><a href="#coercion-other">4.2. Toán tử khác</a></li>
+          <li class="level-3"><a href="#coercion-equality">4.3. == vs ===</a></li>
+          <li><a href="#explicit-coercion">5. Explicit coercion</a></li>
+          <li><a href="#nan">6. NaN</a></li>
+          <li><a href="#optional-nullish">7. ?. và ??</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 2 — Variables, Types &amp; Coercion · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong1.html">← Chương 1</a> · <a href="../index.html">JavaScript TOC</a> · <a href="chuong3.html">Chương 3 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

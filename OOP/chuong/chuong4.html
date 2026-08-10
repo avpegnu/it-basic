@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 4 — Creational Patterns</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 04 · Creational Patterns</div>
+      <h1>Creational Patterns — 5 mẫu khởi tạo</h1>
+      <p class="subtitle">Factory Method · Abstract Factory · Builder · Prototype · Singleton. Cách giấu logic khởi tạo, tách concrete class khỏi client code.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#intro">1. Tổng quan Creational</a></li>
+        <li><a href="#factory-method">2. Factory Method</a></li>
+        <li><a href="#abstract-factory">3. Abstract Factory</a></li>
+        <li><a href="#builder">4. Builder</a></li>
+        <li><a href="#prototype">5. Prototype</a></li>
+        <li><a href="#singleton">6. Singleton</a></li>
+        <li><a href="#modern">7. Pattern hiện đại thay thế</a></li>
+        <li><a href="#exercises">8. Bài tập</a></li>
+        <li><a href="#quiz">9. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="intro">
+        <h2>1. Tổng quan — Creational Patterns</h2>
+        <p>
+          Creational patterns tập trung vào <strong>cách tạo object</strong>. Chúng giúp:
+        </p>
+        <ul>
+          <li>Giấu logic phức tạp khi khởi tạo.</li>
+          <li>Cho phép tạo object thuộc family liên quan mà không khóa cứng concrete class.</li>
+          <li>Kiểm soát số lượng instance.</li>
+          <li>Tái sử dụng đối tượng có sẵn (clone) thay vì tạo mới đắt đỏ.</li>
+        </ul>
+
+        <p>5 pattern trong nhóm:</p>
+        <table>
+          <thead><tr><th>Pattern</th><th>Một câu</th><th>Khi nào dùng</th></tr></thead>
+          <tbody>
+            <tr><td>Factory Method</td><td>Subclass quyết định class nào instantiate</td><td>Có nhiều biến thể, khởi tạo phụ thuộc context</td></tr>
+            <tr><td>Abstract Factory</td><td>Tạo "family" object liên quan</td><td>Cần consistency giữa nhóm object (vd: UI Mac/Win)</td></tr>
+            <tr><td>Builder</td><td>Xây object phức tạp từng bước</td><td>Object có nhiều tham số, nhiều bước khởi tạo</td></tr>
+            <tr><td>Prototype</td><td>Clone object có sẵn</td><td>Khởi tạo đắt, có "template"</td></tr>
+            <tr><td>Singleton</td><td>Đúng 1 instance toàn app</td><td>Hiếm — thường có cách tốt hơn</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Factory Method -->
+      <section id="factory-method">
+        <h2>2. Factory Method</h2>
+
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №1 — CREATIONAL</div>
+          <h3>Factory Method</h3>
+          <p class="intent">Định nghĩa interface để tạo object, nhưng để subclass quyết định class cụ thể nào instantiate. Cho phép class trì hoãn việc khởi tạo cho subclass.</p>
+
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Code có chỗ <code>new ConcreteThing()</code> rải rác → khó đổi sang <code>AnotherConcreteThing</code> mà không sửa khắp nơi.</span>
+            <span class="key">Lợi ích</span>
+            <span>Tách "logic dùng object" khỏi "logic tạo object" — Single Responsibility + Open/Closed.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Tạo thêm class/method, code thêm gián tiếp.</span>
+          </div>
+        </div>
+
+        <h3>2.1. Vấn đề</h3>
+
+<pre><code class="language-typescript">// ❌ Code phải sửa khi thêm shipping provider mới:
+class OrderProcessor {
+  ship(order: Order, country: string) {
+    let provider: ShippingProvider;
+    if (country === 'VN') provider = new VietnamPost();
+    else if (country === 'US') provider = new FedEx();
+    else if (country === 'JP') provider = new JapanPost();
+    // Mỗi provider mới → sửa class này
+
+    provider.ship(order);
+  }
+}</code></pre>
+
+        <h3>2.2. Cấu trúc UML</h3>
+        <div class="ascii">  ┌────────────────────┐         ┌──────────────────┐
+  │   Creator          │         │   Product        │
+  │   (abstract)       │         │   (interface)    │
+  ├────────────────────┤         ├──────────────────┤
+  │ + factoryMethod()  │ ──── creates ────►        │
+  │   : Product        │         │ + operation()    │
+  │ + someOperation()  │         └────▲─────────────┘
+  └─────────▲──────────┘              │
+            │                         │
+            │ extends                 │ implements
+            │                         │
+   ┌────────┴─────────┐    ┌──────────┴─────────┐
+   │ ConcreteCreator  │    │ ConcreteProduct    │
+   ├──────────────────┤    ├────────────────────┤
+   │ + factoryMethod()│    │ + operation()      │
+   │   : returns      │    └────────────────────┘
+   │   ConcreteProduct│
+   └──────────────────┘</div>
+
+        <h3>2.3. Implementation</h3>
+
+<pre><code class="language-typescript">// Product
+interface ShippingProvider {
+  ship(order: Order): void;
+}
+
+class VietnamPost implements ShippingProvider { ship(o: Order) {} }
+class FedEx       implements ShippingProvider { ship(o: Order) {} }
+class JapanPost   implements ShippingProvider { ship(o: Order) {} }
+
+// Creator
+abstract class OrderProcessor {
+  abstract createProvider(): ShippingProvider;   // factory method
+
+  ship(order: Order) {
+    const provider = this.createProvider();
+    provider.ship(order);
+  }
+}
+
+// Concrete creators
+class VnOrderProcessor extends OrderProcessor {
+  createProvider() { return new VietnamPost(); }
+}
+
+class UsOrderProcessor extends OrderProcessor {
+  createProvider() { return new FedEx(); }
+}</code></pre>
+
+        <h3>2.4. Cách dùng đơn giản hơn — static factory method</h3>
+<pre><code class="language-typescript">class ShippingProviderFactory {
+  static forCountry(country: string): ShippingProvider {
+    switch (country) {
+      case 'VN': return new VietnamPost();
+      case 'US': return new FedEx();
+      case 'JP': return new JapanPost();
+      default:   return new InternationalCourier();
+    }
+  }
+}
+
+// Client:
+const provider = ShippingProviderFactory.forCountry(order.country);
+provider.ship(order);</code></pre>
+
+        <p>"Static factory method" thực ra không phải GoF Factory Method gốc, mà là biến thể đơn giản. Trong thực tế đa số dev gọi cả hai là "Factory".</p>
+
+        <h3>2.5. Khi NÀO dùng</h3>
+        <ul>
+          <li>Có nhiều biến thể của 1 product, chọn theo context.</li>
+          <li>Logic khởi tạo phức tạp (nhiều argument, validate, lookup).</li>
+          <li>Muốn cache instance, hoặc có pool.</li>
+          <li>Bạn cần hide concrete class khỏi client.</li>
+        </ul>
+
+        <h3>2.6. Khi KHÔNG cần</h3>
+        <ul>
+          <li>Chỉ có 1 cách tạo, không có biến thể: dùng <code>new</code> đủ rồi.</li>
+          <li>Constructor đã đủ — đừng tạo factory chỉ để wrap <code>new</code>.</li>
+        </ul>
+      </section>
+
+      <!-- Abstract Factory -->
+      <section id="abstract-factory">
+        <h2>3. Abstract Factory</h2>
+
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №2 — CREATIONAL</div>
+          <h3>Abstract Factory</h3>
+          <p class="intent">Cung cấp interface để tạo các <em>family</em> object liên quan mà không cần chỉ định class cụ thể.</p>
+
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có nhiều "family" sản phẩm phải đi cùng nhau (vd: UI MacOS gồm MacButton + MacCheckbox; Windows gồm WinButton + WinCheckbox). Trộn lẫn = bug.</span>
+            <span class="key">Lợi ích</span>
+            <span>Đảm bảo các sản phẩm cùng family được tạo cùng nhau — consistency.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Thêm 1 family product mới phải sửa interface — vi phạm OCP một phần.</span>
+          </div>
+        </div>
+
+        <h3>3.1. Cấu trúc</h3>
+
+<pre><code class="language-typescript">// Abstract products
+interface Button   { render(): void; }
+interface Checkbox { render(): void; }
+
+// Concrete products — 2 family
+class MacButton    implements Button   { render() { console.log('Mac button'); } }
+class MacCheckbox  implements Checkbox { render() { console.log('Mac checkbox'); } }
+
+class WinButton    implements Button   { render() { console.log('Windows button'); } }
+class WinCheckbox  implements Checkbox { render() { console.log('Windows checkbox'); } }
+
+// Abstract factory
+interface UIFactory {
+  createButton(): Button;
+  createCheckbox(): Checkbox;
+}
+
+// Concrete factories
+class MacFactory implements UIFactory {
+  createButton()   { return new MacButton(); }
+  createCheckbox() { return new MacCheckbox(); }
+}
+
+class WinFactory implements UIFactory {
+  createButton()   { return new WinButton(); }
+  createCheckbox() { return new WinCheckbox(); }
+}
+
+// Client — không biết đang ở Mac hay Win
+class App {
+  constructor(private factory: UIFactory) {}
+
+  render() {
+    this.factory.createButton().render();
+    this.factory.createCheckbox().render();
+  }
+}
+
+// Composition root chọn factory:
+const factory: UIFactory = process.platform === 'darwin' ? new MacFactory() : new WinFactory();
+new App(factory).render();</code></pre>
+
+        <h3>3.2. Khác Factory Method ở đâu?</h3>
+        <table>
+          <thead><tr><th></th><th>Factory Method</th><th>Abstract Factory</th></tr></thead>
+          <tbody>
+            <tr><td>Tạo</td><td>Một product</td><td>Family nhiều product</td></tr>
+            <tr><td>Cách</td><td>Method (override trong subclass)</td><td>Object factory chứa nhiều method</td></tr>
+            <tr><td>Mức trừu tượng</td><td>Method-level</td><td>Class/Object-level</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3.3. Use cases thực tế</h3>
+        <ul>
+          <li>Multi-DB driver: <code>PostgresFactory</code> tạo connection + transaction + query builder Postgres-style; <code>MySQLFactory</code> tương tự cho MySQL.</li>
+          <li>Theme system: <code>DarkTheme</code> tạo button/input/card với màu tối; <code>LightTheme</code> với màu sáng.</li>
+          <li>Cross-platform UI library (cũ): React Native, Flutter dùng kiểu này nội bộ.</li>
+        </ul>
+      </section>
+
+      <!-- Builder -->
+      <section id="builder">
+        <h2>4. Builder</h2>
+
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №3 — CREATIONAL</div>
+          <h3>Builder</h3>
+          <p class="intent">Tách quá trình xây object phức tạp ra khỏi class chính, cho phép tạo nhiều biểu diễn khác nhau bằng cùng quá trình xây.</p>
+
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Constructor có 10+ tham số (telescoping constructor), nhiều tham số optional, dễ swap nhầm.</span>
+            <span class="key">Lợi ích</span>
+            <span>Code tạo object đọc như câu nói; tham số có tên rõ; dễ thêm/bớt param.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Code nhiều hơn so với constructor đơn giản.</span>
+          </div>
+        </div>
+
+        <h3>4.1. Vấn đề: Telescoping Constructor</h3>
+
+<pre><code class="language-typescript">class Pizza {
+  constructor(
+    size: number,
+    cheese: boolean,
+    pepperoni: boolean,
+    mushrooms: boolean,
+    onions: boolean,
+    olives: boolean,
+    extraSauce: boolean,
+    glutenFree: boolean,
+  ) {}
+}
+
+// ❌ Khó đọc:
+new Pizza(12, true, false, true, false, false, true, false);
+//        ↑    ↑     ↑      ↑     ↑      ↑      ↑      ↑
+//       size  ?     ?      ?     ?      ?      ?      ?</code></pre>
+
+        <h3>4.2. Cách giải Builder</h3>
+
+<pre><code class="language-typescript">class Pizza {
+  // Private constructor — chỉ Builder gọi
+  private constructor(
+    public readonly size: number,
+    public readonly toppings: ReadonlyArray&lt;string&gt;,
+    public readonly extraSauce: boolean,
+    public readonly glutenFree: boolean,
+  ) {}
+
+  static builder(size: number) {
+    return new PizzaBuilder(size);
+  }
+}
+
+class PizzaBuilder {
+  private toppings: string[] = [];
+  private extraSauce = false;
+  private glutenFree = false;
+
+  constructor(private size: number) {}
+
+  addTopping(t: string): this {
+    this.toppings.push(t);
+    return this;
+  }
+
+  withExtraSauce(): this { this.extraSauce = true; return this; }
+  glutenFreeOption(): this { this.glutenFree = true; return this; }
+
+  build(): Pizza {
+    if (this.size &lt; 8 || this.size &gt; 16) throw new Error('invalid size');
+    return new Pizza(this.size, [...this.toppings], this.extraSauce, this.glutenFree);
+  }
+}
+
+// ✓ Tự nhiên như nói chuyện:
+const pizza = Pizza.builder(12)
+  .addTopping('cheese')
+  .addTopping('pepperoni')
+  .addTopping('mushrooms')
+  .withExtraSauce()
+  .build();</code></pre>
+
+        <h3>4.3. Builder vs Plain Object Argument</h3>
+        <p>Trong TypeScript/JS, "named parameters" qua object thường thay được Builder cho case đơn giản:</p>
+
+<pre><code class="language-typescript">// Đơn giản hơn cho 5-7 field:
+new Pizza({
+  size: 12,
+  toppings: ['cheese', 'pepperoni'],
+  extraSauce: true,
+  glutenFree: false,
+});</code></pre>
+
+        <p>Builder thắng khi:</p>
+        <ul>
+          <li>Cần validate giữa các bước xây.</li>
+          <li>Có method composite (vd: <code>withMargheritaPreset()</code> set nhiều field).</li>
+          <li>Cần nhiều biểu diễn xuất ra (build → Pizza, build → PizzaOrder, build → ToppingsList...).</li>
+          <li>Object thực sự phức tạp (SQL query, HTTP request có nhiều tầng nested).</li>
+        </ul>
+
+        <h3>4.4. Director (variant)</h3>
+        <p>GoF gốc có thêm "Director" gói các bước build phổ biến:</p>
+
+<pre><code class="language-typescript">class PizzaDirector {
+  static margherita(builder: PizzaBuilder) {
+    return builder.addTopping('mozzarella').addTopping('basil').build();
+  }
+  static pepperoniDeluxe(builder: PizzaBuilder) {
+    return builder.addTopping('cheese').addTopping('pepperoni').addTopping('extra-pepperoni').build();
+  }
+}</code></pre>
+
+        <p>Hiếm gặp trong code thực tế — preset thường là static method của Builder.</p>
+
+        <h3>4.5. Use case kinh điển</h3>
+        <ul>
+          <li><code>StringBuilder</code> trong Java — nối string hiệu quả.</li>
+          <li>SQL Query Builder (Knex.js, jOOQ).</li>
+          <li>HTTP Request Builder (axios, OkHttp).</li>
+          <li>UI Form Builder.</li>
+        </ul>
+      </section>
+
+      <!-- Prototype -->
+      <section id="prototype">
+        <h2>5. Prototype</h2>
+
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №4 — CREATIONAL</div>
+          <h3>Prototype</h3>
+          <p class="intent">Tạo object mới bằng cách <em>clone</em> một object có sẵn (prototype) thay vì gọi constructor.</p>
+
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Khởi tạo object đắt (load từ DB, tính toán nặng); muốn tạo nhiều object "giống" 1 template.</span>
+            <span class="key">Lợi ích</span>
+            <span>Tránh tạo lại từ đầu; code không phụ thuộc concrete class.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Deep clone phức tạp khi object có nested reference.</span>
+          </div>
+        </div>
+
+        <h3>5.1. Cấu trúc</h3>
+
+<pre><code class="language-typescript">interface Cloneable&lt;T&gt; {
+  clone(): T;
+}
+
+class Document implements Cloneable&lt;Document&gt; {
+  constructor(
+    public title: string,
+    public content: string,
+    public tags: string[],
+    public metadata: Record&lt;string, any&gt;,
+  ) {}
+
+  clone(): Document {
+    return new Document(
+      this.title,
+      this.content,
+      [...this.tags],                            // shallow copy array
+      JSON.parse(JSON.stringify(this.metadata)), // deep clone object
+    );
+  }
+}
+
+// Sử dụng:
+const template = new Document('Report', 'Default content...', ['draft'], { author: 'system' });
+const doc1 = template.clone();
+doc1.title = 'Q1 Report';
+
+const doc2 = template.clone();
+doc2.title = 'Q2 Report';</code></pre>
+
+        <h3>5.2. Deep clone — pitfall</h3>
+        <p>Shallow clone copy reference, deep clone copy đệ quy. <code>JSON.parse(JSON.stringify(x))</code> đơn giản nhưng:</p>
+        <ul>
+          <li>Mất Date, RegExp, Map, Set, Function (chuyển thành object/null/undefined).</li>
+          <li>Vỡ với circular reference.</li>
+          <li>Mất prototype chain.</li>
+        </ul>
+
+        <p>Cleaner: <code>structuredClone()</code> (browser/Node 17+):</p>
+<pre><code class="language-typescript">const copy = structuredClone(original);
+// Hỗ trợ Date, Map, Set, ArrayBuffer, circular reference</code></pre>
+
+        <h3>5.3. JavaScript prototype-based — Prototype "miễn phí"</h3>
+        <p>JS có <code>Object.create</code> tạo object mới với prototype được chỉ định:</p>
+<pre><code class="language-javascript">const carPrototype = {
+  drive() { console.log(`${this.brand} is driving`); }
+};
+
+const myCar = Object.create(carPrototype);
+myCar.brand = 'Toyota';
+myCar.drive();   // "Toyota is driving"</code></pre>
+
+        <h3>5.4. Use case</h3>
+        <ul>
+          <li>Game: spawn 1000 enemy "giống" template thay vì tạo từ database.</li>
+          <li>Document templates (Word, Excel templates).</li>
+          <li>Object cache: load 1 lần, clone cho user khác.</li>
+          <li>Configuration "preset" + customize.</li>
+        </ul>
+      </section>
+
+      <!-- Singleton -->
+      <section id="singleton">
+        <h2>6. Singleton</h2>
+
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №5 — CREATIONAL</div>
+          <h3>Singleton</h3>
+          <p class="intent">Đảm bảo 1 class chỉ có đúng 1 instance, cung cấp global access point đến nó.</p>
+
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có resource toàn app (logger, config, DB pool) — muốn 1 instance duy nhất.</span>
+            <span class="key">Lợi ích</span>
+            <span>Kiểm soát số lượng instance; lazy initialization.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Global state ẩn → khó test, khó parallel, dễ bị lạm dụng. Trong nhiều case có cách tốt hơn (DI).</span>
+          </div>
+        </div>
+
+        <h3>6.1. Implementation cơ bản</h3>
+
+<pre><code class="language-typescript">class Logger {
+  private static _instance: Logger | null = null;
+
+  private constructor() {}   // private → ai đó <code>new</code> sẽ lỗi
+
+  static getInstance(): Logger {
+    if (!this._instance) {
+      this._instance = new Logger();
+    }
+    return this._instance;
+  }
+
+  log(msg: string) {
+    console.log(`[${new Date().toISOString()}] ${msg}`);
+  }
+}
+
+// Dùng:
+Logger.getInstance().log('hello');</code></pre>
+
+        <h3>6.2. Thread-safe (Java)</h3>
+<pre><code class="language-java">// Bill Pugh idiom — lazy + thread-safe + no synchronized cost
+public class Logger {
+    private Logger() {}
+
+    private static class Holder {
+        private static final Logger INSTANCE = new Logger();
+    }
+
+    public static Logger getInstance() {
+        return Holder.INSTANCE;
+    }
+}
+
+// Hoặc dùng enum (Bloch khuyên):
+public enum Logger {
+    INSTANCE;
+    public void log(String msg) { /* ... */ }
+}</code></pre>
+
+        <h3>6.3. Vì sao Singleton bị "ghét"?</h3>
+        <ul>
+          <li><strong>Hidden dependency</strong> — gọi <code>Logger.getInstance()</code> bên trong method = dependency ẩn, không thấy ở constructor signature.</li>
+          <li><strong>Global state</strong> — test khó: 1 test set state → test khác bị ảnh hưởng.</li>
+          <li><strong>Khó parallel</strong> — 2 thread cùng set config → race condition.</li>
+          <li><strong>Khóa cứng implementation</strong> — không thể swap với mock dễ dàng.</li>
+        </ul>
+
+        <h3>6.4. Thay thế: DI + 1 instance ở composition root</h3>
+
+<pre><code class="language-typescript">// Composition root tạo 1 instance:
+const logger = new Logger(/* config */);
+
+// Inject mọi nơi:
+const userService = new UserService(logger, ...);
+const orderService = new OrderService(logger, ...);
+
+// Test: tạo mock dễ dàng
+const mockLogger = { log: jest.fn() };
+const svc = new UserService(mockLogger, ...);</code></pre>
+
+        <p>Một instance qua DI có cùng hiệu ứng "1 instance app" mà không có hidden global state. Đây là cách hiện đại.</p>
+
+        <h3>6.5. Khi Singleton thực sự hữu ích</h3>
+        <ul>
+          <li>Resource thực sự duy nhất ở OS level: file system handle, hardware driver.</li>
+          <li>Cache với invariant strict: phải có đúng 1 cache để consistency.</li>
+          <li>Thư viện không có DI container (script đơn giản, prototype).</li>
+        </ul>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Lời khuyên</span>
+          Default: KHÔNG dùng Singleton. Dùng DI + register instance vào container ở scope "singleton". Cùng hiệu ứng, không nhược điểm.
+        </div>
+      </section>
+
+      <section id="modern">
+        <h2>7. Pattern hiện đại thay thế Creational</h2>
+
+        <h3>7.1. Dependency Injection thay Factory</h3>
+        <p>DI container biết cách wire instance — ít cần Factory class viết tay.</p>
+
+<pre><code class="language-typescript">// Thay vì:
+class ShippingFactory {
+  create(country: string): ShippingProvider { /* switch */ }
+}
+
+// DI register:
+container.register('VN', VietnamPost);
+container.register('US', FedEx);
+
+// Resolve:
+const provider = container.resolve(order.country);</code></pre>
+
+        <h3>7.2. Tagged Union / Discriminated Union thay Polymorphism Factory</h3>
+        <p>FP-style cho data variant:</p>
+
+<pre><code class="language-typescript">type Shape =
+  | { type: 'circle';    radius: number }
+  | { type: 'rectangle'; width: number; height: number }
+  | { type: 'triangle';  base: number; height: number };
+
+function area(s: Shape): number {
+  switch (s.type) {
+    case 'circle':    return Math.PI * s.radius ** 2;
+    case 'rectangle': return s.width * s.height;
+    case 'triangle':  return s.base * s.height / 2;
+  }
+}</code></pre>
+
+        <p>Ưu: đơn giản, type-safe, không cần class. Nhược: thêm variant phải sửa <code>area</code> (vi phạm OCP một phần). Trade-off — chọn tùy bối cảnh.</p>
+
+        <h3>7.3. Object literals và Configuration</h3>
+        <p>Cho object đơn giản, đừng dùng Builder — dùng plain object:</p>
+<pre><code class="language-typescript">interface PizzaConfig {
+  size: number;
+  toppings: string[];
+  extraSauce?: boolean;
+  glutenFree?: boolean;
+}
+
+function makePizza(c: PizzaConfig): Pizza {
+  return new Pizza(c.size, c.toppings, c.extraSauce ?? false, c.glutenFree ?? false);
+}</code></pre>
+      </section>
+
+      <section id="exercises">
+        <h2>8. Bài tập</h2>
+
+        <ol>
+          <li>Implement Factory Method cho hệ thống thanh toán: <code>PaymentProcessor</code> abstract với subclass <code>StripeProcessor</code>, <code>VnPayProcessor</code>, <code>MomoProcessor</code>. Mỗi processor tạo <code>PaymentGateway</code> riêng.</li>
+
+          <li>Abstract Factory cho theme: <code>LightTheme</code> và <code>DarkTheme</code> mỗi cái tạo <code>Button</code>, <code>Input</code>, <code>Card</code> tương ứng. App dùng theme bất kỳ.</li>
+
+          <li>Builder cho HTTP request:
+<pre><code class="language-typescript">const req = HttpRequest.builder()
+  .url('https://api.example.com/users')
+  .method('POST')
+  .header('Authorization', 'Bearer xxx')
+  .json({ name: 'Alice' })
+  .timeout(5000)
+  .build();</code></pre>
+          </li>
+
+          <li>Prototype: tạo class <code>GameEnemy</code> với template "Goblin" (hp=50, atk=10). Spawn 100 goblin từ template, mỗi cái có thể customize hp/atk khác nhau mà không ảnh hưởng template.</li>
+
+          <li>Singleton: cài đặt <code>AppConfig</code> singleton. Sau đó refactor để dùng DI thay thế. So sánh trải nghiệm khi viết test.</li>
+
+          <li>Phân biệt Factory Method vs Abstract Factory bằng 1 ví dụ thực tế.</li>
+
+          <li>Cho code Pizza ở mục 4.2 — tạo preset method <code>builder.margherita()</code> set sẵn topping mozzarella + basil. Khi nào nên có preset trên Builder?</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>9. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 4</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Factory Method giải vấn đề chính:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Object quá nhiều RAM</li>
+              <li class="quiz-option">Class không có method</li>
+              <li class="quiz-option">Tách "logic dùng object" khỏi "logic chọn/tạo concrete class" — client không phụ thuộc concrete</li>
+              <li class="quiz-option">Hierarchy quá sâu</li>
+            </ul>
+            <div class="quiz-explain">Factory Method giấu việc <code>new ConcreteX()</code>. Client gọi <code>factory.create()</code> hoặc <code>creator.factoryMethod()</code> — không biết concrete nào được tạo. Cho phép thêm/bớt biến thể mà không sửa client code (Open/Closed).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Khác biệt cốt lõi giữa Factory Method và Abstract Factory:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Không có khác biệt</li>
+              <li class="quiz-option">Factory Method tạo 1 product; Abstract Factory tạo "family" nhiều product liên quan</li>
+              <li class="quiz-option">Factory Method nhanh hơn</li>
+              <li class="quiz-option">Abstract Factory chỉ có ở Java</li>
+            </ul>
+            <div class="quiz-explain">Factory Method = method (override trong subclass) tạo 1 product. Abstract Factory = object có nhiều method tạo các product cùng "family" (vd: MacFactory tạo MacButton + MacCheckbox phải đi cùng nhau).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Builder pattern phù hợp nhất khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Object có 2 field</li>
+              <li class="quiz-option">Class không có method</li>
+              <li class="quiz-option">Class abstract</li>
+              <li class="quiz-option">Object phức tạp với nhiều tham số (đặc biệt optional), cần validate giữa các bước, cần fluent API</li>
+            </ul>
+            <div class="quiz-explain">Builder thắng khi có 5+ tham số (đặc biệt optional). Constructor 10 tham số khó đọc và dễ swap nhầm. Builder cho code "đọc như câu nói" + cho phép validate/ràng buộc giữa các bước. Cho object 2-3 field, plain constructor đủ.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Trong TypeScript, alternative đơn giản cho Builder thường là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Object literal với named parameters</li>
+              <li class="quiz-option">Singleton</li>
+              <li class="quiz-option">Inheritance</li>
+              <li class="quiz-option">Generics</li>
+            </ul>
+            <div class="quiz-explain">JS/TS có object literal với named field — đủ rõ cho 5-7 param. Builder thắng khi cần validate giữa các bước, có preset method, hoặc object thực sự phức tạp (SQL query, nested config).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Prototype pattern dùng khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Object có 1 field</li>
+              <li class="quiz-option">Cần Singleton</li>
+              <li class="quiz-option">Khởi tạo tốn kém (load từ DB, calc nặng) và muốn tạo nhiều object "giống template"</li>
+              <li class="quiz-option">Cần inheritance</li>
+            </ul>
+            <div class="quiz-explain">Prototype clone object có sẵn thay vì tạo từ đầu. Hữu ích cho game (spawn 1000 enemy giống goblin), document template, configuration preset. JS có <code>structuredClone</code> built-in cho deep clone.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Singleton bị chỉ trích vì:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Chậm</li>
+              <li class="quiz-option">Tốn RAM</li>
+              <li class="quiz-option">Khó cài đặt</li>
+              <li class="quiz-option">Hidden dependency, global state khó test, khóa cứng implementation</li>
+            </ul>
+            <div class="quiz-explain">Gọi <code>Logger.getInstance()</code> trong method = dependency không hiện ở constructor signature. Test khó (state shared, hard to mock). Hiện đại: dùng DI, đăng ký 1 instance ở composition root → cùng hiệu quả, không nhược điểm.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Modern alternative thay Factory class trong nhiều case:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Inheritance</li>
+              <li class="quiz-option">DI container — register với key, resolve theo key</li>
+              <li class="quiz-option">Singleton</li>
+              <li class="quiz-option">Builder</li>
+            </ul>
+            <div class="quiz-explain">DI container biết cách wire instance theo key/type. Thay vì Factory class viết tay với switch case, register class vào container. Spring, NestJS, Angular dùng pattern này. Tagged Union (FP-style) cũng là alternative cho data variant.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text"><code>JSON.parse(JSON.stringify(x))</code> để clone deep KHÔNG hỗ trợ:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Number, string</li>
+              <li class="quiz-option">Plain object</li>
+              <li class="quiz-option">Date, Map, Set, RegExp, Function, circular reference</li>
+              <li class="quiz-option">Array</li>
+            </ul>
+            <div class="quiz-explain">Date thành string, Map/Set thành <code>{}</code>, RegExp thành <code>{}</code>, Function biến mất, circular ref throw. Modern: <code>structuredClone()</code> (browser/Node 17+) hỗ trợ tất cả + circular.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 4 (5/23 patterns). Tiếp theo: <a href="chuong5.html"><strong>Chương 5 — Structural Patterns (7 mẫu) →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 4 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 8 — Cloud Platforms (AWS / GCP / Azure)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">DevOps</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 08 · Infrastructure</div>
+      <h1>Cloud Platforms — AWS / GCP / Azure</h1>
+      <p class="subtitle">3 cloud providers chiếm ~67% market 2024 (AWS 31%, Azure 24%, GCP 12%). Mỗi cái có 200+ services. Học core abstractions: IaaS/PaaS/SaaS, compute (EC2/GCE/VM), storage (S3/GCS/Blob), networking (VPC), IAM, managed K8s (EKS/GKE/AKS), serverless. So sánh thuật ngữ tương đương để switch dễ dàng.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#why">1. Vì sao Cloud?</a></li>
+        <li><a href="#service-model">2. IaaS / PaaS / SaaS</a></li>
+        <li><a href="#regions">3. Region, AZ, Edge</a></li>
+        <li><a href="#compute">4. Compute</a></li>
+        <li><a href="#storage">5. Storage</a></li>
+        <li><a href="#network">6. Networking & VPC</a></li>
+        <li><a href="#iam">7. IAM</a></li>
+        <li><a href="#k8s">8. Managed Kubernetes</a></li>
+        <li><a href="#serverless">9. Serverless / Functions</a></li>
+        <li><a href="#db">10. Managed Databases</a></li>
+        <li><a href="#cost">11. Cost & FinOps</a></li>
+        <li><a href="#multi">12. Multi-cloud</a></li>
+        <li><a href="#exercises">13. Bài tập</a></li>
+        <li><a href="#quiz">14. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="why">
+        <h2>1. Vì sao Cloud?</h2>
+
+        <p>Trước cloud (pre-2006), công ty phải:</p>
+        <ul>
+          <li>Mua server, để trong datacenter / on-prem.</li>
+          <li>Capacity plan trước 6-12 tháng (overprovisioning).</li>
+          <li>Tự lo electricity, cooling, network.</li>
+          <li>Hire sysadmin 24/7.</li>
+        </ul>
+
+        <p>2006 AWS ra mắt S3 + EC2 → thay đổi hoàn toàn. Cloud value:</p>
+
+        <ul>
+          <li><strong>Pay-as-you-go</strong> — không CapEx, OpEx theo use.</li>
+          <li><strong>Elastic</strong> — scale up/down trong phút.</li>
+          <li><strong>Global reach</strong> — deploy ở 30+ region trong giờ.</li>
+          <li><strong>Managed services</strong> — không tự maintain DB, queue, cache.</li>
+          <li><strong>Cutting-edge tech</strong> — GPU H100, custom silicon (Graviton, TPU).</li>
+        </ul>
+
+        <h3>1.1. Cloud trade-offs</h3>
+
+        <div class="compare">
+          <div>
+            <h4>Pros</h4>
+            <ul>
+              <li>Không CapEx</li>
+              <li>Scale fast</li>
+              <li>Managed services</li>
+              <li>Compliance built-in (SOC2, HIPAA)</li>
+              <li>Disaster recovery dễ</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Cons</h4>
+            <ul>
+              <li>Cost can spiral (egress, NAT)</li>
+              <li>Vendor lock-in</li>
+              <li>Latency cho on-prem hybrid</li>
+              <li>Compliance lo data sovereignty</li>
+              <li>Skill gap — cloud rất sâu</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>1.2. Market share 2024</h3>
+
+        <table>
+          <thead><tr><th>Provider</th><th>Share</th><th>Strengths</th></tr></thead>
+          <tbody>
+            <tr><td>AWS</td><td>~31%</td><td>Most mature, biggest service catalog, enterprise</td></tr>
+            <tr><td>Azure</td><td>~24%</td><td>Enterprise (Microsoft sales), AI (OpenAI), hybrid</td></tr>
+            <tr><td>GCP</td><td>~12%</td><td>Data/ML (BigQuery, TPU), K8s, networking</td></tr>
+            <tr><td>Alibaba</td><td>~4%</td><td>China + APAC</td></tr>
+            <tr><td>Oracle Cloud</td><td>~3%</td><td>Database workload</td></tr>
+            <tr><td>IBM, Tencent, Other</td><td>~26%</td><td>Niche</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="service-model">
+        <h2>2. IaaS / PaaS / SaaS — 3 service model</h2>
+
+        <div class="ascii">                   You manage:                  Provider manages:
+─────────────────────────────────────────────────────────────────
+On-prem        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ everything   nothing
+IaaS           ▓▓▓▓▓▓▓▓▓▓▓▓ app + os           hardware, virt
+PaaS           ▓▓▓▓ app                         OS, runtime, scaling
+Serverless     ▓ code                            everything else
+SaaS           — config only                    everything</div>
+
+        <h3>2.1. IaaS — Infrastructure as a Service</h3>
+
+        <p>Bạn rent VM, bạn quản lý OS + app. Examples: <strong>EC2, GCE, Azure VM</strong>.</p>
+
+        <h3>2.2. PaaS — Platform as a Service</h3>
+
+        <p>Bạn push code, provider chạy. Không lo OS. Examples: <strong>Heroku, AWS Elastic Beanstalk, GCP App Engine, Azure App Service</strong>.</p>
+
+        <h3>2.3. Serverless / FaaS</h3>
+
+        <p>Provider chạy code khi event (HTTP, queue). Pay per execution. Examples: <strong>AWS Lambda, GCP Cloud Functions, Azure Functions, Cloudflare Workers</strong>.</p>
+
+        <h3>2.4. SaaS — Software as a Service</h3>
+
+        <p>App đầy đủ, end user dùng. Examples: <strong>Gmail, Slack, GitHub, Datadog</strong>.</p>
+
+        <h3>2.5. CaaS — Container as a Service</h3>
+
+        <p>Run container không quản node. Examples: <strong>AWS Fargate, GCP Cloud Run, Azure Container Apps</strong>.</p>
+      </section>
+
+      <section id="regions">
+        <h2>3. Region, Availability Zone, Edge</h2>
+
+        <h3>3.1. Region</h3>
+
+        <p>Region = geographic area (us-east-1 = Northern Virginia). Mỗi region:</p>
+        <ul>
+          <li>Có 2-6 AZ.</li>
+          <li>Isolate hoàn toàn — region die không ảnh hưởng region khác.</li>
+          <li>Latency khác nhau (us-east-1 ↔ ap-southeast-1 ~250ms).</li>
+          <li>Pricing khác (us-east-1 thường rẻ nhất).</li>
+        </ul>
+
+        <h3>3.2. Availability Zone (AZ)</h3>
+
+        <p>AZ = data center vật lý isolated trong region (power, network, cooling riêng). Multi-AZ deployment:</p>
+        <ul>
+          <li>Latency giữa AZ &lt; 1ms (within region).</li>
+          <li>Dùng cho HA: web app trải 3 AZ → 1 AZ die còn 2.</li>
+        </ul>
+
+        <h3>3.3. Edge / PoP</h3>
+
+        <p>CloudFront / Cloud CDN / Front Door — edge location toàn cầu, cache content gần user. ~400+ PoP toàn cầu.</p>
+
+        <h3>3.4. So sánh region naming</h3>
+
+        <table>
+          <thead><tr><th>Region (Virginia)</th><th>AWS</th><th>GCP</th><th>Azure</th></tr></thead>
+          <tbody>
+            <tr><td>US East</td><td>us-east-1</td><td>us-east4</td><td>eastus</td></tr>
+            <tr><td>US West</td><td>us-west-2 (Oregon)</td><td>us-west1</td><td>westus2</td></tr>
+            <tr><td>EU West</td><td>eu-west-1 (Ireland)</td><td>europe-west1</td><td>westeurope</td></tr>
+            <tr><td>Asia Pacific</td><td>ap-southeast-1 (Singapore)</td><td>asia-southeast1</td><td>southeastasia</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="compute">
+        <h2>4. Compute — VM</h2>
+
+        <table>
+          <thead><tr><th>Concept</th><th>AWS</th><th>GCP</th><th>Azure</th></tr></thead>
+          <tbody>
+            <tr><td>VM</td><td>EC2 instance</td><td>Compute Engine VM</td><td>Virtual Machine</td></tr>
+            <tr><td>Image</td><td>AMI</td><td>Image</td><td>VM Image</td></tr>
+            <tr><td>Spot/Preemptible</td><td>Spot Instance</td><td>Spot VM (preemptible)</td><td>Spot VM</td></tr>
+            <tr><td>Auto-scaling</td><td>Auto Scaling Group</td><td>Managed Instance Group</td><td>Virtual Machine Scale Set</td></tr>
+            <tr><td>Load Balancer</td><td>ALB / NLB</td><td>Cloud Load Balancer</td><td>Load Balancer / Application Gateway</td></tr>
+            <tr><td>Custom CPU</td><td>Graviton (ARM)</td><td>Tau / T2A (ARM)</td><td>Cobalt 100 (ARM)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.1. Instance types</h3>
+
+        <p>Mỗi cloud có family:</p>
+        <ul>
+          <li><strong>General</strong>: t3, t4g (AWS), n2 (GCP), B/D (Azure) — balanced.</li>
+          <li><strong>Compute-optimized</strong>: c5, c6 (AWS), c2 (GCP), F (Azure) — high CPU.</li>
+          <li><strong>Memory-optimized</strong>: r5, x2 (AWS), m2 (GCP), E (Azure) — DB.</li>
+          <li><strong>Storage-optimized</strong>: i3 (AWS), local SSD — DB heavy I/O.</li>
+          <li><strong>GPU</strong>: p4, g5 (AWS), a2 (GCP) — ML/training.</li>
+        </ul>
+
+        <h3>4.2. Pricing model</h3>
+
+        <ul>
+          <li><strong>On-demand</strong> — full price, pay per hour/sec.</li>
+          <li><strong>Reserved (1-3 năm)</strong> — discount 40-72% nhưng cam kết.</li>
+          <li><strong>Spot/Preemptible</strong> — discount 60-90% nhưng có thể bị reclaim 30s notice.</li>
+          <li><strong>Savings Plan</strong> (AWS) — flexible commitment.</li>
+        </ul>
+
+        <h3>4.3. Spot/Preemptible best practice</h3>
+
+        <p>Use case: stateless worker, batch job, CI runner. Tránh: stateful DB, single-instance critical.</p>
+
+<pre><code class="language-hcl"># Terraform: spot instance
+resource "aws_instance" "ci_runner" {
+  ami           = "ami-..."
+  instance_type = "c5.xlarge"
+
+  instance_market_options {
+    market_type = "spot"
+    spot_options {
+      max_price = "0.05"               # $0.05/hour max
+      spot_instance_type = "one-time"
+    }
+  }
+}
+
+# K8s với spot
+# AWS Karpenter / Cluster Autoscaler set node pool spot
+</code></pre>
+
+        <h3>4.4. Launch template + Auto Scaling Group</h3>
+
+<pre><code class="language-hcl">resource "aws_launch_template" "web" {
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = "t3.medium"
+
+  user_data = base64encode(templatefile("init.sh", {
+    region = var.region
+  }))
+
+  network_interfaces {
+    security_groups = [aws_security_group.web.id]
+  }
+}
+
+resource "aws_autoscaling_group" "web" {
+  name                = "web-asg"
+  vpc_zone_identifier = aws_subnet.public[*].id
+  min_size            = 2
+  max_size            = 10
+  desired_capacity    = 4
+  health_check_type   = "ELB"
+  target_group_arns   = [aws_lb_target_group.web.arn]
+
+  launch_template {
+    id      = aws_launch_template.web.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "web"
+    propagate_at_launch = true
+  }
+}
+</code></pre>
+      </section>
+
+      <section id="storage">
+        <h2>5. Storage</h2>
+
+        <h3>5.1. Object Storage — S3 / GCS / Blob</h3>
+
+        <table>
+          <thead><tr><th>Feature</th><th>AWS S3</th><th>GCS</th><th>Azure Blob</th></tr></thead>
+          <tbody>
+            <tr><td>Container</td><td>Bucket</td><td>Bucket</td><td>Container</td></tr>
+            <tr><td>Object</td><td>Object</td><td>Object</td><td>Blob</td></tr>
+            <tr><td>Tiers</td><td>Standard/IA/Glacier/Deep Archive</td><td>Standard/Nearline/Coldline/Archive</td><td>Hot/Cool/Cold/Archive</td></tr>
+            <tr><td>Lifecycle</td><td>Lifecycle Policy</td><td>Lifecycle Rule</td><td>Lifecycle Mgmt</td></tr>
+            <tr><td>Versioning</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+            <tr><td>Encryption</td><td>SSE-S3, KMS, C</td><td>Auto, CMEK, CSEK</td><td>SSE</td></tr>
+            <tr><td>Pricing /GB/month</td><td>$0.023 (Std)</td><td>$0.020 (Std)</td><td>$0.018 (Hot)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.2. S3 example</h3>
+
+<pre><code class="language-bash"># Tạo bucket
+aws s3 mb s3://my-app-bucket --region us-east-1
+
+# Upload
+aws s3 cp file.txt s3://my-app-bucket/
+aws s3 sync ./dist s3://my-app-bucket/ --delete
+
+# Download
+aws s3 cp s3://my-app-bucket/file.txt .
+
+# Set encryption + versioning
+aws s3api put-bucket-encryption --bucket my-app-bucket \
+  --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+
+aws s3api put-bucket-versioning --bucket my-app-bucket \
+  --versioning-configuration Status=Enabled
+
+# Lifecycle (move to Glacier sau 90 ngày)
+aws s3api put-bucket-lifecycle-configuration --bucket my-app-bucket \
+  --lifecycle-configuration file://lifecycle.json
+</code></pre>
+
+        <h3>5.3. Block Storage — EBS / Persistent Disk / Managed Disk</h3>
+
+        <p>Block storage attach vào VM. Persistence ngoài lifecycle VM.</p>
+
+        <table>
+          <thead><tr><th>Type</th><th>AWS EBS</th><th>GCP PD</th><th>Azure</th></tr></thead>
+          <tbody>
+            <tr><td>SSD General</td><td>gp3</td><td>pd-balanced</td><td>Premium SSD</td></tr>
+            <tr><td>SSD High-perf</td><td>io2 (provisioned IOPS)</td><td>pd-extreme</td><td>Ultra Disk</td></tr>
+            <tr><td>HDD</td><td>st1, sc1</td><td>pd-standard</td><td>Standard HDD</td></tr>
+            <tr><td>NVMe local</td><td>i3 instance store</td><td>Local SSD</td><td>Lsv2</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.4. File Storage — EFS / Filestore / Files</h3>
+
+        <p>NFS-compatible, RWX (mount nhiều VM).</p>
+        <ul>
+          <li>AWS EFS — POSIX, scale tự động.</li>
+          <li>GCP Filestore — managed NFS.</li>
+          <li>Azure Files — SMB + NFS.</li>
+          <li>FSx (AWS) — Lustre, NetApp, Windows File Server.</li>
+        </ul>
+      </section>
+
+      <section id="network">
+        <h2>6. Networking & VPC</h2>
+
+        <h3>6.1. VPC concept</h3>
+
+        <p>VPC = isolated network trong cloud, có CIDR range (vd 10.0.0.0/16). Chia subnet (public/private), security group, NACL, route table.</p>
+
+        <div class="ascii">VPC 10.0.0.0/16
+├── Public Subnet 10.0.1.0/24 (AZ-a)  ──→ Internet Gateway ──→ Internet
+├── Public Subnet 10.0.2.0/24 (AZ-b)
+├── Private Subnet 10.0.10.0/24 (AZ-a) ─→ NAT Gateway ─→ IGW (egress only)
+├── Private Subnet 10.0.20.0/24 (AZ-b)
+└── DB Subnet 10.0.100.0/24 (AZ-a)     ── isolated, không egress</div>
+
+        <h3>6.2. Public vs Private subnet</h3>
+
+        <table>
+          <thead><tr><th>Type</th><th>Route</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Public</td><td>0.0.0.0/0 → IGW</td><td>Load balancer, bastion</td></tr>
+            <tr><td>Private</td><td>0.0.0.0/0 → NAT Gateway</td><td>App, K8s nodes (egress only)</td></tr>
+            <tr><td>Database</td><td>No internet route</td><td>RDS, ElastiCache (max isolation)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>6.3. Security Group vs NACL</h3>
+
+        <ul>
+          <li><strong>Security Group (SG)</strong> — stateful firewall ở instance level. Allow only (no deny rule).</li>
+          <li><strong>Network ACL (NACL)</strong> — stateless firewall ở subnet level. Allow + deny.</li>
+        </ul>
+
+        <p>Practical: dùng SG cho 99% case. NACL chỉ cho subnet-wide block (IP blacklist).</p>
+
+<pre><code class="language-hcl">resource "aws_security_group" "web" {
+  name   = "web-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# DB SG — chỉ cho web SG access
+resource "aws_security_group" "db" {
+  name   = "db-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web.id]    # SG-as-source!
+  }
+}
+</code></pre>
+
+        <h3>6.4. Load Balancer</h3>
+
+        <table>
+          <thead><tr><th>Layer</th><th>AWS</th><th>GCP</th><th>Azure</th></tr></thead>
+          <tbody>
+            <tr><td>L4 (TCP)</td><td>NLB</td><td>Network LB</td><td>LB</td></tr>
+            <tr><td>L7 (HTTP)</td><td>ALB</td><td>HTTP(S) LB</td><td>Application Gateway</td></tr>
+            <tr><td>Global</td><td>Global Accelerator + CloudFront</td><td>Global HTTP(S) LB</td><td>Front Door</td></tr>
+          </tbody>
+        </table>
+
+        <h3>6.5. CDN</h3>
+
+        <ul>
+          <li>AWS CloudFront — 400+ PoP, integrate S3, ALB.</li>
+          <li>GCP Cloud CDN — Anycast IP.</li>
+          <li>Azure CDN / Azure Front Door.</li>
+          <li>Third-party: Cloudflare, Fastly, Akamai.</li>
+        </ul>
+
+        <h3>6.6. Egress cost — silent killer</h3>
+
+        <div class="callout callout-warn">
+          <span class="callout-title">Cảnh báo egress</span>
+          Data <em>vào</em> cloud free, data <em>ra</em> đắt: AWS $0.09/GB egress (us-east-1 → internet). GB free 100/month. Production app 10TB/month egress = ~$900. Multi-region replication: 1TB cross-region = $20-40. Budget cẩn thận!
+        </div>
+
+        <p>Cách giảm: CDN (cache reduce egress), VPC Endpoint (S3 không qua internet), Direct Connect (commit pricing thấp hơn).</p>
+      </section>
+
+      <section id="iam">
+        <h2>7. IAM — Identity & Access Management</h2>
+
+        <h3>7.1. Concepts</h3>
+
+        <ul>
+          <li><strong>User / ServiceAccount</strong> — identity.</li>
+          <li><strong>Group</strong> — collection of users.</li>
+          <li><strong>Role</strong> — collection of permissions; users/services assume.</li>
+          <li><strong>Policy</strong> — JSON rules (allow/deny actions on resources).</li>
+        </ul>
+
+        <h3>7.2. AWS IAM policy</h3>
+
+<pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowReadS3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::my-bucket",
+        "arn:aws:s3:::my-bucket/*"
+      ]
+    },
+    {
+      "Sid": "DenyDelete",
+      "Effect": "Deny",
+      "Action": "s3:DeleteObject",
+      "Resource": "*"
+    }
+  ]
+}
+</code></pre>
+
+        <h3>7.3. IAM principles</h3>
+
+        <ol class="steps">
+          <li><strong>Least privilege</strong> — grant minimum permissions needed.</li>
+          <li><strong>No long-lived keys</strong> — dùng IAM Role + STS, OIDC từ GitHub.</li>
+          <li><strong>MFA mọi root account</strong>.</li>
+          <li><strong>Tách environment</strong> — prod ở account riêng, không share role với dev.</li>
+          <li><strong>Audit</strong> — CloudTrail (AWS), Cloud Audit Logs (GCP), Activity Log (Azure).</li>
+          <li><strong>Tag-based access control</strong> (ABAC) — scale hơn role-based.</li>
+        </ol>
+
+        <h3>7.4. AWS Organizations / GCP Org / Azure Tenant</h3>
+
+        <p>Multi-account hierarchy:</p>
+
+        <div class="ascii">AWS Organization
+├── OU "Production"
+│   ├── Account: prod-app
+│   └── Account: prod-data
+├── OU "Non-Production"
+│   ├── Account: staging
+│   └── Account: dev
+└── Account: shared-services (CI, registry)</div>
+
+        <p>Service Control Policy (SCP) ở org level — guardrails (vd: prod account không xóa được S3 bucket).</p>
+
+        <h3>7.5. IAM trong Terraform — OIDC GHA</h3>
+
+<pre><code class="language-hcl"># GitHub OIDC provider
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["1b511abead59c6ce207077c0bf0e0043b1382612"]
+}
+
+# Role assume được bởi GitHub Actions
+resource "aws_iam_role" "gha_deploy" {
+  name = "gha-deploy"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:myorg/myrepo:ref:refs/heads/main"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "gha_deploy" {
+  role       = aws_iam_role.gha_deploy.name
+  policy_arn = aws_iam_policy.deploy.arn
+}
+</code></pre>
+      </section>
+
+      <section id="k8s">
+        <h2>8. Managed Kubernetes — EKS / GKE / AKS</h2>
+
+        <table>
+          <thead><tr><th>Feature</th><th>EKS (AWS)</th><th>GKE (GCP)</th><th>AKS (Azure)</th></tr></thead>
+          <tbody>
+            <tr><td>Control plane cost</td><td>$0.10/hour</td><td>Free (Standard) / $0.10/hour (Autopilot)</td><td>Free (Free tier)</td></tr>
+            <tr><td>Auto-upgrade</td><td>Manual / EKS Auto Mode</td><td>Auto (channels)</td><td>Auto</td></tr>
+            <tr><td>Auto-scaling node</td><td>Karpenter / CA</td><td>Built-in CA, Autopilot</td><td>CA</td></tr>
+            <tr><td>Network plugin</td><td>VPC CNI</td><td>VPC-native, Anthos</td><td>Azure CNI</td></tr>
+            <tr><td>Best at</td><td>AWS-integration</td><td>K8s features (oldest, mature)</td><td>Microsoft stack</td></tr>
+          </tbody>
+        </table>
+
+        <h3>8.1. EKS quick start</h3>
+
+<pre><code class="language-bash"># eksctl (CLI dễ nhất)
+eksctl create cluster \
+  --name dev-cluster \
+  --region us-east-1 \
+  --version 1.28 \
+  --nodegroup-name workers \
+  --node-type t3.medium \
+  --nodes 3 \
+  --nodes-min 1 \
+  --nodes-max 10 \
+  --managed
+
+# Connect
+aws eks update-kubeconfig --name dev-cluster --region us-east-1
+kubectl get nodes
+</code></pre>
+
+        <h3>8.2. Production-grade với Terraform</h3>
+
+<pre><code class="language-hcl">module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~&gt; 20.0"
+
+  cluster_name    = "prod-cluster"
+  cluster_version = "1.28"
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  cluster_endpoint_public_access = true
+
+  cluster_addons = {
+    coredns                = { addon_version = "v1.10.1-eksbuild.7" }
+    kube-proxy             = {}
+    vpc-cni                = {}
+    aws-ebs-csi-driver     = {}
+  }
+
+  eks_managed_node_groups = {
+    general = {
+      desired_size = 3
+      min_size     = 2
+      max_size     = 10
+      instance_types = ["t3.medium"]
+    }
+
+    spot = {
+      desired_size = 2
+      min_size     = 0
+      max_size     = 20
+      instance_types = ["c5.large", "c5a.large", "m5.large"]
+      capacity_type  = "SPOT"
+    }
+  }
+}
+</code></pre>
+
+        <h3>8.3. GKE Autopilot (zero-config)</h3>
+
+<pre><code class="language-bash">gcloud container clusters create-auto autopilot-cluster \
+  --region=us-central1
+</code></pre>
+
+        <p>Autopilot: Google quản node, billing per Pod resource (request CPU/RAM). Phù hợp team không muốn lo node management.</p>
+      </section>
+
+      <section id="serverless">
+        <h2>9. Serverless / Functions</h2>
+
+        <h3>9.1. AWS Lambda</h3>
+
+<pre><code class="language-javascript">// index.js
+exports.handler = async (event) =&gt; {
+  console.log('Event:', JSON.stringify(event));
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Hello!' }),
+  };
+};
+</code></pre>
+
+<pre><code class="language-bash"># Deploy với SAM
+sam init --runtime nodejs20.x
+sam build
+sam deploy --guided
+
+# Hoặc Terraform
+</code></pre>
+
+        <h3>9.2. Lambda pricing</h3>
+
+        <ul>
+          <li>Free tier: 1M request + 400,000 GB-second/month.</li>
+          <li>Sau đó: $0.20/1M request + $0.0000166667/GB-s.</li>
+          <li>1M request 128MB chạy 200ms = ~$0.20 + $0.42 = ~$0.62.</li>
+        </ul>
+
+        <p>So sánh với EC2 t3.micro $7.5/month: Lambda rẻ hơn cho traffic &lt; ~3M request/month, đắt hơn cho continuous load.</p>
+
+        <h3>9.3. Cold start</h3>
+
+        <p>Lambda có thể "ngủ" nếu không có request. Request đầu tiên: cold start (init runtime, load code) — 100ms - vài giây.</p>
+
+        <p>Mitigations:</p>
+        <ul>
+          <li>Provisioned Concurrency — pre-warm N instance ($).</li>
+          <li>Languages khởi động nhanh: Go, Rust, Python &gt; Java, .NET.</li>
+          <li>Lambda SnapStart (Java) — pre-init snapshot.</li>
+          <li>Smaller deployment package.</li>
+        </ul>
+
+        <h3>9.4. Use cases serverless</h3>
+
+        <ul>
+          <li>API GW + Lambda — REST API simple.</li>
+          <li>S3 trigger — process upload.</li>
+          <li>Cron — EventBridge schedule.</li>
+          <li>Stream processing — Kinesis/SQS triggers.</li>
+          <li>Webhook handler.</li>
+        </ul>
+
+        <h3>9.5. Cloud Run (GCP) — middle ground</h3>
+
+<pre><code class="language-bash">gcloud run deploy myapp \
+  --image gcr.io/myproject/myapp:1.0 \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated
+</code></pre>
+
+        <p>Cloud Run = container serverless. Pay per request, scale-to-zero, max 60min request. Tốt hơn Lambda cho:</p>
+        <ul>
+          <li>Long-running request (Lambda max 15min).</li>
+          <li>Container portability (any language).</li>
+          <li>Less vendor lock-in.</li>
+        </ul>
+
+        <p>Equivalent: AWS App Runner, Azure Container Apps.</p>
+      </section>
+
+      <section id="db">
+        <h2>10. Managed Databases</h2>
+
+        <table>
+          <thead><tr><th>DB</th><th>AWS</th><th>GCP</th><th>Azure</th></tr></thead>
+          <tbody>
+            <tr><td>Postgres/MySQL</td><td>RDS</td><td>Cloud SQL</td><td>Azure Database</td></tr>
+            <tr><td>Postgres serverless</td><td>Aurora Serverless v2</td><td>AlloyDB</td><td>Hyperscale</td></tr>
+            <tr><td>Distributed SQL</td><td>Aurora</td><td>Spanner</td><td>Cosmos DB (multi-model)</td></tr>
+            <tr><td>NoSQL document</td><td>DynamoDB</td><td>Firestore</td><td>Cosmos DB</td></tr>
+            <tr><td>NoSQL key-value</td><td>DynamoDB</td><td>Datastore</td><td>Cosmos DB</td></tr>
+            <tr><td>Cache</td><td>ElastiCache (Redis/Memcached)</td><td>Memorystore</td><td>Cache for Redis</td></tr>
+            <tr><td>Data Warehouse</td><td>Redshift</td><td>BigQuery</td><td>Synapse</td></tr>
+            <tr><td>Search</td><td>OpenSearch</td><td>(no managed)</td><td>Cognitive Search</td></tr>
+          </tbody>
+        </table>
+
+        <h3>10.1. RDS example (Terraform)</h3>
+
+<pre><code class="language-hcl">resource "aws_db_subnet_group" "default" {
+  name       = "main"
+  subnet_ids = module.vpc.database_subnets
+}
+
+resource "aws_db_instance" "main" {
+  identifier              = "myapp-prod"
+  engine                  = "postgres"
+  engine_version          = "15.4"
+  instance_class          = "db.r5.large"
+  allocated_storage       = 100
+  storage_type            = "gp3"
+  storage_encrypted       = true
+
+  db_name                 = "myapp"
+  username                = "app"
+  password                = var.db_password   # Vault / Secrets Manager
+
+  multi_az                = true              # HA
+  backup_retention_period = 30
+  backup_window           = "02:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  performance_insights_enabled = true
+
+  deletion_protection = true
+
+  vpc_security_group_ids = [aws_security_group.db.id]
+  db_subnet_group_name   = aws_db_subnet_group.default.name
+
+  skip_final_snapshot = false
+  final_snapshot_identifier = "myapp-prod-final"
+}
+</code></pre>
+
+        <h3>10.2. Backup & Recovery</h3>
+
+        <ul>
+          <li><strong>Snapshot</strong> — point-in-time backup, restore tạo DB mới.</li>
+          <li><strong>PITR (Point-In-Time Recovery)</strong> — restore tới timestamp cụ thể (within retention).</li>
+          <li><strong>Cross-region snapshot</strong> — DR.</li>
+          <li><strong>Read replica</strong> — async replication, read scaling.</li>
+        </ul>
+      </section>
+
+      <section id="cost">
+        <h2>11. Cost Management & FinOps</h2>
+
+        <h3>11.1. Cost monitoring</h3>
+
+        <ul>
+          <li>AWS Cost Explorer — view spend, forecast.</li>
+          <li>GCP Cost / Budget alerts.</li>
+          <li>Azure Cost Management.</li>
+          <li>Third-party: Vantage, Infracost (Terraform), CloudHealth, Datadog.</li>
+        </ul>
+
+        <h3>11.2. Common cost traps</h3>
+
+        <table>
+          <thead><tr><th>Trap</th><th>Cost</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td>Egress traffic</td><td>$0.09/GB</td><td>CDN, VPC endpoint, compress</td></tr>
+            <tr><td>NAT Gateway</td><td>$0.045/GB + $0.045/hour</td><td>Single NAT (giảm HA), VPC endpoint cho S3</td></tr>
+            <tr><td>EBS unused</td><td>$0.10/GB/month</td><td>Delete volume khi terminate EC2</td></tr>
+            <tr><td>Idle resources</td><td>Vary</td><td>Cron stop dev/staging at night</td></tr>
+            <tr><td>Over-provisioned RDS</td><td>db.r5 vs db.t3 = 5×</td><td>Monitor utilization, downsize</td></tr>
+            <tr><td>S3 versioning</td><td>10× storage</td><td>Lifecycle delete old versions</td></tr>
+            <tr><td>CloudWatch logs</td><td>$0.50/GB ingest</td><td>Log level filter, S3 archive</td></tr>
+            <tr><td>Cross-AZ data</td><td>$0.01/GB each direction</td><td>Affinity routing trong cùng AZ</td></tr>
+          </tbody>
+        </table>
+
+        <h3>11.3. Reserved Instances / Savings Plans</h3>
+
+        <p>Cam kết 1-3 năm cho discount 40-72%. Phù hợp baseline traffic. On-demand cho burst.</p>
+
+        <p>AWS Compute Savings Plans linh hoạt nhất — apply EC2/Lambda/Fargate.</p>
+
+        <h3>11.4. FinOps practices</h3>
+
+        <ol>
+          <li>Tag mọi resource (Owner, Project, Env, CostCenter).</li>
+          <li>Showback / Chargeback — chia phí theo team/project.</li>
+          <li>Budget alert — Slack notification khi vượt 80%.</li>
+          <li>Right-sizing — review monthly utilization.</li>
+          <li>Auto shutdown dev/staging cuối ngày.</li>
+          <li>Spot for stateless.</li>
+          <li>Reserved cho predictable.</li>
+        </ol>
+      </section>
+
+      <section id="multi">
+        <h2>12. Multi-cloud strategy</h2>
+
+        <h3>12.1. Lý do multi-cloud</h3>
+        <ul>
+          <li>Avoid vendor lock-in.</li>
+          <li>Best-of-breed per workload (BigQuery cho analytics, AWS cho legacy).</li>
+          <li>Compliance (data sovereignty per region).</li>
+          <li>Negotiation leverage.</li>
+          <li>Disaster recovery cross-cloud.</li>
+        </ul>
+
+        <h3>12.2. Khó khăn multi-cloud</h3>
+        <ul>
+          <li>Skill: team phải biết 2-3 cloud → expensive.</li>
+          <li>Network: cross-cloud networking phức tạp + đắt egress.</li>
+          <li>Security: IAM khác nhau, audit khó.</li>
+          <li>Cost optimization khó (cant negotiate volume).</li>
+          <li>Tooling: K8s + Terraform + Crossplane help nhưng vẫn cần per-cloud expertise.</li>
+        </ul>
+
+        <h3>12.3. Realistic patterns</h3>
+
+        <ul>
+          <li><strong>Primary + DR</strong>: AWS chính, GCP backup. Active-passive.</li>
+          <li><strong>Best-of-breed</strong>: AWS infra + GCP BigQuery + Cloudflare CDN.</li>
+          <li><strong>Compliance split</strong>: EU data ở Azure EU, US data ở AWS.</li>
+          <li><strong>Hybrid</strong>: on-prem chính + cloud burst.</li>
+        </ul>
+
+        <p>Avoid: "true multi-cloud active-active" — overhead phần lớn không xứng. Đa số công ty thắng khi <em>single-cloud</em> + <em>multi-region</em>.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>13. Bài tập</h2>
+
+        <ol>
+          <li><strong>Cloud account</strong>: setup AWS Free Tier, GCP $300 credit, hoặc Azure $200 credit. Setup MFA cho root account.</li>
+
+          <li><strong>EC2 first server</strong>: launch t3.micro, SSH vào, install nginx, expose qua public IP.</li>
+
+          <li><strong>VPC custom</strong>: tạo VPC 10.99.0.0/16 với 2 public + 2 private + 2 DB subnet ở 2 AZ. NAT Gateway. Verify private subnet có internet egress.</li>
+
+          <li><strong>Multi-tier app</strong>: web (public subnet, ALB) + app (private subnet) + RDS (DB subnet). Security Group chain: ALB → web → DB.</li>
+
+          <li><strong>S3 + lifecycle</strong>: tạo bucket. Upload file. Setup versioning. Lifecycle: transition to IA sau 30 ngày, Glacier sau 90, expire sau 365.</li>
+
+          <li><strong>IAM least privilege</strong>: tạo user "developer" chỉ có quyền read EC2, write S3 1 bucket cụ thể. Test bằng <code>aws sts assume-role</code>.</li>
+
+          <li><strong>OIDC GitHub</strong>: setup IAM OIDC provider + role cho GitHub Actions deploy S3. Workflow assume role không cần long-lived key.</li>
+
+          <li><strong>EKS cluster</strong>: dùng eksctl tạo cluster 3-node. Deploy app. Sau test, <code>eksctl delete cluster</code> để khỏi tốn.</li>
+
+          <li><strong>Lambda + API GW</strong>: viết Lambda Hello World, expose qua API Gateway. Test với curl.</li>
+
+          <li><strong>Cloud Run</strong>: container hóa app, deploy lên GCP Cloud Run. Verify scale-to-zero (sleep 5 phút, hit lại — cold start).</li>
+
+          <li><strong>RDS Postgres</strong>: deploy db.t3.micro multi-AZ. Connect từ EC2 trong VPC. Backup snapshot. Restore.</li>
+
+          <li><strong>Cost analysis</strong>: review AWS Cost Explorer / Billing 30 ngày. Identify top 5 spend. Đề xuất 3 optimizations.</li>
+
+          <li><strong>Cross-cloud</strong>: setup VPN giữa AWS VPC và GCP VPC (hoặc Cloud Interconnect). Ping VM cross-cloud.</li>
+
+          <li><strong>Disaster recovery drill</strong>: backup RDS cross-region. Simulate region failure: terminate primary, restore từ snapshot ở region 2. Đo RTO/RPO.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>14. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 8</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Region và Availability Zone (AZ) khác nhau ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cùng nghĩa</li>
+              <li class="quiz-option">AZ là country</li>
+              <li class="quiz-option">Region là geographic area (us-east-1 = Virginia); AZ là data center vật lý isolated trong region (power/network/cooling riêng); 1 region = 2-6 AZ</li>
+              <li class="quiz-option">Region nhỏ hơn AZ</li>
+            </ul>
+            <div class="quiz-explain">Multi-AZ deploy: trải app qua nhiều AZ trong cùng region cho HA — latency &lt; 1ms giữa AZ. Multi-region deploy: cross-region cho DR (AZ-level disaster). Region die hiếm (nhưng đã xảy ra: us-east-1 12/2021). Production critical: multi-region.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">IaaS / PaaS / Serverless khác nhau ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Pricing only</li>
+              <li class="quiz-option">Mức độ provider quản lý: IaaS (bạn lo OS + app), PaaS (bạn lo app, provider lo OS+runtime), Serverless (bạn lo code, provider lo phần còn lại)</li>
+              <li class="quiz-option">IaaS là cũ nhất</li>
+              <li class="quiz-option">Cùng giá</li>
+            </ul>
+            <div class="quiz-explain">Phổ Spectrum quản lý: On-prem (bạn lo all) → IaaS (EC2, GCE) → CaaS (Fargate, Cloud Run) → PaaS (Beanstalk, App Engine) → FaaS/Serverless (Lambda, Cloud Functions) → SaaS (Gmail). Mỗi step lên: ít control, ít flexibility, nhanh hơn để launch. Trade-off chọn theo team size + workload.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Spot/Preemptible instance phù hợp với workload:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Stateful database</li>
+              <li class="quiz-option">Single-instance critical service</li>
+              <li class="quiz-option">Web app session-stateful</li>
+              <li class="quiz-option">Stateless worker, batch job, CI runner — tolerant của 30s preemption notice; tiết kiệm 60-90% so on-demand</li>
+            </ul>
+            <div class="quiz-explain">Spot: cloud bán capacity dư với discount cao. Provider có thể reclaim với 30s-2min notice. Phù hợp workload "interruptible": batch processing, distributed training (PyTorch checkpoint), CI runner, K8s spot node group cho stateless pods. Avoid: DB primary, single-instance app, long-running stateful job không có checkpoint.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Egress (data ra cloud) cost trap:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Data IN free, data OUT internet đắt ($0.09/GB AWS, sau 100GB free) — 10TB egress/month có thể $900+; mitigate bằng CDN, VPC endpoint, compression</li>
+              <li class="quiz-option">Cả IN và OUT đều đắt</li>
+              <li class="quiz-option">Free unlimited</li>
+              <li class="quiz-option">Chỉ tính cross-region</li>
+            </ul>
+            <div class="quiz-explain">Common cost surprise: dev không nhận thức egress pricing → API trả nhiều JSON → bill $$. Fix: (1) CDN cache giảm origin egress; (2) VPC Endpoint cho S3/DynamoDB không qua internet; (3) Compress (gzip, brotli); (4) Multi-region = cross-region transfer cost; (5) Cross-AZ transfer trong region cũng tính ($0.01/GB direction).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Security Group vs NACL trong AWS VPC:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">SG là deprecated</li>
+              <li class="quiz-option">NACL chỉ allow rule</li>
+              <li class="quiz-option">SG: stateful, instance-level, allow only; NACL: stateless, subnet-level, allow + deny — dùng SG cho 99% case, NACL cho subnet-wide IP block</li>
+              <li class="quiz-option">Phải dùng cả 2</li>
+            </ul>
+            <div class="quiz-explain">SG stateful: response auto-allowed (không cần rule egress riêng). Easier. NACL stateless: phải rule cả 2 chiều, support DENY (cho IP block list). Practical: SG primary, NACL chỉ khi cần guard subnet-wide. Best practice SG: SG-as-source ("allow from sg-web") thay CIDR — auto update khi instance scale.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">IAM least privilege là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cho admin all-access</li>
+              <li class="quiz-option">Grant minimum permissions cần thiết, không hơn — explicit allow + deny by default; audit through CloudTrail/Cloud Audit Logs</li>
+              <li class="quiz-option">Chỉ allow read</li>
+              <li class="quiz-option">Block all</li>
+            </ul>
+            <div class="quiz-explain">Default IAM: deny everything. Mỗi action phải explicit allow. Least privilege: chỉ grant action + resource cần thiết. Vd: Lambda chỉ cần s3:GetObject 1 bucket → policy chỉ allow đó. Lợi: blast radius nhỏ khi credential leak. Audit: review IAM Access Analyzer (AWS), Recommender (GCP) để identify unused permissions.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Managed K8s control plane cost so sánh:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Tất cả $0.50/hour</li>
+              <li class="quiz-option">EKS free</li>
+              <li class="quiz-option">GKE Standard free</li>
+              <li class="quiz-option">EKS $0.10/hour, GKE Standard có 1 cluster free + sau đó $0.10/hour, AKS free; nodes tính riêng</li>
+            </ul>
+            <div class="quiz-explain">EKS: $0.10/hour (~$73/month) cho control plane. GKE: 1 zonal cluster free + thêm $0.10/hour. AKS: control plane free (chỉ tính node). Autopilot mode (GKE/EKS): pay per Pod resource thay node — no node management. Cost optimization: bấm nodes Spot, autoscale, pack bin pods.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">AWS Lambda cold start là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Request đầu tiên sau period idle — Lambda init runtime (load code, JVM startup, ...) trước execute → 100ms-vài giây extra latency; mitigate bằng Provisioned Concurrency, smaller package, fast-startup language (Go/Python &gt; Java)</li>
+              <li class="quiz-option">Lambda crash</li>
+              <li class="quiz-option">Network slow</li>
+              <li class="quiz-option">Always slow</li>
+            </ul>
+            <div class="quiz-explain">Lambda "ngủ" sau 5-15 phút idle. Wake up: container init + runtime init + code init. Java cold start có thể 3-5s; Go ~50-100ms; Python ~200ms. Mitigate: Provisioned Concurrency (pre-warm N instance, có cost); SnapStart cho Java (snapshot-based init); minimize package size; code layer reuse.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Multi-cloud "best-of-breed" là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Active-active mọi service mọi cloud</li>
+              <li class="quiz-option">Cấm dùng cloud nào</li>
+              <li class="quiz-option">Mix: AWS infra + GCP BigQuery (analytics) + Cloudflare CDN — mỗi service chọn cloud tốt nhất; ít overhead hơn full multi-cloud</li>
+              <li class="quiz-option">Chỉ dùng on-prem</li>
+            </ul>
+            <div class="quiz-explain">"True" multi-cloud (active-active mọi thứ) overhead lớn: skill 3 cloud, network cross-cloud phức tạp + đắt egress, IAM 3 hệ. Pragmatic: chọn cloud chính (AWS), cherry-pick service nổi bật từ cloud khác (BigQuery, Vertex AI cho ML, Cloudflare CDN). Đa số công ty thắng với single-cloud + multi-region.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">FinOps practice quan trọng nhất khi mới adopt cloud:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Mua Reserved Instance ngay</li>
+              <li class="quiz-option">Tag everything (Owner, Project, Env, CostCenter) → chia phí theo team, identify waste, accountability</li>
+              <li class="quiz-option">Force serverless</li>
+              <li class="quiz-option">Multi-cloud</li>
+            </ul>
+            <div class="quiz-explain">Tag là foundation FinOps: không tag → không biết ai consume, không thể chargeback. Practice: mandatory tag policy enforce qua SCP. Phổ biến tags: Owner (team email), Project, Env (prod/staging/dev), CostCenter, ManagedBy (Terraform/CFN). Cost report group by tag → showback per team. Reserved chỉ optimize predictable baseline (sau khi đo).</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border-strong); color: var(--text-muted);">
+        Hoàn thành Chương 8. Tiếp theo: <a href="chuong9.html"><strong>Chương 9 — Configuration Management & Secrets →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>DevOps · Chương 8 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

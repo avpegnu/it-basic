@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3 — Functions &amp; Control Flow · Dart Sub-pillar</title>
+  <meta name="description" content="Function declaration, positional/named parameters, required keyword, arrow function, closure, switch expression Dart 3." />
+  <meta name="theme-color" content="#0568b9" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Crimson+Pro:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-dart">D</span>
+        Dart · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Dart</a></li>
+          <li><a href="../../Flutter/index.html">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Dart</a><span class="sep">/</span>
+        <span>Chương 3</span>
+      </div>
+      <div class="chapter-num">Chương 03 · Functions &amp; Control Flow</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Functions &amp; Control Flow
+      </h1>
+      <p class="lead">
+        Function trong Dart có cú pháp đặc biệt — <strong>named parameters</strong> + <strong><code>required</code></strong> keyword.
+        Đây chính là pattern xuất hiện ở <em>mọi widget constructor Flutter</em>. Không nắm chương này, đọc code Flutter sẽ confused.
+        <strong>Switch expression</strong> Dart 3 cũng là cú pháp mới sẽ gặp khắp nơi.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~930 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 2 (types)</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Khai báo function với <strong>positional</strong>, <strong>optional positional</strong>, và <strong>named</strong> parameters.</li>
+            <li>Hiểu <code>required</code> keyword cho named param.</li>
+            <li>Dùng arrow function syntax <code>=&gt;</code> cho function ngắn.</li>
+            <li>Function là first-class: gán biến, truyền argument, return function.</li>
+            <li>Viết closure và hiểu capture biến.</li>
+            <li>Dùng control flow đầy đủ: <code>if</code>, <code>switch</code> (cũ + Dart 3 expression), <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code>, label.</li>
+            <li>Hiểu <code>assert</code> và khi nào dùng.</li>
+          </ul>
+        </div>
+
+        <h2 id="function-co-ban">1. Function declaration cơ bản</h2>
+        <p>Cú pháp chuẩn:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">int</span> <span class="tok-fn">add</span>(<span class="tok-type">int</span> a, <span class="tok-type">int</span> b) {
+  <span class="tok-kw">return</span> a + b;
+}
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">print</span>(<span class="tok-fn">add</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>));  <span class="tok-com">// 5</span>
+}</code></pre>
+
+        <p>Phân tích:</p>
+        <ul>
+          <li><strong>Return type</strong> (<code>int</code>) — đứng trước tên. <code>void</code> nếu không trả gì.</li>
+          <li><strong>Tên function</strong> — camelCase idiomatic.</li>
+          <li><strong>Parameter list</strong> — mỗi param có type + tên.</li>
+          <li><strong>Body</strong> — trong <code>{ }</code>, có <code>return</code> nếu return type khác void.</li>
+        </ul>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So với JS / TS</div>
+          <pre data-lang="js" style="margin-top: 8px;"><code>// JS
+function add(a, b) { return a + b; }
+const add2 = (a, b) =&gt; a + b;
+
+// TS
+function add(a: number, b: number): number { return a + b; }
+
+// Dart — gần TS, return type đứng đầu
+int add(int a, int b) =&gt; a + b;</code></pre>
+        </div>
+
+        <h2 id="positional">2. Positional parameters</h2>
+        <p>
+          Default — param bắt buộc theo thứ tự. Caller phải truyền đủ và đúng order:
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">void</span> <span class="tok-fn">greet</span>(<span class="tok-type">String</span> firstName, <span class="tok-type">String</span> lastName) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'Xin chào $firstName $lastName'</span>);
+}
+
+<span class="tok-fn">greet</span>(<span class="tok-str">'Việt'</span>, <span class="tok-str">'Nguyễn'</span>);   <span class="tok-com">// Xin chào Việt Nguyễn</span>
+<span class="tok-com">// greet('Việt');                // ❌ Thiếu lastName</span>
+<span class="tok-com">// greet('Nguyễn', 'Việt');      // ✅ Compile OK nhưng SAI ý nghĩa</span></code></pre>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Vấn đề positional khi nhiều param</div>
+          <p>
+            Function 5+ positional param khó đọc:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-fn">connectToServer</span>(<span class="tok-str">'api.example.com'</span>, <span class="tok-num">443</span>, <span class="tok-kw">true</span>, <span class="tok-num">30</span>, <span class="tok-kw">false</span>);</code></pre>
+          <p>
+            <em>true</em>? <em>false</em>? <em>30</em>? Đây là lúc cần <strong>named parameters</strong>.
+          </p>
+        </div>
+
+        <h2 id="optional-positional">3. Optional positional parameters</h2>
+        <p>
+          Wrap param trong <code>[ ]</code> để optional:
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">String</span> <span class="tok-fn">greet</span>(<span class="tok-type">String</span> name, [<span class="tok-type">String</span>? title]) {
+  <span class="tok-kw">if</span> (title != <span class="tok-kw">null</span>) <span class="tok-kw">return</span> <span class="tok-str">'$title $name'</span>;
+  <span class="tok-kw">return</span> <span class="tok-str">'Xin chào $name'</span>;
+}
+
+<span class="tok-fn">greet</span>(<span class="tok-str">'Việt'</span>);            <span class="tok-com">// Xin chào Việt</span>
+<span class="tok-fn">greet</span>(<span class="tok-str">'Việt'</span>, <span class="tok-str">'Anh'</span>);    <span class="tok-com">// Anh Việt</span></code></pre>
+
+        <p>Có thể có default value:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">int</span> <span class="tok-fn">add</span>(<span class="tok-type">int</span> a, [<span class="tok-type">int</span> b = <span class="tok-num">0</span>, <span class="tok-type">int</span> c = <span class="tok-num">0</span>]) {
+  <span class="tok-kw">return</span> a + b + c;
+}
+
+<span class="tok-fn">print</span>(<span class="tok-fn">add</span>(<span class="tok-num">1</span>));         <span class="tok-com">// 1</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">add</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>));      <span class="tok-com">// 3</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">add</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>));   <span class="tok-com">// 6</span></code></pre>
+
+        <h2 id="named">4. Named parameters + <code>required</code></h2>
+        <p>
+          <strong>Đây là pattern bạn sẽ gặp ở MỌI widget Flutter.</strong> Wrap trong <code>{ }</code>:
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">void</span> <span class="tok-fn">connectToServer</span>({
+  <span class="tok-kw">required</span> <span class="tok-type">String</span> host,
+  <span class="tok-type">int</span> port = <span class="tok-num">8080</span>,
+  <span class="tok-type">bool</span> secure = <span class="tok-kw">false</span>,
+  <span class="tok-type">Duration</span> timeout = <span class="tok-kw">const</span> <span class="tok-type">Duration</span>(seconds: <span class="tok-num">30</span>),
+}) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'Connect $host:$port secure=$secure timeout=$timeout'</span>);
+}
+
+<span class="tok-com">// Gọi — chỉ truyền những gì cần, theo thứ tự bất kỳ</span>
+<span class="tok-fn">connectToServer</span>(host: <span class="tok-str">'api.example.com'</span>);
+<span class="tok-fn">connectToServer</span>(host: <span class="tok-str">'api.example.com'</span>, port: <span class="tok-num">443</span>, secure: <span class="tok-kw">true</span>);
+<span class="tok-fn">connectToServer</span>(secure: <span class="tok-kw">true</span>, host: <span class="tok-str">'api.example.com'</span>);  <span class="tok-com">// thứ tự đảo OK</span></code></pre>
+
+        <p>Quy tắc <code>required</code>:</p>
+        <ul>
+          <li>Named param <strong>nullable</strong> (<code>T?</code>): mặc định optional, không cần <code>required</code>.</li>
+          <li>Named param <strong>non-nullable</strong> không default: <strong>BẮT BUỘC</strong> <code>required</code>.</li>
+          <li>Named param non-nullable có default: không cần <code>required</code> (vì có default).</li>
+        </ul>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">void</span> <span class="tok-fn">demo</span>({
+  <span class="tok-type">String</span>? a,                     <span class="tok-com">// OK — nullable, optional</span>
+  <span class="tok-kw">required</span> <span class="tok-type">String</span> b,           <span class="tok-com">// OK — required keyword</span>
+  <span class="tok-type">String</span> c = <span class="tok-str">'default'</span>,         <span class="tok-com">// OK — non-null nhưng có default</span>
+  <span class="tok-com">// String d,                  // ❌ Lỗi compile — non-null, no default, no required</span>
+}) {}</code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao Flutter widget dùng named param?</div>
+          <p>
+            Widget Flutter thường có 10-30+ properties. Nếu positional thì caller phải nhớ thứ tự — không khả thi.
+            Named param + <code>required</code> = mọi widget chỉ rõ param nào bắt buộc, param nào optional, có default. Code đọc như JSON.
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-fn">ElevatedButton</span>(
+  onPressed: () =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'tap'</span>),
+  style: <span class="tok-type">ElevatedButton</span>.<span class="tok-fn">styleFrom</span>(...),
+  child: <span class="tok-kw">const</span> <span class="tok-type">Text</span>(<span class="tok-str">'Submit'</span>),
+)</code></pre>
+        </div>
+
+        <h2 id="arrow">5. Arrow function — shorthand</h2>
+        <p>Function 1 expression có thể viết gọn:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Cách dài</span>
+<span class="tok-type">int</span> <span class="tok-fn">square</span>(<span class="tok-type">int</span> x) {
+  <span class="tok-kw">return</span> x * x;
+}
+
+<span class="tok-com">// Cách ngắn — arrow</span>
+<span class="tok-type">int</span> <span class="tok-fn">square</span>(<span class="tok-type">int</span> x) =&gt; x * x;</code></pre>
+
+        <p>Note: <strong>chỉ 1 expression</strong>, không phải block:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// ❌ Sai — block trong arrow</span>
+<span class="tok-com">// int square(int x) =&gt; { return x * x; };</span>
+
+<span class="tok-com">// ✅ Đúng — expression</span>
+<span class="tok-type">int</span> <span class="tok-fn">square</span>(<span class="tok-type">int</span> x) =&gt; x * x;
+
+<span class="tok-com">// ✅ Cũng OK — gọi method, in-line conditional</span>
+<span class="tok-type">String</span> <span class="tok-fn">grade</span>(<span class="tok-type">int</span> score) =&gt; score &gt; <span class="tok-num">50</span> ? <span class="tok-str">'pass'</span> : <span class="tok-str">'fail'</span>;</code></pre>
+
+        <h2 id="lambda">6. Anonymous function / lambda</h2>
+        <p>Function không tên — dùng inline:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Truyền vào higher-order function</span>
+<span class="tok-kw">final</span> doubled = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>].<span class="tok-fn">map</span>((x) =&gt; x * <span class="tok-num">2</span>).<span class="tok-fn">toList</span>();
+<span class="tok-fn">print</span>(doubled);  <span class="tok-com">// [2, 4, 6]</span>
+
+<span class="tok-com">// Hoặc block</span>
+[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>].<span class="tok-fn">forEach</span>((x) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'item: $x'</span>);
+});
+
+<span class="tok-com">// Lưu vào biến</span>
+<span class="tok-kw">final</span> isEven = (<span class="tok-type">int</span> n) =&gt; n % <span class="tok-num">2</span> == <span class="tok-num">0</span>;
+<span class="tok-fn">print</span>(<span class="tok-fn">isEven</span>(<span class="tok-num">4</span>));  <span class="tok-com">// true</span></code></pre>
+
+        <h2 id="first-class">7. Function là first-class value</h2>
+        <p>
+          Dart treat function như object thường — có type, gán biến được, truyền argument, return từ function khác.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">int</span> <span class="tok-fn">square</span>(<span class="tok-type">int</span> x) =&gt; x * x;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-com">// Gán function vào biến</span>
+  <span class="tok-kw">var</span> f = square;          <span class="tok-com">// type: int Function(int)</span>
+  <span class="tok-fn">print</span>(<span class="tok-fn">f</span>(<span class="tok-num">5</span>));             <span class="tok-com">// 25</span>
+
+  <span class="tok-com">// Truyền vào higher-order</span>
+  <span class="tok-kw">final</span> xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>].<span class="tok-fn">map</span>(square).<span class="tok-fn">toList</span>();
+  <span class="tok-fn">print</span>(xs);              <span class="tok-com">// [1, 4, 9]</span>
+}</code></pre>
+
+        <h3 id="function-type">Function type — viết explicit</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Type của function</span>
+<span class="tok-type">int</span> <span class="tok-type">Function</span>(<span class="tok-type">int</span>) f = square;
+<span class="tok-type">bool</span> <span class="tok-type">Function</span>(<span class="tok-type">int</span>) isEven = (n) =&gt; n % <span class="tok-num">2</span> == <span class="tok-num">0</span>;
+
+<span class="tok-com">// typedef — alias cho function type</span>
+<span class="tok-kw">typedef</span> IntTransformer = <span class="tok-type">int</span> <span class="tok-type">Function</span>(<span class="tok-type">int</span>);
+
+IntTransformer addOne = (x) =&gt; x + <span class="tok-num">1</span>;
+IntTransformer mulTwo = (x) =&gt; x * <span class="tok-num">2</span>;
+
+<span class="tok-com">// Higher-order: function nhận + return function</span>
+IntTransformer <span class="tok-fn">compose</span>(IntTransformer f, IntTransformer g) {
+  <span class="tok-kw">return</span> (x) =&gt; <span class="tok-fn">f</span>(<span class="tok-fn">g</span>(x));
+}
+
+<span class="tok-kw">final</span> plus1Mul2 = <span class="tok-fn">compose</span>(mulTwo, addOne);
+<span class="tok-fn">print</span>(<span class="tok-fn">plus1Mul2</span>(<span class="tok-num">3</span>));  <span class="tok-com">// (3+1)*2 = 8</span></code></pre>
+
+        <h2 id="closure">8. Closure — function giữ scope ngoài</h2>
+        <p>Closure là function lambda capture biến từ scope bên ngoài:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">Function</span> <span class="tok-fn">makeCounter</span>() {
+  <span class="tok-kw">var</span> count = <span class="tok-num">0</span>;
+  <span class="tok-kw">return</span> () {
+    count++;
+    <span class="tok-kw">return</span> count;
+  };
+}
+
+<span class="tok-kw">final</span> counter = <span class="tok-fn">makeCounter</span>();
+<span class="tok-fn">print</span>(<span class="tok-fn">counter</span>());  <span class="tok-com">// 1</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">counter</span>());  <span class="tok-com">// 2</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">counter</span>());  <span class="tok-com">// 3 — count được giữ giữa các lần gọi!</span>
+
+<span class="tok-com">// Mỗi gọi makeCounter() tạo closure ĐỘC LẬP</span>
+<span class="tok-kw">final</span> a = <span class="tok-fn">makeCounter</span>();
+<span class="tok-kw">final</span> b = <span class="tok-fn">makeCounter</span>();
+<span class="tok-fn">print</span>(<span class="tok-fn">a</span>());  <span class="tok-com">// 1</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">a</span>());  <span class="tok-com">// 2</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">b</span>());  <span class="tok-com">// 1 — riêng counter cho b</span></code></pre>
+
+        <p>Pattern factory với closure:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">int</span> <span class="tok-type">Function</span>(<span class="tok-type">int</span>) <span class="tok-fn">multiplier</span>(<span class="tok-type">int</span> factor) {
+  <span class="tok-kw">return</span> (x) =&gt; x * factor;  <span class="tok-com">// capture factor</span>
+}
+
+<span class="tok-kw">final</span> double_ = <span class="tok-fn">multiplier</span>(<span class="tok-num">2</span>);
+<span class="tok-kw">final</span> triple = <span class="tok-fn">multiplier</span>(<span class="tok-num">3</span>);
+<span class="tok-fn">print</span>(<span class="tok-fn">double_</span>(<span class="tok-num">5</span>));  <span class="tok-com">// 10</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">triple</span>(<span class="tok-num">5</span>));   <span class="tok-com">// 15</span></code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Capture by reference, không phải value</div>
+          <p>
+            Closure capture biến qua <em>reference</em>. Khi biến outer thay đổi, closure thấy giá trị mới.
+            Ví dụ:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-kw">var</span> x = <span class="tok-num">10</span>;
+<span class="tok-kw">final</span> getX = () =&gt; x;
+<span class="tok-fn">print</span>(<span class="tok-fn">getX</span>());  <span class="tok-com">// 10</span>
+
+x = <span class="tok-num">20</span>;
+<span class="tok-fn">print</span>(<span class="tok-fn">getX</span>());  <span class="tok-com">// 20 — không phải 10!</span></code></pre>
+        </div>
+
+        <h2 id="if-else">9. Control flow — <code>if</code> / <code>else</code></h2>
+        <p>Standard, chỉ điểm:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">if</span> (score &gt;= <span class="tok-num">90</span>) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'A'</span>);
+} <span class="tok-kw">else</span> <span class="tok-kw">if</span> (score &gt;= <span class="tok-num">80</span>) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'B'</span>);
+} <span class="tok-kw">else</span> {
+  <span class="tok-fn">print</span>(<span class="tok-str">'C'</span>);
+}
+
+<span class="tok-com">// Ternary</span>
+<span class="tok-kw">final</span> grade = score &gt;= <span class="tok-num">50</span> ? <span class="tok-str">'pass'</span> : <span class="tok-str">'fail'</span>;
+
+<span class="tok-com">// Lưu ý: điều kiện PHẢI là bool — không có truthy/falsy</span>
+<span class="tok-com">// if (someList) { }   // ❌</span>
+<span class="tok-com">// if (someList.isNotEmpty) { }  // ✅</span></code></pre>
+
+        <h2 id="switch-classical">10. Switch statement cổ điển</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">void</span> <span class="tok-fn">describe</span>(<span class="tok-type">int</span> day) {
+  <span class="tok-kw">switch</span> (day) {
+    <span class="tok-kw">case</span> <span class="tok-num">1</span>:
+      <span class="tok-fn">print</span>(<span class="tok-str">'Thứ Hai'</span>);
+      <span class="tok-kw">break</span>;
+    <span class="tok-kw">case</span> <span class="tok-num">2</span>:
+      <span class="tok-fn">print</span>(<span class="tok-str">'Thứ Ba'</span>);
+      <span class="tok-kw">break</span>;
+    <span class="tok-kw">default</span>:
+      <span class="tok-fn">print</span>(<span class="tok-str">'Ngày khác'</span>);
+  }
+}</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Dart không fallthrough mặc định</div>
+          <p>
+            Khác C/Java — mỗi <code>case</code> tự động <code>break</code>. <code>break</code> trong code trên thực ra <em>không cần</em> (analyzer cảnh báo).
+            Để fallthrough phải dùng <code>continue label;</code>.
+          </p>
+        </div>
+
+        <h2 id="switch-expression">11. Switch expression Dart 3</h2>
+        <p>Cú pháp mới — switch trả value:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">String</span> <span class="tok-fn">describeStatus</span>(<span class="tok-type">int</span> code) {
+  <span class="tok-kw">return</span> <span class="tok-kw">switch</span> (code) {
+    <span class="tok-num">200</span> =&gt; <span class="tok-str">'OK'</span>,
+    <span class="tok-num">201</span> =&gt; <span class="tok-str">'Created'</span>,
+    <span class="tok-num">301</span> || <span class="tok-num">302</span> =&gt; <span class="tok-str">'Redirect'</span>,
+    <span class="tok-num">404</span> =&gt; <span class="tok-str">'Not Found'</span>,
+    &gt;= <span class="tok-num">500</span> =&gt; <span class="tok-str">'Server Error'</span>,
+    _ =&gt; <span class="tok-str">'Unknown'</span>,
+  };
+}
+
+<span class="tok-fn">print</span>(<span class="tok-fn">describeStatus</span>(<span class="tok-num">200</span>));  <span class="tok-com">// OK</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">describeStatus</span>(<span class="tok-num">302</span>));  <span class="tok-com">// Redirect</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">describeStatus</span>(<span class="tok-num">503</span>));  <span class="tok-com">// Server Error</span></code></pre>
+
+        <p>Features:</p>
+        <ul>
+          <li>Trả value — assignable.</li>
+          <li><code>=&gt;</code> arrow cho mỗi case.</li>
+          <li>Multiple values với <code>||</code>.</li>
+          <li>Relational pattern: <code>&gt;= 500</code>, <code>&lt; 100</code>.</li>
+          <li>Wildcard <code>_</code> cho default.</li>
+          <li><strong>Exhaustive check</strong> — analyzer ép cover hết case (đặc biệt với sealed class).</li>
+        </ul>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📘 Chương 8 đi sâu pattern matching</div>
+          <p>
+            Đây mới là <em>switch expression cơ bản</em>. Chương 8 sẽ học destructuring, object pattern, sealed class + exhaustive switch.
+          </p>
+        </div>
+
+        <h2 id="loops">12. For / for-in / forEach</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// For index — quen từ C</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">5</span>; i++) {
+  <span class="tok-fn">print</span>(i);
+}
+
+<span class="tok-com">// For-in — iterate</span>
+<span class="tok-kw">final</span> names = [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'c'</span>];
+<span class="tok-kw">for</span> (<span class="tok-kw">final</span> name <span class="tok-kw">in</span> names) {
+  <span class="tok-fn">print</span>(name);
+}
+
+<span class="tok-com">// forEach method — function-style</span>
+names.<span class="tok-fn">forEach</span>(<span class="tok-fn">print</span>);
+names.<span class="tok-fn">forEach</span>((n) =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'name: $n'</span>));
+
+<span class="tok-com">// Map iterate</span>
+<span class="tok-kw">final</span> ages = {<span class="tok-str">'Việt'</span>: <span class="tok-num">25</span>, <span class="tok-str">'Anh'</span>: <span class="tok-num">30</span>};
+<span class="tok-kw">for</span> (<span class="tok-kw">final</span> entry <span class="tok-kw">in</span> ages.entries) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'$</span>{entry.key}<span class="tok-str">: $</span>{entry.value}<span class="tok-str">'</span>);
+}</code></pre>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>forEach</code> không break được</div>
+          <p>
+            <code>forEach</code> là method, không phải statement. Không có <code>break</code>:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-com">// ❌ Không work — break không hợp lệ ngoài loop</span>
+names.<span class="tok-fn">forEach</span>((n) {
+  <span class="tok-kw">if</span> (n == <span class="tok-str">'b'</span>) <span class="tok-kw">break</span>;  <span class="tok-com">// Lỗi compile</span>
+});
+
+<span class="tok-com">// ✅ Dùng for-in nếu cần break</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">final</span> n <span class="tok-kw">in</span> names) {
+  <span class="tok-kw">if</span> (n == <span class="tok-str">'b'</span>) <span class="tok-kw">break</span>;
+  <span class="tok-fn">print</span>(n);
+}</code></pre>
+        </div>
+
+        <h2 id="while-do">13. While / do-while</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">var</span> i = <span class="tok-num">0</span>;
+<span class="tok-kw">while</span> (i &lt; <span class="tok-num">5</span>) {
+  <span class="tok-fn">print</span>(i);
+  i++;
+}
+
+<span class="tok-com">// do-while — body chạy ít nhất 1 lần</span>
+<span class="tok-kw">var</span> j = <span class="tok-num">10</span>;
+<span class="tok-kw">do</span> {
+  <span class="tok-fn">print</span>(j);
+  j--;
+} <span class="tok-kw">while</span> (j &gt; <span class="tok-num">5</span>);</code></pre>
+
+        <h2 id="break-continue-label">14. <code>break</code>, <code>continue</code>, label</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Vòng lồng — label để break từ vòng trong</span>
+outer: <span class="tok-kw">for</span> (<span class="tok-kw">var</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">5</span>; i++) {
+  <span class="tok-kw">for</span> (<span class="tok-kw">var</span> j = <span class="tok-num">0</span>; j &lt; <span class="tok-num">5</span>; j++) {
+    <span class="tok-kw">if</span> (i == <span class="tok-num">2</span> &amp;&amp; j == <span class="tok-num">3</span>) {
+      <span class="tok-kw">break</span> outer;   <span class="tok-com">// thoát cả 2 vòng</span>
+    }
+    <span class="tok-fn">print</span>(<span class="tok-str">'$i, $j'</span>);
+  }
+}
+
+<span class="tok-com">// continue — skip đến iteration tiếp theo</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">var</span> n = <span class="tok-num">0</span>; n &lt; <span class="tok-num">10</span>; n++) {
+  <span class="tok-kw">if</span> (n % <span class="tok-num">2</span> == <span class="tok-num">0</span>) <span class="tok-kw">continue</span>;
+  <span class="tok-fn">print</span>(n);  <span class="tok-com">// chỉ in số lẻ</span>
+}</code></pre>
+
+        <h2 id="assert">15. <code>assert</code> — debug check</h2>
+        <p>
+          <code>assert</code> kiểm tra điều kiện. <strong>Chỉ chạy trong debug/JIT mode</strong>. Production AOT build skip hoàn toàn.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-type">int</span> <span class="tok-fn">divide</span>(<span class="tok-type">int</span> a, <span class="tok-type">int</span> b) {
+  <span class="tok-fn">assert</span>(b != <span class="tok-num">0</span>, <span class="tok-str">'Divisor must not be zero'</span>);
+  <span class="tok-kw">return</span> a ~/ b;
+}
+
+<span class="tok-fn">divide</span>(<span class="tok-num">10</span>, <span class="tok-num">2</span>);  <span class="tok-com">// 5</span>
+<span class="tok-fn">divide</span>(<span class="tok-num">10</span>, <span class="tok-num">0</span>);  <span class="tok-com">// Debug: AssertionError. Production: phép chia 0 → exception khác.</span></code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>assert</code> ≠ runtime validation</div>
+          <p>
+            Vì <code>assert</code> bị skip ở production, đừng dùng nó để validate input user. Use cases:
+          </p>
+          <ul>
+            <li>Sanity check internal — invariant của module.</li>
+            <li>Catch dev bug sớm (truyền null vào nơi không nên).</li>
+            <li>Document expected condition (assert is documentation).</li>
+          </ul>
+          <p>Validation input user phải dùng <code>throw</code> + exception thường (chương 5).</p>
+        </div>
+
+        <h2 id="bai-tap" class="exercises">16. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Named param + required</h4>
+          <div class="exercise-body">
+            <p>
+              Viết function <code>connectToServer({required String host, int port = 8080, bool secure = false})</code>.
+              Gọi 3 cách khác nhau và in kết quả.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">void connectToServer({
+  required String host,
+  int port = 8080,
+  bool secure = false,
+}) {
+  final protocol = secure ? 'https' : 'http';
+  print('Connect $protocol://$host:$port');
+}
+
+void main() {
+  connectToServer(host: 'api.example.com');
+  connectToServer(host: 'api.example.com', port: 443, secure: true);
+  connectToServer(secure: true, host: 'api.example.com');
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Multiplier với closure</h4>
+          <div class="exercise-body">
+            <p>
+              Viết <code>Function makeMultiplier(int factor)</code> trả về function nhân factor.
+              Test với <code>final double_ = makeMultiplier(2); double_(5)</code> → 10.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">int Function(int) makeMultiplier(int factor) {
+  return (x) =&gt; x * factor;
+}
+
+void main() {
+  final double_ = makeMultiplier(2);
+  final triple = makeMultiplier(3);
+
+  print(double_(5));   // 10
+  print(triple(5));    // 15
+  print(double_(10));  // 20
+}</code></pre>
+              <p>Note: type <code>int Function(int)</code> rõ hơn dùng <code>Function</code> generic — type-safe.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Switch expression mapping HTTP status</h4>
+          <div class="exercise-body">
+            <p>
+              Cho list status code <code>[200, 201, 301, 404, 500]</code>, dùng switch expression mapping ra
+              <code>['ok', 'created', 'redirect', 'not found', 'error']</code>.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">String describe(int code) =&gt; switch (code) {
+  200 =&gt; 'ok',
+  201 =&gt; 'created',
+  300 || 301 || 302 =&gt; 'redirect',
+  404 =&gt; 'not found',
+  &gt;= 500 =&gt; 'error',
+  _ =&gt; 'unknown',
+};
+
+void main() {
+  final codes = [200, 201, 301, 404, 500];
+  final descs = codes.map(describe).toList();
+  print(descs);  // [ok, created, redirect, not found, error]
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Closure bug fix</h4>
+          <div class="exercise-body">
+            <p>Cho đoạn code:</p>
+            <pre data-lang="dart"><code class="language-dart">List&lt;Function&gt; makeAdders() {
+  final adders = &lt;Function&gt;[];
+  for (var i = 0; i &lt; 3; i++) {
+    adders.add(() =&gt; i);
+  }
+  return adders;
+}
+
+void main() {
+  final fs = makeAdders();
+  for (final f in fs) {
+    print(f());  // mong đợi: 0, 1, 2
+  }
+}</code></pre>
+            <p>Output thực tế là gì? Fix nó để in 0, 1, 2.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>
+                Output: <code>0, 1, 2</code> — không phải bug! Dart capture biến by reference theo iteration của for.
+                Mỗi iteration có biến <code>i</code> mới (do <code>var i</code> trong for-init).
+              </p>
+              <p>
+                Khác JavaScript với <code>var</code> (function scope) — JS gặp bug này, print 3, 3, 3. Phải dùng <code>let</code> để fix.
+              </p>
+              <p>
+                Bài học: Dart for-loop scope đúng. Closure capture đúng biến iteration. Không cần fix.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Sum với for vs fold</h4>
+          <div class="exercise-body">
+            <p>
+              Viết function lấy <code>List&lt;int&gt;</code> trả về sum. Implement 2 cách: (a) for-in loop manual, (b) dùng <code>.fold</code>.
+              So sánh code length và readability.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">// (a) For-in
+int sumLoop(List&lt;int&gt; xs) {
+  var total = 0;
+  for (final x in xs) {
+    total += x;
+  }
+  return total;
+}
+
+// (b) fold — function style
+int sumFold(List&lt;int&gt; xs) =&gt; xs.fold(0, (a, b) =&gt; a + b);
+
+// Hoặc dùng reduce nếu list không rỗng
+int sumReduce(List&lt;int&gt; xs) =&gt; xs.reduce((a, b) =&gt; a + b);
+
+void main() {
+  print(sumLoop([1, 2, 3, 4]));    // 10
+  print(sumFold([1, 2, 3, 4]));    // 10
+  print(sumReduce([1, 2, 3, 4])); // 10
+}</code></pre>
+              <p>
+                <code>.fold</code> ngắn hơn nhưng phải biết signature. For-in dễ đọc cho beginner.
+                Chương 6 sẽ dùng <code>.fold</code> nhiều hơn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">17. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q1</div>
+            <div class="quiz-q-text"><p>Named parameter nullable mặc định có cần <code>required</code> không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. <code>String?</code> đã imply optional (có thể null). <code>required</code> chỉ cần khi non-nullable không có default.</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q2</div>
+            <div class="quiz-q-text"><p>Named parameter non-nullable không có default — cần gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>required</code> keyword. Nếu không có → lỗi compile vì biến phải có giá trị trước khi đọc (definite assignment).</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q3</div>
+            <div class="quiz-q-text"><p>Dart switch có fallthrough mặc định như C không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Mỗi case auto-break. Khác C/Java. Fallthrough phải explicit qua <code>continue label;</code>.</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q4</div>
+            <div class="quiz-q-text"><p>Arrow function <code>=&gt;</code> body có thể chứa nhiều statement không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Chỉ 1 expression. Cần nhiều statement → dùng <code>{ ... }</code> block. Không thể <code>(x) =&gt; { stmt1; stmt2; }</code>.</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q5</div>
+            <div class="quiz-q-text"><p><code>void Function()</code> và <code>Function</code> khác gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>void Function()</code> là type cụ thể — function không param, không return. <code>Function</code> là parent type generic — mất type safety, không biết signature.</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q6</div>
+            <div class="quiz-q-text"><p>Closure capture biến — khi biến outer thay đổi, closure thấy giá trị mới hay cũ?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Mới. Closure capture <em>by reference</em>, không by value. Đổi outer → closure thấy ngay.</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q7</div>
+            <div class="quiz-q-text"><p><code>for (var i = 0; i &lt; 3; i++)</code> vs <code>[0,1,2].forEach((i) {...})</code> — cái nào break được giữa chừng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>for</code> được. <code>forEach</code> không — vì là method, body là function bình thường, không có loop context. Cần break → dùng for-in hoặc <code>xs.takeWhile(...)</code> kiểu functional.</p></div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <div class="quiz-num">Q8</div>
+            <div class="quiz-q-text"><p><code>assert(condition)</code> chạy trong production AOT build không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Không. Chỉ chạy debug/JIT mode (<code>dart run</code>, Flutter debug). Release AOT skip hoàn toàn — performance optimization. Đừng dùng assert cho validation user input.</p></div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">18. Tổng kết</h2>
+        <ul>
+          <li>✅ Function declaration: return type + name + params + body.</li>
+          <li>✅ 3 loại parameter: positional (bắt buộc theo thứ tự), optional positional <code>[ ]</code>, named <code>{ }</code>.</li>
+          <li>✅ <code>required</code> keyword cho named param non-nullable không default.</li>
+          <li>✅ Arrow <code>=&gt;</code> cho function 1-expression.</li>
+          <li>✅ Function là first-class: gán biến, truyền argument, return từ function.</li>
+          <li>✅ Closure capture by reference scope ngoài.</li>
+          <li>✅ Switch expression Dart 3 — exhaustive, trả value.</li>
+          <li>✅ Loop: <code>for</code>, <code>for-in</code>, <code>while</code>, <code>do-while</code>, label break.</li>
+          <li>✅ <code>assert</code> chỉ debug-only.</li>
+        </ul>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — chuẩn bị cho Flutter</div>
+          <p>
+            Pattern bạn sẽ gặp ở Flutter mỗi chương:
+          </p>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-type">BuildContext</span> context) {
+  <span class="tok-kw">return</span> <span class="tok-fn">Column</span>(
+    children: [
+      <span class="tok-fn">Text</span>(<span class="tok-str">'Hello'</span>),
+      <span class="tok-fn">ElevatedButton</span>(
+        onPressed: () =&gt; <span class="tok-fn">print</span>(<span class="tok-str">'tap'</span>),  <span class="tok-com">// lambda</span>
+        child: <span class="tok-kw">const</span> <span class="tok-type">Text</span>(<span class="tok-str">'Submit'</span>),
+      ),
+    ],
+  );
+}</code></pre>
+          <p>
+            Mọi widget constructor dùng named param + <code>required</code> ngầm. <code>onPressed</code> nhận function (callback). Children là List của widget. — pattern này bạn đã quen sau chương 3.
+          </p>
+        </div>
+
+        <h2 id="ket-noi">19. Kết nối tới các chương khác</h2>
+        <ul>
+          <li><a href="chuong4.html"><strong>Chương 4 — Classes:</strong></a> constructor là function đặc biệt + named param + <code>required</code>.</li>
+          <li><strong>Chương 7 — Async:</strong> async function là dạng function với keyword <code>async</code>.</li>
+          <li><strong>Chương 8 — Patterns:</strong> switch expression mở rộng với pattern matching.</li>
+          <li><strong>Flutter từ chương 2:</strong> mọi widget constructor dùng <code>{required ...}</code>.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong2.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">02 · Variables &amp; Types</div>
+          </a>
+          <a href="chuong4.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">04 · Classes &amp; Inheritance</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#function-co-ban">1. Function cơ bản</a></li>
+          <li><a href="#positional">2. Positional params</a></li>
+          <li><a href="#optional-positional">3. Optional positional</a></li>
+          <li><a href="#named">4. Named + required</a></li>
+          <li><a href="#arrow">5. Arrow function</a></li>
+          <li><a href="#lambda">6. Anonymous / lambda</a></li>
+          <li><a href="#first-class">7. First-class function</a></li>
+          <li><a href="#closure">8. Closure</a></li>
+          <li><a href="#if-else">9. if/else</a></li>
+          <li><a href="#switch-classical">10. switch cũ</a></li>
+          <li><a href="#switch-expression">11. switch expression</a></li>
+          <li><a href="#loops">12. For / forEach</a></li>
+          <li><a href="#while-do">13. while / do-while</a></li>
+          <li><a href="#break-continue-label">14. break + label</a></li>
+          <li><a href="#assert">15. assert</a></li>
+          <li><a href="#bai-tap">16. Bài tập</a></li>
+          <li><a href="#quiz">17. Quiz</a></li>
+          <li><a href="#tong-ket">18. Tổng kết</a></li>
+          <li><a href="#ket-noi">19. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Dart Chương 3 · Pillar 9 — IT Basic<br/>
+        <a href="chuong2.html">← Chương 2</a> · <a href="../index.html">Dart sub-pillar</a> · <a href="chuong4.html">Chương 4 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

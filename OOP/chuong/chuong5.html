@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — Structural Patterns</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 05 · Structural Patterns</div>
+      <h1>Structural Patterns — 7 mẫu cấu trúc</h1>
+      <p class="subtitle">Adapter · Bridge · Composite · Decorator · Facade · Flyweight · Proxy. Cách ghép các đối tượng thành cấu trúc lớn linh hoạt.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#intro">1. Tổng quan Structural</a></li>
+        <li><a href="#adapter">2. Adapter</a></li>
+        <li><a href="#bridge">3. Bridge</a></li>
+        <li><a href="#composite">4. Composite</a></li>
+        <li><a href="#decorator">5. Decorator</a></li>
+        <li><a href="#facade">6. Facade</a></li>
+        <li><a href="#flyweight">7. Flyweight</a></li>
+        <li><a href="#proxy">8. Proxy</a></li>
+        <li><a href="#summary">9. So sánh nhanh</a></li>
+        <li><a href="#exercises">10. Bài tập</a></li>
+        <li><a href="#quiz">11. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="intro">
+        <h2>1. Tổng quan Structural Patterns</h2>
+        <p>
+          Nhóm này tập trung vào <strong>cách các class và object được tổ chức thành cấu trúc lớn hơn</strong>. Mỗi pattern giải
+          một vấn đề tổ chức cụ thể: hợp nhất API không tương thích (Adapter), tách abstraction khỏi implementation (Bridge),
+          xử lý cây (Composite), thêm chức năng động (Decorator), v.v.
+        </p>
+
+        <table>
+          <thead><tr><th>Pattern</th><th>Một câu</th></tr></thead>
+          <tbody>
+            <tr><td>Adapter</td><td>Chuyển interface không tương thích → tương thích</td></tr>
+            <tr><td>Bridge</td><td>Tách abstraction (cái gì) khỏi implementation (cách)</td></tr>
+            <tr><td>Composite</td><td>Cây object — leaf và composite cùng interface</td></tr>
+            <tr><td>Decorator</td><td>Thêm trách nhiệm động bằng cách bao bọc</td></tr>
+            <tr><td>Facade</td><td>Một interface đơn giản che hệ con phức tạp</td></tr>
+            <tr><td>Flyweight</td><td>Chia sẻ object để tiết kiệm memory</td></tr>
+            <tr><td>Proxy</td><td>Object đại diện kiểm soát truy cập đến object thật</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Adapter -->
+      <section id="adapter">
+        <h2>2. Adapter</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №6 — STRUCTURAL</div>
+          <h3>Adapter</h3>
+          <p class="intent">Chuyển interface của một class thành interface khác mà client mong đợi. Cho phép class hoạt động cùng nhau mà không sửa code.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có code legacy hoặc thư viện third-party với interface không tương thích với code mới.</span>
+            <span class="key">Lợi ích</span>
+            <span>Tích hợp không sửa source. Bảo vệ code mới khỏi đặc tính của code cũ.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Thêm 1 lớp gián tiếp.</span>
+          </div>
+        </div>
+
+        <h3>2.1. Use case kinh điển</h3>
+        <p>App của bạn dùng <code>PaymentProcessor</code> nội bộ. Sếp bảo tích hợp Stripe — nhưng Stripe SDK có signature khác:</p>
+
+<pre><code class="language-typescript">// Interface app dùng
+interface PaymentProcessor {
+  pay(amount: number, currency: string): Promise&lt;{ id: string }&gt;;
+}
+
+// Stripe SDK (third-party)
+class StripeAPI {
+  async createCharge(opts: { amountCents: number; currency: string; source: string }) {
+    return { charge_id: 'ch_' + Date.now() };
+  }
+}
+
+// Adapter
+class StripeAdapter implements PaymentProcessor {
+  constructor(private stripe: StripeAPI, private source: string) {}
+
+  async pay(amount: number, currency: string) {
+    const result = await this.stripe.createCharge({
+      amountCents: Math.round(amount * 100),
+      currency: currency.toLowerCase(),
+      source: this.source,
+    });
+    return { id: result.charge_id };
+  }
+}
+
+// App dùng adapter, không biết về Stripe
+const processor: PaymentProcessor = new StripeAdapter(new StripeAPI(), 'tok_xxx');
+await processor.pay(100, 'USD');</code></pre>
+
+        <h3>2.2. Class adapter vs Object adapter</h3>
+        <ul>
+          <li><strong>Class adapter</strong> — kế thừa từ adaptee + implement target interface. Cần multiple inheritance.</li>
+          <li><strong>Object adapter</strong> — chứa adaptee như field (composition). Linh hoạt hơn — TypeScript chỉ làm được cách này.</li>
+        </ul>
+
+        <h3>2.3. Khi nào dùng</h3>
+        <ul>
+          <li>Tích hợp third-party API có signature khác.</li>
+          <li>Migrate dần từ legacy class sang interface mới.</li>
+          <li>Test: tạo Adapter cho mock implementation.</li>
+        </ul>
+      </section>
+
+      <!-- Bridge -->
+      <section id="bridge">
+        <h2>3. Bridge</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №7 — STRUCTURAL</div>
+          <h3>Bridge</h3>
+          <p class="intent">Tách abstraction khỏi implementation để cả hai có thể vary độc lập.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Hierarchy chéo: M loại × N implementation = M×N class. Vd: Shape × Renderer.</span>
+            <span class="key">Lợi ích</span>
+            <span>Tránh class explosion. Đổi implementation runtime.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Phức tạp hơn 1 hierarchy thông thường.</span>
+          </div>
+        </div>
+
+        <h3>3.1. Vấn đề: class explosion</h3>
+        <p>App vẽ shape (Circle, Square, Triangle) trên nhiều platform render (Canvas, SVG, WebGL). Cách "naive":</p>
+
+        <div class="ascii">          Shape
+       /    |    \
+   Circle Square Triangle
+   /  |     /  |    /  |
+ ...  ...  ... ... ... ...
+ Mỗi shape × mỗi renderer = 1 class
+ → 3 × 3 = 9 class. Thêm Pentagon → 3 class mới. Thêm WebGPU → 3 class mới.</div>
+
+        <h3>3.2. Bridge giải quyết</h3>
+
+<pre><code class="language-typescript">// Implementation hierarchy (Renderer)
+interface Renderer {
+  drawCircle(x: number, y: number, r: number): void;
+  drawRect(x: number, y: number, w: number, h: number): void;
+}
+
+class CanvasRenderer implements Renderer {
+  drawCircle(x: number, y: number, r: number) { console.log(`Canvas: circle (${x},${y}) r=${r}`); }
+  drawRect(x: number, y: number, w: number, h: number) { console.log(`Canvas: rect`); }
+}
+
+class SvgRenderer implements Renderer {
+  drawCircle(x: number, y: number, r: number) { console.log(`SVG: &lt;circle/&gt;`); }
+  drawRect(x: number, y: number, w: number, h: number) { console.log(`SVG: &lt;rect/&gt;`); }
+}
+
+// Abstraction hierarchy (Shape)
+abstract class Shape {
+  constructor(protected renderer: Renderer) {}
+  abstract draw(): void;
+}
+
+class Circle extends Shape {
+  constructor(renderer: Renderer, private x: number, private y: number, private r: number) {
+    super(renderer);
+  }
+  draw() { this.renderer.drawCircle(this.x, this.y, this.r); }
+}
+
+class Square extends Shape {
+  constructor(renderer: Renderer, private x: number, private y: number, private size: number) {
+    super(renderer);
+  }
+  draw() { this.renderer.drawRect(this.x, this.y, this.size, this.size); }
+}
+
+// Sử dụng:
+const canvas = new CanvasRenderer();
+const svg = new SvgRenderer();
+
+new Circle(canvas, 10, 10, 5).draw();
+new Circle(svg, 10, 10, 5).draw();   // cùng circle, khác renderer</code></pre>
+
+        <p>3 shape + 3 renderer = 6 class (thay vì 9). Thêm Pentagon → 1 class. Thêm WebGL renderer → 1 class.</p>
+
+        <h3>3.3. Bridge vs Adapter</h3>
+        <p>
+          Adapter: <em>fix sau</em> — class đã tồn tại không tương thích, ta wrap. Bridge: <em>thiết kế trước</em> — biết hệ sẽ có 2 chiều biến đổi, tách từ đầu.
+        </p>
+      </section>
+
+      <!-- Composite -->
+      <section id="composite">
+        <h2>4. Composite</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №8 — STRUCTURAL</div>
+          <h3>Composite</h3>
+          <p class="intent">Compose object thành cấu trúc cây để biểu diễn hierarchy part-whole. Client xử lý leaf và composite một cách đồng nhất.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có cây/đệ quy: file system (file + folder), UI (button + panel chứa button), org chart (employee + team).</span>
+            <span class="key">Lợi ích</span>
+            <span>Client code đơn giản — không phân biệt leaf/composite.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Interface chung có thể "phình" để hỗ trợ cả leaf và composite.</span>
+          </div>
+        </div>
+
+        <h3>4.1. Implementation</h3>
+
+<pre><code class="language-typescript">interface FileSystemNode {
+  name: string;
+  size(): number;
+  print(indent?: string): void;
+}
+
+class File implements FileSystemNode {
+  constructor(public name: string, private bytes: number) {}
+  size() { return this.bytes; }
+  print(indent = '') { console.log(`${indent}📄 ${this.name} (${this.bytes}B)`); }
+}
+
+class Folder implements FileSystemNode {
+  private children: FileSystemNode[] = [];
+
+  constructor(public name: string) {}
+
+  add(node: FileSystemNode): this {
+    this.children.push(node);
+    return this;
+  }
+
+  size(): number {
+    return this.children.reduce((sum, c) =&gt; sum + c.size(), 0);
+  }
+
+  print(indent = '') {
+    console.log(`${indent}📁 ${this.name}/ (${this.size()}B total)`);
+    this.children.forEach(c =&gt; c.print(indent + '  '));
+  }
+}
+
+// Sử dụng:
+const root = new Folder('project')
+  .add(new File('package.json', 500))
+  .add(new Folder('src')
+    .add(new File('index.ts', 1500))
+    .add(new File('utils.ts', 800))
+  );
+
+root.print();
+console.log('Total size:', root.size());</code></pre>
+
+        <h3>4.2. Use cases thực tế</h3>
+        <ul>
+          <li>File system (như trên).</li>
+          <li>UI tree: <code>Component</code> với <code>Container</code> chứa <code>Component</code> con.</li>
+          <li>HTML/XML DOM.</li>
+          <li>Tổ chức công ty (employee, team, department).</li>
+          <li>Math expression: số (leaf) và biểu thức (composite).</li>
+          <li>Menu hierarchy.</li>
+        </ul>
+
+        <h3>4.3. Variant: Composite với uniform vs safe interface</h3>
+        <ul>
+          <li><strong>Uniform</strong>: cả leaf và composite có cùng API (kể cả <code>add</code>, <code>remove</code>) — gọi <code>file.add(...)</code> không lỗi compile, nhưng có thể no-op hoặc throw.</li>
+          <li><strong>Safe</strong>: chỉ composite có <code>add</code>/<code>remove</code> — type-safe nhưng client phải check type.</li>
+        </ul>
+      </section>
+
+      <!-- Decorator -->
+      <section id="decorator">
+        <h2>5. Decorator</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №9 — STRUCTURAL</div>
+          <h3>Decorator</h3>
+          <p class="intent">Thêm trách nhiệm cho object động bằng cách bao bọc trong wrapper. Linh hoạt hơn nhiều inheritance.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Cần thêm chức năng (logging, caching, retry, validation) cho object mà không muốn subclass cho mọi tổ hợp.</span>
+            <span class="key">Lợi ích</span>
+            <span>Tổ hợp tự do nhiều decorator. Theo OCP — thêm chức năng không sửa class gốc.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Có thể tạo nhiều layer khó debug.</span>
+          </div>
+        </div>
+
+        <h3>5.1. Vấn đề: combinatorial inheritance</h3>
+<pre><code class="language-typescript">class Coffee { cost() { return 5; } }
+class CoffeeWithMilk extends Coffee { cost() { return super.cost() + 1; } }
+class CoffeeWithSugar extends Coffee { cost() { return super.cost() + 0.5; } }
+class CoffeeWithMilkAndSugar extends CoffeeWithMilk { /* + 0.5 */ }
+class CoffeeWithMilkAndSugarAndCaramel extends ... ;
+// Combinatorial explosion! 3 topping = 8 class</code></pre>
+
+        <h3>5.2. Decorator giải</h3>
+
+<pre><code class="language-typescript">interface Beverage {
+  cost(): number;
+  description(): string;
+}
+
+class Coffee implements Beverage {
+  cost() { return 5; }
+  description() { return 'Coffee'; }
+}
+
+class Tea implements Beverage {
+  cost() { return 3; }
+  description() { return 'Tea'; }
+}
+
+// Decorator base
+abstract class BeverageDecorator implements Beverage {
+  constructor(protected wrapped: Beverage) {}
+  abstract cost(): number;
+  abstract description(): string;
+}
+
+class WithMilk extends BeverageDecorator {
+  cost() { return this.wrapped.cost() + 1; }
+  description() { return this.wrapped.description() + ' + milk'; }
+}
+
+class WithSugar extends BeverageDecorator {
+  cost() { return this.wrapped.cost() + 0.5; }
+  description() { return this.wrapped.description() + ' + sugar'; }
+}
+
+class WithCaramel extends BeverageDecorator {
+  cost() { return this.wrapped.cost() + 2; }
+  description() { return this.wrapped.description() + ' + caramel'; }
+}
+
+// Tổ hợp tự do:
+let drink: Beverage = new Coffee();
+drink = new WithMilk(drink);
+drink = new WithSugar(drink);
+drink = new WithCaramel(drink);
+
+console.log(drink.description());   // Coffee + milk + sugar + caramel
+console.log(drink.cost());           // 8.5</code></pre>
+
+        <h3>5.3. Use cases mạnh</h3>
+        <ul>
+          <li><strong>Java I/O</strong>: <code>BufferedInputStream(GzipInputStream(FileInputStream(file)))</code> — combo decorator.</li>
+          <li><strong>Express middleware</strong>: <code>app.use(logger).use(auth).use(cors)</code> — chuỗi handler.</li>
+          <li><strong>HOC trong React</strong>: <code>withAuth(withLogging(MyComponent))</code>.</li>
+          <li>Logging/caching/retry quanh function call.</li>
+        </ul>
+
+        <h3>5.4. Decorator vs Inheritance</h3>
+        <p>Inheritance "đúng" với is-a chuyên biệt; Decorator "đúng" khi muốn <em>mix-and-match feature</em>. Decorator có thể thêm/bỏ runtime, inheritance không.</p>
+      </section>
+
+      <!-- Facade -->
+      <section id="facade">
+        <h2>6. Facade</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №10 — STRUCTURAL</div>
+          <h3>Facade</h3>
+          <p class="intent">Cung cấp interface đơn giản và thống nhất cho một subsystem phức tạp.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Subsystem có nhiều class, client phải gọi đúng thứ tự, biết quá nhiều chi tiết.</span>
+            <span class="key">Lợi ích</span>
+            <span>Client viết ít code, ít coupling với subsystem.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Facade có thể trở thành "god object" nếu không kiểm soát.</span>
+          </div>
+        </div>
+
+        <h3>6.1. Ví dụ</h3>
+
+<pre><code class="language-typescript">// Subsystem phức tạp với nhiều class
+class VideoFile { constructor(public path: string) {} }
+class CodecFactory { static extract(file: VideoFile) { return new MPEG4Codec(); } }
+class MPEG4Codec {}
+class OggCodec {}
+class BitrateReader { static read(file: VideoFile, codec: any) { return Buffer.alloc(1024); } }
+class AudioMixer { fix(buffer: Buffer) { return buffer; } }
+
+// Facade
+class VideoConverter {
+  convert(filename: string, format: string): Buffer {
+    const file = new VideoFile(filename);
+    const sourceCodec = CodecFactory.extract(file);
+    const destCodec = format === 'mp4' ? new MPEG4Codec() : new OggCodec();
+    const buffer = BitrateReader.read(file, sourceCodec);
+    const mixer = new AudioMixer();
+    return mixer.fix(buffer);
+  }
+}
+
+// Client chỉ cần:
+const converter = new VideoConverter();
+const result = converter.convert('video.avi', 'mp4');</code></pre>
+
+        <h3>6.2. Use cases hiện đại</h3>
+        <ul>
+          <li><strong>SDK</strong>: AWS SDK <code>s3.upload()</code> ẩn nhiều bước (multipart, retry, signing).</li>
+          <li><strong>Service layer</strong> trong app: <code>OrderService.checkout()</code> orchestrate Repository, Mailer, Inventory, Payment.</li>
+          <li><strong>API gateway</strong>: 1 endpoint gọi nhiều microservice phía sau.</li>
+        </ul>
+
+        <p>Facade là pattern <em>tự nhiên</em> — bạn đã viết Facade rất nhiều lần mà không gọi tên.</p>
+      </section>
+
+      <!-- Flyweight -->
+      <section id="flyweight">
+        <h2>7. Flyweight</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №11 — STRUCTURAL</div>
+          <h3>Flyweight</h3>
+          <p class="intent">Chia sẻ object để hỗ trợ số lượng cực lớn object nhỏ một cách hiệu quả về memory.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Cần triệu+ object giống nhau (particles, cây 3D forest, character trong text editor).</span>
+            <span class="key">Lợi ích</span>
+            <span>Giảm RAM cực mạnh — chia sẻ phần "intrinsic" giống nhau.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Code phức tạp; tách "intrinsic" (sharable) vs "extrinsic" (per-instance) khó.</span>
+          </div>
+        </div>
+
+        <h3>7.1. Khái niệm intrinsic vs extrinsic</h3>
+        <ul>
+          <li><strong>Intrinsic state</strong> — không đổi, có thể chia sẻ (vd: sprite của particle, mesh của tree).</li>
+          <li><strong>Extrinsic state</strong> — riêng từng instance (vd: vị trí, rotation của particle).</li>
+        </ul>
+
+        <h3>7.2. Implementation</h3>
+
+<pre><code class="language-typescript">// Heavy data — share được
+class TreeType {
+  constructor(
+    public readonly name: string,
+    public readonly color: string,
+    public readonly texture: ArrayBuffer,   // 1 MB texture
+  ) {}
+
+  draw(x: number, y: number) {
+    // Render với x, y (extrinsic) + texture (intrinsic)
+  }
+}
+
+// Flyweight factory đảm bảo TreeType chia sẻ
+class TreeTypeFactory {
+  private static cache = new Map&lt;string, TreeType&gt;();
+
+  static get(name: string, color: string, texture: ArrayBuffer): TreeType {
+    const key = `${name}|${color}`;
+    if (!this.cache.has(key)) {
+      this.cache.set(key, new TreeType(name, color, texture));
+    }
+    return this.cache.get(key)!;
+  }
+}
+
+// Tree thật — chỉ có position
+class Tree {
+  constructor(
+    public x: number,
+    public y: number,
+    public type: TreeType,   // shared!
+  ) {}
+
+  draw() { this.type.draw(this.x, this.y); }
+}
+
+// Forest 1 triệu cây nhưng chỉ 5 loại
+const forest: Tree[] = [];
+for (let i = 0; i &lt; 1_000_000; i++) {
+  const type = TreeTypeFactory.get('Oak', 'green', oakTexture);
+  forest.push(new Tree(Math.random() * 1000, Math.random() * 1000, type));
+}
+
+// 1M tree × 16 byte (2 number + ref) = 16 MB
+// Nếu mỗi tree giữ texture 1MB → 1 TB!</code></pre>
+
+        <h3>7.3. Use cases thực</h3>
+        <ul>
+          <li>Game: particle system, terrain, characters.</li>
+          <li>Text editor: glyph cache (1 char "A" có cùng glyph data, khác chỉ position).</li>
+          <li>Web browser: tab cache shared state.</li>
+          <li>String interning trong Java/.NET — string literal giống nhau dùng chung 1 instance.</li>
+        </ul>
+
+        <p>Trong app web thông thường ít gặp. Khi gặp → giảm RAM 100×.</p>
+      </section>
+
+      <!-- Proxy -->
+      <section id="proxy">
+        <h2>8. Proxy</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №12 — STRUCTURAL</div>
+          <h3>Proxy</h3>
+          <p class="intent">Cung cấp object đại diện kiểm soát truy cập đến object khác. Cùng interface với object thật.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Cần kiểm soát truy cập: lazy loading, caching, access control, logging, remote.</span>
+            <span class="key">Lợi ích</span>
+            <span>Thêm kiểm soát mà client không biết. SOLID OCP.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Thêm latency từ proxy.</span>
+          </div>
+        </div>
+
+        <h3>8.1. Các loại Proxy</h3>
+        <ul>
+          <li><strong>Virtual Proxy</strong> — lazy initialization (chỉ khởi tạo khi cần).</li>
+          <li><strong>Protection Proxy</strong> — kiểm soát quyền truy cập.</li>
+          <li><strong>Caching Proxy</strong> — lưu kết quả gọi.</li>
+          <li><strong>Logging Proxy</strong> — ghi log mọi call.</li>
+          <li><strong>Remote Proxy</strong> — đại diện object trên server khác (RPC).</li>
+          <li><strong>Smart Reference</strong> — count reference, cleanup tự động.</li>
+        </ul>
+
+        <h3>8.2. Virtual Proxy — lazy loading</h3>
+
+<pre><code class="language-typescript">interface Image {
+  display(): void;
+}
+
+class HighResImage implements Image {
+  constructor(private filename: string) {
+    console.log(`Loading ${filename} from disk...`);   // chậm
+  }
+  display() { console.log(`Displaying ${this.filename}`); }
+}
+
+class ImageProxy implements Image {
+  private real: HighResImage | null = null;
+
+  constructor(private filename: string) {}
+
+  display() {
+    if (!this.real) {
+      this.real = new HighResImage(this.filename);   // lazy load
+    }
+    this.real.display();
+  }
+}
+
+// Tạo 100 ảnh — không load disk
+const images = Array.from({ length: 100 }, (_, i) =&gt; new ImageProxy(`img${i}.jpg`));
+
+// Khi user scroll đến ảnh 5 → load
+images[5].display();</code></pre>
+
+        <h3>8.3. Caching Proxy</h3>
+<pre><code class="language-typescript">interface UserApi {
+  getUser(id: string): Promise&lt;User&gt;;
+}
+
+class HttpUserApi implements UserApi {
+  async getUser(id: string) {
+    return fetch(`/api/users/${id}`).then(r =&gt; r.json());
+  }
+}
+
+class CachedUserApi implements UserApi {
+  private cache = new Map&lt;string, User&gt;();
+
+  constructor(private real: UserApi) {}
+
+  async getUser(id: string) {
+    if (this.cache.has(id)) return this.cache.get(id)!;
+    const user = await this.real.getUser(id);
+    this.cache.set(id, user);
+    return user;
+  }
+}
+
+// Client không biết có cache:
+const api: UserApi = new CachedUserApi(new HttpUserApi());</code></pre>
+
+        <h3>8.4. JavaScript Proxy native</h3>
+        <p>JS có <code>Proxy</code> built-in cho meta-programming:</p>
+
+<pre><code class="language-javascript">const target = { name: 'Alice', age: 30 };
+
+const proxy = new Proxy(target, {
+  get(obj, prop) {
+    console.log(`Reading ${String(prop)}`);
+    return obj[prop];
+  },
+  set(obj, prop, value) {
+    if (prop === 'age' &amp;&amp; value &lt; 0) throw new Error('age &gt;= 0');
+    obj[prop] = value;
+    return true;
+  },
+});
+
+proxy.name;       // logs "Reading name"
+proxy.age = -5;   // throws</code></pre>
+
+        <p>Vue 3 reactivity, Mobx, Immer dùng Proxy native cho dirty tracking.</p>
+
+        <h3>8.5. Proxy vs Decorator</h3>
+        <p>Cấu trúc giống — đều wrap object cùng interface. Khác ở <em>ý đồ</em>:</p>
+        <ul>
+          <li>Decorator: <em>thêm chức năng</em> (cộng dồn).</li>
+          <li>Proxy: <em>kiểm soát truy cập</em> (gating).</li>
+        </ul>
+
+        <p>Trong thực tế ranh giới mờ — chọn tên theo intent.</p>
+      </section>
+
+      <section id="summary">
+        <h2>9. So sánh nhanh 7 Structural Patterns</h2>
+
+        <table>
+          <thead><tr><th>Pattern</th><th>Cấu trúc</th><th>Intent</th></tr></thead>
+          <tbody>
+            <tr><td>Adapter</td><td>Wrap với interface khác</td><td>Tương thích interface</td></tr>
+            <tr><td>Bridge</td><td>2 hierarchy song song nối qua composition</td><td>Tách abstraction khỏi implementation</td></tr>
+            <tr><td>Composite</td><td>Cây với leaf và composite cùng interface</td><td>Xử lý đồng nhất phần và toàn thể</td></tr>
+            <tr><td>Decorator</td><td>Wrap cùng interface, cộng dồn</td><td>Thêm chức năng động</td></tr>
+            <tr><td>Facade</td><td>1 class che subsystem</td><td>Đơn giản hóa giao diện</td></tr>
+            <tr><td>Flyweight</td><td>Chia sẻ object intrinsic</td><td>Tiết kiệm memory</td></tr>
+            <tr><td>Proxy</td><td>Wrap cùng interface, gating</td><td>Kiểm soát truy cập</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Adapter vs Decorator vs Proxy — phân biệt nhanh</span>
+          Cả 3 đều wrap. Khác ở <em>intent</em>:
+          <strong>Adapter</strong> = chuyển interface (A → B).
+          <strong>Decorator</strong> = thêm feature (A → A++).
+          <strong>Proxy</strong> = kiểm soát/lazy (A → A nhưng có gate).
+        </div>
+      </section>
+
+      <section id="exercises">
+        <h2>10. Bài tập</h2>
+
+        <ol>
+          <li>Adapter: bạn có legacy class <code>OldLogger.write(level, msg, time)</code>. App mới mong đợi <code>Logger.log(msg)</code>. Viết adapter.</li>
+
+          <li>Bridge: app vẽ Shape (Circle, Square) trên Canvas/SVG. Implement Bridge với 2 hierarchy. Thêm Triangle và WebGL renderer — đếm số class mới.</li>
+
+          <li>Composite: file system với File và Folder. Method <code>find(name)</code> trả về node có tên đó (recursive). <code>print()</code> với indentation.</li>
+
+          <li>Decorator: Coffee với 3 topping (milk, sugar, caramel). Implement Decorator. Tạo "Latte triple sugar" và in ra cost + description.</li>
+
+          <li>Facade: bạn có 4 class <code>OrderRepository</code>, <code>InventoryService</code>, <code>PaymentGateway</code>, <code>EmailService</code>. Tạo <code>CheckoutFacade</code> với 1 method <code>checkout(order)</code> orchestrate.</li>
+
+          <li>Flyweight: app render 100k dot trong canvas, mỗi dot có (x, y, color). Có 5 màu khác nhau. Áp dụng Flyweight để chia sẻ Color object.</li>
+
+          <li>Proxy: tạo CachedHttpProxy wrap fetch API. Cache TTL 60 giây. Demo benefit.</li>
+
+          <li>Phân biệt với ví dụ: Adapter vs Decorator vs Proxy.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>11. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 5</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Adapter pattern phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cần thêm feature</li>
+              <li class="quiz-option">Cần kiểm soát truy cập</li>
+              <li class="quiz-option">Có 2 interface không tương thích cần làm việc cùng nhau (vd: third-party SDK)</li>
+              <li class="quiz-option">Object quá lớn</li>
+            </ul>
+            <div class="quiz-explain">Adapter chuyển interface A thành B. Use case kinh điển: tích hợp third-party (Stripe SDK signature khác PaymentProcessor app), migrate dần legacy class.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Bridge pattern khác Adapter ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Bridge phức tạp hơn</li>
+              <li class="quiz-option">Adapter "fix sau" cho interface đã có; Bridge "thiết kế trước" với 2 chiều biến đổi</li>
+              <li class="quiz-option">Bridge không có wrapping</li>
+              <li class="quiz-option">Bridge chỉ cho UI</li>
+            </ul>
+            <div class="quiz-explain">Adapter là phản ứng (interface không khớp đã tồn tại). Bridge là thiết kế chủ động (biết trước có 2 chiều biến đổi: Shape × Renderer, OS × UI). Tách 2 hierarchy nối qua composition để tránh class explosion.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Composite pattern hữu ích khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Object có 1 field</li>
+              <li class="quiz-option">Cần Singleton</li>
+              <li class="quiz-option">Class abstract</li>
+              <li class="quiz-option">Có cấu trúc cây/đệ quy nơi leaf và composite cần xử lý đồng nhất</li>
+            </ul>
+            <div class="quiz-explain">File system (file + folder), UI tree (component + container), org chart, math expression — leaf và composite cùng interface giúp client code không phân biệt. Recursive size/print/render tự nhiên.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Decorator vs Inheritance:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Decorator linh hoạt — combine feature runtime, tránh class explosion combinatorial</li>
+              <li class="quiz-option">Inheritance luôn tốt hơn</li>
+              <li class="quiz-option">Decorator chỉ cho Java</li>
+              <li class="quiz-option">Hai cái như nhau</li>
+            </ul>
+            <div class="quiz-explain">3 topping qua inheritance = 8 class (combinatorial). Qua decorator = 3 class, combine tự do. Express middleware, React HOC, Java I/O đều dùng pattern này.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Facade pattern:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cấm truy cập subsystem</li>
+              <li class="quiz-option">Force Singleton</li>
+              <li class="quiz-option">Cung cấp interface đơn giản che subsystem phức tạp; client viết ít code, ít coupling</li>
+              <li class="quiz-option">Yêu cầu inheritance</li>
+            </ul>
+            <div class="quiz-explain">Facade tự nhiên xuất hiện ở: SDK (s3.upload ẩn multipart/retry), service layer (OrderService.checkout orchestrate), API gateway. Bạn đã viết Facade nhiều lần mà không gọi tên.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Flyweight tách "intrinsic" và "extrinsic":</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cả hai đều unique</li>
+              <li class="quiz-option">Intrinsic (sharable, không đổi như texture); extrinsic (per-instance như x, y)</li>
+              <li class="quiz-option">Intrinsic là private, extrinsic là public</li>
+              <li class="quiz-option">Không liên quan</li>
+            </ul>
+            <div class="quiz-explain">1M cây trong forest game. Intrinsic = mesh + texture (5 loại cây = 5 đối tượng). Extrinsic = (x, y, scale, rotation) per cây. Tiết kiệm RAM 100×+. Game engines, text editors dùng nhiều.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Proxy KHÔNG phù hợp dùng cho:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Lazy loading object đắt</li>
+              <li class="quiz-option">Caching kết quả method call</li>
+              <li class="quiz-option">Access control / authentication check</li>
+              <li class="quiz-option">Thêm chức năng mới mở rộng API (đó là Decorator)</li>
+            </ul>
+            <div class="quiz-explain">Proxy gating/kiểm soát, không thêm feature mới. Decorator để thêm. Cấu trúc giống nhau (wrap cùng interface), khác ở intent. Câu hỏi phỏng vấn cổ điển: "Decorator vs Proxy?".</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">JavaScript Proxy (native):</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cho meta-programming: trap get/set/apply, dùng cho Vue reactivity, MobX, Immer</li>
+              <li class="quiz-option">Chỉ cho Node.js</li>
+              <li class="quiz-option">Bị deprecated</li>
+              <li class="quiz-option">Chỉ wrap function</li>
+            </ul>
+            <div class="quiz-explain"><code>new Proxy(target, handler)</code> với handler có get/set/apply trap. Vue 3 reactivity, MobX state, Immer immutable updates đều xây trên Proxy. Native JS, không phải pattern Proxy GoF nhưng cùng tên.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 5 (12/23 patterns). Tiếp theo: <a href="chuong6.html"><strong>Chương 6 — Behavioral Part 1 (6 mẫu) →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 5 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

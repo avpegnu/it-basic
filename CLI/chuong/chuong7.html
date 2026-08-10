@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7: Shell scripting — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong6.html">← Chương 6</a></li>
+        <li><a href="chuong7.html" class="active">Chương 7</a></li>
+        <li><a href="chuong8.html">Chương 8 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 07 — Shell scripting</h1>
+        <p>
+          Tới đây bạn đã quen với <em>từng lệnh đơn lẻ</em>. Chương này gói chúng lại thành
+          <strong>script</strong> — file <code>.sh</code> chạy được, lặp lại được, share được.
+          Mục tiêu: viết script <em>ngắn nhưng vững</em>, không cần chuyển sang Python cho mấy việc tự động.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. Script đầu tiên</h2>
+      <p>Một shell script chỉ là <strong>file text chứa các lệnh</strong> bạn vẫn gõ trên terminal, cộng thêm 1 dòng đầu tiên đặc biệt gọi là <em>shebang</em>.</p>
+
+      <pre><code><span class="comment"># file: hello.sh</span>
+<span class="output">#!/usr/bin/env bash</span>
+echo <span class="output">"Xin chào, $(whoami)!"</span>
+echo <span class="output">"Hôm nay là $(date +%Y-%m-%d)"</span></code></pre>
+
+      <p>Lưu file rồi cấp quyền chạy và gọi nó:</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">chmod</span> <span class="flag">+x</span> hello.sh   <span class="comment"># cấp quyền execute</span>
+<span class="prompt">$ </span><span class="cmd">./hello.sh</span>           <span class="comment"># chạy bằng path tương đối</span>
+<span class="output">Xin chào, vietanh!
+Hôm nay là 2026-05-08</span></code></pre>
+
+      <h3>Vì sao phải có <code>./</code>?</h3>
+      <p>Shell chỉ tự tìm lệnh trong các thư mục liệt kê ở biến <code>$PATH</code>. Folder hiện tại không nằm trong đó (vì lý do bảo mật) → bạn phải nói rõ "lấy file <em>ở thư mục hiện tại</em>" bằng <code>./</code>.</p>
+
+      <h3>Shebang: <code>bash</code> vs <code>zsh</code> vs <code>sh</code></h3>
+      <table>
+        <thead><tr><th>Shebang</th><th>Ý nghĩa</th><th>Khi nào dùng</th></tr></thead>
+        <tbody>
+          <tr><td><code>#!/bin/sh</code></td><td>POSIX shell — chuẩn tối thiểu, thiếu nhiều tính năng</td><td>Script cần chạy trên mọi Unix (cả container Alpine)</td></tr>
+          <tr><td><code>#!/bin/bash</code></td><td>Bash ở path cố định</td><td>Linux thì OK; macOS có bash cũ ở <code>/bin/bash</code></td></tr>
+          <tr><td><code>#!/usr/bin/env bash</code></td><td>Tìm bash mới nhất trong <code>$PATH</code></td><td><strong>Khuyến nghị</strong> — portable nhất</td></tr>
+          <tr><td><code>#!/usr/bin/env zsh</code></td><td>Dùng zsh</td><td>Khi script cần tính năng riêng của zsh (hiếm khi cần)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Vì sao mặc định nên là bash, không zsh?</div>
+        Mặc dù macOS đặt zsh làm shell tương tác mặc định, <strong>script tự động hóa nên viết bằng bash</strong>: cú pháp ổn định hơn, có ở mọi Linux server, tài liệu phong phú. Zsh để dùng tương tác (chương 6 alias/zshrc); bash để viết script.
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Biến &amp; quoting</h2>
+
+      <h3>Khai báo &amp; đọc biến</h3>
+      <pre><code>name=<span class="output">"Việt"</span>          <span class="comment"># KHÔNG có space quanh dấu =</span>
+greeting=<span class="output">"Xin chào, $name"</span>
+<span class="cmd">echo</span> <span class="output">"$greeting"</span>     <span class="comment"># → Xin chào, Việt</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Lỗi kinh điển: space quanh dấu =</div>
+        <code>name = "Việt"</code> <strong>SAI</strong> — bash hiểu là "chạy lệnh tên <code>name</code> với 2 arg <code>=</code> và <code>"Việt"</code>". Phải viết liền: <code>name="Việt"</code>.
+      </div>
+
+      <h3>Single quote vs double quote</h3>
+      <table>
+        <thead><tr><th>Loại</th><th>Hành vi</th><th>Ví dụ</th></tr></thead>
+        <tbody>
+          <tr><td><code>'...'</code> (single)</td><td>Literal — KHÔNG expand biến</td><td><code>echo '$name'</code> → <code>$name</code></td></tr>
+          <tr><td><code>"..."</code> (double)</td><td>Expand biến và <code>$(...)</code></td><td><code>echo "$name"</code> → <code>Việt</code></td></tr>
+          <tr><td>Không quote</td><td>Expand + word-splitting + glob (<em>nguy hiểm</em>)</td><td><code>echo $name</code> → vỡ khi có space</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Command substitution: <code>$(...)</code></h3>
+      <p>Chạy 1 lệnh và <em>thay thế</em> bằng output của nó:</p>
+      <pre><code>today=<span class="output">"$(date +%Y-%m-%d)"</span>
+files=<span class="output">"$(ls *.txt | wc -l)"</span>
+<span class="cmd">echo</span> <span class="output">"Hôm nay $today, có $files file txt"</span></code></pre>
+      <p class="text-dim">Cú pháp cũ <code>`...`</code> (backtick) vẫn chạy nhưng <strong>không lồng được</strong> và khó đọc — luôn ưu tiên <code>$(...)</code>.</p>
+
+      <h3>Default value: <code>${var:-default}</code></h3>
+      <pre><code>name=<span class="output">"${1:-stranger}"</span>   <span class="comment"># nếu $1 trống → name = "stranger"</span>
+<span class="cmd">echo</span> <span class="output">"Hello, $name"</span></code></pre>
+      <table>
+        <thead><tr><th>Cú pháp</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>${var:-x}</code></td><td>Nếu var trống/chưa set → trả về <code>x</code> (không gán)</td></tr>
+          <tr><td><code>${var:=x}</code></td><td>Nếu var trống → gán var=x rồi trả về</td></tr>
+          <tr><td><code>${var:?msg}</code></td><td>Nếu var trống → in <code>msg</code> và exit lỗi</td></tr>
+          <tr><td><code>${var:+x}</code></td><td>Nếu var <em>có giá trị</em> → trả về <code>x</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ LUÔN double-quote biến chứa path</div>
+        Có file tên <code>"my notes.txt"</code>. Gõ <code>rm $file</code> (không quote) → bash split thành 2 arg: <code>my</code> và <code>notes.txt</code>, lệnh xóa nhầm 2 file khác. Đúng: <code>rm "$file"</code>. <strong>Nguyên tắc vàng:</strong> mọi biến trong script đều bọc <code>"..."</code> trừ khi có lý do rất rõ ràng để không quote.
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Đối số &amp; exit code</h2>
+
+      <h3>Biến đặc biệt</h3>
+      <table>
+        <thead><tr><th>Biến</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>$0</code></td><td>Tên của script (thường là path đã gọi)</td></tr>
+          <tr><td><code>$1</code>, <code>$2</code>, ..., <code>$9</code></td><td>Đối số thứ 1, 2, ..., 9</td></tr>
+          <tr><td><code>${10}</code>, <code>${11}</code>...</td><td>Đối số ≥10 phải có ngoặc nhọn</td></tr>
+          <tr><td><code>$#</code></td><td>Số lượng đối số</td></tr>
+          <tr><td><code>$@</code></td><td>Tất cả đối số (mảng — khi quote: giữ nguyên từng arg)</td></tr>
+          <tr><td><code>$*</code></td><td>Tất cả đối số gộp thành 1 chuỗi (ngăn cách bằng <code>$IFS</code>)</td></tr>
+          <tr><td><code>$?</code></td><td>Exit code của lệnh <em>vừa chạy xong</em></td></tr>
+          <tr><td><code>$$</code></td><td>PID của script hiện tại</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Ví dụ</h3>
+      <pre><code><span class="comment"># file: greet.sh</span>
+<span class="output">#!/usr/bin/env bash</span>
+<span class="cmd">echo</span> <span class="output">"Script: $0"</span>
+<span class="cmd">echo</span> <span class="output">"Số arg: $#"</span>
+<span class="cmd">echo</span> <span class="output">"Arg đầu: $1"</span>
+<span class="cmd">echo</span> <span class="output">"Tất cả: $@"</span></code></pre>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">./greet.sh</span> hello world
+<span class="output">Script: ./greet.sh
+Số arg: 2
+Arg đầu: hello
+Tất cả: hello world</span></code></pre>
+
+      <h3>Exit code: 0 = success</h3>
+      <p>Mọi lệnh khi kết thúc đều trả về 1 số nguyên 0–255. Convention <strong>cứng</strong> trên Unix:</p>
+      <ul>
+        <li><code>0</code> — thành công</li>
+        <li><code>1</code>–<code>255</code> — có lỗi (1 = lỗi chung; 2 = sai cú pháp; 127 = command not found; 130 = bị Ctrl+C...)</li>
+      </ul>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> /etc
+<span class="output">... (danh sách file)</span>
+<span class="prompt">$ </span><span class="cmd">echo</span> <span class="output">$?</span>
+<span class="output">0</span>
+
+<span class="prompt">$ </span><span class="cmd">ls</span> /khong-ton-tai
+<span class="output">ls: /khong-ton-tai: No such file or directory</span>
+<span class="prompt">$ </span><span class="cmd">echo</span> <span class="output">$?</span>
+<span class="output">1</span></code></pre>
+
+      <p>Trong script, <code>exit N</code> kết thúc sớm với code <code>N</code>:</p>
+      <pre><code><span class="output">#!/usr/bin/env bash</span>
+<span class="cmd">if</span> [[ <span class="output">$#</span> -lt 1 ]]; <span class="cmd">then</span>
+  <span class="cmd">echo</span> <span class="output">"Usage: $0 &lt;name&gt;"</span> &gt;&amp;2   <span class="comment"># in lỗi ra stderr</span>
+  <span class="cmd">exit</span> 1
+<span class="cmd">fi</span>
+<span class="cmd">echo</span> <span class="output">"Hello, $1"</span>
+<span class="cmd">exit</span> 0</code></pre>
+    </section>
+
+    <section>
+      <h2>4. Điều kiện &amp; test</h2>
+
+      <h3>Cú pháp <code>if</code></h3>
+      <pre><code><span class="cmd">if</span> [[ -f <span class="output">"$file"</span> ]]; <span class="cmd">then</span>
+  <span class="cmd">echo</span> <span class="output">"File tồn tại"</span>
+<span class="cmd">elif</span> [[ -d <span class="output">"$file"</span> ]]; <span class="cmd">then</span>
+  <span class="cmd">echo</span> <span class="output">"Là folder"</span>
+<span class="cmd">else</span>
+  <span class="cmd">echo</span> <span class="output">"Không tồn tại"</span>
+<span class="cmd">fi</span></code></pre>
+
+      <h3><code>[ ]</code> vs <code>[[ ]]</code> — khác biệt quan trọng</h3>
+      <table>
+        <thead><tr><th>&nbsp;</th><th><code>[ ]</code> (test)</th><th><code>[[ ]]</code> (bash builtin)</th></tr></thead>
+        <tbody>
+          <tr><td>Có ở</td><td>Mọi POSIX shell (sh, dash...)</td><td>Bash, zsh, ksh</td></tr>
+          <tr><td>Word-splitting biến chưa quote</td><td>Có — vỡ khi biến có space</td><td><strong>Không</strong> — an toàn hơn</td></tr>
+          <tr><td>So sánh chuỗi</td><td><code>=</code></td><td><code>==</code> hoặc <code>=</code>; còn match pattern: <code>[[ "$f" == *.txt ]]</code></td></tr>
+          <tr><td>Regex</td><td>Không</td><td>Có: <code>[[ "$s" =~ ^[0-9]+$ ]]</code></td></tr>
+          <tr><td>Logic AND/OR</td><td><code>-a</code>, <code>-o</code> (deprecated)</td><td><code>&amp;&amp;</code>, <code>||</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Khuyến nghị</div>
+        Trong script bash → <strong>luôn dùng <code>[[ ]]</code></strong>. An toàn hơn, dễ đọc hơn, hỗ trợ regex. Chỉ dùng <code>[ ]</code> khi shebang là <code>#!/bin/sh</code> (cần chạy POSIX thuần).
+      </div>
+
+      <h3>Test operators thường dùng</h3>
+      <table>
+        <thead><tr><th>Operator</th><th>Đúng khi</th></tr></thead>
+        <tbody>
+          <tr><td><code>-f path</code></td><td>Là file thường (regular file) và tồn tại</td></tr>
+          <tr><td><code>-d path</code></td><td>Là folder và tồn tại</td></tr>
+          <tr><td><code>-e path</code></td><td>Tồn tại (kiểu gì cũng được)</td></tr>
+          <tr><td><code>-r/-w/-x path</code></td><td>Có quyền đọc/ghi/chạy</td></tr>
+          <tr><td><code>-s path</code></td><td>File tồn tại và <em>không rỗng</em></td></tr>
+          <tr><td><code>-z "$s"</code></td><td>Chuỗi rỗng</td></tr>
+          <tr><td><code>-n "$s"</code></td><td>Chuỗi <em>không</em> rỗng</td></tr>
+          <tr><td><code>"$a" == "$b"</code></td><td>Chuỗi bằng nhau</td></tr>
+          <tr><td><code>"$a" != "$b"</code></td><td>Chuỗi khác nhau</td></tr>
+          <tr><td><code>$x -eq $y</code></td><td>Số bằng nhau</td></tr>
+          <tr><td><code>$x -ne $y</code></td><td>Số khác nhau</td></tr>
+          <tr><td><code>$x -lt $y</code> / <code>-le</code></td><td>Nhỏ hơn / nhỏ hơn hoặc bằng</td></tr>
+          <tr><td><code>$x -gt $y</code> / <code>-ge</code></td><td>Lớn hơn / lớn hơn hoặc bằng</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Shortcut <code>&amp;&amp;</code> và <code>||</code></h3>
+      <p>Đã biết từ Chương 1: <code>A &amp;&amp; B</code> = chạy B nếu A thành công; <code>A || B</code> = chạy B nếu A thất bại. Trong script, dùng để viết <em>guard</em> ngắn gọn:</p>
+      <pre><code>[[ -d <span class="output">"$dir"</span> ]] || <span class="cmd">mkdir</span> <span class="flag">-p</span> <span class="output">"$dir"</span>   <span class="comment"># tạo nếu chưa có</span>
+[[ -f <span class="output">"$f"</span> ]] &amp;&amp; <span class="cmd">echo</span> <span class="output">"OK"</span> || <span class="cmd">echo</span> <span class="output">"missing"</span></code></pre>
+    </section>
+
+    <section>
+      <h2>5. Vòng lặp</h2>
+
+      <h3><code>for</code> trên list cố định</h3>
+      <pre><code><span class="cmd">for</span> i <span class="cmd">in</span> 1 2 3; <span class="cmd">do</span>
+  <span class="cmd">echo</span> <span class="output">"Lần $i"</span>
+<span class="cmd">done</span>
+
+<span class="cmd">for</span> name <span class="cmd">in</span> alice bob charlie; <span class="cmd">do</span>
+  <span class="cmd">echo</span> <span class="output">"Hello, $name"</span>
+<span class="cmd">done</span></code></pre>
+
+      <h3><code>for</code> trên glob (mạnh nhất)</h3>
+      <pre><code><span class="comment"># in tên + số dòng cho mọi file .txt</span>
+<span class="cmd">for</span> f <span class="cmd">in</span> *.txt; <span class="cmd">do</span>
+  lines=<span class="output">"$(wc -l &lt; "$f")"</span>
+  <span class="cmd">echo</span> <span class="output">"$f: $lines lines"</span>
+<span class="cmd">done</span></code></pre>
+
+      <h3>Ví dụ thực: rename hàng loạt <code>.txt</code> → <code>.md</code></h3>
+      <pre><code><span class="cmd">for</span> f <span class="cmd">in</span> *.txt; <span class="cmd">do</span>
+  <span class="cmd">mv</span> <span class="output">"$f"</span> <span class="output">"${f%.txt}.md"</span>
+<span class="cmd">done</span></code></pre>
+      <p class="text-dim"><code>${f%.txt}</code> = "lấy <code>$f</code> rồi cắt đuôi <code>.txt</code> ở cuối". Đây là <em>parameter expansion</em> — bash có rất nhiều dạng khác (<code>%</code>, <code>%%</code>, <code>#</code>, <code>##</code>, <code>/</code>...).</p>
+
+      <h3><code>for ((...))</code> kiểu C</h3>
+      <pre><code><span class="cmd">for</span> ((i=1; i&lt;=5; i++)); <span class="cmd">do</span>
+  <span class="cmd">echo</span> <span class="output">"i = $i"</span>
+<span class="cmd">done</span></code></pre>
+
+      <h3><code>while</code> đọc từng dòng file</h3>
+      <pre><code><span class="cmd">while</span> <span class="cmd">read</span> <span class="flag">-r</span> line; <span class="cmd">do</span>
+  <span class="cmd">echo</span> <span class="output">"Đọc: $line"</span>
+<span class="cmd">done</span> &lt; urls.txt</code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Đừng <code>for line in $(cat file)</code></div>
+        Đó là anti-pattern — nó split theo <code>$IFS</code> (mặc định: space + tab + newline) → vỡ với dòng có space. Đúng: <code>while read -r line; do ... done &lt; file</code>.
+      </div>
+    </section>
+
+    <section>
+      <h2>6. Hàm + <code>set -euo pipefail</code></h2>
+
+      <h3>Định nghĩa hàm</h3>
+      <pre><code><span class="comment"># 2 cú pháp đều hợp lệ — chọn 1, dùng nhất quán</span>
+greet() {
+  <span class="cmd">echo</span> <span class="output">"Hello, $1"</span>
+}
+
+<span class="cmd">function</span> add() {
+  <span class="cmd">echo</span> <span class="output">$(($1 + $2))</span>
+}
+
+greet <span class="output">"Việt"</span>           <span class="comment"># Hello, Việt</span>
+result=<span class="output">"$(add 3 5)"</span>   <span class="comment"># 8</span></code></pre>
+      <p>Trong hàm: <code>$1</code>, <code>$2</code>... là arg của hàm (không phải arg script). <code>return N</code> trả exit code (0–255), <strong>không</strong> trả giá trị — muốn trả giá trị thì <code>echo</code> rồi capture bằng <code>$(...)</code>.</p>
+
+      <h3>Biến local</h3>
+      <pre><code>count() {
+  <span class="cmd">local</span> n=<span class="output">"$1"</span>          <span class="comment"># local: chỉ tồn tại trong hàm</span>
+  <span class="cmd">echo</span> <span class="output">"Count: $n"</span>
+}</code></pre>
+
+      <h3>Best practice: mở đầu mọi script bằng <code>set -euo pipefail</code></h3>
+      <pre><code><span class="output">#!/usr/bin/env bash</span>
+<span class="cmd">set</span> <span class="flag">-euo pipefail</span>
+<span class="comment"># ... script bắt đầu từ đây</span></code></pre>
+
+      <table>
+        <thead><tr><th>Cờ</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>-e</code> (errexit)</td><td><strong>Fail fast</strong>: nếu bất kỳ lệnh nào trả exit ≠ 0, script dừng ngay. Mặc định bash chạy tiếp như chưa có gì xảy ra — rất nguy hiểm.</td></tr>
+          <tr><td><code>-u</code> (nounset)</td><td>Đụng tới biến <em>chưa được set</em> → báo lỗi và dừng. Ngăn lỗi typo (vd <code>$HOEM</code>) lặng lẽ thành chuỗi rỗng.</td></tr>
+          <tr><td><code>-o pipefail</code></td><td>Trong <code>A | B | C</code>, mặc định bash chỉ check exit code của <code>C</code>. Có pipefail: nếu bất kỳ lệnh nào trong pipe fail → cả pipe fail. Cần thiết khi dùng <code>set -e</code>.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Vì sao <code>set -euo pipefail</code> gần như bắt buộc</div>
+        Mặc định bash <em>tha thứ quá nhiều</em>: lệnh fail vẫn chạy tiếp, biến typo trả về rỗng, pipe ẩn lỗi. Hậu quả: script chạy "thành công" nhưng không làm gì, hoặc xóa nhầm vì biến rỗng. Một dòng <code>set -euo pipefail</code> biến bash từ "ngôn ngữ giấy" thành "ngôn ngữ có kỷ luật". Đặt ngay sau shebang.
+      </div>
+
+      <h3>Bonus: <code>trap</code> dọn dẹp</h3>
+      <p>Khi script bị Ctrl+C giữa chừng hoặc thoát do lỗi, bạn vẫn muốn xóa file tạm:</p>
+      <pre><code><span class="output">#!/usr/bin/env bash</span>
+<span class="cmd">set</span> <span class="flag">-euo pipefail</span>
+
+tmp=<span class="output">"$(mktemp)"</span>
+<span class="cmd">trap</span> <span class="output">'rm -f "$tmp"'</span> EXIT   <span class="comment"># chạy khi script kết thúc (kiểu nào cũng vậy)</span>
+
+<span class="cmd">echo</span> <span class="output">"data"</span> &gt; <span class="output">"$tmp"</span>
+<span class="comment"># ... xử lý $tmp ...</span>
+<span class="comment"># khi script thoát: trap tự gọi rm -f $tmp — không leak file tạm</span></code></pre>
+      <p class="text-dim"><code>EXIT</code> là pseudo-signal chạy mọi trường hợp thoát. Có thể trap riêng <code>INT</code> (Ctrl+C), <code>TERM</code> (kill), <code>ERR</code> (lỗi).</p>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>Mở terminal thật, tạo file <code>demo.sh</code> rồi thử các bước:</p>
+      <ol>
+        <li>Tạo file: <code>touch demo.sh &amp;&amp; chmod +x demo.sh</code></li>
+        <li>Mở bằng editor (<code>nano demo.sh</code> hoặc <code>code demo.sh</code>), paste:
+          <pre><code><span class="output">#!/usr/bin/env bash</span>
+<span class="cmd">set</span> <span class="flag">-euo pipefail</span>
+
+name=<span class="output">"${1:-bạn}"</span>
+<span class="cmd">echo</span> <span class="output">"Xin chào, $name!"</span>
+<span class="cmd">echo</span> <span class="output">"Số arg nhận được: $#"</span></code></pre>
+        </li>
+        <li>Chạy: <code>./demo.sh</code> rồi <code>./demo.sh Việt</code> → so sánh output.</li>
+        <li>Thử biến chưa set: thêm dòng <code>echo "$undefined_var"</code> → script fail vì <code>-u</code>.</li>
+        <li>Tự viết 1 vòng <code>for f in *.sh; do echo "$f"; done</code> trong script.</li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong7 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Mỗi script nhớ: shebang <code>#!/usr/bin/env bash</code> + <code>set -euo pipefail</code> + <code>chmod +x</code>.</p>
+      <ol>
+        <li><strong>hello.sh</strong> — nhận 1 arg là tên, in <code>"Hello, &lt;tên&gt;"</code>. Nếu không có arg, in usage và <code>exit 1</code>.</li>
+        <li><strong>backup.sh</strong> — nhận 1 arg là path folder, tạo file <code>folder-YYYYMMDD-HHMMSS.tar.gz</code> chứa folder đó. Gợi ý: <code>tar -czf "name.tar.gz" "$1"</code>; timestamp lấy từ <code>$(date +%Y%m%d-%H%M%S)</code>.</li>
+        <li><strong>count-lines.sh</strong> — đếm tổng số dòng code trong project: tham số là folder + extension (vd <code>./count-lines.sh ~/myproj js</code>). Dùng <code>find</code> + <code>wc -l</code>. Bonus: in từng file kèm số dòng, sắp xếp giảm dần.</li>
+        <li><strong>check-url.sh</strong> — nhận 1 URL, dùng <code>curl -s -o /dev/null -w "%{http_code}" "$url"</code> để lấy HTTP status. In <code>"OK"</code> nếu code 200, <code>"DOWN"</code> ngược lại. Exit code phản ánh kết quả (0 nếu sống, 1 nếu chết).</li>
+        <li><strong>rename-ext.sh</strong> — đổi đuôi hàng loạt. Vd <code>./rename-ext.sh txt md</code> đổi mọi <code>*.txt</code> trong folder hiện tại sang <code>.md</code>.</li>
+        <li><strong>greet-all.sh</strong> — nhận nhiều arg, in lời chào cho từng người trên 1 dòng riêng. Sau đó in tổng số người. Dùng <code>for x in "$@"</code>.</li>
+        <li><strong>safe-rm.sh</strong> — wrapper an toàn cho <code>rm</code>: hỏi <code>y/N</code> trước khi xóa, log file đã xóa vào <code>~/.safe-rm.log</code>. Gợi ý: <code>read -r answer</code>.</li>
+        <li><strong>disk-watch.sh</strong> — kiểm tra ổ cứng còn dưới 10% trống thì in cảnh báo. Dùng <code>df -h /</code> + <code>awk</code> (Chương 5).</li>
+        <li><strong>(thử thách) deploy-mock.sh</strong> — mô phỏng deploy: tạo file tạm bằng <code>mktemp</code>, viết log vào đó, dùng <code>trap</code> để LUÔN xóa file tạm khi thoát (kể cả khi Ctrl+C giữa chừng). Test bằng cách thêm <code>sleep 10</code> rồi nhấn Ctrl+C.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ Shebang <code>#!/usr/bin/env bash</code> + <code>chmod +x</code> + chạy bằng <code>./script.sh</code></li>
+        <li>✅ Biến không space quanh <code>=</code>; LUÔN double-quote khi expand</li>
+        <li>✅ Đối số: <code>$1</code>, <code>$@</code>, <code>$#</code>, <code>$?</code>; exit 0 = success</li>
+        <li>✅ <code>[[ ]]</code> an toàn hơn <code>[ ]</code>; biết <code>-f</code>, <code>-d</code>, <code>-z</code>, <code>-n</code>, <code>-eq</code>...</li>
+        <li>✅ <code>for</code> trên glob, <code>while read</code> để đọc file dòng-by-dòng</li>
+        <li>✅ Hàm + <code>local</code>; mọi script bắt đầu bằng <code>set -euo pipefail</code></li>
+        <li>✅ <code>trap ... EXIT</code> để cleanup chắc chắn</li>
+      </ul>
+      <p class="text-dim">
+        Chương 8 chúng ta sẽ học <em>Git &amp; SSH</em> — version control và remote access. Có script đã rồi, bạn sẽ thấy git hooks và deploy script tự nhiên hơn nhiều.
+      </p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong6.html">
+        <span class="label">Trước</span>
+        ← Chương 06: Shell config &amp; Aliases
+      </a>
+      <a href="chuong8.html">
+        <span class="label">Tiếp theo</span>
+        Chương 08: Git &amp; SSH →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 07
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Trong bash script, vì sao [[ ]] thường được khuyên dùng thay cho [ ]?",
+        options: [
+          "[[ ]] chạy nhanh hơn nhiều lần",
+          "[[ ]] không bị word-splitting với biến chưa quote, hỗ trợ regex và pattern match",
+          "[ ] đã bị deprecated và sắp bị xóa",
+          "[[ ]] là cú pháp duy nhất hoạt động trên macOS"
+        ],
+        correct: 1,
+        explain: "[[ ]] là bash builtin — nó không split biến theo $IFS, nên [[ -f $file ]] vẫn an toàn ngay cả khi $file có space. Ngoài ra hỗ trợ =~ (regex) và ==/!= với glob pattern. [ ] vẫn dùng được nhưng phải quote cẩn thận."
+      },
+      {
+        q: "Dòng 'set -euo pipefail' đầu script làm gì?",
+        options: [
+          "Bật chế độ debug, in mọi lệnh trước khi chạy",
+          "-e fail fast, -u biến chưa set là lỗi, -o pipefail bắt lỗi giữa pipe",
+          "Tự động retry lệnh fail tối đa 3 lần",
+          "Tăng số biến môi trường tối đa script có thể dùng"
+        ],
+        correct: 1,
+        explain: "Đây là 'unofficial strict mode' của bash. -e dừng ngay khi có lệnh fail, -u báo lỗi khi đụng biến chưa set (chống typo), pipefail làm cả pipe fail nếu bất kỳ lệnh nào trong đó fail. Gần như mọi script production đều bắt đầu bằng dòng này."
+      },
+      {
+        q: "Khác biệt chính giữa \"$@\" và \"$*\" là gì?",
+        options: [
+          "Không có khác biệt, chỉ khác cú pháp",
+          "$@ chỉ chứa arg đầu tiên, $* chứa tất cả",
+          "Khi quote: \"$@\" giữ từng arg riêng biệt; \"$*\" gộp thành 1 chuỗi (ngăn cách bằng $IFS)",
+          "$@ chỉ hoạt động trong hàm, $* chỉ hoạt động ở script chính"
+        ],
+        correct: 2,
+        explain: "Đây là bẫy kinh điển. Chạy với arg 'a b' và 'c d': \"$@\" expand thành 2 phần tử ['a b', 'c d'] — đúng như nhận; \"$*\" thành 1 chuỗi 'a b c d'. Trong vòng for, hầu như luôn dùng \"$@\" để giữ arg gốc. Không quote thì cả hai đều split — tránh."
+      },
+      {
+        q: "Exit code 0 trong Unix có nghĩa là gì?",
+        options: [
+          "Lỗi nhẹ, script đã chạy nhưng có cảnh báo",
+          "Thành công — không có lỗi",
+          "Lỗi nghiêm trọng",
+          "Script chưa chạy xong"
+        ],
+        correct: 1,
+        explain: "Convention Unix: 0 = success, ≠ 0 = lỗi (1–255). Khác trực giác toán học một chút, nhưng giúp 'thành công' chỉ có 1 giá trị còn 'lỗi' có 255 giá trị để phân loại (1=lỗi chung, 127=command not found, 130=Ctrl+C...). Dùng $? để xem exit code lệnh vừa chạy."
+      },
+      {
+        q: "Có biến file=\"my notes.txt\" (có space). Script dùng cp $file backup/. Chuyện gì xảy ra?",
+        options: [
+          "Copy thành công, tên file giữ nguyên",
+          "Báo lỗi cú pháp ngay, không chạy",
+          "cp nhận 3 arg: 'my', 'notes.txt', 'backup/' — copy nhầm 2 file 'my' và 'notes.txt' vào backup/",
+          "Bash tự động hiểu space và copy đúng file"
+        ],
+        correct: 2,
+        explain: "Không quote → bash word-split theo $IFS. Bài học vàng: trong script LUÔN viết \"$file\" với double quote. Đây là nguồn của vô số bug khó debug, đặc biệt khi script chạy ngon trên dev (file không space) rồi vỡ trên production."
+      },
+      {
+        q: "Cú pháp ${name:-stranger} làm gì?",
+        options: [
+          "Gán name = 'stranger' rồi trả về",
+          "Nếu name trống/chưa set thì trả về 'stranger', không gán",
+          "Xóa biến name",
+          "Chỉ in ra 'stranger', bỏ qua name"
+        ],
+        correct: 1,
+        explain: "${var:-default} = 'lấy var, hoặc dùng default nếu var trống'. KHÔNG gán — var vẫn trống sau đó. Nếu muốn gán thì dùng ${var:=default}. Rất hay dùng cho default arg: name=\"${1:-stranger}\"."
+      },
+      {
+        q: "Vì sao 'for line in $(cat file)' là anti-pattern khi đọc file dòng-by-dòng?",
+        options: [
+          "Quá chậm, cat đọc cả file vào RAM",
+          "$(...) split output theo $IFS (space/tab/newline) — dòng có space sẽ bị tách thành nhiều token",
+          "cat không phải lệnh chuẩn POSIX",
+          "for không thể dùng với $(...)"
+        ],
+        correct: 1,
+        explain: "Ví dụ file có dòng 'hello world', for sẽ lặp 2 lần với 'hello' và 'world' chứ không phải 1 lần với cả dòng. Cách đúng: 'while IFS= read -r line; do ... done < file' — read đọc đúng từng dòng, IFS= giữ nguyên leading/trailing space, -r không xử lý backslash."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

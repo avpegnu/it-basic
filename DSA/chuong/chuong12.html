@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 12 — Dynamic Programming · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong11.html">← Ch.11</a></li>
+        <li><a href="chuong12.html" class="active">Ch.12 (Final)</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 12 · TECHNIQUE · FINAL · ~180 phút</div>
+      <h1>Dynamic<br/><span class="text-amber">Programming</span></h1>
+      <p class="lead">
+        Chương <strong>khó nhất</strong> của giáo trình — và cũng "tách giỏi" nhất trong phỏng vấn.
+        DP không phải kỹ thuật bí ẩn, đó là <em>đệ quy có cache + tư duy state</em>.
+        Học chương này, bạn nắm được quy trình 5 bước giải bài DP và 5 dạng DP phổ biến.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#what">12.1 DP là gì?</a></li>
+          <li><a href="#conditions">12.2 2 điều kiện áp dụng</a></li>
+          <li><a href="#topdown">12.3 Top-down (Memo)</a></li>
+          <li><a href="#bottomup">12.4 Bottom-up (Tabulation)</a></li>
+          <li><a href="#process">12.5 Quy trình 5 bước</a></li>
+          <li><a href="#1d">12.6 1D Linear DP</a></li>
+          <li><a href="#2d">12.7 2D Grid DP</a></li>
+          <li><a href="#knapsack">12.8 Knapsack</a></li>
+          <li><a href="#lis-lcs">12.9 LIS & LCS</a></li>
+          <li><a href="#interval">12.10 Interval DP</a></li>
+          <li><a href="#optim">12.11 Tối ưu space</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 12.1 -->
+        <section id="what">
+          <h2>12.1 Dynamic Programming là gì?</h2>
+
+          <p>
+            <strong>Dynamic Programming (DP)</strong> = đệ quy + cache để tránh tính lại + định nghĩa rõ "state".
+            Tên "dynamic programming" do Richard Bellman đặt năm 1950 — không liên quan đến "lập trình động" theo nghĩa hiện đại,
+            chỉ là tên gọi lịch sử.
+          </p>
+
+          <h3>Ví dụ mở đầu — Fibonacci</h3>
+
+          <p>Đã thấy ở Chương 6:</p>
+
+          <pre data-lang="javascript"><code>// Đệ quy ngây thơ — O(2ⁿ)
+function fib(n) {
+  if (n &lt;= 1) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+
+// Top-down DP (memoization) — O(n)
+function fibMemo(n, memo = {}) {
+  if (n &lt;= 1) return n;
+  if (memo[n] !== undefined) return memo[n];
+  return memo[n] = fibMemo(n - 1, memo) + fibMemo(n - 2, memo);
+}
+
+// Bottom-up DP (tabulation) — O(n)
+function fibTab(n) {
+  if (n &lt;= 1) return n;
+  const dp = [0, 1];
+  for (let i = 2; i &lt;= n; i++) dp[i] = dp[i-1] + dp[i-2];
+  return dp[n];
+}
+
+// Optimized — O(n) time, O(1) space
+function fibFast(n) {
+  if (n &lt;= 1) return n;
+  let a = 0, b = 1;
+  for (let i = 2; i &lt;= n; i++) [a, b] = [b, a + b];
+  return b;
+}</code></pre>
+
+          <p>4 phiên bản trên cùng 1 thuật toán, độ phức tạp giảm từ O(2ⁿ) xuống O(n) time, O(1) space.</p>
+        </section>
+
+        <!-- 12.2 -->
+        <section id="conditions">
+          <h2>12.2 Khi nào áp dụng được DP?</h2>
+
+          <p>Bài toán phải có <strong>2 điều kiện</strong>:</p>
+
+          <h3>1. Optimal Substructure</h3>
+          <p>Lời giải tối ưu của bài lớn được xây dựng từ lời giải tối ưu của các bài con.</p>
+          <p>Vd: shortest path từ A đến C qua B = shortest path A→B + shortest path B→C.</p>
+
+          <h3>2. Overlapping Subproblems</h3>
+          <p>Bài con được tính lặp lại nhiều lần khi giải bằng đệ quy thường.</p>
+          <p>Vd: Fibonacci — fib(3) tính 3 lần khi tính fib(5).</p>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Có optimal substructure nhưng KHÔNG overlapping = KHÔNG cần DP</div>
+            <p>Vd: Merge Sort có optimal substructure (giải bài lớn từ 2 nửa) nhưng các nửa <em>không overlap</em> → dùng Divide &amp; Conquer thường, không cần DP.</p>
+          </div>
+        </section>
+
+        <!-- 12.3 -->
+        <section id="topdown">
+          <h2>12.3 Top-down: Memoization (Đệ quy + Cache)</h2>
+
+          <p>Bắt đầu từ bài <em>cần giải</em>, đệ quy đến base case, cache kết quả.</p>
+
+          <pre data-lang="javascript"><code>// Template top-down
+function solve(state, memo = {}) {
+  // 1. Base case
+  if (isBase(state)) return baseValue;
+
+  // 2. Đã tính rồi?
+  const key = JSON.stringify(state);
+  if (memo[key] !== undefined) return memo[key];
+
+  // 3. Tính dựa trên subproblem
+  let result = INIT;
+  for (const choice of choices) {
+    const subResult = solve(nextState(state, choice), memo);
+    result = combine(result, subResult, choice);
+  }
+
+  return memo[key] = result;
+}</code></pre>
+
+          <p><strong>Ưu:</strong> tự nhiên, dễ viết khi đã có recursion. Chỉ tính state thật sự cần.</p>
+          <p><strong>Nhược:</strong> tốn stack (đệ quy sâu), JSON.stringify chậm.</p>
+        </section>
+
+        <!-- 12.4 -->
+        <section id="bottomup">
+          <h2>12.4 Bottom-up: Tabulation (DP table)</h2>
+
+          <p>Bắt đầu từ <em>base case</em>, tính dần các state lớn hơn, lưu vào bảng.</p>
+
+          <pre data-lang="javascript"><code>// Template bottom-up
+function solve(input) {
+  const dp = new Array(n + 1);
+
+  // 1. Base case
+  dp[0] = baseValue;
+
+  // 2. Điền bảng theo thứ tự đúng
+  for (let i = 1; i &lt;= n; i++) {
+    dp[i] = INIT;
+    for (const choice of choices) {
+      dp[i] = combine(dp[i], dp[prevState(i, choice)]);
+    }
+  }
+
+  return dp[n];
+}</code></pre>
+
+          <p><strong>Ưu:</strong> không tốn stack, thường nhanh hơn (no function call overhead).</p>
+          <p><strong>Nhược:</strong> phải xác định đúng <em>thứ tự duyệt</em>; có thể tính những state không cần.</p>
+
+          <h3>Top-down vs Bottom-up — chọn cái nào?</h3>
+          <ul>
+            <li>Bài có nhiều state KHÔNG cần thiết → Top-down ưu thế (chỉ tính state cần)</li>
+            <li>Bài có thứ tự duyệt hiển nhiên (vd 1D từ trái phải) → Bottom-up đẹp hơn</li>
+            <li>State key phức tạp (object, set) → Top-down dễ hơn (memo Map)</li>
+            <li>Cần tối ưu space → Bottom-up dễ rolling array</li>
+          </ul>
+        </section>
+
+        <!-- 12.5 -->
+        <section id="process">
+          <h2>12.5 Quy trình giải bài DP — 5 bước</h2>
+
+          <div class="callout note">
+            <div class="callout-title">📐 5 bước giải bài DP</div>
+            <ol>
+              <li><strong>Định nghĩa state:</strong> "dp[i] (hoặc dp[i][j]) đại diện cho gì?". Bước này chiếm 80% công việc!</li>
+              <li><strong>Base case:</strong> giá trị nào biết ngay không cần tính</li>
+              <li><strong>State transition (recurrence):</strong> dp[lớn] tính từ dp[nhỏ hơn] thế nào?</li>
+              <li><strong>Thứ tự duyệt:</strong> để khi cần dp[lớn], dp[nhỏ hơn] đã có</li>
+              <li><strong>Trả lời cuối:</strong> đáp án nằm ở dp[?]</li>
+            </ol>
+          </div>
+
+          <h3>Áp dụng cho Fibonacci</h3>
+          <ol>
+            <li>State: <code>dp[i]</code> = số Fibonacci thứ i</li>
+            <li>Base: <code>dp[0]=0, dp[1]=1</code></li>
+            <li>Transition: <code>dp[i] = dp[i-1] + dp[i-2]</code></li>
+            <li>Thứ tự: từ i=2 đến n</li>
+            <li>Đáp án: <code>dp[n]</code></li>
+          </ol>
+        </section>
+
+        <!-- 12.6 -->
+        <section id="1d">
+          <h2>12.6 1D Linear DP — bắt đầu từ đây</h2>
+
+          <h3>12.6.1 Climbing Stairs</h3>
+          <p>n bậc thang, mỗi bước nhảy 1 hoặc 2. Đếm số cách lên đỉnh.</p>
+          <pre data-lang="javascript"><code>// State: dp[i] = số cách lên bậc i
+// Transition: dp[i] = dp[i-1] + dp[i-2]  (đến từ bậc i-1 nhảy 1, hoặc bậc i-2 nhảy 2)
+// Base: dp[0] = 1, dp[1] = 1
+function climbStairs(n) {
+  if (n &lt;= 1) return 1;
+  let a = 1, b = 1;
+  for (let i = 2; i &lt;= n; i++) [a, b] = [b, a + b];
+  return b;
+}</code></pre>
+
+          <h3>12.6.2 House Robber</h3>
+          <p>Mảng tiền các nhà. Không được trộm 2 nhà liền kề. Tối đa lấy được bao nhiêu?</p>
+          <pre data-lang="javascript"><code>// State: dp[i] = max tiền trộm được khi xét đến nhà i
+// Transition: dp[i] = max(dp[i-1], dp[i-2] + nums[i])
+//             (bỏ qua nhà i, hoặc trộm nhà i + best của (i-2))
+function rob(nums) {
+  let prev2 = 0, prev1 = 0;
+  for (const n of nums) {
+    [prev2, prev1] = [prev1, Math.max(prev1, prev2 + n)];
+  }
+  return prev1;
+}</code></pre>
+
+          <h3>12.6.3 Coin Change</h3>
+          <p>Cho coins và amount. Tìm số ít nhất coin để tổng = amount. Trả -1 nếu không thể.</p>
+          <pre data-lang="javascript"><code>// State: dp[i] = số coin ít nhất để tạo amount i
+// Transition: dp[i] = min(dp[i - c] + 1) cho mọi coin c &lt;= i
+// Base: dp[0] = 0
+function coinChange(coins, amount) {
+  const dp = new Array(amount + 1).fill(Infinity);
+  dp[0] = 0;
+  for (let i = 1; i &lt;= amount; i++) {
+    for (const c of coins) {
+      if (c &lt;= i) dp[i] = Math.min(dp[i], dp[i - c] + 1);
+    }
+  }
+  return dp[amount] === Infinity ? -1 : dp[amount];
+}</code></pre>
+
+          <h3>12.6.4 Word Break</h3>
+          <p>Cho string s và wordDict. Có thể chia s thành các word từ dict không?</p>
+          <pre data-lang="javascript"><code>// State: dp[i] = s[0..i] có chia được không?
+// Transition: dp[i] = true nếu tồn tại j sao cho dp[j] = true VÀ s[j..i] ∈ dict
+function wordBreak(s, wordDict) {
+  const set = new Set(wordDict);
+  const dp = new Array(s.length + 1).fill(false);
+  dp[0] = true;
+  for (let i = 1; i &lt;= s.length; i++) {
+    for (let j = 0; j &lt; i; j++) {
+      if (dp[j] &amp;&amp; set.has(s.slice(j, i))) {
+        dp[i] = true;
+        break;
+      }
+    }
+  }
+  return dp[s.length];
+}</code></pre>
+        </section>
+
+        <!-- 12.7 -->
+        <section id="2d">
+          <h2>12.7 2D Grid DP</h2>
+
+          <h3>12.7.1 Unique Paths</h3>
+          <p>Lưới m×n. Robot đi từ trái-trên đến phải-dưới, chỉ xuống hoặc phải. Đếm số đường.</p>
+          <pre data-lang="javascript"><code>// State: dp[i][j] = số đường đến ô (i, j)
+// Transition: dp[i][j] = dp[i-1][j] + dp[i][j-1]
+// Base: hàng đầu và cột đầu = 1
+function uniquePaths(m, n) {
+  const dp = Array.from({length: m}, () =&gt; new Array(n).fill(1));
+  for (let i = 1; i &lt; m; i++)
+    for (let j = 1; j &lt; n; j++)
+      dp[i][j] = dp[i-1][j] + dp[i][j-1];
+  return dp[m-1][n-1];
+}</code></pre>
+
+          <h3>12.7.2 Minimum Path Sum</h3>
+          <pre data-lang="javascript"><code>function minPathSum(grid) {
+  const m = grid.length, n = grid[0].length;
+  const dp = Array.from({length: m}, () =&gt; new Array(n));
+  dp[0][0] = grid[0][0];
+  for (let i = 1; i &lt; m; i++) dp[i][0] = dp[i-1][0] + grid[i][0];
+  for (let j = 1; j &lt; n; j++) dp[0][j] = dp[0][j-1] + grid[0][j];
+  for (let i = 1; i &lt; m; i++) {
+    for (let j = 1; j &lt; n; j++) {
+      dp[i][j] = Math.min(dp[i-1][j], dp[i][j-1]) + grid[i][j];
+    }
+  }
+  return dp[m-1][n-1];
+}</code></pre>
+        </section>
+
+        <!-- 12.8 -->
+        <section id="knapsack">
+          <h2>12.8 Knapsack — bài "ba lô"</h2>
+
+          <h3>0/1 Knapsack — mỗi item dùng 1 lần</h3>
+          <p>Có n item với weight và value. Túi chở tối đa W. Lấy items để max tổng value.</p>
+
+          <pre data-lang="javascript"><code>// State: dp[i][w] = max value khi xét i item đầu, túi capacity w
+// Transition:
+//   - Không lấy item i:    dp[i-1][w]
+//   - Lấy item i (nếu w &gt;= weights[i-1]):  dp[i-1][w - weights[i-1]] + values[i-1]
+// dp[i][w] = max của 2 lựa chọn
+
+function knapsack01(weights, values, W) {
+  const n = weights.length;
+  const dp = Array.from({length: n + 1}, () =&gt; new Array(W + 1).fill(0));
+
+  for (let i = 1; i &lt;= n; i++) {
+    for (let w = 0; w &lt;= W; w++) {
+      dp[i][w] = dp[i-1][w];  // không lấy
+      if (w &gt;= weights[i-1]) {
+        dp[i][w] = Math.max(dp[i][w], dp[i-1][w - weights[i-1]] + values[i-1]);
+      }
+    }
+  }
+  return dp[n][W];
+}</code></pre>
+
+          <h3>Unbounded Knapsack — item dùng nhiều lần</h3>
+          <pre data-lang="javascript"><code>// Khác 0/1: khi "lấy item i", state vẫn ở i (chưa chuyển sang i-1)
+function knapsackUnbounded(weights, values, W) {
+  const dp = new Array(W + 1).fill(0);
+  for (let w = 0; w &lt;= W; w++) {
+    for (let i = 0; i &lt; weights.length; i++) {
+      if (weights[i] &lt;= w) {
+        dp[w] = Math.max(dp[w], dp[w - weights[i]] + values[i]);
+      }
+    }
+  }
+  return dp[W];
+}</code></pre>
+
+          <h3>Bài: Partition Equal Subset Sum</h3>
+          <p>Cho mảng. Có thể chia thành 2 subset có tổng bằng nhau? → 0/1 Knapsack tìm subset có tổng = sum/2.</p>
+        </section>
+
+        <!-- 12.9 -->
+        <section id="lis-lcs">
+          <h2>12.9 LIS & LCS — 2 bài DP "phải biết"</h2>
+
+          <h3>12.9.1 Longest Increasing Subsequence (LIS)</h3>
+
+          <pre data-lang="javascript"><code>// O(n²) DP
+// State: dp[i] = độ dài LIS kết thúc tại index i
+// Transition: dp[i] = max(dp[j] + 1) cho mọi j &lt; i với arr[j] &lt; arr[i]
+function lisN2(arr) {
+  const dp = new Array(arr.length).fill(1);
+  for (let i = 1; i &lt; arr.length; i++) {
+    for (let j = 0; j &lt; i; j++) {
+      if (arr[j] &lt; arr[i]) dp[i] = Math.max(dp[i], dp[j] + 1);
+    }
+  }
+  return Math.max(...dp);
+}
+
+// O(n log n) bằng patience sorting + binary search
+function lisNlogN(arr) {
+  const tails = [];
+  for (const x of arr) {
+    // Lower bound binary search
+    let lo = 0, hi = tails.length;
+    while (lo &lt; hi) {
+      const mid = (lo + hi) &gt;&gt; 1;
+      if (tails[mid] &lt; x) lo = mid + 1;
+      else hi = mid;
+    }
+    tails[lo] = x;
+  }
+  return tails.length;
+}</code></pre>
+
+          <h3>12.9.2 Longest Common Subsequence (LCS)</h3>
+
+          <pre data-lang="javascript"><code>// LCS giữa 2 string a, b
+// State: dp[i][j] = LCS của a[0..i-1] và b[0..j-1]
+// Transition:
+//   - a[i-1] === b[j-1]: dp[i][j] = dp[i-1][j-1] + 1
+//   - else:              dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+function lcs(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m + 1}, () =&gt; new Array(n + 1).fill(0));
+  for (let i = 1; i &lt;= m; i++) {
+    for (let j = 1; j &lt;= n; j++) {
+      if (a[i-1] === b[j-1]) dp[i][j] = dp[i-1][j-1] + 1;
+      else                   dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+
+// "abcde", "ace" → LCS = "ace" (length 3)</code></pre>
+
+          <h3>12.9.3 Edit Distance (Levenshtein)</h3>
+
+          <pre data-lang="javascript"><code>// Số phép biến đổi tối thiểu (insert, delete, replace) để word1 → word2
+function minDistance(w1, w2) {
+  const m = w1.length, n = w2.length;
+  const dp = Array.from({length: m + 1}, () =&gt; new Array(n + 1));
+  for (let i = 0; i &lt;= m; i++) dp[i][0] = i;
+  for (let j = 0; j &lt;= n; j++) dp[0][j] = j;
+  for (let i = 1; i &lt;= m; i++) {
+    for (let j = 1; j &lt;= n; j++) {
+      if (w1[i-1] === w2[j-1]) dp[i][j] = dp[i-1][j-1];
+      else dp[i][j] = 1 + Math.min(dp[i-1][j],     // delete
+                                    dp[i][j-1],     // insert
+                                    dp[i-1][j-1]);  // replace
+    }
+  }
+  return dp[m][n];
+}</code></pre>
+        </section>
+
+        <!-- 12.10 -->
+        <section id="interval">
+          <h2>12.10 Interval DP — DP trên đoạn</h2>
+
+          <p>State <code>dp[i][j]</code> = đáp án cho đoạn từ i đến j. Duyệt theo độ dài đoạn từ nhỏ đến lớn.</p>
+
+          <h3>Bài: Matrix Chain Multiplication</h3>
+          <pre data-lang="javascript"><code>// Cho dimensions p[0..n], tìm cách "đặt ngoặc" để tối thiểu phép nhân khi nhân chuỗi ma trận
+function matrixChain(p) {
+  const n = p.length - 1;
+  const dp = Array.from({length: n}, () =&gt; new Array(n).fill(0));
+
+  // Duyệt theo độ dài đoạn (l = 2 đến n)
+  for (let l = 2; l &lt;= n; l++) {
+    for (let i = 0; i &lt;= n - l; i++) {
+      const j = i + l - 1;
+      dp[i][j] = Infinity;
+      for (let k = i; k &lt; j; k++) {
+        const cost = dp[i][k] + dp[k+1][j] + p[i] * p[k+1] * p[j+1];
+        if (cost &lt; dp[i][j]) dp[i][j] = cost;
+      }
+    }
+  }
+  return dp[0][n-1];
+}</code></pre>
+        </section>
+
+        <!-- 12.11 -->
+        <section id="optim">
+          <h2>12.11 Tối ưu Space — Rolling Array</h2>
+
+          <p>Nhiều bài DP chỉ cần dp[i-1] (hoặc i-2) để tính dp[i] → có thể tối ưu O(n) → O(1).</p>
+
+          <pre data-lang="javascript"><code>// Knapsack 0/1 — O(n × W) space
+// Tối ưu xuống O(W) bằng cách duyệt w từ phải sang trái
+function knapsack01Optim(weights, values, W) {
+  const dp = new Array(W + 1).fill(0);
+  for (let i = 0; i &lt; weights.length; i++) {
+    for (let w = W; w &gt;= weights[i]; w--) {  // ngược chiều!
+      dp[w] = Math.max(dp[w], dp[w - weights[i]] + values[i]);
+    }
+  }
+  return dp[W];
+}
+
+// Tại sao duyệt ngược?
+// Nếu duyệt xuôi, dp[w - weights[i]] đã được update với item i hiện tại → trùng item.
+// Duyệt ngược đảm bảo dp[w - weights[i]] còn là từ vòng (i-1).</code></pre>
+
+          <p>LCS, Climbing Stairs, House Robber, Min Path Sum đều có thể tối ưu space.</p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Climbing Stairs</div>
+            <p>Cài cả 3 cách: recursive memo, tabulation O(n) space, optimized O(1) space.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — House Robber I & II</div>
+            <p>II: nhà đầu và nhà cuối kề nhau (vòng tròn). Hint: chạy I trên 2 phạm vi.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Coin Change I & II</div>
+            <p>I: số coin ít nhất. II: số cách tạo amount.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Longest Increasing Subsequence</div>
+            <p>Cài cả 2 cách: O(n²) và O(n log n).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Longest Common Subsequence</div>
+            <p>Đã có ở 12.9.2. Cài rồi thử tối ưu space O(min(m,n)).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Edit Distance (Hard)</div>
+            <p>Đã có ở 12.9.3.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Unique Paths I & II</div>
+            <p>II: có obstacle (ô có giá trị 1 không đi được).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 8 — Word Break</div>
+            <p>Đã có ở 12.6.4.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 9 — Best Time to Buy and Sell Stock (4 biến thể)</div>
+            <p>I: 1 lần. II: nhiều lần. III: 2 lần. IV: k lần. V: với cooldown 1 ngày sau bán.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 10 — Partition Equal Subset Sum</div>
+            <p>0/1 Knapsack với target = sum/2.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 11 — Burst Balloons (Hard, Interval DP)</div>
+            <p>LeetCode 312. Interval DP, không trực quan.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 12 — Regular Expression Matching (Hard)</div>
+            <p>LeetCode 10. DP 2D với match <code>.</code> và <code>*</code>.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> 2 điều kiện để áp dụng DP là?</p>
+              <ul class="quiz-options">
+                <li>Mảng đã sort + có target</li>
+                <li>Có cycle + có direction</li>
+                <li>Optimal substructure + Overlapping subproblems</li>
+                <li>Recursive + Iterative</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Optimal substructure + Overlapping subproblems.</strong> Optimal substructure cho phép kết hợp lời giải con; overlapping cho phép cache có hiệu quả.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> Memoization (top-down) khác Tabulation (bottom-up) chính ở?</p>
+              <ul class="quiz-options">
+                <li>Top-down dùng đệ quy + cache; bottom-up duyệt iterative + bảng</li>
+                <li>Top-down nhanh hơn</li>
+                <li>Bottom-up dùng ít memory hơn</li>
+                <li>Top-down chỉ dùng được cho 1D</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Top-down = đệ quy + cache; bottom-up = iterative + table.</strong> Cả hai cho cùng kết quả nhưng cách cài khác.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Bước quan trọng nhất khi giải DP là?</p>
+              <ul class="quiz-options">
+                <li>Viết base case</li>
+                <li>Tối ưu space</li>
+                <li>Định nghĩa state — dp[i] (hoặc dp[i][j]) đại diện cho gì</li>
+                <li>Kiểm tra Big-O</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Định nghĩa state.</strong> Đây là 80% công việc. State đúng → transition dễ dàng. State sai → không bao giờ tìm được lời giải.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 4.</strong> Climbing Stairs có recurrence là?</p>
+              <ul class="quiz-options">
+                <li>dp[i] = dp[i-1] + dp[i-2]</li>
+                <li>dp[i] = dp[i-1] × 2</li>
+                <li>dp[i] = dp[i/2] + 1</li>
+                <li>dp[i] = max(dp[i-1], dp[i-2])</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: dp[i] = dp[i-1] + dp[i-2].</strong> Đến bậc i từ bậc i-1 (nhảy 1) hoặc bậc i-2 (nhảy 2). Giống Fibonacci!
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Big-O LIS tối ưu nhất với binary search?</p>
+              <ul class="quiz-options">
+                <li>O(n²)</li>
+                <li>O(n)</li>
+                <li>O(n log n)</li>
+                <li>O(2ⁿ)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n log n).</strong> Patience sorting + binary search trên mảng "tails".
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 6.</strong> Trong 0/1 Knapsack tối ưu space O(W), tại sao duyệt w từ <em>phải sang trái</em>?</p>
+              <ul class="quiz-options">
+                <li>Để tăng hiệu năng cache</li>
+                <li>Để dp[w - weights[i]] vẫn là từ vòng trước (chưa update với item hiện tại)</li>
+                <li>Vì loop forward không hoạt động</li>
+                <li>Để tránh integer overflow</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Đảm bảo dp[w - weights[i]] từ vòng trước.</strong> Duyệt forward → dp[w - weights[i]] đã update với item i → trùng item (thành unbounded).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 7.</strong> Bài "Edit Distance" có state là?</p>
+              <ul class="quiz-options">
+                <li>dp[i][j] = số phép biến đổi tối thiểu để w1[0..i] → w2[0..j]</li>
+                <li>dp[i] = số ký tự khác nhau ở vị trí i</li>
+                <li>dp[i][j] = w1[i] === w2[j] hay không</li>
+                <li>dp[i] = LCS dài nhất</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: dp[i][j] = số biến đổi để w1[0..i] thành w2[0..j].</strong> Transition: nếu w1[i-1] = w2[j-1] thì dp[i-1][j-1]; else min của 3 phép (insert/delete/replace) + 1.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Bài "Coin Change" (số coin ít nhất tạo amount) có recurrence?</p>
+              <ul class="quiz-options">
+                <li>dp[i] = max(dp[i - c] + 1) cho mọi coin c &lt;= i</li>
+                <li>dp[i] = min(dp[i - c] + 1) cho mọi coin c &lt;= i</li>
+                <li>dp[i] = sum(dp[i - c]) cho mọi coin c</li>
+                <li>dp[i] = dp[i - 1] + 1</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: min(dp[i - c] + 1).</strong> Để tạo i, lấy 1 coin c và cần thêm dp[i-c] coin nữa. Min trên mọi lựa chọn coin.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 12 — và toàn bộ giáo trình</h2>
+          <ul>
+            <li>✅ DP = đệ quy + cache + tư duy state</li>
+            <li>✅ 2 điều kiện: optimal substructure + overlapping subproblems</li>
+            <li>✅ Top-down (memo) vs Bottom-up (tabulation) — đánh đổi</li>
+            <li>✅ <strong>Quy trình 5 bước</strong>: state → base → transition → thứ tự duyệt → đáp án</li>
+            <li>✅ 5 dạng DP phổ biến: 1D linear, 2D grid, knapsack, LIS/LCS, interval</li>
+            <li>✅ Tối ưu space bằng rolling array khi state chỉ phụ thuộc 1-2 vòng trước</li>
+          </ul>
+
+          <div class="callout tip" style="margin-top: 32px;">
+            <div class="callout-title">🎓 Kết thúc giáo trình DSA Mastery</div>
+            <p>
+              Bạn đã đi qua 12 chương — từ Big-O đến Dynamic Programming. Đây là <strong>nền tảng đủ</strong> cho phỏng vấn IT cấp Junior - Mid.
+              Để tiến xa hơn (FAANG, Senior+), tiếp tục:
+            </p>
+            <ol>
+              <li>Giải <strong>NeetCode 150</strong> (~150 bài) theo từng pattern bạn đã học</li>
+              <li>Quay lại review từng chương sau mỗi 2-3 tuần — DSA chỉ ngấm khi ôn lặp lại</li>
+              <li>Học System Design song song khi đã solid DSA</li>
+              <li>Mock interview với người khác — pressuretest tư duy của bạn</li>
+            </ol>
+            <p>
+              <strong>Chúc bạn thành công ở mọi vòng phỏng vấn!</strong> Đây mới chỉ là 1 trong 6 trụ cột —
+              <a href="../../index.html">trang chủ</a> để xem các trụ cột khác sắp build (OS, Network, Database, OOP, System Design).
+            </p>
+          </div>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong11.html">
+        <span class="label">← Chương trước</span>
+        Chương 11: Graph
+      </a>
+      <a href="../index.html">
+        <span class="label">Hoàn thành 🎉</span>
+        Quay về trang chủ DSA
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 12 (FINAL) · Dynamic Programming · Cảm ơn bạn đã hoàn thành!
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

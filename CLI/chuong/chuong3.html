@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 3: Pipes &amp; Redirects — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong2.html">← Chương 2</a></li>
+        <li><a href="chuong3.html" class="active">Chương 3</a></li>
+        <li><a href="chuong4.html">Chương 4 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 03 — Pipes &amp; Redirects</h1>
+        <p>
+          Đây là chương mà CLI <em>thật sự</em> phát huy sức mạnh. Học cách ghép nhiều lệnh nhỏ
+          thành một <strong>chuỗi xử lý dữ liệu</strong> — đếm dòng log, lọc process, gộp file, lưu output ra disk.
+          Mỗi công cụ làm <em>một việc</em>, nhưng khi nối lại bằng <code>|</code> và <code>&gt;</code> thì gần như không có gì là không làm được.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. stdout, stderr, stdin — 3 stream chuẩn</h2>
+      <p>
+        Mỗi process trên Unix khi chạy đều có 3 luồng dữ liệu mặc định, được đánh số bằng
+        <strong>file descriptor (fd)</strong>:
+      </p>
+
+      <table>
+        <thead><tr><th>fd</th><th>Tên</th><th>Vai trò</th><th>Mặc định nối tới</th></tr></thead>
+        <tbody>
+          <tr><td><code>0</code></td><td><strong>stdin</strong></td><td>Input — nơi lệnh đọc dữ liệu vào</td><td>Bàn phím</td></tr>
+          <tr><td><code>1</code></td><td><strong>stdout</strong></td><td>Output bình thường</td><td>Màn hình terminal</td></tr>
+          <tr><td><code>2</code></td><td><strong>stderr</strong></td><td>Output lỗi / cảnh báo</td><td>Màn hình terminal</td></tr>
+        </tbody>
+      </table>
+
+      <p>Hai stream output (1 và 2) cùng đổ ra terminal nên trông giống nhau, nhưng chúng <em>tách biệt</em> — và đó là điều quan trọng nhất chương này.</p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> existing.txt missing.txt
+<span class="output">existing.txt</span>                                    <span class="comment"># dòng này là stdout</span>
+<span class="output">ls: missing.txt: No such file or directory</span>      <span class="comment"># dòng này là stderr</span></code></pre>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Vì sao tách stdout và stderr?</div>
+        Để bạn có thể <em>lưu kết quả tốt vào file</em> mà <em>vẫn thấy lỗi</em> trên màn hình. Hoặc ngược lại: ẩn output, chỉ giữ lỗi để debug. Phần Redirect (mục 5) sẽ trực tiếp xử lý chuyện này.
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Đọc file: cat, less, head, tail</h2>
+
+      <h3><code>cat</code> — concatenate &amp; in nội dung</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cat</span> README.md              <span class="comment"># in toàn bộ file ra stdout</span>
+<span class="prompt">$ </span><span class="cmd">cat</span> a.txt b.txt            <span class="comment"># nối nhiều file (đó là tên gốc: con-CAT-enate)</span>
+<span class="prompt">$ </span><span class="cmd">cat</span> <span class="flag">-n</span> script.sh           <span class="comment"># -n: kèm số dòng</span></code></pre>
+
+      <p class="text-dim"><code>cat</code> phù hợp cho file ngắn. File dài (vài nghìn dòng) sẽ tràn màn hình — dùng <code>less</code>.</p>
+
+      <h3><code>less</code> — đọc file dài có thể scroll</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">less</span> /var/log/system.log   <span class="comment"># mở pager</span></code></pre>
+
+      <p>Khi đang trong <code>less</code>, các phím hữu ích:</p>
+      <ul>
+        <li><code>↑ ↓</code> hoặc <code>j k</code> — cuộn từng dòng</li>
+        <li><code>Space</code> — cuộn 1 trang xuống, <code>b</code> — 1 trang lên</li>
+        <li><code>/từ-khoá</code> rồi Enter — search; <code>n</code> để tới match tiếp theo</li>
+        <li><code>g</code> — về đầu file, <code>G</code> — xuống cuối</li>
+        <li><code>q</code> — <strong>thoát</strong> (đừng quên!)</li>
+      </ul>
+
+      <h3><code>head</code> &amp; <code>tail</code> — xem đầu / cuối file</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">head</span> access.log              <span class="comment"># 10 dòng đầu (mặc định)</span>
+<span class="prompt">$ </span><span class="cmd">head</span> <span class="flag">-n</span> 20 access.log         <span class="comment"># 20 dòng đầu</span>
+<span class="prompt">$ </span><span class="cmd">tail</span> <span class="flag">-n</span> 50 error.log          <span class="comment"># 50 dòng cuối</span>
+<span class="prompt">$ </span><span class="cmd">tail</span> <span class="flag">-f</span> app.log               <span class="comment"># follow: theo dõi log realtime, dòng mới hiện ngay</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 <code>tail -f</code> là vũ khí số 1 của DevOps</div>
+        Đang debug app crash? <code>tail -f app.log</code> ở 1 cửa sổ, restart app ở cửa sổ khác — bạn thấy log chạy realtime. Kết hợp với <code>grep</code> ở Chương 4: <code>tail -f app.log | grep ERROR</code> — chỉ hiện dòng có chữ ERROR.
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Đếm &amp; gộp: wc, sort, uniq, tee</h2>
+
+      <h3><code>wc</code> — word count (line / word / char)</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">wc</span> README.md
+<span class="output">      42     180    1024 README.md</span>             <span class="comment"># lines  words  bytes  filename</span>
+
+<span class="prompt">$ </span><span class="cmd">wc</span> <span class="flag">-l</span> *.js                  <span class="comment"># -l: chỉ đếm dòng — đếm SLOC nhanh</span>
+<span class="prompt">$ </span><span class="cmd">wc</span> <span class="flag">-w</span> essay.txt              <span class="comment"># -w: đếm từ</span>
+<span class="prompt">$ </span><span class="cmd">wc</span> <span class="flag">-c</span> file.bin               <span class="comment"># -c: đếm byte</span></code></pre>
+
+      <h3><code>sort</code> — sắp xếp dòng</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sort</span> names.txt              <span class="comment"># A→Z</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-r</span> names.txt           <span class="comment"># reverse: Z→A</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-n</span> sizes.txt           <span class="comment"># -n: sort theo số (tự nhiên), không phải string</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> <span class="flag">-u</span> dup.txt             <span class="comment"># -u: unique, bỏ trùng</span></code></pre>
+
+      <h3><code>uniq</code> — bỏ dòng trùng <em>liền kề</em></h3>
+      <p><strong>Quan trọng:</strong> <code>uniq</code> chỉ gộp dòng trùng <em>kề nhau</em>. Vì vậy luôn đi cặp với <code>sort</code> trước:</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sort</span> log.txt | <span class="cmd">uniq</span>            <span class="comment"># gộp dòng trùng</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> log.txt | <span class="cmd">uniq</span> <span class="flag">-c</span>         <span class="comment"># -c: kèm count mỗi dòng xuất hiện bao nhiêu lần</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> log.txt | <span class="cmd">uniq</span> <span class="flag">-d</span>         <span class="comment"># -d: chỉ in dòng trùng (duplicate)</span></code></pre>
+
+      <h3><code>tee</code> — chia stream thành 2</h3>
+      <p>Hình chữ T trong tên gọi: input đi vào, output chia làm 2 hướng — vừa ra stdout vừa ghi file.</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> | <span class="cmd">tee</span> filelist.txt           <span class="comment"># vừa hiện trên màn hình, vừa lưu file</span>
+<span class="prompt">$ </span><span class="cmd">make</span> | <span class="cmd">tee</span> build.log             <span class="comment"># xem build live, đồng thời lưu log để xem lại</span>
+<span class="prompt">$ </span><span class="cmd">echo</span> "127.0.0.1 dev" | <span class="cmd">sudo</span> tee <span class="flag">-a</span> /etc/hosts  <span class="comment"># -a: append; pattern phổ biến để ghi file cần sudo</span></code></pre>
+    </section>
+
+    <section>
+      <h2>4. Pipe <code>|</code> — nối stdout của lệnh A vào stdin của lệnh B</h2>
+      <p>
+        Đây là <em>linh hồn</em> của Unix philosophy: <strong>"Mỗi chương trình làm 1 việc, làm thật tốt. Nối chúng bằng pipe để giải bài toán lớn."</strong>
+      </p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> | <span class="cmd">wc</span> <span class="flag">-l</span>                       <span class="comment"># đếm số file/folder trong thư mục hiện tại</span>
+<span class="prompt">$ </span><span class="cmd">ps</span> aux | <span class="cmd">grep</span> node                <span class="comment"># tìm mọi process node đang chạy</span>
+<span class="prompt">$ </span><span class="cmd">history</span> | <span class="cmd">tail</span> <span class="flag">-n</span> 20              <span class="comment"># 20 lệnh gần nhất bạn đã gõ</span></code></pre>
+
+      <h3>Ví dụ kinh điển — top 10 IP truy cập nhiều nhất từ access log</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cat</span> access.log | <span class="cmd">awk</span> '{print $1}' | <span class="cmd">sort</span> | <span class="cmd">uniq</span> <span class="flag">-c</span> | <span class="cmd">sort</span> <span class="flag">-rn</span> | <span class="cmd">head</span> <span class="flag">-n</span> 10</code></pre>
+
+      <p>Đọc từ trái qua phải, mỗi pipe là một bước:</p>
+      <ol>
+        <li><code>cat access.log</code> — đọc file log</li>
+        <li><code>awk '{print $1}'</code> — lấy cột 1 (IP address)</li>
+        <li><code>sort</code> — sắp xếp để các IP giống nhau nằm cạnh nhau</li>
+        <li><code>uniq -c</code> — gộp + đếm số lần</li>
+        <li><code>sort -rn</code> — sort theo số, giảm dần</li>
+        <li><code>head -n 10</code> — lấy 10 dòng đầu</li>
+      </ol>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Tư duy "stream"</div>
+        Đừng nghĩ "tôi muốn lấy gì". Hãy nghĩ "dữ liệu chảy qua những bước biến đổi nào". Pipe biến CLI thành dây chuyền lắp ráp dữ liệu — và đây là kỹ năng <em>cốt lõi</em> phân biệt người dùng CLI sơ cấp với pro.
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Redirect: <code>&gt;</code> <code>&gt;&gt;</code> <code>&lt;</code> <code>2&gt;</code> <code>&amp;&gt;</code></h2>
+
+      <h3>Ghi stdout ra file: <code>&gt;</code> và <code>&gt;&gt;</code></h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> &gt; files.txt              <span class="comment"># ghi đè (overwrite): nội dung cũ MẤT</span>
+<span class="prompt">$ </span><span class="cmd">date</span> &gt;&gt; log.txt            <span class="comment"># append: nối thêm vào cuối</span>
+<span class="prompt">$ </span><span class="cmd">echo</span> "Hello" &gt; greet.txt    <span class="comment"># tạo file mới với nội dung "Hello"</span></code></pre>
+
+      <div class="callout danger">
+        <div class="callout-title">🛑 Cẩn thận: <code>&gt;</code> ghi đè không hỏi</div>
+        <code>cat important.txt &gt; important.txt</code> sẽ <strong>xóa sạch</strong> file. Shell mở file để ghi (truncate về rỗng) <em>trước khi</em> chạy <code>cat</code>. Nếu cần append, luôn dùng <code>&gt;&gt;</code>. Để an toàn hơn, có thể bật <code>set -o noclobber</code> trong shell — khi đó <code>&gt;</code> sẽ từ chối ghi đè file đã tồn tại.
+      </div>
+
+      <h3>Đọc file làm stdin: <code>&lt;</code></h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">wc</span> <span class="flag">-l</span> &lt; access.log         <span class="comment"># tương đương wc -l access.log nhưng đi qua stdin</span>
+<span class="prompt">$ </span><span class="cmd">sort</span> &lt; names.txt &gt; sorted.txt   <span class="comment"># đọc names.txt, sort, ghi ra sorted.txt</span></code></pre>
+
+      <h3>Redirect stderr: <code>2&gt;</code></h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">make</span> 2&gt; errors.log              <span class="comment"># stderr → file, stdout vẫn ra màn hình</span>
+<span class="prompt">$ </span><span class="cmd">find</span> / <span class="flag">-name</span> "*.conf" 2&gt; /dev/null  <span class="comment"># nuốt mọi "Permission denied"</span></code></pre>
+
+      <h3>Gộp cả stdout và stderr</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">make</span> &gt; build.log 2&gt;&amp;1          <span class="comment"># stdout → file, stderr → cùng nơi với stdout</span>
+<span class="prompt">$ </span><span class="cmd">make</span> &amp;&gt; build.log              <span class="comment"># shortcut: stdout + stderr cùng vào file (bash/zsh)</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Thứ tự <code>2&gt;&amp;1</code> rất quan trọng</div>
+        <code>cmd &gt; file 2&gt;&amp;1</code> <strong>đúng</strong>: stdout sang file, rồi stderr theo sau stdout (cũng vào file).
+        <br><code>cmd 2&gt;&amp;1 &gt; file</code> <strong>SAI</strong>: stderr trỏ tới chỗ stdout đang trỏ (lúc đó vẫn là màn hình), <em>rồi</em> stdout mới đổi sang file. Kết quả: stderr ra màn hình, chỉ stdout vào file.
+      </div>
+
+      <h3><code>/dev/null</code> — "thùng rác" của hệ thống</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cmd</span> &gt; /dev/null               <span class="comment"># vứt stdout đi, chỉ giữ stderr để debug</span>
+<span class="prompt">$ </span><span class="cmd">cmd</span> 2&gt; /dev/null              <span class="comment"># vứt stderr, giữ output</span>
+<span class="prompt">$ </span><span class="cmd">cmd</span> &gt; /dev/null 2&gt;&amp;1          <span class="comment"># im lặng tuyệt đối — chỉ quan tâm exit code</span></code></pre>
+
+      <h3>Bảng tổng kết redirect</h3>
+      <table>
+        <thead><tr><th>Cú pháp</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>&gt; file</code></td><td>stdout → file (ghi đè)</td></tr>
+          <tr><td><code>&gt;&gt; file</code></td><td>stdout → file (append)</td></tr>
+          <tr><td><code>&lt; file</code></td><td>file → stdin</td></tr>
+          <tr><td><code>2&gt; file</code></td><td>stderr → file</td></tr>
+          <tr><td><code>2&gt;&gt; file</code></td><td>stderr → file (append)</td></tr>
+          <tr><td><code>2&gt;&amp;1</code></td><td>stderr → đi cùng stdout</td></tr>
+          <tr><td><code>&amp;&gt; file</code></td><td>cả stdout + stderr → file</td></tr>
+          <tr><td><code>&gt; /dev/null</code></td><td>vứt output</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>6. Here-doc, Here-string &amp; Process substitution</h2>
+
+      <h3>Here-document <code>&lt;&lt;EOF</code> — nhúng nhiều dòng làm stdin</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cat</span> &gt; config.yml &lt;&lt;EOF
+server:
+  host: localhost
+  port: 8080
+EOF</code></pre>
+
+      <p>Mọi thứ giữa <code>&lt;&lt;EOF</code> và dòng <code>EOF</code> được dùng làm stdin. <code>EOF</code> chỉ là quy ước — đặt tên gì cũng được, miễn nhất quán giữa mở và đóng.</p>
+
+      <h3>Here-string <code>&lt;&lt;&lt;</code> — 1 chuỗi ngắn làm stdin</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">wc</span> <span class="flag">-w</span> &lt;&lt;&lt; "hello world from cli"
+<span class="output">       4</span>
+<span class="prompt">$ </span><span class="cmd">grep</span> apple &lt;&lt;&lt; "I like apple pie"
+<span class="output">I like apple pie</span></code></pre>
+
+      <h3>Process substitution <code>&lt;(cmd)</code></h3>
+      <p>Cho phép <em>output của một lệnh</em> được dùng như một <strong>file ảo</strong>. Cực kỳ tiện cho các lệnh chỉ nhận file (như <code>diff</code>):</p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">diff</span> &lt;(<span class="cmd">ls</span> dir1) &lt;(<span class="cmd">ls</span> dir2)        <span class="comment"># so sánh nội dung 2 thư mục</span>
+<span class="prompt">$ </span><span class="cmd">diff</span> &lt;(<span class="cmd">sort</span> a.txt) &lt;(<span class="cmd">sort</span> b.txt)    <span class="comment"># so sánh sau khi sort</span>
+<span class="prompt">$ </span><span class="cmd">comm</span> &lt;(<span class="cmd">sort</span> emails-2024.txt) &lt;(<span class="cmd">sort</span> emails-2025.txt)</code></pre>
+
+      <p class="text-dim">Hướng ngược <code>&gt;(cmd)</code> ít gặp hơn — gửi output đến <em>nhiều</em> consumer cùng lúc, ví dụ <code>echo data | tee &gt;(gzip &gt; out.gz) &gt;(wc -c)</code>.</p>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>Simulator đã hỗ trợ pipe và redirect cơ bản — thử các kịch bản:</p>
+      <ol>
+        <li>Tạo file demo: <code>echo "apple" &gt; fruits.txt</code></li>
+        <li>Append thêm: <code>echo "banana" &gt;&gt; fruits.txt</code> rồi <code>echo "apple" &gt;&gt; fruits.txt</code></li>
+        <li>Xem nội dung: <code>cat fruits.txt</code></li>
+        <li>Đếm dòng: <code>cat fruits.txt | wc -l</code></li>
+        <li>Đếm tần suất: <code>sort fruits.txt | uniq -c</code></li>
+        <li>Lưu kết quả: <code>sort fruits.txt | uniq -c &gt; report.txt</code></li>
+        <li>Xem report: <code>cat report.txt</code></li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong3 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Trên Terminal thật, làm tuần tự (xong báo lại tôi check):</p>
+      <ol>
+        <li>Đếm tổng số dòng trong tất cả file <code>.js</code> ở thư mục dự án (gợi ý: <code>wc -l *.js</code> — dòng cuối là tổng).</li>
+        <li>Tạo file <code>names.txt</code> chứa 5 cái tên (mỗi dòng 1 tên, có vài tên trùng). Đếm xem mỗi tên xuất hiện bao nhiêu lần — chỉ dùng <code>sort</code> + <code>uniq -c</code>.</li>
+        <li>Chạy <code>ls /etc</code> và lưu kết quả vào <code>etc-listing.txt</code>. Sau đó dùng <code>wc -l</code> để biết <code>/etc</code> có bao nhiêu mục.</li>
+        <li>Chạy <code>find / -name "*.log" 2&gt; /dev/null | head</code>. Giải thích vì sao có <code>2&gt; /dev/null</code> trong lệnh.</li>
+        <li>Cùng lệnh <code>ls -la</code>: ghi output ra file <code>list.txt</code> <strong>nhưng vẫn hiện trên màn hình</strong>. Dùng lệnh nào?</li>
+        <li>Tạo <code>config.ini</code> (3 dòng nội dung) chỉ bằng <strong>1 lệnh</strong> dùng here-document <code>&lt;&lt;EOF</code>.</li>
+        <li>So sánh nội dung 2 thư mục <code>~/Downloads</code> và <code>~/Desktop</code> bằng <code>diff</code> + process substitution.</li>
+        <li>Trick câu hỏi: chạy <code>cmd 2&gt;&amp;1 &gt; out.txt</code> và <code>cmd &gt; out.txt 2&gt;&amp;1</code>. Output (stderr) của 2 cách rơi vào đâu? Vì sao khác nhau?</li>
+        <li>Bonus: tạo 1 chuỗi pipe đếm 5 lệnh bạn dùng nhiều nhất từ history (gợi ý: <code>history | awk '{print $2}' | sort | uniq -c | sort -rn | head -n 5</code>).</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ Hiểu 3 stream: stdin (0), stdout (1), stderr (2)</li>
+        <li>✅ Đọc file: <code>cat</code>, <code>less</code>, <code>head</code>, <code>tail -f</code> để theo dõi log realtime</li>
+        <li>✅ Đếm &amp; thống kê: <code>wc -l</code>, <code>sort</code>, <code>uniq -c</code>, <code>tee</code></li>
+        <li>✅ Pipe <code>|</code> — nối stdout của lệnh trước vào stdin lệnh sau</li>
+        <li>✅ Redirect: <code>&gt;</code> ghi đè, <code>&gt;&gt;</code> append, <code>&lt;</code> đọc từ file</li>
+        <li>✅ Tách / gộp stderr: <code>2&gt;</code>, <code>2&gt;&amp;1</code>, <code>&amp;&gt;</code>, <code>/dev/null</code></li>
+        <li>✅ Here-doc <code>&lt;&lt;EOF</code>, here-string <code>&lt;&lt;&lt;</code>, process substitution <code>&lt;(cmd)</code></li>
+      </ul>
+      <p class="text-dim">Chương 4 chúng ta sẽ học <em>search</em> — <code>grep</code>, <code>find</code> và <code>fzf</code> — bộ ba để tìm bất cứ thứ gì trong file system và nội dung file. Kết hợp với pipe của chương này, bạn sẽ có superpower thật sự.</p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong2.html">
+        <span class="label">Trước</span>
+        ← Chương 02: File ops &amp; Permissions
+      </a>
+      <a href="chuong4.html">
+        <span class="label">Tiếp theo</span>
+        Chương 04: Search (grep, find, fzf) →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 03
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Trong Unix, file descriptor nào là stderr?",
+        options: ["0", "1", "2", "3"],
+        correct: 2,
+        explain: "fd 0 = stdin, fd 1 = stdout, fd 2 = stderr. Đó là lý do redirect stderr viết là 2> (đọc: 'fd 2 ra...')."
+      },
+      {
+        q: "Bạn có file 'data.txt' chứa nội dung quan trọng. Gõ 'echo hello > data.txt' thì điều gì xảy ra?",
+        options: [
+          "Append 'hello' vào cuối file, nội dung cũ giữ nguyên",
+          "File báo lỗi vì đã tồn tại",
+          "Nội dung cũ bị XÓA hoàn toàn, file giờ chỉ còn dòng 'hello'",
+          "macOS sẽ hỏi xác nhận trước khi ghi đè"
+        ],
+        correct: 2,
+        explain: "Toán tử > ghi đè không hỏi gì. File bị truncate về rỗng trước khi ghi nội dung mới. Để append phải dùng >>. Đây là lỗi mất dữ liệu phổ biến nhất với người mới."
+      },
+      {
+        q: "Câu nào ĐÚNG về sự khác nhau giữa hai lệnh: 'cmd > out.txt 2>&1' VS 'cmd 2>&1 > out.txt'?",
+        options: [
+          "Hai lệnh tương đương — đều đưa stdout và stderr vào out.txt",
+          "Cách 1 đưa cả 2 vào file. Cách 2 chỉ đưa stdout vào file, stderr vẫn ra màn hình",
+          "Cách 1 chỉ ghi stdout. Cách 2 chỉ ghi stderr",
+          "Cả hai đều bị lỗi cú pháp"
+        ],
+        correct: 1,
+        explain: "Redirect xử lý từ trái sang phải. 'cmd > out.txt 2>&1': stdout → file, sau đó stderr trỏ tới CHỖ stdout đang trỏ (= file). 'cmd 2>&1 > out.txt': stderr trỏ tới CHỖ stdout đang trỏ LÚC ĐÓ (= terminal), sau đó stdout mới đổi sang file. Kết quả: stderr ra terminal, chỉ stdout vào file. Thứ tự cực kỳ quan trọng."
+      },
+      {
+        q: "Vì sao luôn cần 'sort' trước khi 'uniq'?",
+        options: [
+          "uniq chạy nhanh hơn khi input đã sort",
+          "uniq chỉ gộp các dòng trùng LIỀN KỀ, nên cần sort để các dòng giống nhau nằm cạnh nhau",
+          "Đó chỉ là quy ước, không bắt buộc",
+          "uniq sẽ báo lỗi nếu input chưa sort"
+        ],
+        correct: 1,
+        explain: "uniq so sánh từng dòng với dòng ngay trước nó. Nếu input chưa sort, các bản trùng nằm rải rác sẽ KHÔNG bị gộp. Đó là lý do pattern 'sort | uniq -c | sort -rn' xuất hiện ở mọi nơi."
+      },
+      {
+        q: "Lệnh nào in ra số dòng trong file lớn /var/log/system.log mà KHÔNG load toàn file vào memory?",
+        options: [
+          "cat /var/log/system.log | wc -l",
+          "wc -l /var/log/system.log",
+          "wc -l < /var/log/system.log",
+          "Cả 3 cách đều OK và có hiệu năng tương tự"
+        ],
+        correct: 3,
+        explain: "Cả 3 đều stream qua wc theo từng buffer nhỏ. wc -l file là gọn nhất. cat | wc -l được gọi là 'useless use of cat' nhưng hoạt động đúng. < file đẩy file vào stdin của wc. Tất cả đều hiệu năng tương tự — Unix đọc file kiểu streaming."
+      },
+      {
+        q: "Bạn muốn xem log app realtime, mỗi khi có dòng mới chứa ERROR thì hiện ngay. Lệnh nào đúng?",
+        options: [
+          "cat app.log | grep ERROR",
+          "tail app.log | grep ERROR",
+          "tail -f app.log | grep ERROR",
+          "head -f app.log | grep ERROR"
+        ],
+        correct: 2,
+        explain: "tail -f (follow) giữ file mở và stream dòng mới khi chúng được ghi vào. Pipe vào grep ERROR lọc chỉ những dòng quan tâm. cat và tail không có -f thì kết thúc ngay khi đọc xong file hiện tại — không có realtime."
+      },
+      {
+        q: "diff nhận tham số là 2 file. Bạn muốn so sánh output của 'ls dir1' và 'ls dir2'. Cách Unix-y nhất?",
+        options: [
+          "Lưu mỗi cái ra file tạm rồi diff 2 file đó",
+          "diff <(ls dir1) <(ls dir2)",
+          "ls dir1 | diff ls dir2",
+          "diff ls dir1 ls dir2"
+        ],
+        correct: 1,
+        explain: "Process substitution <(cmd) tạo file ảo từ output của cmd. diff đọc nó như đọc file thường. Không cần file tạm, không cần dọn dẹp. Đây là siêu năng lực ít người biết của bash/zsh."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

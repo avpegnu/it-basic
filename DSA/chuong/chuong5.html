@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 05 — Hash Table · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong4.html">← Ch.04</a></li>
+        <li><a href="chuong5.html" class="active">Ch.05</a></li>
+        <li><a href="chuong6.html">Ch.06 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 05 · LOOKUP DS · ~120 phút</div>
+      <h1>Hash Table<br/><span class="text-amber">Bảng băm — vũ khí O(1)</span></h1>
+      <p class="lead">
+        Hash Table là <strong>"vũ khí bí mật"</strong> giảm độ phức tạp từ O(n²) xuống O(n) trong cực nhiều bài toán.
+        Hiểu sâu cơ chế bên trong (hash function, collision, load factor) là điểm cộng lớn khi phỏng vấn — vì 90% ứng viên
+        chỉ biết "dùng được" mà không biết "tại sao chạy được".
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#why">5.1 Tại sao cần Hash Table?</a></li>
+          <li><a href="#hash-fn">5.2 Hash function</a></li>
+          <li><a href="#collision">5.3 Collision và xử lý</a></li>
+          <li><a href="#load-factor">5.4 Load factor & Rehashing</a></li>
+          <li><a href="#big-o">5.5 Big-O của Hash Table</a></li>
+          <li><a href="#js">5.6 Object/Map/Set trong JS</a></li>
+          <li><a href="#impl">5.7 Tự cài đặt Hash Map</a></li>
+          <li><a href="#patterns">5.8 Patterns kinh điển</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 5.1 -->
+        <section id="why">
+          <h2>5.1 Tại sao cần Hash Table?</h2>
+
+          <p>
+            Hãy giải bài toán: <strong>"Cho mảng nums và target, tìm 2 phần tử có tổng = target."</strong>
+            Đây là LeetCode 1, nổi tiếng nhất.
+          </p>
+
+          <pre data-lang="javascript"><code>// Cách 1: Brute force — O(n²)
+function twoSum(nums, target) {
+  for (let i = 0; i &lt; nums.length; i++) {
+    for (let j = i + 1; j &lt; nums.length; j++) {
+      if (nums[i] + nums[j] === target) return [i, j];
+    }
+  }
+}
+
+// Cách 2: Hash Map — O(n)
+function twoSum(nums, target) {
+  const map = new Map();
+  for (let i = 0; i &lt; nums.length; i++) {
+    const need = target - nums[i];
+    if (map.has(need)) return [map.get(need), i];
+    map.set(nums[i], i);
+  }
+}</code></pre>
+
+          <p>
+            Cách 2 chạy <strong>nhanh gấp ~50,000 lần</strong> với n = 100,000.
+            Sự khác biệt ấy đến từ Hash Map: <code>map.has()</code> và <code>map.get()</code> đều O(1) trung bình.
+          </p>
+
+          <h3>Hash Table là gì?</h3>
+          <p>
+            <strong>Hash Table</strong> (bảng băm) là cấu trúc lưu cặp <code>(key, value)</code> sao cho thao tác
+            <code>get/set/has/delete</code> có độ phức tạp <strong>O(1) trung bình</strong>.
+          </p>
+
+          <p>Ý tưởng: dùng một <strong>hàm băm (hash function)</strong> biến <em>key bất kỳ</em> thành <em>chỉ số mảng</em>:</p>
+
+          <pre data-lang="text"><code>key "apple" ──hash()──→ 73   ──mod 10──→ 3
+key "banana" ──hash()──→ 124  ──mod 10──→ 4
+
+bucket[]: [_, _, _, "apple→1", "banana→3", _, _, _, _, _]</code></pre>
+        </section>
+
+        <!-- 5.2 -->
+        <section id="hash-fn">
+          <h2>5.2 Hash function — trái tim của hash table</h2>
+
+          <p>Một hash function tốt có 4 tính chất:</p>
+
+          <ol>
+            <li><strong>Deterministic:</strong> cùng key → luôn cho cùng hash</li>
+            <li><strong>Uniform distribution:</strong> các key khác nhau phân bố đều khắp các bucket</li>
+            <li><strong>Fast to compute:</strong> tính nhanh, ưu tiên O(1) hoặc O(độ dài key)</li>
+            <li><strong>Avalanche effect:</strong> thay đổi 1 bit của key làm thay đổi mạnh hash</li>
+          </ol>
+
+          <h3>Ví dụ hash function đơn giản cho string</h3>
+
+          <pre data-lang="javascript"><code>// Hash đơn giản — chỉ để minh hoạ, không nên dùng production
+function badHash(str) {
+  let sum = 0;
+  for (const ch of str) sum += ch.charCodeAt(0);
+  return sum;
+}
+// Vấn đề: "abc" và "cba" cho cùng hash → quá nhiều collision
+
+// Polynomial hash — tốt hơn nhiều
+function polyHash(str, mod = 1e9 + 7) {
+  let h = 0;
+  const p = 31;  // prime
+  for (let i = 0; i &lt; str.length; i++) {
+    h = (h * p + str.charCodeAt(i)) % mod;
+  }
+  return h;
+}
+// "abc" và "cba" cho hash khác nhau
+
+// FNV-1a — production-grade, dùng trong nhiều thư viện
+function fnv1a(str) {
+  let hash = 2166136261;
+  for (let i = 0; i &lt; str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 16777619) &gt;&gt;&gt; 0;  // unsigned 32-bit
+  }
+  return hash;
+}</code></pre>
+
+          <h3>Hash cho object</h3>
+          <p>
+            Trong các ngôn ngữ như Java, Python, mỗi object có method <code>hashCode()</code>. Trong JS,
+            <code>Map</code> dùng cơ chế nội bộ của V8 (chi tiết bên trong là engine implementation).
+          </p>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Object key trong JS Object thường (không phải Map)</div>
+            <pre data-lang="javascript"><code>const obj = {};
+const key1 = {a: 1};
+const key2 = {b: 2};
+obj[key1] = "hello";
+obj[key2] = "world";
+console.log(obj[key1]);  // "world" (!) — vì key1.toString() = "[object Object]" = key2.toString()</code></pre>
+            <p>JS Object thường <strong>convert key thành string</strong>. Để dùng object làm key, phải dùng <code>Map</code>.</p>
+          </div>
+        </section>
+
+        <!-- 5.3 -->
+        <section id="collision">
+          <h2>5.3 Collision và 2 chiến lược xử lý</h2>
+
+          <p>
+            Vì số lượng key tiềm năng là <em>vô hạn</em> nhưng số bucket là <em>hữu hạn</em>, theo
+            <strong>nguyên lý ngăn kéo (pigeonhole)</strong>, sẽ có 2 key khác nhau cho cùng hash → <strong>collision</strong>.
+          </p>
+
+          <h3>5.3.1 Separate Chaining — mỗi bucket là 1 linked list</h3>
+
+          <pre data-lang="text"><code>bucket 0: → null
+bucket 1: → ("apple", 1) → ("apricot", 8) → null  (cùng hash)
+bucket 2: → ("banana", 3) → null
+bucket 3: → null
+bucket 4: → ("cherry", 5) → null</code></pre>
+
+          <ul>
+            <li><strong>Insert:</strong> tìm bucket, append vào list — O(1) trung bình</li>
+            <li><strong>Search:</strong> tìm bucket, duyệt list, so sánh key — O(load factor) trung bình</li>
+            <li><strong>Delete:</strong> tương tự search</li>
+          </ul>
+
+          <p>Java <code>HashMap</code>, C++ <code>unordered_map</code>, JS <code>Map</code> đều dùng (biến thể) chaining.</p>
+
+          <h3>5.3.2 Open Addressing — không dùng linked list</h3>
+
+          <p>Khi collision, tìm bucket trống <em>khác</em> theo một quy tắc (probing).</p>
+
+          <ul>
+            <li><strong>Linear probing:</strong> thử bucket <code>(h+1, h+2, h+3, ...)</code> mod N</li>
+            <li><strong>Quadratic probing:</strong> thử <code>(h+1, h+4, h+9, ...)</code> — giảm "clustering"</li>
+            <li><strong>Double hashing:</strong> dùng hash function thứ hai để xác định bước nhảy</li>
+          </ul>
+
+          <pre data-lang="text"><code>Insert "apple" → hash=3 → bucket[3]
+Insert "apricot" → hash=3 → bucket[3] đầy → bucket[4] (linear probe)
+Insert "almond" → hash=3 → bucket[3,4] đầy → bucket[5]</code></pre>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-green">Separate Chaining</h4>
+              <ul>
+                <li>Đơn giản, dễ cài</li>
+                <li>Không bị "clustering"</li>
+                <li>Load factor có thể &gt; 1</li>
+                <li>Cần extra memory cho linked list nodes</li>
+              </ul>
+            </div>
+            <div class="bad">
+              <h4 class="text-amber">Open Addressing</h4>
+              <ul>
+                <li>Cache-friendly (data nằm trong array)</li>
+                <li>Không tốn memory cho pointers</li>
+                <li>Bị clustering (linear probing)</li>
+                <li>Load factor phải &lt; 0.75 hoặc 0.5</li>
+                <li>Phức tạp khi delete (cần "tombstone")</li>
+              </ul>
+            </div>
+          </div>
+
+          <p>
+            <strong>Python's dict</strong> dùng open addressing (vì cache-friendly). <strong>Java's HashMap</strong> dùng chaining +
+            chuyển sang Red-Black Tree khi list dài &gt; 8 (Java 8+). <strong>Rust's HashMap</strong> dùng SwissTable (open addressing với SIMD probing).
+          </p>
+        </section>
+
+        <!-- 5.4 -->
+        <section id="load-factor">
+          <h2>5.4 Load Factor & Rehashing</h2>
+
+          <p>
+            <strong>Load factor</strong> = <code>số phần tử / số bucket</code>. Nó đo độ "chật" của hash table.
+          </p>
+
+          <ul>
+            <li>Load factor thấp (e.g. 0.3): nhiều bucket trống → tốn memory nhưng ít collision</li>
+            <li>Load factor cao (e.g. 0.9): tiết kiệm memory nhưng nhiều collision → chậm</li>
+          </ul>
+
+          <p>Khi load factor vượt ngưỡng (thường 0.75 cho chaining, 0.5 cho open addressing), hash table phải <strong>rehash</strong>:</p>
+
+          <ol>
+            <li>Cấp phát mảng mới gấp đôi kích thước</li>
+            <li>Tính lại hash cho mỗi key (vì chỉ số bucket thay đổi)</li>
+            <li>Insert lại vào mảng mới</li>
+          </ol>
+
+          <p>Rehash tốn O(n), nhưng nhờ amortized analysis, insert vẫn là <strong>O(1) trung bình</strong>.</p>
+
+          <pre data-lang="javascript"><code>// Pseudo-code rehashing
+function rehash() {
+  const oldBuckets = this.buckets;
+  this.capacity *= 2;
+  this.buckets = new Array(this.capacity).fill(null).map(() =&gt; []);
+  this.size = 0;
+  for (const bucket of oldBuckets) {
+    for (const [k, v] of bucket) {
+      this.set(k, v);  // tính hash mới với capacity mới
+    }
+  }
+}</code></pre>
+        </section>
+
+        <!-- 5.5 -->
+        <section id="big-o">
+          <h2>5.5 Big-O của Hash Table</h2>
+
+          <table>
+            <thead>
+              <tr><th>Thao tác</th><th>Trung bình</th><th>Worst case</th><th>Ghi chú</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>get(k)</code></td><td class="text-green">O(1)</td><td>O(n)</td><td>Worst khi tất cả key collide</td></tr>
+              <tr><td><code>set(k, v)</code></td><td class="text-green">O(1) amortized</td><td>O(n)</td><td>Có thể trigger rehash</td></tr>
+              <tr><td><code>has(k)</code></td><td class="text-green">O(1)</td><td>O(n)</td><td></td></tr>
+              <tr><td><code>delete(k)</code></td><td class="text-green">O(1)</td><td>O(n)</td><td></td></tr>
+              <tr><td>Iterate</td><td>O(n)</td><td>O(n)</td><td>Duyệt hết</td></tr>
+              <tr><td>Tìm phần tử max/min</td><td class="text-red">O(n)</td><td>O(n)</td><td>Hash table không sort</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Worst case O(n) khi nào xảy ra thực tế?</div>
+            <p>
+              Worst case xảy ra khi attacker biết hash function và cố tình gửi nhiều key cùng hash → <strong>Hash DoS attack</strong>.
+              Điều này từng tấn công web servers (PHP, Python, Java) năm 2011-2012.
+            </p>
+            <p>
+              Phòng tránh: dùng <strong>randomized hash</strong> (seed ngẫu nhiên mỗi lần khởi động) hoặc cryptographic hash.
+              JS V8 dùng SipHash với random seed.
+            </p>
+          </div>
+        </section>
+
+        <!-- 5.6 -->
+        <section id="js">
+          <h2>5.6 Object vs Map vs Set trong JavaScript</h2>
+
+          <p>Trong JS có 3 cấu trúc lookup. Biết chọn đúng là quan trọng.</p>
+
+          <h3>5.6.1 Object thường — <code>{}</code></h3>
+
+          <pre data-lang="javascript"><code>const obj = {};
+obj.name = "Alice";
+obj["age"] = 25;
+obj[42] = true;        // key tự động convert sang "42"
+console.log(Object.keys(obj));  // ["42", "name", "age"]</code></pre>
+
+          <p>Đặc điểm:</p>
+          <ul>
+            <li>Key tự động <strong>convert sang string</strong> hoặc Symbol</li>
+            <li>Có prototype chain (kế thừa methods như <code>toString</code>) → có thể nhầm lẫn</li>
+            <li>Khi nói "hash table" trong JS, đây thường là Object (trước ES6)</li>
+            <li>Performance: V8 tối ưu nhiều cho object có shape cố định (hidden classes)</li>
+          </ul>
+
+          <h3>5.6.2 Map — ES6 hash map "đúng nghĩa"</h3>
+
+          <pre data-lang="javascript"><code>const map = new Map();
+map.set("name", "Alice");
+map.set(42, true);
+map.set({a: 1}, "object key!");  // object cũng làm key được
+map.set(NaN, "even NaN!");        // NaN cũng làm key được
+
+console.log(map.get("name"));   // "Alice"
+console.log(map.size);           // 4
+console.log([...map.keys()]);    // ["name", 42, {a:1}, NaN]</code></pre>
+
+          <p>Đặc điểm:</p>
+          <ul>
+            <li><strong>Key có thể là kiểu bất kỳ</strong> (object, NaN, function...)</li>
+            <li><strong>Giữ thứ tự insertion</strong> khi iterate</li>
+            <li>Có method tiện lợi: <code>size</code>, <code>has</code>, <code>delete</code>, <code>clear</code></li>
+            <li>Iterable trực tiếp với <code>for...of</code></li>
+          </ul>
+
+          <h3>5.6.3 Set — chỉ chứa value, không có key</h3>
+
+          <pre data-lang="javascript"><code>const set = new Set([1, 2, 3, 2, 1]);
+console.log(set);          // Set(3) {1, 2, 3} — auto dedupe
+set.add(4);
+set.has(2);                // true
+set.delete(1);
+console.log(set.size);     // 3
+
+// Convert array → set → array để loại trùng
+const unique = [...new Set([1, 2, 2, 3, 3, 3])];  // [1, 2, 3]</code></pre>
+
+          <h3>So sánh khi nào dùng</h3>
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Dùng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Key là string đơn giản, ít key, biết trước</td><td><code>Object</code></td></tr>
+              <tr><td>Key động, cần insert/delete nhiều</td><td><code>Map</code></td></tr>
+              <tr><td>Key là object/NaN/non-string</td><td><code>Map</code> (Object không hỗ trợ)</td></tr>
+              <tr><td>Cần giữ thứ tự insert</td><td><code>Map</code></td></tr>
+              <tr><td>Chỉ cần "phần tử có tồn tại không"</td><td><code>Set</code></td></tr>
+              <tr><td>Loại trùng trong array</td><td><code>Set</code></td></tr>
+              <tr><td>Key sẽ được dùng làm prop của JSON output</td><td><code>Object</code></td></tr>
+            </tbody>
+          </table>
+
+          <h3>WeakMap & WeakSet</h3>
+          <p>
+            <strong>WeakMap/WeakSet</strong>: chỉ chấp nhận object làm key, và <em>không giữ reference</em> →
+            khi không còn ai khác giữ key, GC có thể thu hồi. Dùng cho metadata, caching gắn với object.
+          </p>
+        </section>
+
+        <!-- 5.7 -->
+        <section id="impl">
+          <h2>5.7 Tự cài đặt Hash Map (Separate Chaining)</h2>
+
+          <pre data-lang="javascript"><code>class HashMap {
+  constructor(capacity = 16, loadFactor = 0.75) {
+    this.capacity = capacity;
+    this.loadFactor = loadFactor;
+    this.size = 0;
+    this.buckets = Array.from({length: capacity}, () =&gt; []);
+  }
+
+  // Hash function đơn giản cho string
+  _hash(key) {
+    const str = String(key);
+    let h = 0;
+    for (let i = 0; i &lt; str.length; i++) {
+      h = (h * 31 + str.charCodeAt(i)) &gt;&gt;&gt; 0;  // unsigned 32-bit
+    }
+    return h % this.capacity;
+  }
+
+  set(key, value) {
+    const idx = this._hash(key);
+    const bucket = this.buckets[idx];
+    for (const pair of bucket) {
+      if (pair[0] === key) {
+        pair[1] = value;  // update existing
+        return;
+      }
+    }
+    bucket.push([key, value]);
+    this.size++;
+    if (this.size / this.capacity &gt; this.loadFactor) this._rehash();
+  }
+
+  get(key) {
+    const idx = this._hash(key);
+    const bucket = this.buckets[idx];
+    for (const [k, v] of bucket) {
+      if (k === key) return v;
+    }
+    return undefined;
+  }
+
+  has(key) {
+    return this.get(key) !== undefined;
+  }
+
+  delete(key) {
+    const idx = this._hash(key);
+    const bucket = this.buckets[idx];
+    for (let i = 0; i &lt; bucket.length; i++) {
+      if (bucket[i][0] === key) {
+        bucket.splice(i, 1);
+        this.size--;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _rehash() {
+    const oldBuckets = this.buckets;
+    this.capacity *= 2;
+    this.buckets = Array.from({length: this.capacity}, () =&gt; []);
+    this.size = 0;
+    for (const bucket of oldBuckets) {
+      for (const [k, v] of bucket) this.set(k, v);
+    }
+  }
+
+  *entries() {
+    for (const bucket of this.buckets) {
+      for (const pair of bucket) yield pair;
+    }
+  }
+}
+
+// Test
+const m = new HashMap();
+m.set("apple", 1);
+m.set("banana", 2);
+m.set("apple", 3);  // update
+console.log(m.get("apple"));   // 3
+console.log(m.size);            // 2</code></pre>
+        </section>
+
+        <!-- 5.8 -->
+        <section id="patterns">
+          <h2>5.8 Hash Table Patterns kinh điển</h2>
+
+          <h3>5.8.1 Counting / Frequency Map</h3>
+
+          <pre data-lang="javascript"><code>// Đếm tần suất từng phần tử
+function countFreq(arr) {
+  const freq = new Map();
+  for (const x of arr) freq.set(x, (freq.get(x) || 0) + 1);
+  return freq;
+}
+
+// Bài: Most Frequent Element
+function mostFrequent(arr) {
+  const freq = countFreq(arr);
+  let best = null, max = 0;
+  for (const [k, v] of freq) {
+    if (v &gt; max) { max = v; best = k; }
+  }
+  return best;
+}</code></pre>
+
+          <h3>5.8.2 Two Sum & biến thể</h3>
+
+          <pre data-lang="javascript"><code>// Đã thấy ở 5.1, đây là biến thể:
+// Subarray Sum Equals K — đếm số subarray có tổng = k
+function subarraySum(nums, k) {
+  const map = new Map([[0, 1]]);
+  let sum = 0, count = 0;
+  for (const x of nums) {
+    sum += x;
+    if (map.has(sum - k)) count += map.get(sum - k);
+    map.set(sum, (map.get(sum) || 0) + 1);
+  }
+  return count;
+}</code></pre>
+
+          <h3>5.8.3 Group Anagrams</h3>
+
+          <pre data-lang="javascript"><code>// Cho mảng strings, group các từ là anagram của nhau
+function groupAnagrams(strs) {
+  const map = new Map();
+  for (const s of strs) {
+    const key = s.split('').sort().join('');
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(s);
+  }
+  return [...map.values()];
+}
+
+// Input:  ["eat","tea","tan","ate","nat","bat"]
+// Output: [["eat","tea","ate"], ["tan","nat"], ["bat"]]</code></pre>
+
+          <h3>5.8.4 Longest Consecutive Sequence — KINH ĐIỂN</h3>
+
+          <pre data-lang="javascript"><code>// Tìm độ dài chuỗi liên tiếp dài nhất trong mảng (không cần sort)
+// O(n) bằng Hash Set
+function longestConsecutive(nums) {
+  const set = new Set(nums);
+  let longest = 0;
+  for (const n of set) {
+    // Chỉ bắt đầu đếm từ phần tử đầu chuỗi (n-1 không có trong set)
+    if (!set.has(n - 1)) {
+      let len = 1;
+      while (set.has(n + len)) len++;
+      longest = Math.max(longest, len);
+    }
+  }
+  return longest;
+}
+
+// Input: [100, 4, 200, 1, 3, 2]
+// Chuỗi 1-2-3-4 dài nhất = 4
+// Output: 4</code></pre>
+
+          <p>
+            <strong>Tại sao O(n)?</strong> Mỗi phần tử được duyệt trong inner while chỉ 1 lần
+            (vì ta chỉ bắt đầu từ "đầu chuỗi"). Tổng: O(n).
+          </p>
+
+          <h3>5.8.5 LRU Cache — Hash Map + Doubly Linked List</h3>
+
+          <pre data-lang="javascript"><code>// LRU Cache với get/put O(1) — bài LeetCode 146 cực kinh điển
+class LRUCache {
+  constructor(capacity) {
+    this.cap = capacity;
+    this.map = new Map();  // key → node
+    // Doubly linked list với head/tail dummy
+    this.head = {};
+    this.tail = {};
+    this.head.next = this.tail;
+    this.tail.prev = this.head;
+  }
+
+  _remove(node) {
+    node.prev.next = node.next;
+    node.next.prev = node.prev;
+  }
+
+  _addToFront(node) {
+    node.next = this.head.next;
+    node.prev = this.head;
+    this.head.next.prev = node;
+    this.head.next = node;
+  }
+
+  get(key) {
+    if (!this.map.has(key)) return -1;
+    const node = this.map.get(key);
+    this._remove(node);
+    this._addToFront(node);
+    return node.val;
+  }
+
+  put(key, val) {
+    if (this.map.has(key)) {
+      const node = this.map.get(key);
+      node.val = val;
+      this._remove(node);
+      this._addToFront(node);
+    } else {
+      const node = {key, val};
+      this.map.set(key, node);
+      this._addToFront(node);
+      if (this.map.size &gt; this.cap) {
+        const lru = this.tail.prev;
+        this._remove(lru);
+        this.map.delete(lru.key);
+      }
+    }
+  }
+}</code></pre>
+
+          <p>
+            <strong>Lưu ý:</strong> JS <code>Map</code> giữ thứ tự insert, nên LRU Cache có thể cài đơn giản hơn bằng cách
+            delete + set lại để "đẩy" key lên cuối Map. Nhưng cách dùng doubly linked list là cách "cổ điển" hỏi trong phỏng vấn.
+          </p>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Two Sum</div>
+            <p>LeetCode 1. Cài đặt với Hash Map O(n).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Contains Duplicate</div>
+            <p>Mảng có phần tử trùng không? Trả về true/false. Dùng Set.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Group Anagrams</div>
+            <p>Đã có ở 5.8.3. Tự cài lại không nhìn bài.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Top K Frequent Elements</div>
+            <p>Cho mảng và k. Trả về k phần tử xuất hiện nhiều nhất. (Hint: freq map + sort hoặc bucket sort)</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Longest Consecutive Sequence</div>
+            <p>Đã có ở 5.8.4. Cài đạt O(n).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Subarray Sum Equals K</div>
+            <p>Prefix sum + Hash Map. Đã có ở 5.8.2.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — LRU Cache</div>
+            <p>LeetCode 146. Cài get/put O(1).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 8 — First Unique Character</div>
+            <p>Trong string, tìm vị trí ký tự đầu tiên không lặp lại. <code>"leetcode" → 0</code> (l), <code>"loveleetcode" → 2</code> (v).</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 1.</strong> Big-O trung bình của <code>map.has(k)</code> là?</p>
+              <ul class="quiz-options">
+                <li>O(1)</li>
+                <li>O(log n)</li>
+                <li>O(n)</li>
+                <li>O(n log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(1).</strong> Hash → bucket → so sánh key. Worst case O(n) nhưng trung bình O(1).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 2.</strong> Tại sao Object thường không nên dùng làm hash map khi key là object?</p>
+              <ul class="quiz-options">
+                <li>Vì Object chậm hơn Map</li>
+                <li>Vì Object không có method size</li>
+                <li>Vì Object convert key thành string, gây mất thông tin (key1 và key2 khác nhau cho cùng một string)</li>
+                <li>Vì Object chỉ chấp nhận key kiểu number</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Object convert key thành string.</strong> <code>{a:1}.toString()</code> = <code>"[object Object]"</code> cho mọi object → tất cả object key đều giống nhau.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Separate Chaining xử lý collision bằng cách nào?</p>
+              <ul class="quiz-options">
+                <li>Tăng kích thước mảng</li>
+                <li>Tìm bucket trống tiếp theo (linear probe)</li>
+                <li>Mỗi bucket là một linked list, append phần tử mới vào list</li>
+                <li>Bỏ qua phần tử cũ</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: linked list trong mỗi bucket.</strong> Đó là Separate Chaining. "Linear probe" là Open Addressing.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> Load factor = 0.75 nghĩa là?</p>
+              <ul class="quiz-options">
+                <li>Hash function thành công 75% lần</li>
+                <li>Khi 75% bucket có phần tử, hash table sẽ rehash</li>
+                <li>Có 75% collision</li>
+                <li>Tốn 75% bộ nhớ</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 75% bucket có phần tử → rehash.</strong> Vượt ngưỡng này, hash table cấp phát mảng gấp đôi và rehash hết.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 5.</strong> Big-O của <code>set(k, v)</code> trong hash table?</p>
+              <ul class="quiz-options">
+                <li>O(1) amortized</li>
+                <li>O(1) worst case</li>
+                <li>O(n) luôn luôn</li>
+                <li>O(log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(1) amortized.</strong> Đa phần O(1), nhưng đôi khi rehash O(n). Trung bình amortized vẫn là O(1).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Bài "Longest Consecutive Sequence" với Hash Set giải tối ưu có Big-O?</p>
+              <ul class="quiz-options">
+                <li>O(n²)</li>
+                <li>O(n log n)</li>
+                <li>O(n)</li>
+                <li>O(n²) trong worst case</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n).</strong> Set lookup O(1). Mỗi phần tử chỉ được duyệt trong inner while khi nó thuộc một chuỗi (mỗi phần tử thuộc 1 chuỗi duy nhất).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> LRU Cache cài đặt với get/put O(1) cần kết hợp 2 cấu trúc nào?</p>
+              <ul class="quiz-options">
+                <li>Array + Stack</li>
+                <li>Tree + Heap</li>
+                <li>Hash Map + Doubly Linked List</li>
+                <li>Hash Map + Stack</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Hash Map + Doubly LL.</strong> Hash Map cho lookup O(1) (key → node), Doubly LL cho remove/move-to-front O(1).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Sự khác biệt chính giữa <code>WeakMap</code> và <code>Map</code>?</p>
+              <ul class="quiz-options">
+                <li>WeakMap nhanh hơn</li>
+                <li>WeakMap chỉ nhận object làm key, không giữ reference (cho phép GC)</li>
+                <li>WeakMap có size cố định</li>
+                <li>WeakMap chỉ chứa được string key</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: chỉ object key, không giữ reference.</strong> WeakMap dùng cho metadata, caching gắn với object — khi object bị GC, entry trong WeakMap tự biến mất.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 5</h2>
+          <ul>
+            <li>✅ Hash Table: O(1) trung bình cho get/set/has/delete</li>
+            <li>✅ Hash function biến key thành chỉ số bucket; cần fast + uniform + deterministic</li>
+            <li>✅ 2 cách xử lý collision: Separate Chaining (linked list) vs Open Addressing (probing)</li>
+            <li>✅ Load factor &gt; ngưỡng → rehash O(n) nhưng amortized O(1)</li>
+            <li>✅ JS có 3 lựa chọn: Object (key string), Map (key bất kỳ + giữ thứ tự), Set (chỉ value)</li>
+            <li>✅ Patterns vàng: Frequency Map, Two Sum, Group Anagrams, Longest Consecutive, LRU Cache</li>
+            <li>✅ <strong>LRU Cache</strong> = Hash Map + Doubly Linked List → bài phỏng vấn cực hay</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong4.html">
+        <span class="label">← Chương trước</span>
+        Chương 04: Stack &amp; Queue
+      </a>
+      <a href="chuong6.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 06: Recursion &amp; Backtracking →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 05 · Hash Table
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

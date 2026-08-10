@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D4 · SQL vs NoSQL & modeling</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-d">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">D4 · SQL vs NoSQL & modeling</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần D · Database</div>
+      <nav class="nav">
+        <a href="D1-sql-co-ban.html">D1 · SQL (MySQL/PostgreSQL)</a>
+        <a href="D2-mongodb-mongoose.html">D2 · MongoDB & Mongoose</a>
+        <a href="D3-orm-odm.html">D3 · ORM/ODM thực chiến</a>
+        <a href="D4-sql-vs-nosql-modeling.html" class="active">D4 · SQL vs NoSQL & modeling</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#cap">① CAP & nhất quán</a>
+        <a href="#choose">② SQL vs NoSQL — khi nào</a>
+        <a href="#polyglot">③ Polyglot persistence</a>
+        <a href="#modeling">④ Data modeling Contact Center</a>
+        <a href="#denorm">⑤ Denormalization & caching</a>
+        <a href="#scaling">⑥ Sharding & partitioning</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần D · Database &nbsp;›&nbsp; <b>D4 · SQL vs NoSQL & modeling</b></div>
+      <div class="live-pill"><span class="blink"></span> polyglot data</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần D · Chương 4</span>
+        <h1>SQL vs NoSQL & Data Modeling</h1>
+        <p class="lead">Chọn đúng kho dữ liệu cho từng loại dữ liệu Contact Center và mô hình hóa để vừa nhanh vừa nhất quán.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phát biểu chính xác định lý <b>CAP</b> (CP vs AP) và mở rộng <b>PACELC</b>, phân biệt <b>strong</b> vs <b>eventual consistency</b>.</p>
+        <p>• Ra quyết định <b>SQL hay NoSQL</b> dựa trên cấu trúc dữ liệu, mẫu truy vấn, yêu cầu nhất quán và quy mô — chứ không theo trend.</p>
+        <p>• Hiểu <b>polyglot persistence</b>: mỗi loại dữ liệu một kho phù hợp, và cái giá của việc dùng nhiều kho.</p>
+        <p>• Mô hình hóa dữ liệu lõi của Contact Center: <b>call</b> (time-series), <b>chat message</b> (append-heavy), <b>trạng thái agent</b> (hot), <b>CRM</b> (quan hệ), <b>analytics</b> (OLAP).</p>
+        <p>• Áp dụng <b>denormalization</b> + <b>caching</b> để đọc nhanh, và <b>sharding/partitioning/replication</b> để scale.</p>
+        <p>• Trả lời tự tin các câu phỏng vấn kinh điển về CAP, eventual consistency, sharding và hot/cold data.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế Contact Center</div>
+        <p>Một hệ thống Contact Center <b>không có một kho dữ liệu duy nhất</b>. Trạng thái agent (online/busy/wrap-up) đổi mỗi vài giây → cần <code>Redis</code> in-memory.
+        Lịch sử chat tăng hàng triệu dòng/ngày, chỉ ghi-thêm (append) → hợp với một kho NoSQL ghi nhanh. Thông tin khách hàng + hợp đồng (CRM) đầy ràng buộc quan hệ → <code>PostgreSQL</code>.
+        Báo cáo SLA, AHT, CSAT cuối ngày → một kho <b>OLAP</b> riêng. Hiểu vì sao mỗi loại dữ liệu "sống" ở kho khác nhau chính là chiều sâu mà người phỏng vấn tìm kiếm.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="cap"><span class="ico">①</span> Định lý CAP & các mô hình nhất quán</h2>
+      <p>Trong một hệ phân tán (dữ liệu được nhân bản trên nhiều node), <strong>định lý CAP</strong> nói rằng khi xảy ra
+      <b>partition</b> (đứt liên lạc giữa các node), bạn chỉ chọn được <b>một</b> trong hai: <b>Consistency</b> hoặc <b>Availability</b>.
+      Ba chữ cái:</p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🔒</span> Consistency (C)</div><p>Mọi node đọc ra <b>cùng một</b> dữ liệu mới nhất. Đọc luôn thấy bản ghi vừa được ghi (linearizability).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🟢</span> Availability (A)</div><p>Mọi request đến node còn sống đều <b>nhận được phản hồi</b> (không lỗi, không treo), dù có thể là dữ liệu cũ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✂️</span> Partition tolerance (P)</div><p>Hệ vẫn hoạt động khi mạng giữa các node bị đứt. Trong thực tế phân tán, <b>P là bắt buộc</b>.</p></div>
+      </div>
+      <p>Vì mạng <em>sẽ</em> đứt (đó là chuyện khi nào, không phải có hay không), <code>P</code> không thực sự là lựa chọn — bạn buộc phải có nó.
+      Nên thực chất CAP là sự đánh đổi giữa <b>CP</b> và <b>AP</b>:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Lựa chọn</th><th>Khi partition xảy ra</th><th>Đánh đổi</th><th>Ví dụ kho</th></tr></thead>
+          <tbody>
+            <tr><td><b>CP</b> (chọn nhất quán)</td><td>Từ chối/khóa request không đảm bảo được nhất quán</td><td>Mất <b>availability</b> tạm thời (vài request lỗi/timeout)</td><td>PostgreSQL (primary), MongoDB (mặc định w:majority), etcd, ZooKeeper</td></tr>
+            <tr><td><b>AP</b> (chọn sẵn sàng)</td><td>Vẫn trả lời bằng dữ liệu có sẵn dù có thể cũ</td><td>Mất <b>consistency</b> tạm thời (đọc ra dữ liệu lỗi thời)</td><td>Cassandra, DynamoDB (eventual), Riak</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Hiểu lầm phổ biến về CAP</div>
+        <p>CAP <b>không</b> nói "chọn 2 trong 3 vĩnh viễn". Khi mạng bình thường (không partition), bạn có <b>cả</b> C và A.
+        Đánh đổi chỉ phát sinh <b>trong lúc</b> partition. Nói "MongoDB là CP, Cassandra là AP" là cách nói gọn cho hành vi khi partition.</p>
+      </div>
+
+      <h3>Strong vs Eventual Consistency</h3>
+      <p>Nhất quán không phải nhị phân bật/tắt mà là một <b>phổ</b>. Hai đầu phổ:</p>
+      <div class="two-col">
+        <div class="callout info"><div class="c-title">🔒 Strong consistency</div>
+          <p>Sau khi ghi thành công, <b>mọi</b> lần đọc sau đó (ở bất kỳ node nào) đều thấy giá trị mới. Đơn giản cho lập trình viên,
+          nhưng đắt: cần đồng bộ giữa các bản sao (quorum, đồng thuận) → độ trễ cao hơn.</p></div>
+        <div class="callout tip"><div class="c-title">⏳ Eventual consistency</div>
+          <p>Sau khi ghi, các bản sao sẽ <b>cuối cùng</b> hội tụ về cùng giá trị, nhưng trong khoảng ngắn có thể đọc ra dữ liệu cũ.
+          Đổi lại: ghi/đọc nhanh, sẵn sàng cao. Hợp dữ liệu chịu được "trễ một chút".</p></div>
+      </div>
+      <p>Giữa hai đầu còn nhiều mức trung gian quan trọng khi làm realtime:</p>
+      <ul>
+        <li><b>Read-your-own-writes</b>: một user luôn đọc thấy thứ chính họ vừa ghi (dù người khác chưa thấy). Quan trọng cho UX: agent gửi tin nhắn xong phải thấy nó ngay.</li>
+        <li><b>Monotonic reads</b>: đã đọc thấy giá trị mới rồi thì không "lùi" về giá trị cũ ở lần đọc sau.</li>
+        <li><b>Causal consistency</b>: nếu B là phản hồi của A thì ai thấy B cũng phải thấy A trước — giữ đúng thứ tự nhân quả trong hội thoại chat.</li>
+      </ul>
+
+      <h3>PACELC — phần CAP bỏ quên</h3>
+      <p>CAP chỉ nói về lúc <b>partition</b>. Nhưng phần lớn thời gian mạng <em>không</em> đứt — và ngay cả khi đó vẫn có đánh đổi.
+      <strong>PACELC</strong> bổ sung: <em>nếu Partition (P) thì chọn A hay C; Else (E) thì chọn Latency (L) hay Consistency (C)</em>.</p>
+      <div class="flow">
+        <span class="node">Có Partition?</span><span class="arr">→ Có →</span>
+        <span class="node" style="border-color:var(--amber)">A vs C</span>
+        <span class="arr">|</span>
+        <span class="node">Không →</span>
+        <span class="node" style="border-color:var(--cyan)">L (độ trễ) vs C</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Kho</th><th>Phân loại PACELC</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td>PostgreSQL/MySQL (1 primary)</td><td>PC/EC</td><td>Ưu tiên nhất quán cả khi partition lẫn khi bình thường</td></tr>
+            <tr><td>MongoDB</td><td>PC/EC (cấu hình được)</td><td>Mặc định nghiêng nhất quán; chỉnh được qua read/write concern</td></tr>
+            <tr><td>Cassandra/DynamoDB</td><td>PA/EL</td><td>Ưu tiên sẵn sàng & độ trễ thấp; chấp nhận eventual</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Áp dụng cho Contact Center</div>
+        <p>Số dư ví/khoản thanh toán của khách → cần <b>CP/EC</b> (không bao giờ được đọc sai số tiền). Trạng thái "agent đang online" hiển thị trên dashboard
+        → chấp nhận <b>AP/EL</b> (trễ 1–2 giây không sao, nhưng dashboard không được sập). Cùng một hệ thống, mỗi loại dữ liệu một yêu cầu nhất quán khác nhau.</p>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="choose"><span class="ico">②</span> SQL vs NoSQL — chọn khi nào?</h2>
+      <p>Không có kho "tốt hơn" tuyệt đối — chỉ có kho <b>phù hợp với bài toán</b>. So sánh theo bốn trục quyết định:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Trục</th><th>SQL (quan hệ)</th><th>NoSQL (document/KV/wide-column...)</th></tr></thead>
+          <tbody>
+            <tr><td><b>Cấu trúc</b></td><td>Schema cố định, chuẩn hóa (normalize), ràng buộc FK/UNIQUE/CHECK</td><td>Schema linh hoạt/không schema, dữ liệu lồng nhau, tiến hóa dễ</td></tr>
+            <tr><td><b>Quan hệ & truy vấn</b></td><td>JOIN mạnh, truy vấn ad-hoc phức tạp, tổng hợp tùy ý</td><td>JOIN yếu/không có; tối ưu cho truy vấn theo <b>khóa đã biết trước</b></td></tr>
+            <tr><td><b>Nhất quán</b></td><td>ACID, giao dịch đa bảng mạnh mẽ</td><td>Thường BASE/eventual; giao dịch hạn chế (tuy MongoDB đã có multi-doc tx)</td></tr>
+            <tr><td><b>Scale</b></td><td>Scale dọc dễ; scale ngang khó hơn (sharding thủ công)</td><td>Sinh ra để scale ngang, phân tán tự nhiên</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Quy tắc thực dụng để chọn</h3>
+      <p>Hỏi tuần tự các câu sau:</p>
+      <ol>
+        <li><b>Dữ liệu có nhiều quan hệ, cần JOIN và giao dịch đa bảng?</b> → nghiêng <b>SQL</b>. (CRM: khách ↔ hợp đồng ↔ ticket ↔ thanh toán).</li>
+        <li><b>Mẫu truy vấn cố định, truy theo một khóa, ghi cực nhiều, schema hay đổi?</b> → nghiêng <b>NoSQL document</b>. (Lịch sử chat, log sự kiện).</li>
+        <li><b>Cần đọc/ghi cực nhanh, dữ liệu tạm, không cần bền vững tuyệt đối?</b> → <b>KV in-memory</b> (Redis) cho trạng thái nóng.</li>
+        <li><b>Cần tổng hợp/báo cáo trên hàng tỉ dòng?</b> → kho <b>OLAP cột</b> (ClickHouse, BigQuery), không phải OLTP.</li>
+      </ol>
+      <div class="callout danger">
+        <div class="c-title">🐛 Sai lầm kinh điển khi phỏng vấn</div>
+        <p>Trả lời "NoSQL nhanh hơn SQL nên chọn NoSQL" là <b>trượt</b>. NoSQL nhanh <em>cho mẫu truy vấn nó được thiết kế</em>;
+        nếu bạn cần JOIN/giao dịch mà chọn NoSQL, bạn sẽ phải tự cài lại những thứ SQL cho sẵn (và làm sai). Quyết định phải dựa trên <b>access pattern</b>, không phải tốc độ chung chung.</p>
+      </div>
+      <p>Một ví dụ minh họa khác biệt mô hình hóa cùng một dữ liệu "cuộc hội thoại có nhiều tin nhắn":</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">sql-normalized.sql</span><span class="lang">PostgreSQL</span></div>
+        <pre><code><span class="tok-com">-- SQL: chuẩn hóa, tách bảng, dùng FK + JOIN</span>
+<span class="tok-key">CREATE TABLE</span> conversations (
+  id          <span class="tok-typ">UUID</span> <span class="tok-key">PRIMARY KEY</span>,
+  tenant_id   <span class="tok-typ">UUID</span> <span class="tok-key">NOT NULL</span>,
+  customer_id <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> customers(id),
+  status      <span class="tok-typ">TEXT</span>,
+  created_at  <span class="tok-typ">TIMESTAMPTZ</span> <span class="tok-key">DEFAULT</span> now()
+);
+<span class="tok-key">CREATE TABLE</span> messages (
+  id          <span class="tok-typ">BIGSERIAL</span> <span class="tok-key">PRIMARY KEY</span>,
+  conv_id     <span class="tok-typ">UUID</span> <span class="tok-key">REFERENCES</span> conversations(id),
+  sender      <span class="tok-typ">TEXT</span>,    <span class="tok-com">-- 'agent' | 'customer'</span>
+  body        <span class="tok-typ">TEXT</span>,
+  sent_at     <span class="tok-typ">TIMESTAMPTZ</span>
+);
+<span class="tok-com">-- Lấy 50 tin mới nhất của 1 hội thoại = 1 JOIN gọn gàng</span>
+<span class="tok-key">SELECT</span> m.* <span class="tok-key">FROM</span> messages m
+<span class="tok-key">WHERE</span> m.conv_id = $1 <span class="tok-key">ORDER BY</span> m.sent_at <span class="tok-key">DESC</span> <span class="tok-key">LIMIT</span> <span class="tok-num">50</span>;</code></pre>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">nosql-embedded.js</span><span class="lang">MongoDB</span></div>
+        <pre><code><span class="tok-com">// NoSQL document: nhúng tin nhắn vào hội thoại (đọc 1 phát ra hết)</span>
+<span class="tok-key">const</span> conversation = {
+  _id: <span class="tok-str">"conv_8af2"</span>,
+  tenantId: <span class="tok-str">"t_01"</span>,
+  customerId: <span class="tok-str">"cus_55"</span>,
+  status: <span class="tok-str">"open"</span>,
+  <span class="tok-com">// nhúng (embed) — tốt khi đọc cả hội thoại một lần</span>
+  messages: [
+    { sender: <span class="tok-str">"customer"</span>, body: <span class="tok-str">"Tôi chưa nhận được hàng"</span>, sentAt: <span class="tok-typ">ISODate</span>() },
+    { sender: <span class="tok-str">"agent"</span>,    body: <span class="tok-str">"Em kiểm tra ngay ạ"</span>,    sentAt: <span class="tok-typ">ISODate</span>() }
+  ]
+};
+<span class="tok-com">// CẢNH BÁO: document MongoDB tối đa 16MB — hội thoại dài VÔ HẠN sẽ vỡ.</span>
+<span class="tok-com">// → với chat tăng mãi, KHÔNG embed mà tách collection messages (xem mục ④).</span></code></pre>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="polyglot"><span class="ico">③</span> Polyglot persistence</h2>
+      <p><strong>Polyglot persistence</strong> = dùng <b>nhiều loại kho dữ liệu khác nhau trong cùng một hệ thống</b>, mỗi loại cho phần dữ liệu mà nó phục vụ tốt nhất.
+      Thay vì ép mọi thứ vào một DB "vạn năng", ta để mỗi đặc tính dữ liệu (quan hệ, time-series, KV nóng, full-text, OLAP) chọn công cụ phù hợp.</p>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🐘</span> Quan hệ → PostgreSQL/MySQL</div><p>CRM, tài khoản, hợp đồng, thanh toán, cấu hình tenant — nơi cần ACID & JOIN.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🍃</span> Document/append → MongoDB</div><p>Lịch sử chat, log tương tác, sự kiện cuộc gọi — schema mềm, ghi nhiều.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⚡</span> KV in-memory → Redis</div><p>Trạng thái agent, presence, hàng đợi cuộc gọi, session, rate-limit, pub/sub realtime.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔎</span> Search → Elasticsearch</div><p>Tìm kiếm toàn văn trong lịch sử chat/ticket, gợi ý, lọc theo nhiều trường.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📊</span> OLAP cột → ClickHouse/BigQuery</div><p>Báo cáo AHT, SLA, CSAT, dashboard phân tích trên hàng tỉ bản ghi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📨</span> Log/stream → Kafka</div><p>Backbone sự kiện: mọi thay đổi (call started, message sent) chảy qua đây tới các kho khác.</p></div>
+      </div>
+      <p>Một kiến trúc dữ liệu Contact Center tiêu biểu nhìn theo dòng chảy:</p>
+      <div class="flow">
+        <span class="node" style="border-color:var(--green)">App / Realtime</span><span class="arr">→</span>
+        <span class="node">Kafka (event bus)</span><span class="arr">→</span>
+        <span class="node">PostgreSQL (CRM)</span>
+        <span class="arr">+</span>
+        <span class="node">MongoDB (chat)</span>
+        <span class="arr">+</span>
+        <span class="node" style="border-color:var(--cyan)">Redis (hot)</span>
+        <span class="arr">→</span>
+        <span class="node" style="border-color:var(--amber)">ClickHouse (OLAP)</span>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Cái giá của polyglot</div>
+        <p>Nhiều kho = nhiều thứ phải vận hành, backup, giám sát; <b>không có giao dịch xuyên kho</b> nên phải xử lý nhất quán bằng tay
+        (outbox pattern, saga, eventual sync). Đừng polyglot vì "ngầu" — chỉ thêm một kho khi đặc tính dữ liệu thực sự đòi hỏi.
+        Một startup nhỏ hoàn toàn có thể bắt đầu chỉ với PostgreSQL (nó còn làm được cả JSONB, full-text, time-series tạm ổn).</p>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="modeling"><span class="ico">④</span> Data modeling cho Contact Center</h2>
+      <p>Đây là phần <b>tư duy thiết kế</b> quan trọng nhất. Với mỗi loại dữ liệu, ta đi theo khung: <em>yêu cầu → đặc tính ghi/đọc → phương án &amp; đánh đổi → chọn</em>.</p>
+
+      <h3>4.1 — Call records (time-series, ghi rất nhiều)</h3>
+      <p><b>Yêu cầu:</b> mỗi cuộc gọi sinh nhiều sự kiện (ringing, answered, hold, transfer, ended) có dấu thời gian; ghi liên tục, đọc chủ yếu theo khoảng thời gian + theo agent/queue; dữ liệu cũ ít truy cập nhưng phải lưu lâu cho audit.</p>
+      <p><b>Đặc tính:</b> append-heavy, gần như không update, truy vấn theo thời gian → đây là <b>time-series</b> điển hình. Lưu vào bảng SQL được <b>partition theo thời gian</b>, hoặc kho time-series chuyên dụng.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">calls-partition.sql</span><span class="lang">PostgreSQL</span></div>
+        <pre><code><span class="tok-com">-- Partition theo tháng: query gần đây nhanh, dữ liệu cũ dễ archive/drop</span>
+<span class="tok-key">CREATE TABLE</span> call_events (
+  id        <span class="tok-typ">BIGSERIAL</span>,
+  tenant_id <span class="tok-typ">UUID</span> <span class="tok-key">NOT NULL</span>,
+  call_id   <span class="tok-typ">UUID</span> <span class="tok-key">NOT NULL</span>,
+  agent_id  <span class="tok-typ">UUID</span>,
+  queue_id  <span class="tok-typ">UUID</span>,
+  event     <span class="tok-typ">TEXT</span>,        <span class="tok-com">-- 'answered' | 'hold' | 'ended' ...</span>
+  ts        <span class="tok-typ">TIMESTAMPTZ</span> <span class="tok-key">NOT NULL</span>
+) <span class="tok-key">PARTITION BY RANGE</span> (ts);
+
+<span class="tok-key">CREATE TABLE</span> call_events_2026_06 <span class="tok-key">PARTITION OF</span> call_events
+  <span class="tok-key">FOR VALUES FROM</span> (<span class="tok-str">'2026-06-01'</span>) <span class="tok-key">TO</span> (<span class="tok-str">'2026-07-01'</span>);
+
+<span class="tok-com">-- Index phục vụ truy vấn "cuộc gọi của agent X trong tháng"</span>
+<span class="tok-key">CREATE INDEX</span> <span class="tok-key">ON</span> call_events (tenant_id, agent_id, ts <span class="tok-key">DESC</span>);</code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Vì sao partition theo thời gian?</div>
+        <p>Truy vấn hầu hết hỏi "gần đây" → chỉ đụng vào vài partition mới (partition pruning) thay vì quét cả bảng tỉ dòng.
+        Archive/xóa dữ liệu cũ = <code>DROP</code> nguyên partition (siêu nhanh) thay vì <code>DELETE</code> hàng loạt (chậm, sinh bloat).</p>
+      </div>
+
+      <h3>4.2 — Tin nhắn chat (append-heavy, tăng vô hạn)</h3>
+      <p><b>Yêu cầu:</b> hàng triệu tin nhắn/ngày, ghi-thêm liên tục, đọc theo hội thoại (mới nhất trước), cần phân trang vô hạn, hiếm khi sửa/xóa.</p>
+      <p><b>Phương án &amp; đánh đổi:</b></p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Phương án</th><th>Ưu</th><th>Nhược</th></tr></thead>
+          <tbody>
+            <tr><td><b>Embed</b> tin nhắn vào document hội thoại</td><td>Đọc 1 lần ra cả hội thoại; cục bộ hóa tốt</td><td>Vỡ giới hạn 16MB khi hội thoại quá dài; ghi-thêm phải update document lớn</td></tr>
+            <tr><td><b>Reference</b>: collection <code>messages</code> riêng, mỗi tin 1 document</td><td>Không giới hạn độ dài; ghi-thêm là insert nhỏ; phân trang dễ</td><td>Đọc cần truy vấn theo <code>convId</code> + index</td></tr>
+            <tr><td><b>Bucketing</b>: gom N tin vào 1 document "bucket"</td><td>Ít document hơn, đọc theo trang hiệu quả</td><td>Logic ghi phức tạp hơn (phải biết bucket hiện tại)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><b>Chọn:</b> với chat tăng vô hạn → <b>reference</b> (mỗi tin một document), index <code>(convId, sentAt)</code>, phân trang bằng <em>keyset</em> (không OFFSET).</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">chat-messages.js</span><span class="lang">MongoDB</span></div>
+        <pre><code><span class="tok-com">// Mỗi tin nhắn = 1 document nhỏ → insert nhanh, không đụng giới hạn 16MB</span>
+db.messages.insertOne({
+  convId:  <span class="tok-str">"conv_8af2"</span>,
+  tenantId:<span class="tok-str">"t_01"</span>,
+  sender:  <span class="tok-str">"customer"</span>,
+  body:    <span class="tok-str">"Đơn của tôi tới đâu rồi?"</span>,
+  sentAt:  <span class="tok-key">new</span> <span class="tok-fn">Date</span>()
+});
+db.messages.<span class="tok-fn">createIndex</span>({ convId: <span class="tok-num">1</span>, sentAt: <span class="tok-num">-1</span> });
+
+<span class="tok-com">// Phân trang KEYSET (cuộn lên xem tin cũ) — nhanh, ổn định, không lệch trang</span>
+db.messages.<span class="tok-fn">find</span>({ convId: <span class="tok-str">"conv_8af2"</span>, sentAt: { $lt: cursorTs } })
+           .<span class="tok-fn">sort</span>({ sentAt: <span class="tok-num">-1</span> })
+           .<span class="tok-fn">limit</span>(<span class="tok-num">30</span>);
+<span class="tok-com">// Tránh .skip(n) (OFFSET) vì càng cuộn sâu càng chậm + có thể nhảy dòng.</span></code></pre>
+      </div>
+
+      <h3>4.3 — Trạng thái agent (hot data → Redis)</h3>
+      <p><b>Yêu cầu:</b> trạng thái mỗi agent (available/busy/wrap-up/offline) đổi liên tục, được đọc cực nhiều (router phân bổ cuộc gọi, dashboard giám sát),
+      nhưng <b>không cần bền vững vĩnh viễn</b> — nếu mất, hệ tự dựng lại từ heartbeat.</p>
+      <p><b>Chọn:</b> <code>Redis</code> in-memory. Ghi/đọc dưới mili-giây, hỗ trợ TTL (tự hết hạn nếu agent mất heartbeat), pub/sub đẩy thay đổi realtime.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">agent-presence.ts</span><span class="lang">Redis</span></div>
+        <pre><code><span class="tok-com">// Trạng thái agent: HASH + TTL (tự offline nếu ngừng heartbeat)</span>
+<span class="tok-key">await</span> redis.<span class="tok-fn">hset</span>(<span class="tok-str">`agent:${id}`</span>, {
+  status: <span class="tok-str">"available"</span>,
+  queue:  <span class="tok-str">"sales"</span>,
+  since:  <span class="tok-typ">Date</span>.<span class="tok-fn">now</span>()
+});
+<span class="tok-key">await</span> redis.<span class="tok-fn">expire</span>(<span class="tok-str">`agent:${id}`</span>, <span class="tok-num">30</span>);   <span class="tok-com">// heartbeat phải refresh mỗi &lt;30s</span>
+
+<span class="tok-com">// Tập agent rảnh theo queue → router lấy ra cực nhanh bằng SET</span>
+<span class="tok-key">await</span> redis.<span class="tok-fn">sadd</span>(<span class="tok-str">"queue:sales:available"</span>, id);
+
+<span class="tok-com">// Đẩy thay đổi tới mọi dashboard đang xem (pub/sub)</span>
+<span class="tok-key">await</span> redis.<span class="tok-fn">publish</span>(<span class="tok-str">"presence"</span>, <span class="tok-typ">JSON</span>.<span class="tok-fn">stringify</span>({ id, status: <span class="tok-str">"available"</span> }));</code></pre>
+      </div>
+
+      <h3>4.4 — CRM (quan hệ → SQL)</h3>
+      <p><b>Yêu cầu:</b> khách hàng có nhiều ticket, mỗi ticket thuộc một hàng đợi, gắn với agent, có lịch sử trạng thái, ràng buộc toàn vẹn (không được tạo ticket cho khách không tồn tại),
+      và đôi khi cần giao dịch (đóng ticket + ghi hoạt động + cập nhật SLA cùng lúc — tất cả hoặc không gì cả).</p>
+      <p><b>Chọn:</b> <code>PostgreSQL</code>. JOIN + FK + giao dịch ACID đúng nhu cầu. Đây là nơi NoSQL sẽ khiến bạn khổ.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">crm-tx.sql</span><span class="lang">PostgreSQL</span></div>
+        <pre><code><span class="tok-com">-- Đóng ticket: 3 thao tác phải nguyên tử → BEGIN/COMMIT</span>
+<span class="tok-key">BEGIN</span>;
+  <span class="tok-key">UPDATE</span> tickets <span class="tok-key">SET</span> status=<span class="tok-str">'resolved'</span>, resolved_at=now()
+    <span class="tok-key">WHERE</span> id=$1 <span class="tok-key">AND</span> tenant_id=$2;
+  <span class="tok-key">INSERT INTO</span> ticket_activities(ticket_id, actor, action)
+    <span class="tok-key">VALUES</span> ($1, $3, <span class="tok-str">'resolved'</span>);
+  <span class="tok-key">UPDATE</span> sla_metrics <span class="tok-key">SET</span> resolved_count = resolved_count + <span class="tok-num">1</span>
+    <span class="tok-key">WHERE</span> queue_id=$4 <span class="tok-key">AND</span> day=current_date;
+<span class="tok-key">COMMIT</span>;
+<span class="tok-com">-- Nếu bất kỳ bước nào lỗi → ROLLBACK, không để dữ liệu nửa vời.</span></code></pre>
+      </div>
+
+      <h3>4.5 — Analytics (OLAP, tách khỏi OLTP)</h3>
+      <p><b>Yêu cầu:</b> tổng hợp AHT trung bình, tỷ lệ SLA đạt, CSAT theo agent/queue/ngày, trên hàng tỉ bản ghi — truy vấn quét nhiều, nhóm nhiều, ít cần realtime tuyệt đối.</p>
+      <p><b>Vì sao tách kho riêng?</b> Truy vấn OLAP nặng (quét triệu dòng) chạy trên DB OLTP sẽ <b>làm chậm cả hệ thống đang phục vụ khách</b>.
+      Tách dữ liệu sang kho <b>cột</b> (ClickHouse/BigQuery) — định dạng cột nén tốt, quét theo cột cực nhanh cho tổng hợp. Đồng bộ bằng CDC/ETL/stream từ OLTP sang.</p>
+      <div class="flow">
+        <span class="node" style="border-color:var(--green)">OLTP (Postgres/Mongo)</span><span class="arr">→ CDC/ETL →</span>
+        <span class="node" style="border-color:var(--amber)">OLAP cột (ClickHouse)</span><span class="arr">→</span>
+        <span class="node">Dashboard / Báo cáo</span>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Đừng chạy báo cáo nặng trên DB sản xuất</div>
+        <p>Một truy vấn <code>GROUP BY</code> 90 ngày lịch sử trên primary OLTP có thể khóa I/O, làm trễ mọi cuộc gọi đang phục vụ.
+        Tối thiểu hãy chạy trên <b>read replica</b>; lý tưởng là một kho OLAP tách biệt.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="denorm"><span class="ico">⑤</span> Denormalization & caching</h2>
+      <p><strong>Chuẩn hóa (normalize)</strong> giúp <em>ghi</em> sạch và không trùng lặp, nhưng khiến <em>đọc</em> phải JOIN nhiều bảng.
+      <strong>Phi chuẩn hóa (denormalize)</strong> làm ngược lại: <b>nhân bản có chủ đích</b> một vài trường để đọc nhanh hơn, đổi lấy việc phải đồng bộ khi dữ liệu gốc đổi.</p>
+      <div class="two-col">
+        <div class="callout info"><div class="c-title">📐 Normalize (ghi tối ưu)</div>
+          <p>Mỗi sự thật ở đúng một chỗ. Update một nơi là xong. Nhưng đọc danh sách hội thoại kèm tên khách + tên agent cần JOIN 3 bảng.</p></div>
+        <div class="callout tip"><div class="c-title">⚡ Denormalize (đọc tối ưu)</div>
+          <p>Nhúng sẵn <code>customerName</code>, <code>lastMessage</code> vào bản ghi hội thoại → render danh sách inbox không cần JOIN.
+          Khi khách đổi tên, phải cập nhật các bản sao (chấp nhận eventual).</p></div>
+      </div>
+      <p>Trong domain Contact Center, màn hình "inbox" của agent là <b>đọc cực nhiều</b> (mỗi agent refresh liên tục). Đây là chỗ vàng để denormalize:</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">conversation-summary.js</span><span class="lang">MongoDB</span></div>
+        <pre><code><span class="tok-com">// Document "tóm tắt hội thoại" cho danh sách inbox — đọc 1 phát đủ render</span>
+{
+  _id: <span class="tok-str">"conv_8af2"</span>,
+  tenantId:    <span class="tok-str">"t_01"</span>,
+  customerId:  <span class="tok-str">"cus_55"</span>,
+  customerName:<span class="tok-str">"Trần B"</span>,        <span class="tok-com">// DENORMALIZED từ bảng customers</span>
+  assignedTo:  <span class="tok-str">"Agent Lan"</span>,      <span class="tok-com">// DENORMALIZED</span>
+  lastMessage: <span class="tok-str">"Cảm ơn anh/chị!"</span>, <span class="tok-com">// DENORMALIZED — không cần JOIN messages</span>
+  lastAt:      <span class="tok-typ">ISODate</span>(),
+  unread:      <span class="tok-num">2</span>,
+  status:      <span class="tok-str">"open"</span>
+}
+<span class="tok-com">// Đánh đổi: khi customers đổi tên → phải cập nhật customerName ở đây (async/event).</span></code></pre>
+      </div>
+
+      <h3>Chiến lược caching</h3>
+      <p>Cache là một dạng denormalization tạm thời ở tầng đọc. Các mẫu hay dùng:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Mẫu</th><th>Cách hoạt động</th><th>Hợp với</th></tr></thead>
+          <tbody>
+            <tr><td><b>Cache-aside</b> (lazy)</td><td>App đọc cache trước; miss thì đọc DB rồi nạp vào cache</td><td>Phổ biến nhất; dữ liệu đọc nhiều ghi ít (hồ sơ khách, cấu hình queue)</td></tr>
+            <tr><td><b>Write-through</b></td><td>Ghi vào cache và DB cùng lúc</td><td>Cần cache luôn đồng bộ; chấp nhận ghi chậm hơn</td></tr>
+            <tr><td><b>Write-behind</b></td><td>Ghi cache trước, flush xuống DB sau (async)</td><td>Ghi cực nhiều, chịu rủi ro mất dữ liệu khi crash</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">cache-aside.ts</span><span class="lang">TypeScript</span></div>
+        <pre><code><span class="tok-key">async function</span> <span class="tok-fn">getCustomer</span>(id: <span class="tok-typ">string</span>) {
+  <span class="tok-key">const</span> key = <span class="tok-str">`cust:${id}`</span>;
+  <span class="tok-key">const</span> cached = <span class="tok-key">await</span> redis.<span class="tok-fn">get</span>(key);
+  <span class="tok-key">if</span> (cached) <span class="tok-key">return</span> <span class="tok-typ">JSON</span>.<span class="tok-fn">parse</span>(cached);      <span class="tok-com">// HIT</span>
+
+  <span class="tok-key">const</span> row = <span class="tok-key">await</span> db.customers.<span class="tok-fn">findById</span>(id); <span class="tok-com">// MISS → đọc DB</span>
+  <span class="tok-key">await</span> redis.<span class="tok-fn">set</span>(key, <span class="tok-typ">JSON</span>.<span class="tok-fn">stringify</span>(row), <span class="tok-str">"EX"</span>, <span class="tok-num">300</span>); <span class="tok-com">// TTL 5 phút</span>
+  <span class="tok-key">return</span> row;
+}
+<span class="tok-com">// Khi customer đổi → redis.del(`cust:${id}`) để tránh đọc dữ liệu cũ (invalidation).</span></code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Hai bài toán khó của cache</div>
+        <p><b>Cache invalidation</b> (làm mới cache khi dữ liệu gốc đổi) là một trong "hai việc khó nhất ngành". Và coi chừng <b>thundering herd</b>:
+        khi một key nóng hết hạn, hàng nghìn request cùng miss và đập vào DB một lúc → dùng TTL lệch nhau (jitter) hoặc khóa nạp lại (single-flight).</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="scaling"><span class="ico">⑥</span> Sharding, partitioning & replication</h2>
+      <p>Khi một node không kham nổi, ta scale ngang theo hai trục bù trừ nhau: <b>replication</b> (nhân bản để đọc nhiều/an toàn) và <b>sharding</b> (chia nhỏ để ghi nhiều/chứa nhiều).</p>
+
+      <h3>Replication & read replica</h3>
+      <p><b>Replication</b> = sao dữ liệu primary sang các replica. Mục đích: (1) <b>chịu lỗi</b> (primary chết → promote replica), (2) <b>scale đọc</b> (đẩy truy vấn đọc sang replica).</p>
+      <div class="flow">
+        <span class="node" style="border-color:var(--green)">Primary (ghi)</span><span class="arr">→ replicate →</span>
+        <span class="node">Replica 1 (đọc)</span>
+        <span class="arr">+</span>
+        <span class="node">Replica 2 (đọc/báo cáo)</span>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Replication lag → đọc dữ liệu cũ</div>
+        <p>Replica thường <b>bất đồng bộ</b> → trễ vài chục–trăm ms so với primary. Hệ quả: agent gửi tin nhắn (ghi vào primary) rồi đọc lại từ replica có thể <b>chưa thấy</b> tin của mình.
+        Giải pháp: đọc-sau-khi-ghi thì đọc từ primary (read-your-writes), hoặc dùng "sticky read" trong một khoảng ngắn.</p>
+      </div>
+
+      <h3>Partitioning vs Sharding</h3>
+      <ul>
+        <li><b>Partitioning</b>: chia một bảng/collection thành nhiều phần <em>trong cùng một node</em> (vd partition theo tháng ở mục 4.1). Quản lý dữ liệu dễ hơn, không phải để scale ra nhiều máy.</li>
+        <li><b>Sharding</b>: phân tán dữ liệu ra <em>nhiều node/máy</em> theo một <b>shard key</b>. Đây mới là cách scale ghi và dung lượng vượt giới hạn một máy.</li>
+      </ul>
+      <p>Chìa khóa của sharding là <b>chọn shard key</b>. Một shard key tốt phải: (1) <b>phân bố đều</b> tải (tránh hot shard), (2) khớp với <b>mẫu truy vấn</b> (để truy vấn chỉ đụng một shard), (3) có <b>độ chia (cardinality) cao</b>.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Chiến lược</th><th>Cách chia</th><th>Ưu / Nhược</th></tr></thead>
+          <tbody>
+            <tr><td><b>Range</b></td><td>Theo khoảng giá trị (vd theo ngày)</td><td>Truy vấn theo khoảng tốt; dễ <b>hot shard</b> ở khoảng mới nhất</td></tr>
+            <tr><td><b>Hash</b></td><td>Hash của key → phân bố ngẫu nhiên đều</td><td>Tải đều; nhưng truy vấn theo khoảng phải fan-out mọi shard</td></tr>
+            <tr><td><b>Directory/lookup</b></td><td>Bảng tra cứu key → shard</td><td>Linh hoạt, dễ rebalance; thêm một lớp tra cứu</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Shard theo tenant — lựa chọn tự nhiên của Contact Center</div>
+        <p>Hệ Contact Center thường <b>multi-tenant</b> (nhiều doanh nghiệp khách hàng dùng chung nền tảng). Dùng <code>tenant_id</code> làm shard key rất hợp:
+        dữ liệu của một tenant nằm gọn trên một shard → truy vấn của họ chỉ đụng một node, cô lập được "hàng xóm ồn ào". Cảnh giác: một tenant siêu lớn có thể tự nó thành hot shard → khi đó cần shard key tổ hợp <code>(tenant_id, sub_key)</code>.</p>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">shard-by-tenant.js</span><span class="lang">MongoDB</span></div>
+        <pre><code><span class="tok-com">// Bật sharding cho collection messages, shard theo tenant + conv</span>
+sh.<span class="tok-fn">enableSharding</span>(<span class="tok-str">"cc"</span>);
+sh.<span class="tok-fn">shardCollection</span>(<span class="tok-str">"cc.messages"</span>, { tenantId: <span class="tok-str">"hashed"</span>, convId: <span class="tok-num">1</span> });
+
+<span class="tok-com">// Truy vấn CÓ tenantId → router chỉ hỏi đúng shard (targeted, nhanh)</span>
+db.messages.<span class="tok-fn">find</span>({ tenantId: <span class="tok-str">"t_01"</span>, convId: <span class="tok-str">"conv_8af2"</span> });
+
+<span class="tok-com">// Truy vấn KHÔNG có tenantId → scatter-gather mọi shard (chậm) → TRÁNH</span>
+db.messages.<span class="tok-fn">find</span>({ body: <span class="tok-str">/refund/</span> });   <span class="tok-com">// ❌ phải hỏi tất cả shard</span></code></pre>
+      </div>
+
+      <h3>Hot vs Cold data — vòng đời dữ liệu</h3>
+      <p>Không phải dữ liệu nào cũng cần ở kho đắt tiền/tốc độ cao mãi mãi. Phân tầng theo "nhiệt độ":</p>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🔥</span> Hot</div><p>Truy cập liên tục, cần &lt;ms: trạng thái agent, hội thoại đang mở → Redis / SSD nóng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🌤️</span> Warm</div><p>Vài tuần gần đây, đọc thỉnh thoảng: lịch sử chat tháng này → SQL/Mongo thường.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🧊</span> Cold</div><p>Cũ, chỉ giữ cho audit/luật: cuộc gọi năm ngoái → object storage rẻ (S3/Glacier), nén.</p></div>
+      </div>
+      <p>Cơ chế <b>TTL/archival</b> tự động đẩy dữ liệu nguội xuống tầng rẻ hơn (vd <code>DROP PARTITION</code> cũ + dump ra S3), giữ kho nóng nhỏ gọn và rẻ.</p>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Chọn NoSQL vì "trend"</div><p>Rồi tự cài lại JOIN/giao dịch trong code → vừa chậm vừa sai. Hãy chọn theo access pattern.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Embed mảng tăng vô hạn</div><p>Nhúng chat mãi vào 1 document → vỡ 16MB, update ngày càng nặng. Tách collection riêng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Báo cáo nặng trên primary OLTP</div><p>Khóa I/O, làm trễ cuộc gọi thật. Dùng read replica hoặc kho OLAP.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Shard key kém</div><p>Range theo thời gian → hot shard ở "hôm nay"; shard key cardinality thấp → lệch tải. Khó đổi sau khi chọn.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên cache invalidation</div><p>Denormalize/cache nhưng không cập nhật khi gốc đổi → khách thấy dữ liệu cũ. Có chiến lược invalidate ngay từ đầu.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Giả định replica luôn mới</div><p>Đọc-sau-ghi từ replica gặp lag → mất tin nhắn vừa gửi. Read-your-writes từ primary.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Bắt đầu đơn giản</div><p>PostgreSQL (kèm JSONB, full-text) gánh được rất xa. Thêm kho mới chỉ khi đặc tính dữ liệu thực sự đòi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Mỗi loại dữ liệu một yêu cầu nhất quán</div><p>Tiền → strong; presence dashboard → eventual. Đừng áp một mức cho tất cả.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Chọn kho cho từng loại dữ liệu</div>
+        <p>Với hệ Contact Center, hãy phân loại 5 dữ liệu sau vào kho phù hợp và giải thích ngắn: (a) trạng thái online của agent, (b) hồ sơ khách + hợp đồng, (c) toàn bộ lịch sử chat, (d) báo cáo SLA cuối tháng, (e) tìm kiếm toàn văn trong ticket.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">(a) Redis (hot, đổi liên tục, TTL). (b) PostgreSQL (quan hệ, ACID, JOIN). (c) MongoDB collection messages riêng (append-heavy, schema mềm, sharded theo tenant). (d) Kho OLAP cột như ClickHouse/BigQuery (tổng hợp nặng, tách khỏi OLTP). (e) Elasticsearch (full-text, lọc đa trường). Đây chính là <b>polyglot persistence</b>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Thiết kế lưu lịch sử chat ở quy mô lớn</div>
+        <p>Một tenant lớn sinh 5 triệu tin nhắn/ngày. Hãy đề xuất: mô hình lưu (embed/reference/bucket), shard key, chiến lược phân trang, và cách xử lý dữ liệu cũ.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px"><b>Mô hình:</b> reference — mỗi tin một document (tránh giới hạn 16MB). <b>Index:</b> <code>(convId, sentAt)</code>. <b>Shard key:</b> <code>{tenantId:"hashed", convId:1}</code> để truy vấn theo hội thoại nhắm đúng shard và phân bố đều. <b>Phân trang:</b> keyset theo <code>sentAt</code> (không OFFSET). <b>Dữ liệu cũ:</b> phân tầng hot/warm/cold — tin cũ vài tháng archive sang object storage/nén, hoặc dùng TTL/partition theo thời gian rồi drop. Cân nhắc denormalize một bản tóm tắt <code>lastMessage</code> cho inbox.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Read-your-writes với replica lag</div>
+        <p>Agent gửi tin nhắn (ghi vào primary). Ngay sau đó UI gọi API tải lại hội thoại từ <b>read replica</b> nhưng không thấy tin vừa gửi. Vì sao? Đề xuất 2 cách khắc phục.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px"><b>Vì sao:</b> replication bất đồng bộ → replica trễ vài chục ms, chưa kịp nhận tin mới ghi (đọc dữ liệu cũ — eventual). <b>Khắc phục:</b> (1) Read-your-writes: trong N giây sau khi ghi, route đọc của chính user đó về primary. (2) Optimistic UI: hiển thị tin ngay từ phía client (đã có dữ liệu) thay vì chờ round-trip; chỉ điều chỉnh nếu server báo lỗi. (3) Chờ replica bắt kịp một LSN/oplog timestamp nhất định trước khi đọc.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Theo định lý CAP, khi xảy ra network partition bạn buộc phải đánh đổi giữa?</div>
+          <div class="opt">Performance và Cost</div>
+          <div class="opt" data-correct="true">Consistency và Availability</div>
+          <div class="opt">Durability và Latency</div>
+          <div class="explain"><b>C vs A.</b> Partition tolerance (P) là bắt buộc trong hệ phân tán, nên đánh đổi thực chất là CP hay AP khi partition.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Trạng thái online/busy của agent (đổi mỗi vài giây, mất thì dựng lại) nên lưu ở đâu?</div>
+          <div class="opt">PostgreSQL với giao dịch ACID</div>
+          <div class="opt" data-correct="true">Redis in-memory (KV, có TTL)</div>
+          <div class="opt">Kho OLAP cột</div>
+          <div class="explain"><b>Redis.</b> Hot data đổi liên tục, đọc cực nhiều, không cần bền vững — in-memory + TTL là chuẩn.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Polyglot persistence nghĩa là?</div>
+          <div class="opt">Viết app bằng nhiều ngôn ngữ lập trình</div>
+          <div class="opt" data-correct="true">Dùng nhiều loại kho dữ liệu, mỗi loại cho phần dữ liệu nó phục vụ tốt nhất</div>
+          <div class="opt">Dịch dữ liệu sang nhiều ngôn ngữ tự nhiên</div>
+          <div class="explain"><b>Nhiều kho.</b> Mỗi đặc tính dữ liệu (quan hệ, time-series, hot KV, OLAP) chọn công cụ phù hợp.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Lưu chat tăng vô hạn bằng cách nhúng (embed) toàn bộ tin nhắn vào một document hội thoại MongoDB sẽ?</div>
+          <div class="opt">Luôn là cách tốt nhất vì đọc một phát ra hết</div>
+          <div class="opt" data-correct="true">Vỡ giới hạn 16MB và làm update ngày càng nặng — nên tách collection riêng</div>
+          <div class="opt">Tự động được sharding nên không sao</div>
+          <div class="explain"><b>Vỡ 16MB.</b> Với mảng tăng vô hạn dùng reference (mỗi tin một document) thay vì embed.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Vì sao đọc-lại-ngay-sau-khi-ghi từ read replica có thể không thấy dữ liệu vừa ghi?</div>
+          <div class="opt">Vì replica có schema khác</div>
+          <div class="opt" data-correct="true">Vì replication bất đồng bộ gây lag — replica chưa kịp nhận bản ghi mới (eventual)</div>
+          <div class="opt">Vì read replica không lưu dữ liệu</div>
+          <div class="explain"><b>Replication lag.</b> Khắc phục bằng read-your-writes (đọc từ primary trong khoảng ngắn) hoặc optimistic UI.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>SQL vs NoSQL, CAP và modeling — bộ câu hỏi đánh giá tư duy thiết kế dữ liệu.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Định lý CAP là gì? Phát biểu và cho ví dụ.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Trong hệ phân tán có nhân bản, khi xảy ra <b>partition</b> (đứt mạng giữa các node) ta chỉ giữ được một trong hai: <b>Consistency</b> (mọi node đọc cùng dữ liệu mới nhất) hoặc <b>Availability</b> (mọi request đều có phản hồi). Partition tolerance (P) là bắt buộc nên thực chất là chọn CP hay AP. Ví dụ: PostgreSQL primary thiên CP (từ chối ghi nếu không đảm bảo nhất quán), Cassandra thiên AP (vẫn trả lời bằng dữ liệu có thể cũ).</p>
+        <p class="trap">⚠️ Bẫy: nói "chọn 2 trong 3 vĩnh viễn" là sai — khi không partition bạn có cả C lẫn A; đánh đổi chỉ phát sinh lúc partition.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Phân biệt strong và eventual consistency. Khi nào dùng cái nào?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>Strong</b>: sau khi ghi, mọi lần đọc đều thấy giá trị mới — đơn giản nhưng đắt (đồng bộ, độ trễ cao). <b>Eventual</b>: các bản sao sẽ hội tụ "cuối cùng", trong khoảng ngắn có thể đọc dữ liệu cũ — nhanh, sẵn sàng cao. Dùng strong cho dữ liệu nhạy cảm (số tiền, số dư ví khách). Dùng eventual cho dữ liệu chịu trễ được (trạng thái presence trên dashboard, đếm lượt xem).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>PACELC bổ sung gì cho CAP?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> CAP chỉ nói về lúc partition. PACELC nói: <em>nếu Partition (P) → chọn A hay C; Else (E) → chọn Latency (L) hay Consistency (C)</em>. Tức ngay cả khi mạng bình thường vẫn có đánh đổi giữa độ trễ và nhất quán (vd quorum mạnh hơn = nhất quán hơn nhưng chậm hơn). Cassandra/DynamoDB là PA/EL; PostgreSQL là PC/EC. PACELC mô tả hành vi thực tế đầy đủ hơn vì phần lớn thời gian hệ <b>không</b> partition.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Bạn quyết định SQL hay NoSQL như thế nào? Đừng trả lời "NoSQL nhanh hơn".<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Tôi quyết theo <b>access pattern</b> và yêu cầu, không theo tốc độ chung chung. Hỏi: dữ liệu có nhiều quan hệ, cần JOIN và giao dịch đa bảng không? → SQL (CRM). Mẫu truy vấn cố định theo khóa, ghi rất nhiều, schema hay đổi? → NoSQL document (lịch sử chat). Cần đọc/ghi cực nhanh, tạm thời? → KV in-memory (presence). Cần tổng hợp tỉ dòng? → OLAP cột. NoSQL chỉ nhanh cho mẫu truy vấn nó được thiết kế.</p>
+        <p class="trap">⚠️ Bẫy: "NoSQL nhanh hơn nên chọn NoSQL" thể hiện chưa hiểu đánh đổi — sẽ tự cài lại JOIN/giao dịch và làm sai.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Thiết kế lưu lịch sử chat ở quy mô hàng triệu tin/ngày như thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Tin nhắn là append-heavy, tăng vô hạn nên <b>không embed</b> mà tách collection <code>messages</code> (mỗi tin một document). Index <code>(convId, sentAt)</code>. Phân trang <b>keyset</b> theo <code>sentAt</code> chứ không OFFSET (tránh chậm/nhảy dòng khi cuộn sâu). Sharding theo <code>{tenantId:"hashed", convId:1}</code> để truy vấn theo hội thoại nhắm đúng shard và phân bố tải đều. Denormalize một bản tóm tắt (<code>lastMessage</code>, <code>customerName</code>) cho inbox. Dữ liệu cũ phân tầng hot/warm/cold, archive ra object storage rẻ.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Polyglot persistence là gì? Cái giá phải trả?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là dùng nhiều loại kho khác nhau trong một hệ thống, mỗi loại cho phần dữ liệu nó phục vụ tốt nhất: PostgreSQL cho CRM, MongoDB cho chat, Redis cho presence, Elasticsearch cho tìm kiếm, ClickHouse cho analytics. Cái giá: nhiều thứ phải vận hành/backup/giám sát, <b>không có giao dịch xuyên kho</b> nên phải đảm bảo nhất quán bằng outbox/saga/eventual sync, và tăng độ phức tạp. Nguyên tắc: chỉ thêm kho khi đặc tính dữ liệu thực sự đòi hỏi.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>Sharding là gì? Làm sao chọn shard key tốt?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Sharding là phân tán dữ liệu ra nhiều node theo một <b>shard key</b> để scale ghi và dung lượng vượt một máy. Shard key tốt phải: (1) phân bố tải đều (tránh hot shard), (2) khớp mẫu truy vấn để truy vấn chỉ đụng một shard (tránh scatter-gather), (3) cardinality cao. Với hệ multi-tenant, <code>tenant_id</code> là lựa chọn tự nhiên: cô lập dữ liệu mỗi tenant trên một shard. Cảnh giác tenant siêu lớn thành hot shard → dùng shard key tổ hợp.</p>
+        <p class="trap">⚠️ Bẫy: shard theo timestamp (range) gây hot shard ở "hôm nay" vì mọi ghi mới dồn vào một shard. Đổi shard key sau khi production rất tốn kém.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Phân biệt partitioning, sharding và replication.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>Partitioning</b>: chia một bảng thành nhiều phần (thường trong cùng node), để quản lý/truy vấn dữ liệu dễ hơn (vd partition theo tháng). <b>Sharding</b>: phân tán dữ liệu ra nhiều node theo shard key, để scale ghi/dung lượng. <b>Replication</b>: nhân bản dữ liệu sang các bản sao, để chịu lỗi và scale đọc (read replica). Ba thứ bù trừ: sharding chia để ghi nhiều, replication nhân để đọc nhiều và an toàn, partitioning để quản lý vòng đời dữ liệu.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>Read replica giúp gì và có rủi ro gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Read replica nhân bản dữ liệu từ primary để (1) scale đọc — đẩy truy vấn đọc/báo cáo nặng sang replica, giảm tải primary; (2) chịu lỗi — promote replica khi primary chết. Rủi ro chính là <b>replication lag</b> (thường bất đồng bộ): đọc từ replica có thể ra dữ liệu cũ. Vì vậy đọc-sau-ghi quan trọng nên route về primary (read-your-writes), và không đặt logic nhạy cảm nhất quán lên replica.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Hot vs cold data là gì? Áp dụng cho Contact Center thế nào?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Phân tầng dữ liệu theo tần suất truy cập. <b>Hot</b>: truy cập liên tục, cần dưới mili-giây (trạng thái agent, hội thoại đang mở) → Redis/SSD nóng. <b>Warm</b>: gần đây, đọc thỉnh thoảng (chat tháng này) → SQL/Mongo thường. <b>Cold</b>: cũ, chỉ giữ cho audit/luật (cuộc gọi năm ngoái) → object storage rẻ, nén. Cơ chế TTL/archival tự đẩy dữ liệu nguội xuống tầng rẻ hơn (drop partition cũ + dump ra S3), giữ kho nóng nhỏ gọn, tiết kiệm chi phí.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Khi nào nên denormalize? Đánh đổi là gì?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Denormalize khi <b>đọc nhiều hơn ghi rất nhiều</b> và muốn tránh JOIN/truy vấn tốn kém ở đường nóng — ví dụ danh sách inbox của agent nhúng sẵn <code>customerName</code>, <code>lastMessage</code> để render một phát. Đánh đổi: dữ liệu nhân bản nên khi gốc đổi phải cập nhật mọi bản sao (chấp nhận eventual, cần cơ chế đồng bộ/event). Phải có chiến lược invalidation rõ ràng, nếu không khách sẽ thấy dữ liệu cũ.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Vì sao không chạy báo cáo analytics trực tiếp trên DB sản xuất? Giải pháp?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Truy vấn OLAP (quét hàng triệu dòng, GROUP BY nhiều) chạy trên DB OLTP sẽ chiếm I/O/CPU, khóa tài nguyên và làm <b>trễ các giao dịch đang phục vụ khách</b> (cuộc gọi, chat realtime). OLTP tối ưu cho ghi/đọc bản ghi nhỏ theo khóa, không cho tổng hợp lớn. Giải pháp: tối thiểu chạy trên <b>read replica</b>; lý tưởng là tách sang kho <b>OLAP cột</b> (ClickHouse/BigQuery) — nén tốt, quét cột nhanh — và đồng bộ bằng CDC/ETL/stream từ OLTP.</p>
+        <p class="trap">⚠️ Bẫy: nói "đánh thêm index là đủ" — index không cứu được truy vấn tổng hợp quét cả bảng; vấn đề là tách workload OLAP khỏi OLTP.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương D4</button>
+      </div>
+
+      <div class="pager">
+        <a href="D3-orm-odm.html"><span class="dir">← Trước</span><span class="ttl">D3 · ORM/ODM thực chiến</span></a>
+        <a href="../E/E1-nestjs-kien-truc-di.html" class="next"><span class="dir">Phần E →</span><span class="ttl">E1 · Kiến trúc NestJS & DI</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='D4',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành D4 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương D4'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

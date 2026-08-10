@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B2 · Module, npm, môi trường</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-b">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">B2 · Module, npm, môi trường</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần B · Node.js Core</div>
+      <nav class="nav">
+        <a href="B1-kien-truc-nodejs.html">B1 · Kiến trúc Node.js</a>
+        <a href="B2-module-npm.html" class="active">B2 · Module, npm, môi trường</a>
+        <a href="B3-streams-buffer-events.html">B3 · Streams, Buffer, Events</a>
+        <a href="B4-http-rest-co-ban.html">B4 · HTTP & REST cơ bản</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#esm">① Module: CommonJS vs ESM</a>
+        <a href="#resolution">② Cơ chế phân giải module</a>
+        <a href="#npm">③ npm & package.json</a>
+        <a href="#semver">④ Versioning & semver</a>
+        <a href="#scripts">⑤ Scripts & npx</a>
+        <a href="#env">⑥ Quản lý môi trường & config</a>
+        <a href="#security">⑦ Bảo mật dependency</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần B · Node.js Core &nbsp;›&nbsp; <b>B2 · Module, npm, môi trường</b></div>
+      <div class="live-pill"><span class="blink"></span> package registry</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần B · Chương 2</span>
+        <h1>Module system, npm & môi trường</h1>
+        <p class="lead">Hiểu sâu hệ module của Node, cách npm quản lý phụ thuộc, semver, lockfile và cấu hình môi trường chuẩn 12-factor cho một service Contact Center.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Phân biệt rõ <b>CommonJS</b> và <b>ESM</b>: cú pháp, thời điểm phân giải, caching và circular dependency.</p>
+        <p>• Mô tả <b>cơ chế phân giải module</b> của Node — từ core module, file, đến leo lên <code>node_modules</code>.</p>
+        <p>• Đọc/viết <code>package.json</code> chuẩn, phân biệt <code>dependencies</code> / <code>devDependencies</code> / <code>peerDependencies</code>.</p>
+        <p>• Hiểu <b>semver</b> (<code>^</code>, <code>~</code>, exact), vai trò <code>package-lock.json</code> và vì sao CI dùng <code>npm ci</code>.</p>
+        <p>• Cấu hình môi trường chuẩn <b>12-factor</b>: <code>process.env</code>, <code>dotenv</code>, validate fail-fast lúc boot.</p>
+        <p>• Đánh giá rủi ro chuỗi cung ứng và dùng <code>npm audit</code> để giữ dependency an toàn.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế — vì sao chương này quan trọng với Contact Center</div>
+        <p>Một service Contact Center điển hình (gateway WebSocket cho agent, service định tuyến cuộc gọi, worker xử lý ticket) phụ thuộc vào hàng trăm package: driver DB, client Redis, thư viện SIP/WebRTC, SDK telephony. Chỉ cần một bản nâng cấp <code>^</code> "vô hại" kéo theo breaking change, hoặc một package bị nhiễm mã độc trong chuỗi cung ứng, là cả tổng đài có thể rớt cuộc gọi giữa giờ cao điểm. Quản lý module & dependency chặt chẽ chính là <b>tuyến phòng thủ đầu tiên</b> cho độ ổn định realtime.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="esm"><span class="ico">①</span> Module: CommonJS vs ESM</h2>
+      <p>Node hỗ trợ <strong>hai hệ module song song</strong>: <b>CommonJS (CJS)</b> — hệ "cổ điển" có từ ngày đầu của Node, và <b>ECMAScript Modules (ESM)</b> — chuẩn chính thức của ngôn ngữ JavaScript. Hiểu khác biệt giữa chúng là điều bắt buộc vì bạn sẽ gặp cả hai trong mọi codebase thực tế.</p>
+
+      <h3>1.1 CommonJS — <code>require</code> / <code>module.exports</code></h3>
+      <p>CJS dùng <code>require()</code> để nạp module và <code>module.exports</code> để xuất. Đặc điểm cốt lõi: <strong>nạp đồng bộ (synchronous)</strong> và phân giải <strong>tại thời điểm chạy (runtime)</strong> — nghĩa là <code>require</code> có thể nằm trong <code>if</code>, trong hàm, được gọi với đường dẫn tính toán động.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">callRouter.js</span><span class="lang">CommonJS</span></div>
+        <pre><code><span class="tok-com">// Xuất bằng module.exports (gán cả object)</span>
+<span class="tok-key">function</span> <span class="tok-fn">routeCall</span>(call) { <span class="tok-com">/* ... chọn agent rảnh ... */</span> }
+<span class="tok-typ">module</span>.exports = { <span class="tok-fn">routeCall</span> };
+
+<span class="tok-com">// hoặc gán từng phần qua exports (alias của module.exports)</span>
+exports.<span class="tok-var">maxRetries</span> = <span class="tok-num">3</span>;</code></pre>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">gateway.js</span><span class="lang">CommonJS</span></div>
+        <pre><code><span class="tok-key">const</span> { routeCall } = <span class="tok-fn">require</span>(<span class="tok-str">'./callRouter'</span>);
+<span class="tok-key">const</span> redis = <span class="tok-fn">require</span>(<span class="tok-str">'ioredis'</span>);          <span class="tok-com">// package từ node_modules</span>
+<span class="tok-key">const</span> fs = <span class="tok-fn">require</span>(<span class="tok-str">'fs'</span>);                  <span class="tok-com">// core module</span>
+
+<span class="tok-com">// require ĐỘNG — chỉ nạp adapter telephony khi cần (lazy load)</span>
+<span class="tok-key">if</span> (process.env.<span class="tok-var">PROVIDER</span> === <span class="tok-str">'sip'</span>) {
+  <span class="tok-key">const</span> sip = <span class="tok-fn">require</span>(<span class="tok-str">'./adapters/sip'</span>);
+}</code></pre>
+      </div>
+
+      <h3>1.2 Hai cơ chế quan trọng: <code>exports</code> vs <code>module.exports</code></h3>
+      <p>Một bẫy kinh điển: <code>exports</code> chỉ là <em>một biến tham chiếu</em> trỏ tới <code>module.exports</code>. Nếu bạn <b>gán lại</b> <code>exports = ...</code> thì nó chỉ đổi biến cục bộ, <strong>không</strong> đổi giá trị thật mà Node trả về. Luôn nhớ: cái Node trả về cho <code>require</code> là <code>module.exports</code>.</p>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Sai lầm hay gặp</div>
+        <p><code>exports = function(){}</code> → module trả về <code>{}</code> rỗng. Muốn xuất một hàm/đối tượng duy nhất, phải viết <code>module.exports = function(){}</code>.</p>
+      </div>
+
+      <h3>1.3 Module caching</h3>
+      <p>Node <strong>cache module sau lần require đầu tiên</strong>. Lần thứ hai trở đi, <code>require</code> trả về <em>chính object đã cache</em> trong <code>require.cache</code> (key là đường dẫn tuyệt đối đã phân giải) — code module <b>không chạy lại</b>. Đây là nền tảng cho pattern <b>singleton</b> rất hữu ích.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">dbPool.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-com">// File này chạy ĐÚNG MỘT LẦN dù được require ở 50 nơi</span>
+<span class="tok-key">const</span> { Pool } = <span class="tok-fn">require</span>(<span class="tok-str">'pg'</span>);
+<span class="tok-key">const</span> pool = <span class="tok-key">new</span> <span class="tok-fn">Pool</span>({ connectionString: process.env.<span class="tok-var">DB_URL</span> });
+
+console.<span class="tok-fn">log</span>(<span class="tok-str">'Pool DB khởi tạo (chỉ in 1 lần)'</span>);
+<span class="tok-typ">module</span>.exports = pool;   <span class="tok-com">// mọi nơi dùng chung 1 connection pool — singleton</span></code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Ứng dụng Contact Center</div>
+        <p>Connection pool DB, client Redis, instance logger, hay registry các agent đang online — đều nên là singleton qua module cache. Nếu mỗi request tự tạo pool mới, bạn sẽ nhanh chóng làm cạn kết nối DB.</p>
+      </div>
+
+      <h3>1.4 Circular dependency (phụ thuộc vòng)</h3>
+      <p>Khi <code>A.js</code> require <code>B.js</code> mà <code>B.js</code> lại require <code>A.js</code>, ta có vòng phụ thuộc. Node không treo, nhưng xử lý theo cách <em>nguy hiểm âm thầm</em>: module đang nạp dở sẽ trả về <strong>exports chưa hoàn chỉnh</strong> (đúng những gì đã gán <em>tới thời điểm đó</em>).</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">agent.js ↔ ticket.js</span><span class="lang">Circular</span></div>
+        <pre><code><span class="tok-com">// agent.js</span>
+<span class="tok-key">const</span> ticket = <span class="tok-fn">require</span>(<span class="tok-str">'./ticket'</span>);   <span class="tok-com">// lúc này ticket.exports CÓ THỂ rỗng</span>
+exports.<span class="tok-fn">assign</span> = (t) => ticket.<span class="tok-fn">close</span>(t);  <span class="tok-com">// gọi LÚC RUNTIME → ok</span>
+
+<span class="tok-com">// ticket.js</span>
+<span class="tok-key">const</span> agent = <span class="tok-fn">require</span>(<span class="tok-str">'./agent'</span>);
+console.<span class="tok-fn">log</span>(agent.<span class="tok-fn">assign</span>);  <span class="tok-com">// có thể là undefined nếu chạy lúc nạp!</span>
+exports.<span class="tok-fn">close</span> = (t) => { <span class="tok-com">/* ... */</span> };</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Tại sao đáng sợ</div>
+        <p>Nếu bạn dùng giá trị từ module kia <b>ngay lúc nạp</b> (top-level), bạn có thể nhận <code>undefined</code> → lỗi <code>x is not a function</code> khó truy. Nếu chỉ dùng <b>trong hàm</b> (gọi lúc runtime, sau khi mọi module đã nạp xong) thì thường an toàn. Cách chữa tận gốc: <b>tách phần dùng chung ra module thứ ba</b>, hoặc đảo lại thiết kế để bỏ vòng.</p>
+      </div>
+
+      <h3>1.5 ESM — <code>import</code> / <code>export</code></h3>
+      <p>ESM là chuẩn của ngôn ngữ. Khác biệt then chốt so với CJS:</p>
+      <ul>
+        <li><strong>Tĩnh (static):</strong> <code>import</code> phải ở top-level, được phân giải lúc <em>biên dịch/parse</em>, không thể đặt trong <code>if</code>. Nhờ vậy bundler làm được <b>tree-shaking</b> (loại bỏ code chết).</li>
+        <li><strong>Bất đồng bộ:</strong> đồ thị module được nạp async; hỗ trợ <b>top-level await</b>.</li>
+        <li><strong>Live binding:</strong> import là tham chiếu sống tới biến được export, không phải bản sao giá trị.</li>
+      </ul>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">queue.mjs</span><span class="lang">ESM</span></div>
+        <pre><code><span class="tok-com">// Named export & default export</span>
+<span class="tok-key">export</span> <span class="tok-key">function</span> <span class="tok-fn">enqueue</span>(call) { <span class="tok-com">/* ... */</span> }
+<span class="tok-key">export</span> <span class="tok-key">const</span> <span class="tok-var">MAX_WAIT</span> = <span class="tok-num">120</span>;
+<span class="tok-key">export</span> <span class="tok-key">default</span> <span class="tok-key">class</span> CallQueue { <span class="tok-com">/* ... */</span> }
+
+<span class="tok-com">// gateway.mjs</span>
+<span class="tok-key">import</span> CallQueue, { enqueue, MAX_WAIT } <span class="tok-key">from</span> <span class="tok-str">'./queue.mjs'</span>;
+<span class="tok-key">import</span> { readFile } <span class="tok-key">from</span> <span class="tok-str">'node:fs/promises'</span>;  <span class="tok-com">// core module dùng prefix node:</span>
+
+<span class="tok-com">// top-level await — chỉ ESM mới có</span>
+<span class="tok-key">const</span> cfg = <span class="tok-key">await</span> <span class="tok-fn">readFile</span>(<span class="tok-str">'./routing.json'</span>, <span class="tok-str">'utf8'</span>);</code></pre>
+      </div>
+
+      <h3>1.6 Bật ESM & interop với CJS</h3>
+      <p>Node quyết định một file là CJS hay ESM theo quy tắc:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tín hiệu</th><th>Kết quả</th></tr></thead>
+          <tbody>
+            <tr><td>Đuôi <code>.mjs</code></td><td>Luôn là ESM</td></tr>
+            <tr><td>Đuôi <code>.cjs</code></td><td>Luôn là CommonJS</td></tr>
+            <tr><td><code>"type": "module"</code> trong package.json</td><td>File <code>.js</code> được coi là ESM</td></tr>
+            <tr><td>Mặc định (không có <code>type</code>)</td><td>File <code>.js</code> là CommonJS</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Interop — các luật đau đầu</div>
+        <p>• Từ <b>ESM</b> có thể <code>import</code> module CJS: <code>module.exports</code> sẽ thành <b>default export</b> (đôi khi cả named export nhờ phân tích tĩnh, nhưng không bảo đảm).</p>
+        <p>• Từ <b>CJS</b> <u>không</u> dùng được <code>require()</code> cho package "ESM-only" (vì <code>require</code> đồng bộ còn ESM async) — phải dùng <code>const m = await import('pkg')</code> (dynamic import).</p>
+        <p>• ESM <b>không có</b> <code>__dirname</code>, <code>__filename</code>, <code>require</code>, <code>module</code>. Thay bằng <code>import.meta.url</code> + <code>fileURLToPath</code>.</p>
+      </div>
+
+      <h3>1.7 Bảng so sánh tổng kết</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>CommonJS</th><th>ESM</th></tr></thead>
+          <tbody>
+            <tr><td>Cú pháp</td><td><code>require</code> / <code>module.exports</code></td><td><code>import</code> / <code>export</code></td></tr>
+            <tr><td>Thời điểm phân giải</td><td>Runtime (động)</td><td>Parse-time (tĩnh)</td></tr>
+            <tr><td>Nạp</td><td>Đồng bộ</td><td>Bất đồng bộ</td></tr>
+            <tr><td>Top-level await</td><td>❌</td><td>✅</td></tr>
+            <tr><td>Tree-shaking</td><td>Khó</td><td>Tốt (import tĩnh)</td></tr>
+            <tr><td>Giá trị export</td><td>Bản sao (snapshot)</td><td>Live binding</td></tr>
+            <tr><td><code>__dirname</code></td><td>Có sẵn</td><td>Không (dùng <code>import.meta.url</code>)</td></tr>
+            <tr><td>Conditional/dynamic load</td><td><code>require()</code> bất kỳ đâu</td><td><code>import()</code> (dynamic, trả Promise)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="resolution"><span class="ico">②</span> Cơ chế phân giải module</h2>
+      <p>Khi bạn viết <code>require('x')</code> hay <code>import 'x'</code>, Node phải biến chuỗi <code>'x'</code> thành <strong>một file cụ thể trên đĩa</strong>. Quy trình này gọi là <b>module resolution</b>. Hiểu nó giúp bạn debug lỗi <code>Cannot find module</code> và biết package thực sự được nạp từ đâu.</p>
+
+      <h3>2.1 Ba loại định danh</h3>
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🧩</span> Core module</div><p><code>fs</code>, <code>path</code>, <code>http</code>, <code>crypto</code>... Node nhận diện ngay, có ưu tiên cao nhất. Prefix <code>node:</code> ép buộc dùng core.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📁</span> Đường dẫn tương đối</div><p>Bắt đầu bằng <code>./</code>, <code>../</code> hoặc <code>/</code> → tìm file ngay tại vị trí đó.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📦</span> Package (bare)</div><p><code>'ioredis'</code>, <code>'express'</code>... → tìm trong <code>node_modules</code>, leo dần lên cây thư mục.</p></div>
+      </div>
+
+      <h3>2.2 Thuật toán phân giải (rút gọn)</h3>
+      <div class="flow">
+        <span class="node">Là core module?</span><span class="arr">→</span>
+        <span class="node">Bắt đầu <code>./</code> <code>/</code> ?</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">Tìm <code>node_modules</code> leo lên</span><span class="arr">→</span>
+        <span class="node">Khớp file / thư mục</span><span class="arr">→</span>
+        <span class="node">Lỗi MODULE_NOT_FOUND</span>
+      </div>
+      <p>Với <b>đường dẫn file</b>, Node thử lần lượt:</p>
+      <ol>
+        <li>Đúng tên file: <code>./callRouter</code> → <code>callRouter.js</code></li>
+        <li>Thêm đuôi: <code>.js</code> → <code>.json</code> → <code>.node</code></li>
+        <li>Nếu là <b>thư mục</b>: đọc <code>package.json</code> của thư mục đó, lấy field <code>main</code> (hoặc <code>exports</code>)</li>
+        <li>Không có <code>main</code> → thử <code>index.js</code>, <code>index.json</code>...</li>
+      </ol>
+
+      <h3>2.3 Cơ chế "leo lên" <code>node_modules</code></h3>
+      <p>Với package bare như <code>require('ioredis')</code> từ file <code>/app/services/gateway/index.js</code>, Node tìm theo thứ tự:</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">resolution-order</span><span class="lang">node_modules lookup</span></div>
+        <pre><code>/app/services/gateway/node_modules/ioredis   <span class="tok-com">// 1. gần nhất</span>
+/app/services/node_modules/ioredis           <span class="tok-com">// 2. leo lên 1 cấp</span>
+/app/node_modules/ioredis                    <span class="tok-com">// 3. gốc project (hay gặp nhất)</span>
+/node_modules/ioredis                        <span class="tok-com">// 4. tới root hệ thống</span>
+<span class="tok-com">// hết → throw Error [MODULE_NOT_FOUND]</span></code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Vì sao điều này quan trọng trong monorepo</div>
+        <p>Trong monorepo Contact Center (gateway, routing-service, ticket-worker chung một repo), cơ chế leo lên cho phép <b>hoisting</b>: các package chung được đặt ở <code>node_modules</code> gốc, mỗi service chỉ giữ riêng package có version đặc thù. Đây chính là nền tảng của <code>npm workspaces</code>.</p>
+      </div>
+
+      <h3>2.4 Field <code>main</code> vs <code>exports</code></h3>
+      <p>Trong <code>package.json</code> của một package:</p>
+      <ul>
+        <li><code>"main"</code>: entry point cổ điển (vd <code>"dist/index.js"</code>). Mọi đường dẫn con của package đều truy cập được.</li>
+        <li><code>"exports"</code>: bản đồ <b>chính xác</b> những gì package cho phép import — gọi là <em>encapsulation</em>. Có thể định nghĩa entry khác nhau cho CJS và ESM (conditional exports).</li>
+      </ul>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">package.json (của package)</span><span class="lang">exports map</span></div>
+        <pre><code>{
+  <span class="tok-str">"exports"</span>: {
+    <span class="tok-str">"."</span>: {
+      <span class="tok-str">"import"</span>: <span class="tok-str">"./dist/index.mjs"</span>,   <span class="tok-com">// khi ESM import</span>
+      <span class="tok-str">"require"</span>: <span class="tok-str">"./dist/index.cjs"</span>    <span class="tok-com">// khi CJS require</span>
+    },
+    <span class="tok-str">"./adapters/sip"</span>: <span class="tok-str">"./dist/sip.js"</span>  <span class="tok-com">// chỉ cho phép import path này</span>
+  }
+}</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Bẫy "exports" chặn deep import</div>
+        <p>Nếu package khai báo <code>exports</code>, bạn <b>không</b> thể import file nội bộ không liệt kê (vd <code>require('pkg/lib/internal')</code> sẽ lỗi <code>ERR_PACKAGE_PATH_NOT_EXPORTED</code>) — kể cả file đó tồn tại. Đây là tính năng, không phải bug.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="npm"><span class="ico">③</span> npm & package.json</h2>
+      <p><strong>npm</strong> (Node Package Manager) gồm 3 thứ: một <em>CLI</em>, một <em>registry</em> (kho package online) và một <em>chuẩn manifest</em> là <code>package.json</code>. Đây là "tờ khai" mô tả project: tên, version, scripts, và quan trọng nhất — <b>cây phụ thuộc</b>.</p>
+
+      <h3>3.1 Cấu trúc package.json</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">package.json</span><span class="lang">contact-center gateway</span></div>
+        <pre><code>{
+  <span class="tok-str">"name"</span>: <span class="tok-str">"cc-gateway"</span>,            <span class="tok-com">// tên (lowercase, kebab-case)</span>
+  <span class="tok-str">"version"</span>: <span class="tok-str">"2.4.1"</span>,             <span class="tok-com">// theo semver</span>
+  <span class="tok-str">"type"</span>: <span class="tok-str">"module"</span>,               <span class="tok-com">// bật ESM cho file .js</span>
+  <span class="tok-str">"main"</span>: <span class="tok-str">"src/index.js"</span>,        <span class="tok-com">// entry point</span>
+  <span class="tok-str">"engines"</span>: { <span class="tok-str">"node"</span>: <span class="tok-str">"&gt;=20"</span> },  <span class="tok-com">// chốt version Node</span>
+  <span class="tok-str">"scripts"</span>: {
+    <span class="tok-str">"start"</span>: <span class="tok-str">"node src/index.js"</span>,
+    <span class="tok-str">"dev"</span>: <span class="tok-str">"node --watch src/index.js"</span>,
+    <span class="tok-str">"test"</span>: <span class="tok-str">"vitest run"</span>
+  },
+  <span class="tok-str">"dependencies"</span>: {        <span class="tok-com">// CẦN khi chạy production</span>
+    <span class="tok-str">"socket.io"</span>: <span class="tok-str">"^4.7.0"</span>,
+    <span class="tok-str">"ioredis"</span>: <span class="tok-str">"^5.3.2"</span>,
+    <span class="tok-str">"pg"</span>: <span class="tok-str">"^8.11.0"</span>
+  },
+  <span class="tok-str">"devDependencies"</span>: {     <span class="tok-com">// CHỈ cần khi dev/build/test</span>
+    <span class="tok-str">"vitest"</span>: <span class="tok-str">"^1.4.0"</span>,
+    <span class="tok-str">"eslint"</span>: <span class="tok-str">"^9.0.0"</span>
+  }
+}</code></pre>
+      </div>
+
+      <h3>3.2 Ba loại phụ thuộc</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Loại</th><th>Khi nào cài</th><th>Ví dụ Contact Center</th></tr></thead>
+          <tbody>
+            <tr><td><code>dependencies</code></td><td>Cần để <b>chạy</b> production. Luôn được cài.</td><td><code>socket.io</code>, <code>ioredis</code>, <code>pg</code>, SDK telephony</td></tr>
+            <tr><td><code>devDependencies</code></td><td>Chỉ cần lúc <b>dev/test/build</b>. Bị bỏ qua với <code>npm install --production</code> / <code>NODE_ENV=production</code>.</td><td><code>vitest</code>, <code>eslint</code>, <code>typescript</code>, <code>nodemon</code></td></tr>
+            <tr><td><code>peerDependencies</code></td><td>Package của bạn <b>yêu cầu host cung cấp</b>, không tự cài. Tránh trùng bản.</td><td>Một plugin Socket.IO khai báo <code>socket.io</code> là peer</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Đặt nhầm chỗ = lỗi production</div>
+        <p>Để nhầm một runtime dependency (vd <code>dotenv</code>) vào <code>devDependencies</code> → build production tối ưu bỏ qua nó → service crash ngay khi boot vì <code>Cannot find module 'dotenv'</code>. Quy tắc vàng: <b>thứ gì code <code>require/import</code> lúc chạy phải nằm trong <code>dependencies</code></b>.</p>
+      </div>
+
+      <h3>3.3 peerDependencies — vì sao tồn tại</h3>
+      <p>Hình dung một <b>plugin định tuyến</b> dành cho framework gateway của bạn. Plugin cần dùng đúng <em>cùng một instance</em> của framework mà ứng dụng đang chạy — nếu plugin tự cài bản riêng, sẽ có <b>hai instance khác nhau</b> trong bộ nhớ, state không chia sẻ, gây bug khó hiểu (vd hai registry agent tách biệt). <code>peerDependencies</code> giải quyết: plugin tuyên bố "tôi cần host có framework <code>^4</code>", host chịu trách nhiệm cung cấp một bản duy nhất.</p>
+
+      <!-- 4 -->
+      <h2 id="semver"><span class="ico">④</span> Versioning & semver</h2>
+      <p><strong>Semantic Versioning (semver)</strong> là quy ước đánh số <code>MAJOR.MINOR.PATCH</code> mang ý nghĩa rõ ràng — giúp bạn biết một bản nâng cấp có an toàn hay không <em>chỉ bằng cách nhìn số</em>.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Phần</th><th>Tăng khi</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td><b>MAJOR</b> (X.0.0)</td><td>Có <b>breaking change</b></td><td>Nâng cấp có thể làm hỏng code của bạn — phải đọc changelog</td></tr>
+            <tr><td><b>MINOR</b> (0.X.0)</td><td>Thêm tính năng, <b>tương thích ngược</b></td><td>An toàn nâng cấp</td></tr>
+            <tr><td><b>PATCH</b> (0.0.X)</td><td>Sửa lỗi, tương thích ngược</td><td>An toàn, nên nâng</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>4.1 Range: caret <code>^</code> vs tilde <code>~</code> vs exact</h3>
+      <p>Trong <code>package.json</code>, số version thường đi kèm <b>ký hiệu range</b> quy định npm được phép nâng tới đâu khi cài:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Khai báo</th><th>Cho phép</th><th>Khoảng (với 4.7.2)</th></tr></thead>
+          <tbody>
+            <tr><td><code>^4.7.2</code> (caret)</td><td>Nâng MINOR + PATCH, giữ nguyên MAJOR</td><td>&gt;= 4.7.2 và &lt; 5.0.0</td></tr>
+            <tr><td><code>~4.7.2</code> (tilde)</td><td>Chỉ nâng PATCH, giữ MAJOR + MINOR</td><td>&gt;= 4.7.2 và &lt; 4.8.0</td></tr>
+            <tr><td><code>4.7.2</code> (exact)</td><td>Cố định tuyệt đối</td><td>Đúng 4.7.2</td></tr>
+            <tr><td><code>*</code> / <code>latest</code></td><td>Bất kỳ — RẤT NGUY HIỂM</td><td>Mọi version</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Đặc thù version 0.x</div>
+        <p>Với version <code>0.y.z</code> (chưa "ổn định"), <code>^0.5.3</code> chỉ cho phép tới <code>&lt; 0.6.0</code> — caret hành xử như tilde, vì semver coi mỗi bước MINOR ở 0.x là có thể breaking. Nhiều bug nâng cấp đến từ hiểu nhầm chỗ này.</p>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Mặc định npm và lựa chọn cho production</div>
+        <p><code>npm install pkg</code> mặc định ghi <code>^</code>. Với một gateway xử lý cuộc gọi trực tiếp, nhiều team thích <b>pin chặt hơn</b> (tilde hoặc exact) ở các package nhạy cảm để tránh một bản MINOR "vô tình" thay đổi hành vi realtime. Dù vậy, <b>thứ thật sự đảm bảo tái lập là lockfile</b>, không phải range.</p>
+      </div>
+
+      <h3>4.2 package-lock.json — nguồn sự thật</h3>
+      <p>Range trong <code>package.json</code> chỉ nói "tôi <em>chấp nhận</em> khoảng này". Còn <strong>version <em>thực sự</em> được cài là gì</strong> thì <code>package-lock.json</code> ghi lại — chính xác tới từng package con (transitive), kèm <b>hash integrity</b> để chống bị thay nội dung.</p>
+      <div class="callout danger">
+        <div class="c-title">🐛 "Works on my machine"</div>
+        <p>Không có lockfile (hoặc không commit nó), hai lần <code>npm install</code> cách nhau vài ngày có thể cài hai cây phụ thuộc khác nhau (vì có bản PATCH mới). Hậu quả: code chạy ở máy dev nhưng vỡ ở CI/production. <b>Luôn commit <code>package-lock.json</code></b>.</p>
+      </div>
+
+      <h3>4.3 <code>npm install</code> vs <code>npm ci</code></h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th><code>npm install</code></th><th><code>npm ci</code></th></tr></thead>
+          <tbody>
+            <tr><td>Mục đích</td><td>Phát triển, thêm/sửa package</td><td>Cài đặt <b>tái lập</b> cho CI/CD & production</td></tr>
+            <tr><td>Nguồn version</td><td>Giải range, có thể <b>cập nhật</b> lockfile</td><td>Bám <b>chính xác</b> lockfile, không sửa</td></tr>
+            <tr><td>Cần lockfile?</td><td>Không bắt buộc</td><td><b>Bắt buộc</b>, nếu lệch package.json → lỗi</td></tr>
+            <tr><td><code>node_modules</code> cũ</td><td>Cập nhật tăng dần</td><td><b>Xóa sạch</b> rồi cài lại</td></tr>
+            <tr><td>Tốc độ</td><td>Chậm hơn</td><td>Nhanh & ổn định hơn</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Trong pipeline deploy Contact Center</div>
+        <p>Dockerfile build image cho service nên dùng <code>npm ci --omit=dev</code>: đảm bảo mọi lần build cho ra <b>đúng cùng một cây phụ thuộc</b> (deterministic), bỏ devDependencies cho image gọn nhẹ và giảm bề mặt tấn công. Dev mới dùng <code>npm install</code> khi thêm package.</p>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="scripts"><span class="ico">⑤</span> Scripts & npx</h2>
+      <p>Field <code>scripts</code> biến <code>package.json</code> thành <em>task runner</em> — cách chuẩn hóa các lệnh thường dùng để cả team gõ giống nhau.</p>
+
+      <h3>5.1 npm scripts & lifecycle hooks</h3>
+      <p>Ngoài script tự đặt, npm có các <b>lifecycle hook</b> chạy tự động theo vòng đời. Quan trọng là cặp <code>pre*</code> / <code>post*</code>: npm tự chạy <code>prebuild</code> trước <code>build</code>, và <code>postbuild</code> sau đó.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">scripts</span><span class="lang">package.json</span></div>
+        <pre><code><span class="tok-str">"scripts"</span>: {
+  <span class="tok-str">"prestart"</span>: <span class="tok-str">"node scripts/check-env.js"</span>,   <span class="tok-com">// tự chạy TRƯỚC start</span>
+  <span class="tok-str">"start"</span>:    <span class="tok-str">"node src/index.js"</span>,
+  <span class="tok-str">"lint"</span>:     <span class="tok-str">"eslint src"</span>,
+  <span class="tok-str">"test"</span>:     <span class="tok-str">"vitest run"</span>,
+  <span class="tok-str">"migrate"</span>:  <span class="tok-str">"node-pg-migrate up"</span>
+}
+<span class="tok-com">// Gọi: npm run lint  |  npm start  |  npm test (start/test/install có alias)</span>
+<span class="tok-com">// Truyền cờ: npm run test -- --coverage</span></code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Cảnh báo bảo mật: lifecycle install hooks</div>
+        <p>Hook <code>preinstall</code>/<code>postinstall</code> của <b>package phụ thuộc</b> chạy <b>tự động</b> khi cài — đây là vector tấn công supply chain phổ biến (mã độc chạy ngay lúc <code>npm install</code>). Trong CI nhạy cảm có thể cân nhắc <code>npm ci --ignore-scripts</code> rồi chạy build thủ công.</p>
+      </div>
+
+      <h3>5.2 npx — chạy package không cần cài global</h3>
+      <p><code>npx</code> thực thi binary của một package: nếu đã có trong <code>node_modules/.bin</code> thì dùng luôn, nếu chưa thì <b>tải tạm</b> rồi chạy. Lợi ích: không "ô nhiễm" global, luôn dùng đúng version dự án.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">npx-usage</span><span class="lang">shell</span></div>
+        <pre><code>npx create-vite cc-dashboard       <span class="tok-com"># scaffold không cần cài trước</span>
+npx prisma migrate dev             <span class="tok-com"># chạy CLI từ devDependency của dự án</span>
+npx -p typescript tsc --noEmit     <span class="tok-com"># chạy 1 lần với version chỉ định</span></code></pre>
+      </div>
+
+      <h3>5.3 Workspaces (monorepo)</h3>
+      <p><b>npm workspaces</b> cho phép một repo chứa nhiều package liên quan (gateway, routing, ticket, shared-utils) dùng <em>một</em> <code>node_modules</code> gốc và <em>một</em> lockfile. Package nội bộ liên kết với nhau bằng symlink — sửa <code>shared-utils</code> là các service thấy ngay, không cần publish.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">package.json (root)</span><span class="lang">workspaces</span></div>
+        <pre><code>{
+  <span class="tok-str">"name"</span>: <span class="tok-str">"contact-center"</span>,
+  <span class="tok-str">"private"</span>: <span class="tok-key">true</span>,                <span class="tok-com">// root không publish</span>
+  <span class="tok-str">"workspaces"</span>: [<span class="tok-str">"services/*"</span>, <span class="tok-str">"packages/*"</span>]
+}
+<span class="tok-com">// Cài cho riêng 1 workspace:</span>
+<span class="tok-com">//   npm install pg -w services/gateway</span>
+<span class="tok-com">// Chạy script ở tất cả workspace:</span>
+<span class="tok-com">//   npm run test --workspaces</span></code></pre>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="env"><span class="ico">⑥</span> Quản lý môi trường & config</h2>
+      <p>Một service phải chạy ở nhiều môi trường: máy dev, staging, production. Cách bạn quản lý <b>config</b> (DB URL, secret, cổng, feature flag) quyết định độ an toàn và khả năng deploy.</p>
+
+      <h3>6.1 Nguyên tắc 12-factor: config trong môi trường</h3>
+      <p>Phương pháp <b>12-factor app</b> nêu: <em>"Lưu config trong môi trường (env vars), không hardcode trong code."</em> Lý do:</p>
+      <ul>
+        <li><strong>Tách config khỏi code:</strong> cùng một artifact (image Docker) chạy được ở mọi môi trường, chỉ đổi env.</li>
+        <li><strong>Bảo mật:</strong> secret (DB password, JWT key, token telephony) không bao giờ lọt vào git.</li>
+        <li><strong>Linh hoạt:</strong> đổi cấu hình không cần build lại.</li>
+      </ul>
+
+      <h3>6.2 <code>process.env</code> & <code>dotenv</code></h3>
+      <p>Node đọc biến môi trường qua <code>process.env</code> (mọi giá trị đều là <b>chuỗi</b>). Lúc dev, gói <code>dotenv</code> nạp file <code>.env</code> vào <code>process.env</code> để khỏi phải set tay.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">.env (KHÔNG commit)</span><span class="lang">dotenv</span></div>
+        <pre><code>NODE_ENV=development
+PORT=8080
+DB_URL=postgres://user:pass@localhost:5432/cc
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=super-secret-change-me
+MAX_AGENTS_PER_QUEUE=50</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Quy tắc bắt buộc</div>
+        <p>• <code>.env</code> phải nằm trong <code>.gitignore</code> — <b>không bao giờ</b> commit secret.</p>
+        <p>• Commit một file mẫu <code>.env.example</code> (chỉ tên biến, không giá trị thật) để onboard dev mới.</p>
+        <p>• Production thật <b>không dùng file .env</b> mà inject env qua orchestrator (Kubernetes Secret, biến môi trường container). Node 20+ còn hỗ trợ <code>node --env-file=.env</code> sẵn, không cần gói dotenv.</p>
+      </div>
+
+      <h3>6.3 Validate env lúc boot — fail-fast</h3>
+      <p>Đây là một trong những best practice giá trị nhất. Thay vì để service crash <em>giữa lúc phục vụ cuộc gọi</em> vì thiếu một biến, hãy <strong>kiểm tra toàn bộ config ngay khi khởi động</strong> và dừng ngay nếu sai (fail-fast). Một module config tập trung, đã được <em>ép kiểu và validate</em>, là chuẩn mực.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">config.js</span><span class="lang">fail-fast config</span></div>
+        <pre><code><span class="tok-key">import</span> { z } <span class="tok-key">from</span> <span class="tok-str">'zod'</span>;
+
+<span class="tok-com">// Khai báo schema: kiểu, bắt buộc, mặc định, ép kiểu</span>
+<span class="tok-key">const</span> schema = z.<span class="tok-fn">object</span>({
+  NODE_ENV: z.<span class="tok-fn">enum</span>([<span class="tok-str">'development'</span>, <span class="tok-str">'production'</span>, <span class="tok-str">'test'</span>]),
+  PORT: z.<span class="tok-fn">coerce</span>.<span class="tok-fn">number</span>().<span class="tok-fn">default</span>(<span class="tok-num">8080</span>),       <span class="tok-com">// string → number</span>
+  DB_URL: z.<span class="tok-fn">string</span>().<span class="tok-fn">url</span>(),                       <span class="tok-com">// bắt buộc, đúng định dạng URL</span>
+  REDIS_URL: z.<span class="tok-fn">string</span>().<span class="tok-fn">url</span>(),
+  JWT_SECRET: z.<span class="tok-fn">string</span>().<span class="tok-fn">min</span>(<span class="tok-num">16</span>),                  <span class="tok-com">// chặn secret quá yếu</span>
+  MAX_AGENTS_PER_QUEUE: z.<span class="tok-fn">coerce</span>.<span class="tok-fn">number</span>().<span class="tok-fn">default</span>(<span class="tok-num">50</span>)
+});
+
+<span class="tok-key">const</span> parsed = schema.<span class="tok-fn">safeParse</span>(process.env);
+<span class="tok-key">if</span> (!parsed.success) {
+  console.<span class="tok-fn">error</span>(<span class="tok-str">'❌ Config sai — dừng khởi động:'</span>, parsed.error.<span class="tok-fn">flatten</span>().<span class="tok-var">fieldErrors</span>);
+  process.<span class="tok-fn">exit</span>(<span class="tok-num">1</span>);   <span class="tok-com">// FAIL-FAST: thà chết lúc boot còn hơn giữa giờ cao điểm</span>
+}
+
+<span class="tok-key">export</span> <span class="tok-key">const</span> config = parsed.<span class="tok-var">data</span>;  <span class="tok-com">// đã typed & validate — phần code khác dùng yên tâm</span></code></pre>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Quy ước dùng config</div>
+        <p>Phần còn lại của ứng dụng <b>không bao giờ</b> đọc <code>process.env</code> trực tiếp — luôn import từ module <code>config</code> này. Như vậy mọi biến đã được kiểm tra một chỗ, có gợi ý kiểu, và bạn không bị lỗi typo tên biến rải rác khắp codebase.</p>
+      </div>
+
+      <!-- 7 -->
+      <h2 id="security"><span class="ico">⑦</span> Bảo mật dependency</h2>
+      <p>Một project Node trung bình kéo theo hàng <b>nghìn</b> package gián tiếp. Mỗi package là một mẩu code lạ chạy với quyền của service bạn — kể cả quyền đọc env có secret. Đây là <strong>supply chain risk</strong>: lỗ hổng không chỉ ở code bạn viết mà còn ở mọi dependency.</p>
+
+      <h3>7.1 npm audit</h3>
+      <p><code>npm audit</code> đối chiếu cây phụ thuộc với cơ sở dữ liệu lỗ hổng đã biết và báo cáo mức độ (low → critical).</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">audit</span><span class="lang">shell</span></div>
+        <pre><code>npm audit                       <span class="tok-com"># liệt kê lỗ hổng đã biết</span>
+npm audit --omit=dev            <span class="tok-com"># chỉ quan tâm dependency chạy production</span>
+npm audit fix                   <span class="tok-com"># tự nâng bản trong range an toàn</span>
+npm audit fix --force           <span class="tok-com"># cho phép cả breaking change — CẨN THẬN</span>
+npm audit --audit-level=high    <span class="tok-com"># chỉ fail CI khi có high/critical</span></code></pre>
+      </div>
+
+      <h3>7.2 Phòng thủ chuỗi cung ứng — checklist</h3>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🔒</span> Commit lockfile</div><p>Cố định cây phụ thuộc + hash integrity → chống bị thay nội dung package âm thầm.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🤖</span> npm ci trong CI</div><p>Cài tái lập, không tự nâng bản — phát hiện ngay khi lockfile lệch.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📉</span> Giảm số dependency</div><p>Mỗi package thêm vào là thêm rủi ro. Cân nhắc tự viết tiện ích nhỏ thay vì kéo cả thư viện.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">⏳</span> Cẩn thận với bản mới ra</div><p>Tránh nâng ngay version vừa phát hành (typosquatting, package bị chiếm). Đợi cộng đồng kiểm chứng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> --ignore-scripts khi nghi ngờ</div><p>Chặn postinstall script độc hại chạy lúc cài trong môi trường nhạy cảm.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔁</span> Bot cập nhật tự động</div><p>Dependabot/Renovate mở PR nâng bản đều đặn + chạy test → vá lỗ hổng có kiểm soát.</p></div>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Vì sao đặc biệt nguy với Contact Center</div>
+        <p>Service tổng đài thường giữ secret nhạy cảm (token nhà mạng, khóa ghi âm, dữ liệu khách hàng — có thể là PII). Một package bị nhiễm trong cây phụ thuộc có thể đọc <code>process.env</code> và rò rỉ toàn bộ. Vì vậy kỷ luật dependency ở đây không phải "nice to have" mà là yêu cầu compliance.</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Gán lại <code>exports</code></div><p><code>exports = {...}</code> không xuất gì cả. Muốn xuất nguyên object phải dùng <code>module.exports = ...</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Dùng giá trị circular lúc nạp</div><p>Đọc export của module kia ở top-level khi có vòng → <code>undefined</code>. Chỉ dùng trong hàm, hoặc phá vòng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Không commit lockfile</div><p>Mất tính tái lập, "works on my machine". Luôn commit <code>package-lock.json</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Range quá lỏng (<code>*</code>, <code>latest</code>)</div><p>Một bản nâng cấp lén có thể phá production. Pin bằng range hợp lý + lockfile.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Đặt nhầm dependency vào devDeps</div><p>Build production bỏ qua → crash khi boot. Thứ chạy runtime phải ở <code>dependencies</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Đọc <code>process.env</code> khắp nơi</div><p>Khó kiểm soát, dễ typo. Tập trung vào một module <code>config</code> đã validate.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Commit file <code>.env</code></div><p>Rò rỉ secret vĩnh viễn trong git history. Phải <code>.gitignore</code> + xoay vòng secret nếu lỡ.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> <code>install</code> trong CI thay vì <code>ci</code></div><p>CI có thể tự nâng bản, cài không xác định. Dùng <code>npm ci</code> cho build/deploy.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Giải mã semver range</div>
+        <p>Cho khai báo <code>"ioredis": "^5.3.2"</code> và <code>"pg": "~8.11.0"</code>. Với mỗi bản phát hành mới sau đây, npm có cài tự động khi chạy lại không (giả sử <em>không</em> có lockfile)? <code>ioredis 5.9.0</code>, <code>ioredis 6.0.0</code>, <code>pg 8.11.5</code>, <code>pg 8.12.0</code>.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px"><code>^5.3.2</code> = <code>&gt;=5.3.2 &lt;6.0.0</code> → <b>ioredis 5.9.0 CÓ</b>, <b>6.0.0 KHÔNG</b> (đổi MAJOR). <code>~8.11.0</code> = <code>&gt;=8.11.0 &lt;8.12.0</code> → <b>pg 8.11.5 CÓ</b>, <b>8.12.0 KHÔNG</b> (đổi MINOR). Lưu ý: có lockfile thì <em>không</em> tự nâng dù range cho phép — phải <code>npm update</code>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Validate config fail-fast</div>
+        <p>Viết một module <code>config</code> đọc <code>PORT</code> (số, mặc định 8080), <code>DB_URL</code> (bắt buộc, URL), <code>JWT_SECRET</code> (bắt buộc, tối thiểu 16 ký tự). Nếu thiếu/sai phải in lỗi rõ ràng và <code>process.exit(1)</code>. Giải thích vì sao validate lúc boot tốt hơn validate rải rác.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Dùng schema (zod/joi) hoặc kiểm tra tay: ép <code>Number(process.env.PORT) || 8080</code>, ném lỗi nếu <code>!DB_URL</code> hoặc <code>JWT_SECRET.length &lt; 16</code>. Validate lúc boot = <b>fail-fast</b>: lỗi config lộ ra <em>trước khi</em> nhận traffic, thay vì làm rớt cuộc gọi giữa giờ cao điểm; lại tập trung một chỗ, dễ audit. Tham khảo lại ý tưởng <code>getEnv</code> ở <a href="B1-kien-truc-nodejs.html">B1</a>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Phá vòng phụ thuộc</div>
+        <p>Module <code>agent.js</code> và <code>queue.js</code> require lẫn nhau và bạn gặp <code>TypeError: queue.push is not a function</code> lúc khởi động. Đề xuất 2 cách sửa và giải thích cách nào tốt hơn.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">(1) <b>Lazy require</b>: chuyển <code>require('./queue')</code> vào <em>trong hàm</em> thay vì top-level → lúc gọi thì module đã nạp xong. (2) <b>Tách module thứ ba</b> chứa phần dùng chung (vd <code>types.js</code> / <code>store.js</code>), cả hai cùng phụ thuộc vào nó, phá vòng hẳn. Cách (2) tốt hơn vì xử lý <em>nguyên nhân gốc</em> (thiết kế kết dính chéo), còn (1) chỉ né triệu chứng.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Đặc điểm nào đúng với ESM (mà CommonJS không có)?</div>
+          <div class="opt">Nạp đồng bộ tại runtime</div>
+          <div class="opt" data-correct="true">Import tĩnh, hỗ trợ top-level await và tree-shaking</div>
+          <div class="opt">Có sẵn <code>__dirname</code></div>
+          <div class="explain"><b>Import tĩnh.</b> ESM phân giải lúc parse-time, cho phép top-level await và tree-shaking. CJS nạp đồng bộ runtime và có <code>__dirname</code>.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> <code>"^4.7.2"</code> cho phép npm cài version nào?</div>
+          <div class="opt">Đúng 4.7.2</div>
+          <div class="opt">&gt;=4.7.2 và &lt;4.8.0</div>
+          <div class="opt" data-correct="true">&gt;=4.7.2 và &lt;5.0.0</div>
+          <div class="explain"><b>&lt;5.0.0.</b> Caret giữ nguyên MAJOR, cho nâng MINOR + PATCH. Tilde <code>~</code> mới là <code>&lt;4.8.0</code>.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Mục đích chính của <code>package-lock.json</code>?</div>
+          <div class="opt">Liệt kê script</div>
+          <div class="opt" data-correct="true">Cố định cây phụ thuộc chính xác để cài đặt tái lập</div>
+          <div class="opt">Thay thế package.json</div>
+          <div class="explain"><b>Tái lập.</b> Lockfile ghi version thật của mọi package (kể cả transitive) + hash integrity → mọi máy/CI cài giống hệt nhau.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Trong CI/CD và Docker production nên dùng lệnh nào?</div>
+          <div class="opt">npm install</div>
+          <div class="opt" data-correct="true">npm ci --omit=dev</div>
+          <div class="opt">npm update</div>
+          <div class="explain"><b>npm ci.</b> Cài tái lập bám đúng lockfile, xóa node_modules cũ rồi cài lại; <code>--omit=dev</code> bỏ devDependencies cho image gọn.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Một thư viện chỉ cần khi <code>require</code> lúc service đang chạy production nên đặt ở đâu?</div>
+          <div class="opt" data-correct="true"><code>dependencies</code></div>
+          <div class="opt"><code>devDependencies</code></div>
+          <div class="opt"><code>peerDependencies</code></div>
+          <div class="explain"><b>dependencies.</b> Thứ gì code dùng lúc chạy phải ở đây, nếu không build production bỏ qua sẽ crash khi boot.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Module system, npm & cấu hình — chủ đề "đời thường" nhưng lộ rõ ai thực sự vận hành production.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Phân biệt CommonJS và ESM.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> CommonJS dùng <code>require</code>/<code>module.exports</code>, nạp đồng bộ và phân giải tại runtime (có thể require động trong if). ESM dùng <code>import</code>/<code>export</code>, tĩnh tại parse-time, nạp bất đồng bộ, hỗ trợ top-level await và tree-shaking. Node chọn hệ theo đuôi file (<code>.mjs</code>/<code>.cjs</code>) hoặc <code>"type": "module"</code>. ESM không có <code>__dirname</code>, dùng <code>import.meta.url</code> thay thế.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>require cache hoạt động thế nào? Tận dụng ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Lần đầu <code>require</code> một module, Node chạy code của nó và lưu <code>module.exports</code> vào <code>require.cache</code> (key là đường dẫn tuyệt đối). Những lần sau trả về <em>chính object đã cache</em>, không chạy lại. Nhờ vậy ta tạo <b>singleton</b>: connection pool DB, client Redis, logger — chỉ khởi tạo một lần dù require ở nhiều nơi, tránh cạn kết nối.</p>
+        <p class="trap">⚠️ Bẫy: vì cache theo đường dẫn đã phân giải, hai đường dẫn khác nhau (vd qua symlink, hay khác casing trên hệ phân biệt chữ hoa/thường) có thể tạo HAI instance — phá vỡ giả định singleton.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Circular dependency là gì? Node xử lý ra sao và cách phòng tránh?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Là khi A require B và B require A. Node không treo: khi gặp vòng, module đang nạp dở trả về <code>module.exports</code> <em>tại trạng thái hiện tại</em> — có thể chưa đầy đủ. Nếu bạn dùng export của module kia <b>ngay lúc nạp</b> (top-level), có thể nhận <code>undefined</code> → lỗi <code>x is not a function</code>. Nếu chỉ dùng <b>trong hàm</b> (gọi sau khi mọi module đã nạp) thì thường an toàn. Cách phòng: tách phần chung ra module thứ ba, lazy require trong hàm, hoặc thiết kế lại để bỏ vòng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Mô tả cơ chế phân giải module của Node.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Node phân loại định danh: (1) core module (<code>fs</code>, <code>path</code>...) ưu tiên cao nhất; (2) đường dẫn tương đối <code>./</code> <code>../</code> <code>/</code> → tìm file ngay đó, thử thêm đuôi <code>.js/.json/.node</code>, nếu là thư mục thì đọc <code>main</code>/<code>exports</code> hoặc <code>index.js</code>; (3) package bare → tìm <code>node_modules</code> bắt đầu từ thư mục hiện tại rồi <b>leo dần lên</b> cây cho tới root. Hết mà không thấy thì ném <code>MODULE_NOT_FOUND</code>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Giải thích semver và khác nhau giữa <code>^</code> và <code>~</code>.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Semver là <code>MAJOR.MINOR.PATCH</code>: MAJOR tăng khi breaking change, MINOR khi thêm tính năng tương thích ngược, PATCH khi sửa lỗi. <code>^1.2.3</code> cho nâng MINOR + PATCH, giữ MAJOR (<code>&lt;2.0.0</code>). <code>~1.2.3</code> chỉ cho nâng PATCH (<code>&lt;1.3.0</code>). Exact <code>1.2.3</code> cố định tuyệt đối.</p>
+        <p class="trap">⚠️ Bẫy: với <code>0.x</code>, caret hành xử như tilde — <code>^0.5.3</code> chỉ tới <code>&lt;0.6.0</code> vì semver coi 0.x là chưa ổn định.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>package-lock.json để làm gì? Có nên commit không?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Nó khóa lại <em>version chính xác</em> của toàn bộ cây phụ thuộc — kể cả các package gián tiếp (transitive) — kèm hash integrity. Mục đích: <b>cài đặt tái lập</b>, đảm bảo mọi dev/CI/production có cùng cây phụ thuộc, tránh "works on my machine". <b>Phải commit</b> lockfile. Range trong package.json chỉ nói "chấp nhận khoảng nào", còn lockfile mới là cái thực sự được cài.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span><code>npm ci</code> khác <code>npm install</code> thế nào? Khi nào dùng?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>npm install</code> giải range, có thể cập nhật lockfile và cài tăng dần — dùng khi phát triển/thêm package. <code>npm ci</code> bám <b>chính xác</b> lockfile (không sửa), bắt buộc có lockfile và lockfile phải khớp package.json, xóa sạch <code>node_modules</code> rồi cài lại — nhanh và tái lập. Dùng <code>npm ci</code> trong CI/CD và Docker production (kèm <code>--omit=dev</code>).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Phân biệt dependencies, devDependencies, peerDependencies.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <code>dependencies</code> cần để chạy production (luôn cài). <code>devDependencies</code> chỉ cần lúc dev/test/build (bỏ qua với <code>--omit=dev</code>/production). <code>peerDependencies</code> là thứ package của bạn yêu cầu <em>host</em> cung cấp — không tự cài — để tránh trùng instance (vd plugin cần đúng một bản framework mà app đang dùng).</p>
+        <p class="trap">⚠️ Bẫy: nhầm một runtime dep vào devDependencies → build production bỏ qua → service crash lúc boot.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>peerDependencies giải quyết vấn đề gì? Cho ví dụ.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Nó tránh tình trạng <b>nhiều bản trùng</b> của một thư viện cùng tồn tại trong cây phụ thuộc, vốn gây bug khó hiểu khi cần <em>chia sẻ một instance duy nhất</em> (state, singleton, kiểm tra <code>instanceof</code>). Ví dụ: một plugin cho framework gateway khai báo framework là peer <code>^4</code> — host chịu trách nhiệm cung cấp một bản, đảm bảo plugin và app dùng chung instance, chung registry. Nếu khai báo là dependency thường, plugin có thể kéo bản riêng → hai registry agent tách biệt.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Bạn quản lý config/secret cho một service Node thế nào theo 12-factor?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Config lưu trong env vars chứ không hardcode → cùng một artifact chạy mọi môi trường. Dev dùng <code>.env</code> (đã <code>.gitignore</code>, có <code>.env.example</code> mẫu) nạp qua dotenv hoặc <code>node --env-file</code>; production inject env qua orchestrator (K8s Secret). Tôi gom toàn bộ vào một module <code>config</code> đã <b>validate + ép kiểu</b> bằng zod/joi và <b>fail-fast</b> (<code>process.exit(1)</code>) nếu thiếu/sai lúc boot; phần code khác chỉ import từ module này, không đụng <code>process.env</code> trực tiếp.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>Interop CJS ↔ ESM có những vướng mắc gì?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Từ ESM có thể <code>import</code> module CJS: <code>module.exports</code> trở thành default export (named export đôi khi được suy ra nhưng không bảo đảm). Từ CJS <b>không</b> dùng <code>require()</code> được cho package ESM-only (vì require đồng bộ, ESM async) — phải dùng dynamic <code>await import()</code>. ESM thiếu <code>__dirname</code>/<code>__filename</code>/<code>require</code>; thay bằng <code>import.meta.url</code> + <code>fileURLToPath</code>. Nhiều package nay phát hành "dual" qua conditional <code>exports</code> (entry riêng cho <code>import</code> và <code>require</code>).</p>
+        <p class="trap">⚠️ Bẫy: hiện tượng "dual package hazard" — nếu một thư viện được nạp cả ở dạng CJS lẫn ESM, có thể tồn tại hai bản state riêng biệt.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Bạn giảm rủi ro supply chain cho dependency npm thế nào?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> (1) Commit lockfile để cố định cây + hash integrity. (2) Dùng <code>npm ci</code> trong CI để cài tái lập, phát hiện lockfile lệch. (3) Chạy <code>npm audit --audit-level=high</code> trong pipeline và để Dependabot/Renovate mở PR nâng bản có test. (4) Giảm số dependency, tránh nâng ngay version vừa ra (phòng typosquatting/package bị chiếm). (5) Cân nhắc <code>--ignore-scripts</code> để chặn postinstall độc hại trong môi trường nhạy cảm. (6) Pin chặt các package nhạy cảm. Với service tổng đài giữ secret nhà mạng và PII khách hàng, kỷ luật này là yêu cầu compliance, không chỉ là tốt-nên-có.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương B2</button>
+      </div>
+
+      <div class="pager">
+        <a href="B1-kien-truc-nodejs.html"><span class="dir">← Trước</span><span class="ttl">B1 · Kiến trúc Node.js</span></a>
+        <a href="B3-streams-buffer-events.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">B3 · Streams, Buffer, Events</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='B2',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành B2 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương B2'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

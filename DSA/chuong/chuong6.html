@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 06 — Recursion & Backtracking · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong5.html">← Ch.05</a></li>
+        <li><a href="chuong6.html" class="active">Ch.06</a></li>
+        <li><a href="chuong7.html">Ch.07 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 06 · TECHNIQUE · ~120 phút</div>
+      <h1>Recursion &amp;<br/><span class="text-amber">Backtracking</span></h1>
+      <p class="lead">
+        Tư duy đệ quy là <strong>kỹ năng nền tảng</strong> cho cây, đồ thị, divide &amp; conquer, dynamic programming.
+        Backtracking là "anh em song sinh" — đệ quy có thử-sai-quay-lui. Học chương này, bạn nắm template để giải
+        Permutations, Combinations, Subsets, N-Queens, Sudoku — toàn bài kinh điển.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#concept">6.1 Đệ quy là gì?</a></li>
+          <li><a href="#thinking">6.2 Tư duy đệ quy</a></li>
+          <li><a href="#tree">6.3 Recursion Tree</a></li>
+          <li><a href="#tail">6.4 Tail recursion</a></li>
+          <li><a href="#memo">6.5 Memoization</a></li>
+          <li><a href="#backtracking">6.6 Backtracking</a></li>
+          <li><a href="#perm">6.7 Permutations</a></li>
+          <li><a href="#comb">6.8 Combinations</a></li>
+          <li><a href="#subsets">6.9 Subsets</a></li>
+          <li><a href="#classics">6.10 Bài kinh điển</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 6.1 -->
+        <section id="concept">
+          <h2>6.1 Đệ quy là gì?</h2>
+
+          <p>
+            <strong>Đệ quy (recursion)</strong> = một hàm <em>gọi chính nó</em> với input nhỏ hơn.
+            Ý tưởng: <em>"để giải bài toán cỡ n, ta giả sử đã giải được cho cỡ n-1, rồi từ đó ráp ra đáp án cho n."</em>
+          </p>
+
+          <p>Mọi hàm đệ quy phải có 2 thành phần:</p>
+          <ol>
+            <li><strong>Base case:</strong> điều kiện dừng — khi bài toán đủ nhỏ để giải trực tiếp</li>
+            <li><strong>Recursive case:</strong> gọi chính nó với input nhỏ hơn, sau đó kết hợp kết quả</li>
+          </ol>
+
+          <pre data-lang="javascript"><code>// Tính giai thừa n!
+function factorial(n) {
+  if (n &lt;= 1) return 1;        // base case
+  return n * factorial(n - 1); // recursive case
+}
+
+factorial(5)
+= 5 * factorial(4)
+= 5 * 4 * factorial(3)
+= 5 * 4 * 3 * factorial(2)
+= 5 * 4 * 3 * 2 * factorial(1)
+= 5 * 4 * 3 * 2 * 1
+= 120</code></pre>
+
+          <h3>Tại sao đệ quy "hoạt động"?</h3>
+          <p>
+            Mỗi lời gọi đệ quy được lưu trên <strong>call stack</strong>. Mỗi frame có biến cục bộ riêng,
+            không ảnh hưởng đến frame khác. Khi base case return, frame được pop, kết quả truyền ngược lên.
+          </p>
+
+          <pre data-lang="text"><code>Call stack (đệ quy factorial(3)):
+
+[factorial(1), n=1]   ← top, return 1
+[factorial(2), n=2]      → return 2 * 1 = 2
+[factorial(3), n=3]      → return 3 * 2 = 6
+[main()]              ← bottom</code></pre>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Đệ quy SAI lầm thường gặp</div>
+            <ul>
+              <li><strong>Quên base case</strong> → vô hạn → stack overflow</li>
+              <li><strong>Recursive case không tiến gần base case</strong> → vẫn vô hạn</li>
+              <li>Vd: <code>fact(n) { return n * fact(n); }</code> ← không giảm n!</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 6.2 -->
+        <section id="thinking">
+          <h2>6.2 Tư duy đệ quy — 3 bước viết hàm đệ quy</h2>
+
+          <p>Khi viết hàm đệ quy, không cần "imagine" toàn bộ stack. Chỉ cần 3 bước:</p>
+
+          <ol>
+            <li><strong>Định nghĩa rõ "hàm này làm gì"</strong> với input cụ thể.</li>
+            <li><strong>Xác định base case</strong>: input cỡ nào thì giải trực tiếp được?</li>
+            <li><strong>Giả sử hàm đã đúng cho input nhỏ hơn</strong>, ráp ra đáp án cho input hiện tại.</li>
+          </ol>
+
+          <h3>Ví dụ: tính tổng mảng</h3>
+
+          <pre data-lang="javascript"><code>// Bước 1: sumArray(arr) trả về tổng các phần tử của arr
+// Bước 2: base case — mảng rỗng → 0
+// Bước 3: giả sử sumArray(arr.slice(1)) đúng
+//          → kết quả = arr[0] + sumArray(arr.slice(1))
+
+function sumArray(arr) {
+  if (arr.length === 0) return 0;
+  return arr[0] + sumArray(arr.slice(1));
+}
+
+// sumArray([1,2,3,4]) = 1 + sumArray([2,3,4])
+//                     = 1 + 2 + sumArray([3,4])
+//                     = 1 + 2 + 3 + sumArray([4])
+//                     = 1 + 2 + 3 + 4 + sumArray([])
+//                     = 1 + 2 + 3 + 4 + 0 = 10</code></pre>
+
+          <p>
+            <strong>Lưu ý:</strong> code trên có space O(n²) vì <code>slice</code> tạo array mới mỗi lần.
+            Cải tiến: dùng index thay vì slice.
+          </p>
+
+          <pre data-lang="javascript"><code>function sumArray(arr, i = 0) {
+  if (i === arr.length) return 0;
+  return arr[i] + sumArray(arr, i + 1);
+}
+// Time O(n), Space O(n) cho call stack</code></pre>
+
+          <h3>Ví dụ: Đảo ngược chuỗi</h3>
+
+          <pre data-lang="javascript"><code>// reverse(s) đảo ngược chuỗi s
+// Base case: s rỗng → ""
+// Recursive: reverse(s.slice(1)) + s[0]
+
+function reverse(s) {
+  if (s.length &lt;= 1) return s;
+  return reverse(s.slice(1)) + s[0];
+}
+// reverse("hello") = reverse("ello") + "h"
+//                  = (reverse("llo") + "e") + "h"
+//                  = "olleh"</code></pre>
+        </section>
+
+        <!-- 6.3 -->
+        <section id="tree">
+          <h2>6.3 Recursion Tree — vẽ ra để tính Big-O</h2>
+
+          <p>Nhiều hàm đệ quy gọi chính nó <em>nhiều lần</em>. Để tính Big-O, ta vẽ <strong>recursion tree</strong>.</p>
+
+          <h3>Ví dụ: Fibonacci đệ quy ngây thơ</h3>
+
+          <pre data-lang="javascript"><code>function fib(n) {
+  if (n &lt;= 1) return n;
+  return fib(n - 1) + fib(n - 2);
+}</code></pre>
+
+          <pre data-lang="text"><code>                    fib(5)
+                   /        \
+              fib(4)         fib(3)
+              /    \         /    \
+          fib(3)  fib(2)  fib(2)  fib(1)
+          /  \    /  \    /  \
+      fib(2) fib(1) fib(1) fib(0) fib(1) fib(0)
+      /  \
+  fib(1) fib(0)</code></pre>
+
+          <p>
+            <strong>Phân tích:</strong> recursion tree có ~2ⁿ node → <strong>O(2ⁿ)</strong> time, O(n) space (depth của cây).
+            Với n=30 đã thấy chậm rõ. Với n=50, chạy mất hàng giờ.
+          </p>
+
+          <h3>Tại sao chậm?</h3>
+          <p>
+            Vì rất nhiều subproblem được tính <em>lặp đi lặp lại</em>: <code>fib(2)</code> được tính 3 lần,
+            <code>fib(1)</code> 5 lần, ... Đây là dấu hiệu của <strong>overlapping subproblems</strong> — bài này
+            có thể tối ưu bằng <strong>Memoization</strong> (xem 6.5).
+          </p>
+
+          <h3>Công thức tổng quát: Master Theorem</h3>
+
+          <p>Cho recursion <code>T(n) = a · T(n/b) + f(n)</code>, có 3 trường hợp:</p>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Master Theorem (đơn giản hoá)</div>
+            <ul>
+              <li>Nếu <code>f(n) = O(n^c)</code> với <code>c &lt; log_b(a)</code>: <strong>T(n) = Θ(n^log_b(a))</strong></li>
+              <li>Nếu <code>f(n) = Θ(n^c)</code> với <code>c = log_b(a)</code>: <strong>T(n) = Θ(n^c · log n)</strong></li>
+              <li>Nếu <code>f(n) = Ω(n^c)</code> với <code>c &gt; log_b(a)</code>: <strong>T(n) = Θ(f(n))</strong></li>
+            </ul>
+          </div>
+
+          <p>Áp dụng cho Merge Sort: <code>T(n) = 2T(n/2) + O(n)</code> → trường hợp 2 → <code>O(n log n)</code>.</p>
+        </section>
+
+        <!-- 6.4 -->
+        <section id="tail">
+          <h2>6.4 Tail Recursion — đệ quy đuôi</h2>
+
+          <p>
+            <strong>Tail recursion</strong> = lời gọi đệ quy là phép tính <em>cuối cùng</em> trong hàm
+            (không có phép cộng/trừ/... sau lời gọi đệ quy).
+          </p>
+
+          <pre data-lang="javascript"><code>// KHÔNG phải tail recursion — có "n *" sau lời gọi
+function factorial(n) {
+  if (n &lt;= 1) return 1;
+  return n * factorial(n - 1);  // ← không phải call cuối
+}
+
+// Tail recursion — dùng accumulator
+function factorialTail(n, acc = 1) {
+  if (n &lt;= 1) return acc;
+  return factorialTail(n - 1, acc * n);  // ← call cuối
+}</code></pre>
+
+          <p>
+            Một số ngôn ngữ (Scheme, Scala, Haskell) tối ưu tail recursion bằng <strong>Tail Call Optimization (TCO)</strong>:
+            không tạo frame mới, biến đệ quy thành vòng lặp → <strong>O(1) space</strong>.
+          </p>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ JS không có TCO trên thực tế</div>
+            <p>
+              Spec ES6 có TCO nhưng các engine V8/JSC/SpiderMonkey không bật. Vì vậy trong JS,
+              tail recursion vẫn tốn O(n) space cho call stack. Khi gặp đệ quy sâu, hãy chuyển sang iterative.
+            </p>
+          </div>
+        </section>
+
+        <!-- 6.5 -->
+        <section id="memo">
+          <h2>6.5 Memoization — cache kết quả</h2>
+
+          <p>
+            Khi đệ quy có <strong>overlapping subproblems</strong>, dùng cache để tránh tính lại.
+            Đây là cầu nối từ Recursion sang Dynamic Programming (Chương 12).
+          </p>
+
+          <h3>Fibonacci với memoization</h3>
+
+          <pre data-lang="javascript"><code>function fib(n, memo = {}) {
+  if (n &lt;= 1) return n;
+  if (memo[n] !== undefined) return memo[n];
+  return memo[n] = fib(n - 1, memo) + fib(n - 2, memo);
+}
+
+// Time: O(n) — mỗi fib(k) tính đúng 1 lần
+// Space: O(n) — memo + call stack</code></pre>
+
+          <p>Sự khác biệt: <code>fib(50)</code> không memo chạy ~1 phút; có memo ~1 ms.</p>
+
+          <h3>Hàm decorator memoize tổng quát</h3>
+
+          <pre data-lang="javascript"><code>function memoize(fn) {
+  const cache = new Map();
+  return function(...args) {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) return cache.get(key);
+    const result = fn.apply(this, args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+const fastFib = memoize(function fib(n) {
+  if (n &lt;= 1) return n;
+  return fastFib(n - 1) + fastFib(n - 2);
+});</code></pre>
+        </section>
+
+        <!-- 6.6 -->
+        <section id="backtracking">
+          <h2>6.6 Backtracking — đệ quy có thử-sai-quay-lui</h2>
+
+          <p>
+            <strong>Backtracking</strong> = đệ quy duyệt mọi nhánh, khi gặp ngõ cụt (không thoả điều kiện) thì <em>quay lui</em>
+            để thử nhánh khác. Đây là kỹ thuật giải:
+          </p>
+          <ul>
+            <li>Liệt kê tất cả phương án (permutations, combinations, subsets)</li>
+            <li>Tìm phương án thoả điều kiện (N-Queens, Sudoku)</li>
+            <li>Tối ưu trên không gian phương án (Travelling Salesman brute force)</li>
+          </ul>
+
+          <h3>Template tổng quát</h3>
+
+          <pre data-lang="javascript"><code>function backtrack(state, choices) {
+  if (isGoal(state)) {
+    record(state);          // lưu kết quả
+    return;
+  }
+  for (const choice of choices) {
+    if (isValid(state, choice)) {
+      apply(state, choice);   // thử (choose)
+      backtrack(state, ...);  // đệ quy (explore)
+      undo(state, choice);    // quay lui (un-choose)
+    }
+  }
+}</code></pre>
+
+          <p>3 bước: <strong>choose → explore → un-choose</strong>. Đây là điểm khác biệt với đệ quy thường (không có un-choose).</p>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Vẽ "decision tree" để hình dung</div>
+            <p>
+              Mỗi nút trong cây quyết định = một state. Mỗi cạnh = một lựa chọn. Backtracking = DFS trên cây này,
+              quay lui khi nhánh sai.
+            </p>
+          </div>
+        </section>
+
+        <!-- 6.7 -->
+        <section id="perm">
+          <h2>6.7 Permutations — Hoán vị</h2>
+
+          <p>Cho mảng <code>[1, 2, 3]</code>, liệt kê <strong>tất cả hoán vị</strong>: <code>[1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1]</code>.</p>
+
+          <pre data-lang="javascript"><code>function permute(nums) {
+  const result = [];
+
+  function backtrack(path, used) {
+    if (path.length === nums.length) {
+      result.push([...path]);  // copy vì path sẽ thay đổi
+      return;
+    }
+    for (let i = 0; i &lt; nums.length; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      path.push(nums[i]);
+
+      backtrack(path, used);
+
+      path.pop();         // un-choose
+      used[i] = false;    // un-choose
+    }
+  }
+
+  backtrack([], new Array(nums.length).fill(false));
+  return result;
+}
+
+console.log(permute([1, 2, 3]));
+// [[1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1]]</code></pre>
+
+          <p><strong>Big-O:</strong> O(n · n!) — n! hoán vị, mỗi cái copy O(n).</p>
+
+          <h3>Permutations II — có phần tử trùng</h3>
+
+          <pre data-lang="javascript"><code>function permuteUnique(nums) {
+  nums.sort((a, b) =&gt; a - b);  // sort để nhận biết trùng
+  const result = [];
+
+  function backtrack(path, used) {
+    if (path.length === nums.length) {
+      result.push([...path]);
+      return;
+    }
+    for (let i = 0; i &lt; nums.length; i++) {
+      if (used[i]) continue;
+      // Skip nếu phần tử trùng và phần tử trước chưa được dùng
+      if (i &gt; 0 &amp;&amp; nums[i] === nums[i - 1] &amp;&amp; !used[i - 1]) continue;
+      used[i] = true;
+      path.push(nums[i]);
+      backtrack(path, used);
+      path.pop();
+      used[i] = false;
+    }
+  }
+
+  backtrack([], new Array(nums.length).fill(false));
+  return result;
+}</code></pre>
+        </section>
+
+        <!-- 6.8 -->
+        <section id="comb">
+          <h2>6.8 Combinations — Tổ hợp</h2>
+
+          <p>Khác permutation, combination <em>không quan tâm thứ tự</em>: <code>[1,2]</code> và <code>[2,1]</code> giống nhau.</p>
+
+          <h3>Combinations: chọn k từ [1..n]</h3>
+
+          <pre data-lang="javascript"><code>function combine(n, k) {
+  const result = [];
+
+  function backtrack(start, path) {
+    if (path.length === k) {
+      result.push([...path]);
+      return;
+    }
+    for (let i = start; i &lt;= n; i++) {
+      path.push(i);
+      backtrack(i + 1, path);  // i+1 tránh chọn lại
+      path.pop();
+    }
+  }
+
+  backtrack(1, []);
+  return result;
+}
+
+console.log(combine(4, 2));
+// [[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]]</code></pre>
+
+          <h3>Combination Sum: chọn nhiều lần được</h3>
+
+          <pre data-lang="javascript"><code>// Cho candidates và target. Tìm các bộ phần tử (có thể trùng nhau từ candidates)
+// có tổng = target. Mỗi candidate dùng được nhiều lần.
+function combinationSum(candidates, target) {
+  const result = [];
+
+  function backtrack(start, path, sum) {
+    if (sum === target) {
+      result.push([...path]);
+      return;
+    }
+    if (sum &gt; target) return;
+    for (let i = start; i &lt; candidates.length; i++) {
+      path.push(candidates[i]);
+      // Truyền i (không phải i+1) để cho phép dùng lại
+      backtrack(i, path, sum + candidates[i]);
+      path.pop();
+    }
+  }
+
+  backtrack(0, [], 0);
+  return result;
+}
+
+// candidates = [2,3,6,7], target = 7
+// → [[2,2,3], [7]]</code></pre>
+        </section>
+
+        <!-- 6.9 -->
+        <section id="subsets">
+          <h2>6.9 Subsets — Tập con</h2>
+
+          <p>Cho mảng <code>[1, 2, 3]</code>, liệt kê tất cả 2³ = 8 tập con (kể cả <code>[]</code> và mảng đầy đủ).</p>
+
+          <pre data-lang="javascript"><code>function subsets(nums) {
+  const result = [];
+
+  function backtrack(start, path) {
+    result.push([...path]);  // mỗi state đều là 1 subset
+    for (let i = start; i &lt; nums.length; i++) {
+      path.push(nums[i]);
+      backtrack(i + 1, path);
+      path.pop();
+    }
+  }
+
+  backtrack(0, []);
+  return result;
+}
+
+// [1,2,3] →
+// [], [1], [1,2], [1,2,3], [1,3], [2], [2,3], [3]</code></pre>
+
+          <h3>Cách khác: bit manipulation</h3>
+
+          <pre data-lang="javascript"><code>// Mỗi tập con tương ứng 1 bitmask
+function subsetsBit(nums) {
+  const n = nums.length;
+  const result = [];
+  for (let mask = 0; mask &lt; (1 &lt;&lt; n); mask++) {
+    const subset = [];
+    for (let i = 0; i &lt; n; i++) {
+      if (mask &amp; (1 &lt;&lt; i)) subset.push(nums[i]);
+    }
+    result.push(subset);
+  }
+  return result;
+}</code></pre>
+        </section>
+
+        <!-- 6.10 -->
+        <section id="classics">
+          <h2>6.10 Bài kinh điển</h2>
+
+          <h3>6.10.1 N-Queens</h3>
+
+          <p>Đặt N quân hậu trên bàn cờ NxN sao cho không quân nào "tấn công" được quân khác.</p>
+
+          <pre data-lang="javascript"><code>function solveNQueens(n) {
+  const result = [];
+  const cols = new Set();
+  const diag1 = new Set();  // r - c
+  const diag2 = new Set();  // r + c
+  const board = Array.from({length: n}, () =&gt; Array(n).fill('.'));
+
+  function backtrack(row) {
+    if (row === n) {
+      result.push(board.map(r =&gt; r.join('')));
+      return;
+    }
+    for (let col = 0; col &lt; n; col++) {
+      if (cols.has(col) || diag1.has(row - col) || diag2.has(row + col)) continue;
+      board[row][col] = 'Q';
+      cols.add(col); diag1.add(row - col); diag2.add(row + col);
+
+      backtrack(row + 1);
+
+      board[row][col] = '.';
+      cols.delete(col); diag1.delete(row - col); diag2.delete(row + col);
+    }
+  }
+
+  backtrack(0);
+  return result;
+}</code></pre>
+
+          <h3>6.10.2 Sudoku Solver</h3>
+
+          <pre data-lang="javascript"><code>function solveSudoku(board) {
+  function isValid(r, c, ch) {
+    for (let i = 0; i &lt; 9; i++) {
+      if (board[r][i] === ch) return false;
+      if (board[i][c] === ch) return false;
+      const br = 3 * Math.floor(r / 3) + Math.floor(i / 3);
+      const bc = 3 * Math.floor(c / 3) + i % 3;
+      if (board[br][bc] === ch) return false;
+    }
+    return true;
+  }
+
+  function backtrack() {
+    for (let r = 0; r &lt; 9; r++) {
+      for (let c = 0; c &lt; 9; c++) {
+        if (board[r][c] !== '.') continue;
+        for (let n = 1; n &lt;= 9; n++) {
+          const ch = String(n);
+          if (isValid(r, c, ch)) {
+            board[r][c] = ch;
+            if (backtrack()) return true;
+            board[r][c] = '.';
+          }
+        }
+        return false;  // không số nào đặt được → quay lui
+      }
+    }
+    return true;  // hết ô trống
+  }
+
+  backtrack();
+}</code></pre>
+
+          <h3>6.10.3 Word Search</h3>
+
+          <pre data-lang="javascript"><code>// Cho board ký tự và word. Có thể tìm word trên board không?
+// Ô liền kề (4 hướng), không dùng lại ô.
+function exist(board, word) {
+  const m = board.length, n = board[0].length;
+
+  function dfs(r, c, i) {
+    if (i === word.length) return true;
+    if (r &lt; 0 || r &gt;= m || c &lt; 0 || c &gt;= n) return false;
+    if (board[r][c] !== word[i]) return false;
+
+    const tmp = board[r][c];
+    board[r][c] = '#';  // đánh dấu đã thăm
+
+    const found = dfs(r+1, c, i+1) || dfs(r-1, c, i+1)
+               || dfs(r, c+1, i+1) || dfs(r, c-1, i+1);
+
+    board[r][c] = tmp;  // un-choose
+    return found;
+  }
+
+  for (let r = 0; r &lt; m; r++)
+    for (let c = 0; c &lt; n; c++)
+      if (dfs(r, c, 0)) return true;
+  return false;
+}</code></pre>
+
+          <h3>6.10.4 Generate Parentheses</h3>
+
+          <pre data-lang="javascript"><code>// Tạo ra tất cả chuỗi dấu ngoặc hợp lệ với n cặp.
+// n=3: "((()))", "(()())", "(())()", "()(())", "()()()"
+function generateParenthesis(n) {
+  const result = [];
+
+  function backtrack(open, close, path) {
+    if (path.length === 2 * n) {
+      result.push(path);
+      return;
+    }
+    if (open &lt; n) backtrack(open + 1, close, path + '(');
+    if (close &lt; open) backtrack(open, close + 1, path + ')');
+  }
+
+  backtrack(0, 0, '');
+  return result;
+}</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Power x^n</div>
+            <p>Tính x^n bằng đệ quy. Yêu cầu: O(log n).</p>
+            <p>Hint: <code>x^n = (x^(n/2))²</code> nếu n chẵn, <code>x · x^(n-1)</code> nếu n lẻ.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Climb Stairs</div>
+            <p>Cầu thang n bậc, mỗi bước nhảy 1 hoặc 2 bậc. Đếm số cách đi tới bậc thứ n.</p>
+            <p>Hint: <code>f(n) = f(n-1) + f(n-2)</code>. Dùng memoization.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Subsets</div>
+            <p>Đã có ở 6.9. Tự cài cả 2 cách (backtracking và bitmask).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Permutations</div>
+            <p>Đã có ở 6.7. Tự cài.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Letter Combinations of a Phone Number</div>
+            <p>Cho chuỗi số 2-9 (trên bàn phím điện thoại), trả về tất cả tổ hợp chữ.</p>
+            <pre data-lang="text"><code>"23" → ["ad","ae","af","bd","be","bf","cd","ce","cf"]</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Restore IP Addresses</div>
+            <p>Cho chuỗi số. Liệt kê tất cả cách chèn 3 dấu chấm để tạo IP hợp lệ.</p>
+            <pre data-lang="text"><code>"25525511135" → ["255.255.11.135", "255.255.111.35"]</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Palindrome Partitioning</div>
+            <p>Phân hoạch chuỗi thành các substring sao cho mỗi substring là palindrome. Liệt kê tất cả.</p>
+            <pre data-lang="text"><code>"aab" → [["a","a","b"], ["aa","b"]]</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 8 — N-Queens</div>
+            <p>Trả về <em>số lượng</em> cách đặt N quân hậu (LeetCode 52). Đơn giản hơn việc trả board.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> Hàm đệ quy bắt buộc phải có?</p>
+              <ul class="quiz-options">
+                <li>Memoization</li>
+                <li>Vòng lặp</li>
+                <li>Base case (điều kiện dừng)</li>
+                <li>Tail call optimization</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Base case.</strong> Không có base case → đệ quy vô hạn → stack overflow.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> Big-O của Fibonacci đệ quy ngây thơ <code>fib(n) = fib(n-1) + fib(n-2)</code>?</p>
+              <ul class="quiz-options">
+                <li>O(2ⁿ)</li>
+                <li>O(n²)</li>
+                <li>O(n log n)</li>
+                <li>O(n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(2ⁿ).</strong> Recursion tree có 2ⁿ node. Memoization giảm xuống O(n).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Sự khác biệt giữa đệ quy thường và backtracking?</p>
+              <ul class="quiz-options">
+                <li>Backtracking nhanh hơn</li>
+                <li>Backtracking dùng vòng lặp, đệ quy không</li>
+                <li>Backtracking có bước "un-choose" để thử nhánh khác</li>
+                <li>Backtracking không dùng được trong JS</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: un-choose.</strong> Backtracking = choose → explore → un-choose. Bước un-choose giúp duyệt mọi phương án.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> Memoization giảm Big-O của Fibonacci đệ quy từ O(2ⁿ) xuống?</p>
+              <ul class="quiz-options">
+                <li>O(log n)</li>
+                <li>O(n)</li>
+                <li>O(n log n)</li>
+                <li>O(1)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n).</strong> Mỗi <code>fib(k)</code> chỉ tính 1 lần (lần sau lấy từ cache). Có n giá trị k khác nhau → O(n) time.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Số hoán vị của mảng có n phần tử là?</p>
+              <ul class="quiz-options">
+                <li>2ⁿ</li>
+                <li>n²</li>
+                <li>n!</li>
+                <li>n × log n</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: n!.</strong> Vị trí 1 có n cách, vị trí 2 còn n-1 cách,..., tổng = n × (n-1) × ... × 1 = n!.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 6.</strong> Số tập con (subset) của mảng có n phần tử là?</p>
+              <ul class="quiz-options">
+                <li>2ⁿ</li>
+                <li>n!</li>
+                <li>n²</li>
+                <li>n × n</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 2ⁿ.</strong> Mỗi phần tử có 2 lựa chọn (có/không có trong subset) → 2ⁿ.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Trong template backtracking, thứ tự đúng là?</p>
+              <ul class="quiz-options">
+                <li>Explore → Choose → Un-choose</li>
+                <li>Un-choose → Choose → Explore</li>
+                <li>Choose → Explore → Un-choose</li>
+                <li>Choose → Un-choose → Explore</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Choose → Explore → Un-choose.</strong> Đầu tiên chọn lựa, đệ quy thăm nhánh đó, sau đó hoàn nguyên trạng thái để thử nhánh khác.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 8.</strong> Tail recursion là gì?</p>
+              <ul class="quiz-options">
+                <li>Đệ quy có 2 lời gọi đệ quy</li>
+                <li>Lời gọi đệ quy là phép tính cuối cùng trong hàm</li>
+                <li>Đệ quy với memoization</li>
+                <li>Đệ quy có if-else nhiều nhánh</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Lời gọi đệ quy là phép cuối.</strong> Vd <code>return f(n-1, acc*n)</code> là tail; <code>return n * f(n-1)</code> không phải.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 6</h2>
+          <ul>
+            <li>✅ Đệ quy = base case + recursive case; tư duy "giả sử đã đúng cho n-1"</li>
+            <li>✅ Recursion tree giúp tính Big-O; nhiều subproblem trùng → dùng memoization</li>
+            <li>✅ JS không có TCO thực tế → đệ quy sâu vẫn tốn O(n) stack</li>
+            <li>✅ <strong>Backtracking</strong> = đệ quy + un-choose; template "choose → explore → un-choose"</li>
+            <li>✅ Permutations = n! cách; Subsets = 2ⁿ; Combinations C(n,k) bài "chọn k từ n"</li>
+            <li>✅ Bài kinh điển: N-Queens, Sudoku, Word Search, Generate Parentheses</li>
+            <li>✅ Memoization là cầu nối từ Recursion sang Dynamic Programming (Chương 12)</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong5.html">
+        <span class="label">← Chương trước</span>
+        Chương 05: Hash Table
+      </a>
+      <a href="chuong7.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 07: Sorting →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 06 · Recursion &amp; Backtracking
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

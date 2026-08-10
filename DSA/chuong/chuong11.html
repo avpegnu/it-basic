@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 11 — Graph (BFS, DFS, Dijkstra, MST) · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong10.html">← Ch.10</a></li>
+        <li><a href="chuong11.html" class="active">Ch.11</a></li>
+        <li><a href="chuong12.html">Ch.12 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 11 · GRAPH DS · ~180 phút</div>
+      <h1>Graph<br/><span class="text-amber">BFS, DFS, Dijkstra, MST</span></h1>
+      <p class="lead">
+        Đỉnh cao của DSA cơ bản. Graph mô hình hoá mọi thứ: bản đồ, mạng xã hội, dependency,
+        network routing, web link. Bạn sẽ làm chủ: BFS/DFS, cycle detection, topological sort,
+        shortest path (Dijkstra/Bellman-Ford), Minimum Spanning Tree, và Union-Find.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#term">11.1 Terminology</a></li>
+          <li><a href="#repr">11.2 Biểu diễn graph</a></li>
+          <li><a href="#bfs">11.3 BFS</a></li>
+          <li><a href="#dfs">11.4 DFS</a></li>
+          <li><a href="#cycle">11.5 Cycle detection</a></li>
+          <li><a href="#topo">11.6 Topological sort</a></li>
+          <li><a href="#dijkstra">11.7 Dijkstra</a></li>
+          <li><a href="#bellman">11.8 Bellman-Ford</a></li>
+          <li><a href="#floyd">11.9 Floyd-Warshall</a></li>
+          <li><a href="#unionfind">11.10 Union-Find</a></li>
+          <li><a href="#mst">11.11 MST (Kruskal/Prim)</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 11.1 -->
+        <section id="term">
+          <h2>11.1 Graph Terminology</h2>
+
+          <ul>
+            <li><strong>Vertex (V):</strong> đỉnh / node</li>
+            <li><strong>Edge (E):</strong> cạnh, kết nối 2 vertex</li>
+            <li><strong>Directed:</strong> cạnh có hướng (vd Twitter: A follow B ≠ B follow A)</li>
+            <li><strong>Undirected:</strong> cạnh 2 chiều (vd Facebook friend)</li>
+            <li><strong>Weighted:</strong> cạnh có trọng số (vd khoảng cách, thời gian, chi phí)</li>
+            <li><strong>Cycle:</strong> đường đi quay về điểm xuất phát</li>
+            <li><strong>DAG:</strong> Directed Acyclic Graph — đồ thị có hướng không cycle</li>
+            <li><strong>Connected component:</strong> tập vertex liên thông với nhau</li>
+            <li><strong>Tree:</strong> connected acyclic undirected graph với V vertex và V-1 edge</li>
+          </ul>
+        </section>
+
+        <!-- 11.2 -->
+        <section id="repr">
+          <h2>11.2 Biểu diễn Graph trong code</h2>
+
+          <h3>11.2.1 Adjacency List (phổ biến nhất)</h3>
+
+          <pre data-lang="javascript"><code>// Mảng/Map: vertex → list các neighbor
+const graph = {
+  'A': ['B', 'C'],
+  'B': ['A', 'D'],
+  'C': ['A', 'D'],
+  'D': ['B', 'C']
+};
+
+// Hoặc dùng Map
+const g = new Map();
+g.set('A', ['B', 'C']);
+// ...
+
+// Với weighted graph: list các [neighbor, weight]
+const wg = {
+  'A': [['B', 4], ['C', 2]],
+  'B': [['D', 5]],
+  // ...
+};</code></pre>
+
+          <h3>11.2.2 Adjacency Matrix</h3>
+
+          <pre data-lang="javascript"><code>// Ma trận n×n: matrix[i][j] = 1 nếu có edge i→j
+//                              0 nếu không
+//                              weight nếu weighted
+
+const matrix = [
+  [0, 1, 1, 0],  // A
+  [1, 0, 0, 1],  // B
+  [1, 0, 0, 1],  // C
+  [0, 1, 1, 0],  // D
+];</code></pre>
+
+          <h3>So sánh</h3>
+          <table>
+            <thead><tr><th>Aspect</th><th>Adjacency List</th><th>Adjacency Matrix</th></tr></thead>
+            <tbody>
+              <tr><td>Space</td><td>O(V + E)</td><td>O(V²)</td></tr>
+              <tr><td>Add edge</td><td>O(1)</td><td>O(1)</td></tr>
+              <tr><td>Remove edge</td><td>O(degree)</td><td>O(1)</td></tr>
+              <tr><td>Check edge (u, v)?</td><td>O(degree)</td><td>O(1)</td></tr>
+              <tr><td>Iterate neighbors</td><td>O(degree)</td><td>O(V)</td></tr>
+            </tbody>
+          </table>
+
+          <p>Quy tắc: <strong>sparse graph</strong> (ít edge) → list. <strong>Dense graph</strong> (nhiều edge gần V²) → matrix.</p>
+        </section>
+
+        <!-- 11.3 -->
+        <section id="bfs">
+          <h2>11.3 BFS — Breadth-First Search</h2>
+
+          <p>
+            BFS thăm các vertex theo "lớp" — bắt đầu từ start, thăm tất cả neighbor (depth 1), rồi tất cả depth 2, ...
+          </p>
+
+          <pre data-lang="javascript"><code>function bfs(graph, start) {
+  const visited = new Set([start]);
+  const queue = [start];
+  const result = [];
+  while (queue.length) {
+    const node = queue.shift();
+    result.push(node);
+    for (const neighbor of graph[node] || []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+  return result;
+}</code></pre>
+
+          <h3>Ứng dụng kinh điển: Shortest path trên unweighted graph</h3>
+
+          <pre data-lang="javascript"><code>// Tìm khoảng cách ngắn nhất (số cạnh) từ start đến target
+function shortestPath(graph, start, target) {
+  const visited = new Set([start]);
+  const queue = [[start, 0]];  // [node, distance]
+  while (queue.length) {
+    const [node, dist] = queue.shift();
+    if (node === target) return dist;
+    for (const neighbor of graph[node] || []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push([neighbor, dist + 1]);
+      }
+    }
+  }
+  return -1;
+}</code></pre>
+
+          <h3>Bài: Number of Islands (LeetCode 200)</h3>
+
+          <pre data-lang="javascript"><code>function numIslands(grid) {
+  const m = grid.length, n = grid[0].length;
+  let count = 0;
+
+  function bfs(r, c) {
+    const queue = [[r, c]];
+    grid[r][c] = '0';  // mark visited
+    while (queue.length) {
+      const [x, y] = queue.shift();
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx &gt;= 0 &amp;&amp; nx &lt; m &amp;&amp; ny &gt;= 0 &amp;&amp; ny &lt; n &amp;&amp; grid[nx][ny] === '1') {
+          grid[nx][ny] = '0';
+          queue.push([nx, ny]);
+        }
+      }
+    }
+  }
+
+  for (let r = 0; r &lt; m; r++) {
+    for (let c = 0; c &lt; n; c++) {
+      if (grid[r][c] === '1') {
+        count++;
+        bfs(r, c);
+      }
+    }
+  }
+  return count;
+}</code></pre>
+
+          <h3>Multi-source BFS</h3>
+
+          <p>Khi có nhiều điểm xuất phát, push tất cả vào queue ngay từ đầu.</p>
+
+          <pre data-lang="javascript"><code>// Bài "Rotting Oranges": orange thối lan ra ô liền kề mỗi phút.
+// Tìm phút cuối khi tất cả orange thối.
+function orangesRotting(grid) {
+  const m = grid.length, n = grid[0].length;
+  const queue = [];
+  let fresh = 0;
+  for (let r = 0; r &lt; m; r++) {
+    for (let c = 0; c &lt; n; c++) {
+      if (grid[r][c] === 2) queue.push([r, c, 0]);
+      else if (grid[r][c] === 1) fresh++;
+    }
+  }
+  let minutes = 0;
+  while (queue.length) {
+    const [r, c, t] = queue.shift();
+    minutes = Math.max(minutes, t);
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nr = r + dx, nc = c + dy;
+      if (nr &gt;= 0 &amp;&amp; nr &lt; m &amp;&amp; nc &gt;= 0 &amp;&amp; nc &lt; n &amp;&amp; grid[nr][nc] === 1) {
+        grid[nr][nc] = 2;
+        fresh--;
+        queue.push([nr, nc, t + 1]);
+      }
+    }
+  }
+  return fresh === 0 ? minutes : -1;
+}</code></pre>
+        </section>
+
+        <!-- 11.4 -->
+        <section id="dfs">
+          <h2>11.4 DFS — Depth-First Search</h2>
+
+          <p>DFS đi sâu vào một nhánh đến tận cùng trước khi quay lại thử nhánh khác.</p>
+
+          <pre data-lang="javascript"><code>// Recursive
+function dfs(graph, start, visited = new Set()) {
+  if (visited.has(start)) return;
+  visited.add(start);
+  console.log(start);  // hoặc collect
+  for (const neighbor of graph[start] || []) {
+    dfs(graph, neighbor, visited);
+  }
+}
+
+// Iterative với stack
+function dfsIter(graph, start) {
+  const visited = new Set();
+  const stack = [start];
+  const result = [];
+  while (stack.length) {
+    const node = stack.pop();
+    if (visited.has(node)) continue;
+    visited.add(node);
+    result.push(node);
+    for (const neighbor of graph[node] || []) {
+      if (!visited.has(neighbor)) stack.push(neighbor);
+    }
+  }
+  return result;
+}</code></pre>
+
+          <h3>BFS vs DFS — Khi nào dùng cái nào?</h3>
+          <table>
+            <thead><tr><th>BFS</th><th>DFS</th></tr></thead>
+            <tbody>
+              <tr><td>Shortest path (unweighted)</td><td>Path-finding bất kỳ</td></tr>
+              <tr><td>Level-order traversal</td><td>Topological sort</td></tr>
+              <tr><td>Connected components đơn giản</td><td>Cycle detection</td></tr>
+              <tr><td>Web crawler "gần trước"</td><td>Maze solver (backtrack)</td></tr>
+              <tr><td>Space O(width)</td><td>Space O(depth)</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- 11.5 -->
+        <section id="cycle">
+          <h2>11.5 Cycle Detection</h2>
+
+          <h3>Undirected graph — DFS với parent</h3>
+
+          <pre data-lang="javascript"><code>function hasCycleUndirected(graph) {
+  const visited = new Set();
+
+  function dfs(node, parent) {
+    visited.add(node);
+    for (const neighbor of graph[node] || []) {
+      if (!visited.has(neighbor)) {
+        if (dfs(neighbor, node)) return true;
+      } else if (neighbor !== parent) {
+        // Đã thăm + không phải parent → cycle
+        return true;
+      }
+    }
+    return false;
+  }
+
+  for (const node in graph) {
+    if (!visited.has(node)) {
+      if (dfs(node, null)) return true;
+    }
+  }
+  return false;
+}</code></pre>
+
+          <h3>Directed graph — DFS với 3 màu</h3>
+
+          <pre data-lang="javascript"><code>// 0 = white (chưa thăm), 1 = gray (đang thăm), 2 = black (đã xong)
+function hasCycleDirected(graph) {
+  const color = {};
+  for (const node in graph) color[node] = 0;
+
+  function dfs(node) {
+    color[node] = 1;  // gray
+    for (const neighbor of graph[node] || []) {
+      if (color[neighbor] === 1) return true;  // gặp gray → cycle
+      if (color[neighbor] === 0 &amp;&amp; dfs(neighbor)) return true;
+    }
+    color[node] = 2;  // black
+    return false;
+  }
+
+  for (const node in graph) {
+    if (color[node] === 0 &amp;&amp; dfs(node)) return true;
+  }
+  return false;
+}</code></pre>
+
+          <p>
+            <strong>Tại sao 3 màu?</strong> Trong undirected, gặp lại visited node mà không phải parent → cycle.
+            Trong directed, không có "parent" rõ ràng → ta cần phân biệt "đang trên đường thăm hiện tại (gray)" và "đã thăm xong (black)".
+            Gặp gray = cycle vì có đường quay lại trên cùng path DFS.
+          </p>
+        </section>
+
+        <!-- 11.6 -->
+        <section id="topo">
+          <h2>11.6 Topological Sort — sắp xếp theo dependency</h2>
+
+          <p>
+            <strong>Bài toán:</strong> cho DAG (directed acyclic graph), sắp xếp vertex sao cho với mọi edge u→v, u đứng trước v.
+            Ứng dụng: build dependency, course schedule, task ordering.
+          </p>
+
+          <h3>Cách 1: Kahn's Algorithm (BFS-based)</h3>
+
+          <pre data-lang="javascript"><code>function topoSortKahn(graph, n) {
+  // Tính indegree
+  const indegree = new Array(n).fill(0);
+  for (const u in graph) {
+    for (const v of graph[u]) indegree[v]++;
+  }
+
+  // Queue chứa node có indegree = 0
+  const queue = [];
+  for (let i = 0; i &lt; n; i++) if (indegree[i] === 0) queue.push(i);
+
+  const result = [];
+  while (queue.length) {
+    const node = queue.shift();
+    result.push(node);
+    for (const neighbor of graph[node] || []) {
+      indegree[neighbor]--;
+      if (indegree[neighbor] === 0) queue.push(neighbor);
+    }
+  }
+
+  // Nếu không lấy hết = có cycle
+  return result.length === n ? result : null;
+}</code></pre>
+
+          <h3>Cách 2: DFS-based</h3>
+
+          <pre data-lang="javascript"><code>function topoSortDFS(graph, n) {
+  const visited = new Set();
+  const stack = [];
+
+  function dfs(node) {
+    visited.add(node);
+    for (const neighbor of graph[node] || []) {
+      if (!visited.has(neighbor)) dfs(neighbor);
+    }
+    stack.push(node);  // post-order: thêm sau khi xong children
+  }
+
+  for (let i = 0; i &lt; n; i++) {
+    if (!visited.has(i)) dfs(i);
+  }
+  return stack.reverse();
+}</code></pre>
+
+          <h3>Bài: Course Schedule (LeetCode 207)</h3>
+
+          <pre data-lang="javascript"><code>// numCourses = n, prerequisites = [[a, b], ...] nghĩa là phải học b trước a
+// Trả về true nếu có thể hoàn thành tất cả → DAG có topo sort hợp lệ → KHÔNG cycle
+function canFinish(numCourses, prereq) {
+  const graph = Array.from({length: numCourses}, () =&gt; []);
+  const indegree = new Array(numCourses).fill(0);
+  for (const [a, b] of prereq) {
+    graph[b].push(a);
+    indegree[a]++;
+  }
+  const queue = [];
+  for (let i = 0; i &lt; numCourses; i++) if (indegree[i] === 0) queue.push(i);
+
+  let taken = 0;
+  while (queue.length) {
+    const c = queue.shift();
+    taken++;
+    for (const next of graph[c]) {
+      if (--indegree[next] === 0) queue.push(next);
+    }
+  }
+  return taken === numCourses;
+}</code></pre>
+        </section>
+
+        <!-- 11.7 -->
+        <section id="dijkstra">
+          <h2>11.7 Dijkstra — Shortest Path với non-negative weights</h2>
+
+          <p>
+            Tìm đường đi ngắn nhất từ source đến mọi vertex khác trên weighted graph với edge weight ≥ 0.
+            Dùng Priority Queue (min-heap) — đây là <strong>tại sao chương 10 trước chương 11</strong>.
+          </p>
+
+          <pre data-lang="javascript"><code>function dijkstra(graph, start) {
+  const dist = {};
+  for (const node in graph) dist[node] = Infinity;
+  dist[start] = 0;
+
+  // Priority Queue: min-heap theo distance
+  const pq = new MinHeap((a, b) =&gt; a[1] - b[1]);
+  pq.push([start, 0]);
+
+  while (pq.size) {
+    const [node, d] = pq.pop();
+    if (d &gt; dist[node]) continue;  // outdated entry
+
+    for (const [neighbor, weight] of graph[node] || []) {
+      const newDist = d + weight;
+      if (newDist &lt; dist[neighbor]) {
+        dist[neighbor] = newDist;
+        pq.push([neighbor, newDist]);
+      }
+    }
+  }
+  return dist;
+}
+
+// Big-O: O((V + E) log V) với heap
+// O(V²) nếu không dùng heap</code></pre>
+
+          <h3>Tại sao Dijkstra KHÔNG chạy với negative weight?</h3>
+          <p>
+            Dijkstra giả định: một khi đã chốt distance cho 1 node (pop từ heap), không có cách nào ngắn hơn.
+            Với negative weight, có thể "đi xa hơn rồi quay về với negative edge" cho ra distance ngắn hơn → giả định sai.
+          </p>
+        </section>
+
+        <!-- 11.8 -->
+        <section id="bellman">
+          <h2>11.8 Bellman-Ford — chạy được với negative weight</h2>
+
+          <p>Phát hiện negative cycle (edge weights tổng cộng ngược về &lt; 0).</p>
+
+          <pre data-lang="javascript"><code>function bellmanFord(edges, n, source) {
+  const dist = new Array(n).fill(Infinity);
+  dist[source] = 0;
+
+  // Relax tất cả edges V-1 lần
+  for (let i = 0; i &lt; n - 1; i++) {
+    for (const [u, v, w] of edges) {
+      if (dist[u] !== Infinity &amp;&amp; dist[u] + w &lt; dist[v]) {
+        dist[v] = dist[u] + w;
+      }
+    }
+  }
+
+  // Lần thứ V-th: nếu còn relax được → có negative cycle
+  for (const [u, v, w] of edges) {
+    if (dist[u] !== Infinity &amp;&amp; dist[u] + w &lt; dist[v]) {
+      return null;  // negative cycle
+    }
+  }
+  return dist;
+}
+// Big-O: O(V × E)</code></pre>
+        </section>
+
+        <!-- 11.9 -->
+        <section id="floyd">
+          <h2>11.9 Floyd-Warshall — All Pairs Shortest Path</h2>
+
+          <p>Tính shortest path giữa mọi cặp vertex bằng DP. O(V³).</p>
+
+          <pre data-lang="javascript"><code>function floydWarshall(graph, n) {
+  // Init: dist[i][j] = weight nếu có edge, 0 nếu i==j, Infinity nếu không
+  const dist = Array.from({length: n}, () =&gt; new Array(n).fill(Infinity));
+  for (let i = 0; i &lt; n; i++) dist[i][i] = 0;
+  for (const u in graph) {
+    for (const [v, w] of graph[u]) dist[+u][v] = w;
+  }
+
+  // 3 vòng for: k = "intermediate"
+  for (let k = 0; k &lt; n; k++) {
+    for (let i = 0; i &lt; n; i++) {
+      for (let j = 0; j &lt; n; j++) {
+        if (dist[i][k] + dist[k][j] &lt; dist[i][j]) {
+          dist[i][j] = dist[i][k] + dist[k][j];
+        }
+      }
+    }
+  }
+  return dist;
+}</code></pre>
+        </section>
+
+        <!-- 11.10 -->
+        <section id="unionfind">
+          <h2>11.10 Union-Find (Disjoint Set Union)</h2>
+
+          <p>
+            Cấu trúc quản lý các tập hợp rời nhau, hỗ trợ 2 thao tác:
+          </p>
+          <ul>
+            <li><code>find(x)</code>: tìm "đại diện" (root) của tập chứa x</li>
+            <li><code>union(x, y)</code>: gộp tập chứa x với tập chứa y</li>
+          </ul>
+
+          <p>Với 2 optimization (path compression + union by rank), cả hai gần như O(1) (chính xác là α(n) — hàm Ackerman ngược, gần như hằng số).</p>
+
+          <pre data-lang="javascript"><code>class UnionFind {
+  constructor(n) {
+    this.parent = Array.from({length: n}, (_, i) =&gt; i);
+    this.rank = new Array(n).fill(0);
+    this.count = n;  // số connected component
+  }
+
+  find(x) {
+    if (this.parent[x] !== x) {
+      this.parent[x] = this.find(this.parent[x]);  // path compression
+    }
+    return this.parent[x];
+  }
+
+  union(x, y) {
+    const rx = this.find(x), ry = this.find(y);
+    if (rx === ry) return false;  // đã cùng tập
+    // Union by rank: tập nhỏ gắn vào tập lớn
+    if (this.rank[rx] &lt; this.rank[ry]) {
+      this.parent[rx] = ry;
+    } else if (this.rank[rx] &gt; this.rank[ry]) {
+      this.parent[ry] = rx;
+    } else {
+      this.parent[ry] = rx;
+      this.rank[rx]++;
+    }
+    this.count--;
+    return true;
+  }
+
+  connected(x, y) { return this.find(x) === this.find(y); }
+}</code></pre>
+
+          <h3>Ứng dụng</h3>
+          <ul>
+            <li>Đếm connected components</li>
+            <li>Phát hiện cycle trong undirected graph (khi union 2 vertex đã connected)</li>
+            <li>Kruskal's MST</li>
+            <li>Dynamic connectivity</li>
+            <li>Account merging</li>
+          </ul>
+        </section>
+
+        <!-- 11.11 -->
+        <section id="mst">
+          <h2>11.11 Minimum Spanning Tree (MST)</h2>
+
+          <p>
+            Cho weighted undirected connected graph. MST = subset của edges tạo thành tree (V-1 edges, không cycle, connected)
+            với <strong>tổng weight nhỏ nhất</strong>.
+          </p>
+
+          <h3>11.11.1 Kruskal's Algorithm — O(E log E) với Union-Find</h3>
+
+          <pre data-lang="javascript"><code>function kruskal(n, edges) {
+  // edges = [[u, v, w], ...]
+  edges.sort((a, b) =&gt; a[2] - b[2]);  // sort theo weight tăng
+
+  const uf = new UnionFind(n);
+  const mst = [];
+  let total = 0;
+  for (const [u, v, w] of edges) {
+    if (uf.union(u, v)) {  // chỉ thêm nếu không tạo cycle
+      mst.push([u, v, w]);
+      total += w;
+      if (mst.length === n - 1) break;
+    }
+  }
+  return {mst, total};
+}</code></pre>
+
+          <h3>11.11.2 Prim's Algorithm — O(E log V) với heap</h3>
+
+          <pre data-lang="javascript"><code>function prim(graph, start) {
+  // graph: adjacency list {u: [[v, w], ...]}
+  const visited = new Set([start]);
+  const pq = new MinHeap((a, b) =&gt; a[2] - b[2]);  // [u, v, w]
+  for (const [v, w] of graph[start] || []) pq.push([start, v, w]);
+
+  const mst = [];
+  let total = 0;
+  while (pq.size &amp;&amp; mst.length &lt; Object.keys(graph).length - 1) {
+    const [u, v, w] = pq.pop();
+    if (visited.has(v)) continue;
+    visited.add(v);
+    mst.push([u, v, w]);
+    total += w;
+    for (const [next, weight] of graph[v] || []) {
+      if (!visited.has(next)) pq.push([v, next, weight]);
+    }
+  }
+  return {mst, total};
+}</code></pre>
+
+          <h3>So sánh Kruskal vs Prim</h3>
+          <table>
+            <thead><tr><th>Kruskal</th><th>Prim</th></tr></thead>
+            <tbody>
+              <tr><td>Sort edges + Union-Find</td><td>Heap chứa edges từ "frontier"</td></tr>
+              <tr><td>Tốt cho sparse graph</td><td>Tốt cho dense graph</td></tr>
+              <tr><td>O(E log E)</td><td>O(E log V) hoặc O(V²)</td></tr>
+              <tr><td>Cây có thể "lan" khắp nơi</td><td>Cây "lan" liên tục từ start</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Number of Islands</div>
+            <p>LeetCode 200. BFS hoặc DFS.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Clone Graph</div>
+            <p>Deep copy đồ thị. Hint: BFS/DFS + hash map oldNode → newNode.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Course Schedule I & II</div>
+            <p>Kiểm tra DAG (I) hoặc trả về thứ tự topo sort (II).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Word Ladder</div>
+            <p>Cho 2 word và dictionary. Tìm đường đi ngắn nhất biến word này thành word kia, mỗi bước thay 1 chữ. BFS.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Pacific Atlantic Water Flow</div>
+            <p>Multi-source DFS từ 2 đại dương.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Network Delay Time</div>
+            <p>Dijkstra. LeetCode 743.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Cheapest Flights Within K Stops</div>
+            <p>Bellman-Ford limit K iterations. LeetCode 787.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 8 — Number of Connected Components</div>
+            <p>Union-Find.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 9 — Minimum Cost to Connect All Points</div>
+            <p>Kruskal's MST hoặc Prim's. LeetCode 1584.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 10 — Reconstruct Itinerary (Hard)</div>
+            <p>Hierholzer's algorithm cho Eulerian path.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 1.</strong> Để biểu diễn graph thưa (sparse), nên dùng?</p>
+              <ul class="quiz-options">
+                <li>Adjacency Matrix</li>
+                <li>Adjacency List</li>
+                <li>2D array</li>
+                <li>Hash set</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Adjacency List.</strong> Sparse: E &lt;&lt; V². Matrix tốn O(V²) memory phí phạm. List chỉ O(V+E).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> Shortest path trên unweighted graph, dùng?</p>
+              <ul class="quiz-options">
+                <li>BFS</li>
+                <li>DFS</li>
+                <li>Dijkstra</li>
+                <li>Bellman-Ford</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: BFS.</strong> Trên unweighted, BFS thăm theo lớp → khi chạm target, đó là shortest path. Đơn giản và nhanh hơn Dijkstra.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Topological sort áp dụng được trên đồ thị nào?</p>
+              <ul class="quiz-options">
+                <li>Mọi đồ thị có hướng</li>
+                <li>Đồ thị vô hướng</li>
+                <li>Directed Acyclic Graph (DAG)</li>
+                <li>Đồ thị có cycle</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: DAG.</strong> Có cycle → không thể sắp xếp linear (mâu thuẫn dependency). Vô hướng → không có "trước-sau".
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 4.</strong> Dijkstra KHÔNG chạy đúng khi?</p>
+              <ul class="quiz-options">
+                <li>Đồ thị có nhiều vertex</li>
+                <li>Có edge với weight âm</li>
+                <li>Đồ thị vô hướng</li>
+                <li>Đồ thị có cycle</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Có weight âm.</strong> Dùng Bellman-Ford. Cycle bình thường (positive weight) không sao.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Big-O Dijkstra với min-heap?</p>
+              <ul class="quiz-options">
+                <li>O(V²)</li>
+                <li>O(V × E)</li>
+                <li>O((V + E) log V)</li>
+                <li>O(V³)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O((V+E) log V).</strong> Mỗi vertex pop 1 lần (V log V), mỗi edge có thể push (E log V).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Cycle detection trong directed graph dùng?</p>
+              <ul class="quiz-options">
+                <li>BFS</li>
+                <li>DFS với parent pointer</li>
+                <li>DFS với 3 màu (white/gray/black)</li>
+                <li>Hash map</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: DFS 3 màu.</strong> Gặp gray node = cycle. Parent pointer chỉ làm việc với undirected.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> Union-Find với path compression + union by rank có Big-O?</p>
+              <ul class="quiz-options">
+                <li>O(log n)</li>
+                <li>Gần O(1) (cụ thể là α(n) — Ackerman ngược)</li>
+                <li>O(n)</li>
+                <li>O(n log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ~O(1).</strong> α(n) ≤ 4 với mọi n thực tế → coi như hằng số.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 8.</strong> Kruskal's MST sử dụng cấu trúc nào?</p>
+              <ul class="quiz-options">
+                <li>Sort edges + Union-Find</li>
+                <li>Min-heap</li>
+                <li>Stack</li>
+                <li>Adjacency matrix</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Sort + Union-Find.</strong> Sort edges theo weight, duyệt từ nhỏ đến lớn, dùng Union-Find để bỏ qua edge gây cycle.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 11</h2>
+          <ul>
+            <li>✅ Biểu diễn: Adjacency List (sparse) vs Matrix (dense)</li>
+            <li>✅ <strong>BFS = Queue</strong>: shortest path unweighted, level-order</li>
+            <li>✅ <strong>DFS = Stack/recursive</strong>: cycle detection, topo sort, backtracking</li>
+            <li>✅ Cycle: undirected (DFS + parent), directed (DFS + 3 màu)</li>
+            <li>✅ <strong>Topological sort</strong>: Kahn (BFS + indegree) hoặc DFS post-order reverse</li>
+            <li>✅ <strong>Dijkstra</strong>: shortest path non-negative — O((V+E) log V)</li>
+            <li>✅ <strong>Bellman-Ford</strong>: chạy được với weight âm + phát hiện negative cycle — O(VE)</li>
+            <li>✅ <strong>Floyd-Warshall</strong>: all-pairs shortest path — O(V³)</li>
+            <li>✅ <strong>Union-Find</strong> với path compression + union by rank ≈ O(1)</li>
+            <li>✅ <strong>MST</strong>: Kruskal (sort + UF) hoặc Prim (heap)</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong10.html">
+        <span class="label">← Chương trước</span>
+        Chương 10: Heap
+      </a>
+      <a href="chuong12.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 12: DP →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 11 · Graph
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

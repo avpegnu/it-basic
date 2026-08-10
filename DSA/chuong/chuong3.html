@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 03 — Linked List · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong2.html">← Ch.02</a></li>
+        <li><a href="chuong3.html" class="active">Ch.03</a></li>
+        <li><a href="chuong4.html">Ch.04 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 03 · LINEAR DS · ~120 phút</div>
+      <h1>Linked List<br/><span class="text-amber">Cấu trúc liên kết</span></h1>
+      <p class="lead">
+        Linked List dạy bạn về <strong>con trỏ (pointer/reference)</strong> — khái niệm cốt lõi của lập trình.
+        Phỏng vấn cực hay hỏi linked list vì nó test khả năng thao tác pointer cẩn thận, không bị "rò rỉ tham chiếu".
+        Học chương này, bạn sẽ thành thạo các pattern: dummy node, fast & slow pointer, reverse, merge.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#concept">3.1 Linked List là gì?</a></li>
+          <li><a href="#vs-array">3.2 So sánh với Array</a></li>
+          <li><a href="#singly">3.3 Singly Linked List</a></li>
+          <li><a href="#doubly">3.4 Doubly Linked List</a></li>
+          <li><a href="#circular">3.5 Circular Linked List</a></li>
+          <li><a href="#dummy">3.6 Dummy Node Pattern</a></li>
+          <li><a href="#fast-slow">3.7 Fast & Slow Pointer</a></li>
+          <li><a href="#reverse">3.8 Reverse Linked List</a></li>
+          <li><a href="#merge">3.9 Merge & Sort</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 3.1 -->
+        <section id="concept">
+          <h2>3.1 Linked List là gì?</h2>
+
+          <p>
+            <strong>Linked List</strong> (danh sách liên kết) là một chuỗi các <em>node</em>, mỗi node chứa:
+          </p>
+          <ul>
+            <li><code>value</code> — dữ liệu</li>
+            <li><code>next</code> — tham chiếu đến node tiếp theo (hoặc <code>null</code> nếu là cuối)</li>
+          </ul>
+
+          <p>Khác với array, các node <strong>không nằm liên tiếp trong RAM</strong> — chúng nằm rải rác, kết nối qua reference.</p>
+
+          <pre data-lang="text"><code>head → [3|·] → [7|·] → [9|·] → [2|·] → null
+        node1   node2   node3   node4</code></pre>
+
+          <h3>Khai báo Node trong JS</h3>
+
+          <pre data-lang="javascript"><code>class ListNode {
+  constructor(val = 0, next = null) {
+    this.val = val;
+    this.next = next;
+  }
+}
+
+// Tạo linked list 1 → 2 → 3 thủ công:
+const head = new ListNode(1, new ListNode(2, new ListNode(3)));
+
+// Hoặc:
+const a = new ListNode(1);
+const b = new ListNode(2);
+const c = new ListNode(3);
+a.next = b;
+b.next = c;
+// head = a</code></pre>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Tại sao tồn tại Linked List?</div>
+            <p>
+              Trong array, để chèn phần tử ở giữa, phải dịch hết phần đuôi → O(n).
+              Linked list cho phép chèn <em>ở giữa trong O(1)</em> nếu đã có pointer đến vị trí đó.
+            </p>
+            <p>
+              Đánh đổi: bạn mất khả năng truy cập ngẫu nhiên (random access). Lấy phần tử thứ k phải duyệt từ đầu → O(k).
+            </p>
+          </div>
+        </section>
+
+        <!-- 3.2 -->
+        <section id="vs-array">
+          <h2>3.2 Linked List vs Array — đánh đổi</h2>
+
+          <table>
+            <thead>
+              <tr><th>Thao tác</th><th>Array</th><th>Linked List</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Truy cập index</td><td class="text-green">O(1)</td><td class="text-red">O(n)</td></tr>
+              <tr><td>Tìm kiếm</td><td>O(n)</td><td>O(n)</td></tr>
+              <tr><td>Thêm vào đầu</td><td class="text-red">O(n)</td><td class="text-green">O(1)</td></tr>
+              <tr><td>Thêm vào cuối</td><td class="text-green">O(1) amortized</td><td>O(n) hoặc O(1) nếu lưu tail</td></tr>
+              <tr><td>Thêm vào giữa (đã có pointer)</td><td>O(n)</td><td class="text-green">O(1)</td></tr>
+              <tr><td>Xoá phần tử (đã có pointer)</td><td>O(n)</td><td class="text-green">O(1)</td></tr>
+              <tr><td>Bộ nhớ</td><td>contiguous, gọn</td><td>scattered, mỗi node có overhead pointer</td></tr>
+              <tr><td>Cache friendly</td><td class="text-green">Có</td><td class="text-red">Không (cache miss nhiều)</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Trong thực tế, Array thường thắng</div>
+            <p>
+              Mặc dù linked list "lý thuyết" nhanh hơn ở chèn/xoá, nhưng <strong>cache miss</strong> khi duyệt linked list
+              khiến nó chậm hơn array trong hầu hết workload thực tế. Đây là lý do <code>std::list</code> trong C++ và <code>LinkedList</code> trong Java
+              ít được dùng so với <code>std::vector</code> / <code>ArrayList</code>.
+            </p>
+            <p>
+              Linked list shine ở các trường hợp: implement Stack/Queue/LRU Cache, các thuật toán như Floyd's cycle detection,
+              hoặc dùng làm component của cấu trúc lớn hơn (graph adjacency list).
+            </p>
+          </div>
+        </section>
+
+        <!-- 3.3 -->
+        <section id="singly">
+          <h2>3.3 Singly Linked List — cài đặt đầy đủ</h2>
+
+          <pre data-lang="javascript"><code>class ListNode {
+  constructor(val = 0, next = null) {
+    this.val = val;
+    this.next = next;
+  }
+}
+
+class SinglyLinkedList {
+  constructor() {
+    this.head = null;
+    this.tail = null;
+    this.size = 0;
+  }
+
+  // O(1) — thêm vào đầu
+  prepend(val) {
+    const node = new ListNode(val, this.head);
+    this.head = node;
+    if (!this.tail) this.tail = node;
+    this.size++;
+  }
+
+  // O(1) — thêm vào cuối (vì lưu tail pointer)
+  append(val) {
+    const node = new ListNode(val);
+    if (!this.head) {
+      this.head = this.tail = node;
+    } else {
+      this.tail.next = node;
+      this.tail = node;
+    }
+    this.size++;
+  }
+
+  // O(n) — lấy node thứ index
+  getNode(index) {
+    if (index &lt; 0 || index &gt;= this.size) return null;
+    let curr = this.head;
+    for (let i = 0; i &lt; index; i++) curr = curr.next;
+    return curr;
+  }
+
+  // O(n) — chèn vào index
+  insertAt(index, val) {
+    if (index === 0) return this.prepend(val);
+    if (index === this.size) return this.append(val);
+    const prev = this.getNode(index - 1);
+    if (!prev) throw new Error('Index out of range');
+    prev.next = new ListNode(val, prev.next);
+    this.size++;
+  }
+
+  // O(n) — xoá node thứ index
+  removeAt(index) {
+    if (index &lt; 0 || index &gt;= this.size) return null;
+    let removed;
+    if (index === 0) {
+      removed = this.head;
+      this.head = this.head.next;
+      if (!this.head) this.tail = null;
+    } else {
+      const prev = this.getNode(index - 1);
+      removed = prev.next;
+      prev.next = removed.next;
+      if (removed === this.tail) this.tail = prev;
+    }
+    this.size--;
+    return removed.val;
+  }
+
+  // O(n) — chuyển sang array để in
+  toArray() {
+    const result = [];
+    let curr = this.head;
+    while (curr) {
+      result.push(curr.val);
+      curr = curr.next;
+    }
+    return result;
+  }
+}
+
+// Demo:
+const list = new SinglyLinkedList();
+list.append(1);
+list.append(2);
+list.append(3);
+list.prepend(0);
+list.insertAt(2, 99);
+console.log(list.toArray());  // [0, 1, 99, 2, 3]
+list.removeAt(0);
+console.log(list.toArray());  // [1, 99, 2, 3]</code></pre>
+        </section>
+
+        <!-- 3.4 -->
+        <section id="doubly">
+          <h2>3.4 Doubly Linked List — duyệt 2 chiều</h2>
+
+          <p>Mỗi node có thêm <code>prev</code> trỏ về node phía trước.</p>
+
+          <pre data-lang="text"><code>     ←prev      ←prev      ←prev
+[3|·]      [7|·]      [9|·]      [2|·]
+     next→      next→      next→</code></pre>
+
+          <pre data-lang="javascript"><code>class DListNode {
+  constructor(val = 0, prev = null, next = null) {
+    this.val = val;
+    this.prev = prev;
+    this.next = next;
+  }
+}
+
+class DoublyLinkedList {
+  constructor() {
+    this.head = null;
+    this.tail = null;
+    this.size = 0;
+  }
+
+  // O(1) — thêm cuối
+  append(val) {
+    const node = new DListNode(val, this.tail, null);
+    if (!this.head) {
+      this.head = this.tail = node;
+    } else {
+      this.tail.next = node;
+      this.tail = node;
+    }
+    this.size++;
+  }
+
+  // O(1) — xoá node bất kỳ KHI ĐÃ CÓ REFERENCE đến node đó
+  removeNode(node) {
+    if (node.prev) node.prev.next = node.next;
+    else this.head = node.next;
+
+    if (node.next) node.next.prev = node.prev;
+    else this.tail = node.prev;
+
+    this.size--;
+  }
+
+  // O(1) — chèn sau một node bất kỳ
+  insertAfter(node, val) {
+    const newNode = new DListNode(val, node, node.next);
+    if (node.next) node.next.prev = newNode;
+    else this.tail = newNode;
+    node.next = newNode;
+    this.size++;
+  }
+}</code></pre>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Ứng dụng nổi tiếng: LRU Cache</div>
+            Doubly linked list + Hash Map = LRU Cache với get/put O(1).
+            Hash map cho phép tìm node theo key trong O(1), doubly linked list cho phép xoá/chèn node bất kỳ trong O(1).
+            Đây là bài LeetCode rất nổi tiếng (146).
+          </div>
+        </section>
+
+        <!-- 3.5 -->
+        <section id="circular">
+          <h2>3.5 Circular Linked List — vòng tròn</h2>
+
+          <p>Node cuối cùng <code>next</code> trỏ về <code>head</code> thay vì <code>null</code>.</p>
+
+          <pre data-lang="text"><code>head → [3|·] → [7|·] → [9|·] → [2|·]
+        ↑                              │
+        └──────────────────────────────┘</code></pre>
+
+          <h3>Ứng dụng</h3>
+          <ul>
+            <li><strong>Round-robin scheduler:</strong> hệ điều hành luân phiên CPU cho process</li>
+            <li><strong>Multiplayer game turn:</strong> luân phiên lượt chơi</li>
+            <li><strong>Music playlist (loop):</strong> phát lại từ đầu khi hết</li>
+            <li><strong>Buffer ring:</strong> producer/consumer với fixed-size buffer</li>
+          </ul>
+
+          <pre data-lang="javascript"><code>// Phát hiện circular: dùng fast-slow pointer (xem 3.7)
+function isCircular(head) {
+  if (!head) return false;
+  let slow = head, fast = head.next;
+  while (fast &amp;&amp; fast.next) {
+    if (slow === fast) return true;
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+  return false;
+}</code></pre>
+        </section>
+
+        <!-- 3.6 -->
+        <section id="dummy">
+          <h2>3.6 Dummy Node Pattern — tránh edge case head</h2>
+
+          <p>
+            Khi xử lý linked list, edge case "node cần xoá là head" thường gây code phức tạp với nhiều if/else.
+            <strong>Dummy node</strong> (node giả) giải quyết đẹp vấn đề này.
+          </p>
+
+          <h3>Ví dụ: Remove all elements with value = val</h3>
+
+          <pre data-lang="javascript"><code>// ❌ Không có dummy — phức tạp với edge case
+function removeElementsBad(head, val) {
+  // Xử lý head trước
+  while (head &amp;&amp; head.val === val) head = head.next;
+  if (!head) return null;
+  let curr = head;
+  while (curr.next) {
+    if (curr.next.val === val) curr.next = curr.next.next;
+    else curr = curr.next;
+  }
+  return head;
+}
+
+// ✅ Có dummy — code thanh lịch
+function removeElements(head, val) {
+  const dummy = new ListNode(0, head);
+  let curr = dummy;
+  while (curr.next) {
+    if (curr.next.val === val) {
+      curr.next = curr.next.next;
+    } else {
+      curr = curr.next;
+    }
+  }
+  return dummy.next;
+}</code></pre>
+
+          <p>Dummy node "đứng trước" head, nên ta luôn có <code>prev</code> để thao tác. Cuối cùng trả <code>dummy.next</code>.</p>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Quy tắc vàng</div>
+            Bất cứ khi nào bạn viết code xử lý linked list mà phải <code>if (head === ...)</code>, hãy nghĩ ngay đến dummy node.
+            Code sẽ đơn giản và ít bug hơn rất nhiều.
+          </div>
+        </section>
+
+        <!-- 3.7 -->
+        <section id="fast-slow">
+          <h2>3.7 Fast & Slow Pointer — vũ khí chính của Linked List</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> dùng 2 pointer di chuyển trên linked list với tốc độ khác nhau (thường fast=2 bước, slow=1 bước mỗi lần).
+            Nhiều bài kinh điển dùng kỹ thuật này.
+          </p>
+
+          <h3>3.7.1 Tìm middle node</h3>
+
+          <pre data-lang="javascript"><code>// Khi fast đến cuối, slow đang ở giữa
+function findMiddle(head) {
+  let slow = head, fast = head;
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+  return slow;
+}
+
+// 1 → 2 → 3 → 4 → 5 → null
+//         ↑
+//       middle (3)
+
+// 1 → 2 → 3 → 4 → null
+//         ↑
+//   middle = 3 (lấy node thứ 2 trong cặp giữa)</code></pre>
+
+          <h3>3.7.2 Phát hiện cycle (Floyd's Tortoise &amp; Hare)</h3>
+
+          <pre data-lang="javascript"><code>function hasCycle(head) {
+  let slow = head, fast = head;
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+    if (slow === fast) return true;
+  }
+  return false;
+}</code></pre>
+
+          <p>
+            <strong>Tại sao đúng?</strong> Nếu có cycle, fast (chạy nhanh) sẽ "bắt kịp" slow trong vòng tròn.
+            Mỗi vòng, khoảng cách giữa fast và slow giảm 1 → chắc chắn gặp nhau.
+          </p>
+
+          <h3>3.7.3 Tìm điểm bắt đầu cycle</h3>
+
+          <pre data-lang="javascript"><code>function detectCycle(head) {
+  let slow = head, fast = head;
+  // Bước 1: tìm gặp nhau
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+    if (slow === fast) {
+      // Bước 2: reset slow về head, đi cùng tốc độ với fast
+      slow = head;
+      while (slow !== fast) {
+        slow = slow.next;
+        fast = fast.next;
+      }
+      return slow;  // điểm vào cycle
+    }
+  }
+  return null;
+}</code></pre>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Toán học của Floyd's algorithm</div>
+            <p>Gọi <code>L</code> = khoảng cách từ head đến điểm vào cycle, <code>C</code> = chu vi cycle, <code>k</code> = vị trí gặp nhau từ điểm vào.</p>
+            <p>Khi gặp: slow đi <code>L + k</code>, fast đi <code>L + k + nC</code> (n vòng) = 2(L + k).</p>
+            <p>→ <code>L + k = nC</code> → <code>L = nC - k = (n-1)C + (C - k)</code></p>
+            <p>Tức là từ head đi L bước = từ điểm gặp đi <code>C - k</code> bước (đến điểm vào cycle). Đó là lý do tại sao reset slow về head và đi cùng tốc độ.</p>
+          </div>
+
+          <h3>3.7.4 Tìm node thứ k từ cuối</h3>
+
+          <pre data-lang="javascript"><code>function nthFromEnd(head, k) {
+  let fast = head;
+  // Đẩy fast đi trước k bước
+  for (let i = 0; i &lt; k; i++) {
+    if (!fast) return null;
+    fast = fast.next;
+  }
+  // Sau đó cả hai cùng đi đến khi fast hết
+  let slow = head;
+  while (fast) {
+    slow = slow.next;
+    fast = fast.next;
+  }
+  return slow;
+}</code></pre>
+        </section>
+
+        <!-- 3.8 -->
+        <section id="reverse">
+          <h2>3.8 Reverse Linked List — phải biết cả iterative và recursive</h2>
+
+          <h3>Iterative — 3 con trỏ</h3>
+
+          <pre data-lang="javascript"><code>function reverseList(head) {
+  let prev = null;
+  let curr = head;
+  while (curr) {
+    const next = curr.next;  // lưu lại next
+    curr.next = prev;        // đảo hướng
+    prev = curr;
+    curr = next;
+  }
+  return prev;  // prev là head mới
+}
+
+// Demo từng bước với 1 → 2 → 3 → null:
+// Init: prev=null, curr=1
+// Bước 1: next=2, 1.next=null, prev=1, curr=2
+//   → null ← 1     2 → 3
+// Bước 2: next=3, 2.next=1, prev=2, curr=3
+//   → null ← 1 ← 2     3
+// Bước 3: next=null, 3.next=2, prev=3, curr=null
+//   → null ← 1 ← 2 ← 3
+// Return prev = 3</code></pre>
+
+          <h3>Recursive — đẹp nhưng khó hiểu</h3>
+
+          <pre data-lang="javascript"><code>function reverseListRec(head) {
+  if (!head || !head.next) return head;
+  const newHead = reverseListRec(head.next);
+  head.next.next = head;  // đảo hướng
+  head.next = null;
+  return newHead;
+}
+
+// Demo với 1 → 2 → 3:
+// reverseListRec(1):
+//   reverseListRec(2):
+//     reverseListRec(3) → return 3 (base case)
+//     [tại đây list là: 1 → 2 → 3]
+//     2.next.next = 2  // tức 3.next = 2
+//     2.next = null
+//     [list giờ: 1 → 2 ← 3, 2 không có next]
+//     return 3
+//   1.next.next = 1  // tức 2.next = 1
+//   1.next = null
+//   return 3
+// Final: 3 → 2 → 1</code></pre>
+
+          <h3>Reverse một đoạn (m đến n)</h3>
+
+          <pre data-lang="javascript"><code>function reverseBetween(head, m, n) {
+  const dummy = new ListNode(0, head);
+  let prev = dummy;
+  for (let i = 1; i &lt; m; i++) prev = prev.next;
+  // prev đứng ngay trước node thứ m
+
+  let curr = prev.next;
+  for (let i = 0; i &lt; n - m; i++) {
+    const next = curr.next;
+    curr.next = next.next;
+    next.next = prev.next;
+    prev.next = next;
+  }
+  return dummy.next;
+}</code></pre>
+        </section>
+
+        <!-- 3.9 -->
+        <section id="merge">
+          <h2>3.9 Merge & Sort Linked List</h2>
+
+          <h3>3.9.1 Merge Two Sorted Lists</h3>
+
+          <pre data-lang="javascript"><code>function mergeTwoLists(l1, l2) {
+  const dummy = new ListNode(0);
+  let tail = dummy;
+  while (l1 &amp;&amp; l2) {
+    if (l1.val &lt;= l2.val) {
+      tail.next = l1;
+      l1 = l1.next;
+    } else {
+      tail.next = l2;
+      l2 = l2.next;
+    }
+    tail = tail.next;
+  }
+  tail.next = l1 || l2;  // gắn phần còn lại
+  return dummy.next;
+}</code></pre>
+
+          <h3>3.9.2 Merge Sort cho Linked List — O(n log n)</h3>
+
+          <p>
+            Khác với array (thường dùng quick sort), linked list dùng <strong>merge sort</strong> vì:
+          </p>
+          <ul>
+            <li>Quick sort cần truy cập ngẫu nhiên cho pivot → linked list không có</li>
+            <li>Merge sort không cần extra space khi merge hai linked list</li>
+          </ul>
+
+          <pre data-lang="javascript"><code>function sortList(head) {
+  if (!head || !head.next) return head;
+
+  // 1. Tìm giữa và chia đôi
+  let slow = head, fast = head, prev = null;
+  while (fast &amp;&amp; fast.next) {
+    prev = slow;
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+  prev.next = null;  // ngắt đôi
+
+  // 2. Đệ quy sort 2 nửa
+  const left  = sortList(head);
+  const right = sortList(slow);
+
+  // 3. Merge
+  return mergeTwoLists(left, right);
+}</code></pre>
+
+          <h3>3.9.3 Merge K Sorted Lists — O(n log k) với heap</h3>
+
+          <pre data-lang="javascript"><code>// Dùng min-heap chứa head của k list
+// Mỗi lần lấy node nhỏ nhất, push next của nó vào heap
+// Heap sẽ học chi tiết ở Chương 10
+
+// Phiên bản đơn giản dùng divide & conquer:
+function mergeKLists(lists) {
+  if (lists.length === 0) return null;
+  while (lists.length &gt; 1) {
+    const merged = [];
+    for (let i = 0; i &lt; lists.length; i += 2) {
+      const l1 = lists[i];
+      const l2 = i + 1 &lt; lists.length ? lists[i + 1] : null;
+      merged.push(mergeTwoLists(l1, l2));
+    }
+    lists = merged;
+  }
+  return lists[0];
+}
+// Big-O: O(n log k) — log k tầng, mỗi tầng tổng cộng O(n)</code></pre>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Reverse Linked List</div>
+            <p>Cài đặt cả hai phiên bản: iterative và recursive. So sánh space complexity.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Linked List Cycle</div>
+            <p>Cho head, kiểm tra linked list có cycle không. Giới hạn: <strong>O(1) space</strong>.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Remove Nth Node From End</div>
+            <p>Cho head và n. Xoá node thứ n từ cuối. Yêu cầu: chỉ duyệt 1 lần.</p>
+            <pre data-lang="text"><code>1 → 2 → 3 → 4 → 5, n = 2 → 1 → 2 → 3 → 5</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — Palindrome Linked List</div>
+            <p>Kiểm tra linked list có phải palindrome không. Yêu cầu: <strong>O(n) time, O(1) space</strong>.</p>
+            <p>Hint: tìm middle, reverse nửa sau, so sánh từng phần tử.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Reorder List</div>
+            <p>Cho 1→2→3→4→5, biến thành 1→5→2→4→3. Hint: tìm middle, reverse nửa sau, merge.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Add Two Numbers</div>
+            <p>Hai số được biểu diễn bởi linked list (chữ số đảo ngược). Cộng và trả về linked list kết quả.</p>
+            <pre data-lang="text"><code>(2 → 4 → 3) + (5 → 6 → 4)
+biểu diễn 342 + 465 = 807
+→ (7 → 0 → 8)</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 7 — Copy List with Random Pointer</div>
+            <p>Linked list mà mỗi node có thêm <code>random</code> pointer trỏ tới node bất kỳ trong list (hoặc null). Deep copy list này.</p>
+            <p>Hint: 3 cách: (1) hash map, (2) interleaving nodes, (3) recursion + map.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> Big-O của truy cập node thứ k trong Singly Linked List?</p>
+              <ul class="quiz-options">
+                <li>O(1)</li>
+                <li>O(log n)</li>
+                <li>O(n)</li>
+                <li>O(k)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n).</strong> Phải duyệt tuần tự từ head, mỗi bước qua next. Worst case k = n. Đáp án "O(k)" cũng đúng nhưng Big-O thường lấy worst case → O(n).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 2.</strong> Khi nào nên dùng Doubly Linked List thay vì Singly?</p>
+              <ul class="quiz-options">
+                <li>Khi cần xoá node bất kỳ trong O(1) (đã có pointer đến node đó)</li>
+                <li>Khi muốn tiết kiệm bộ nhớ</li>
+                <li>Khi cần truy cập index trong O(1)</li>
+                <li>Khi luôn duyệt từ đầu đến cuối</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Xoá node bất kỳ O(1).</strong> Singly LL cần biết prev → phải duyệt lại O(n). Doubly LL có sẵn prev pointer → O(1). Đây là lý do LRU Cache dùng doubly LL.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 3.</strong> Mục đích của dummy node là?</p>
+              <ul class="quiz-options">
+                <li>Tăng tốc thuật toán</li>
+                <li>Đơn giản hoá code, tránh xử lý edge case khi thao tác trên head</li>
+                <li>Giảm bộ nhớ</li>
+                <li>Bắt buộc phải có để linked list hoạt động</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Đơn giản hoá code.</strong> Dummy node không thay đổi Big-O nhưng giảm bug edge case (khi node cần xoá/chèn là head).
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Trong Floyd's Cycle Detection, sau khi slow gặp fast, làm sao để tìm điểm vào cycle?</p>
+              <ul class="quiz-options">
+                <li>Đếm số node trong cycle, rồi đi lại từ head</li>
+                <li>Dùng hash set ghi lại đã thăm</li>
+                <li>Reset một con trỏ về head, cả hai cùng đi 1 bước/lần đến khi gặp</li>
+                <li>Không thể tìm được</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Reset slow về head, cả hai đi 1 bước/lần.</strong> Toán học chứng minh: <code>L = (n-1)C + (C-k)</code>, nên từ head đi L bước = từ điểm gặp đi (C-k) bước, cả hai cùng đến điểm vào cycle.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 5.</strong> Big-O của reverse linked list iterative là?</p>
+              <ul class="quiz-options">
+                <li>Time O(n), Space O(1)</li>
+                <li>Time O(n), Space O(n)</li>
+                <li>Time O(n²), Space O(1)</li>
+                <li>Time O(log n), Space O(1)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Time O(n), Space O(1).</strong> Duyệt 1 lần, chỉ dùng 3 biến (prev, curr, next). Phiên bản recursive tốn O(n) space cho call stack.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Tại sao linked list nên dùng merge sort thay vì quick sort?</p>
+              <ul class="quiz-options">
+                <li>Vì merge sort luôn nhanh hơn</li>
+                <li>Vì quick sort không hoạt động trên linked list</li>
+                <li>Vì quick sort cần random access cho pivot, linked list không có hiệu quả random access</li>
+                <li>Vì merge sort dùng ít bộ nhớ hơn cho mọi cấu trúc</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Quick sort cần random access.</strong> Linked list truy cập ngẫu nhiên O(n), khiến quick sort chậm. Merge sort chỉ cần duyệt tuần tự + chia đôi → phù hợp với linked list.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 7.</strong> Bài "Tìm node thứ k từ cuối" giải tối ưu (1 lần duyệt) bằng?</p>
+              <ul class="quiz-options">
+                <li>Đảo ngược list rồi lấy phần tử thứ k</li>
+                <li>Two pointers: fast đi trước k bước, sau đó cả hai cùng đi đến khi fast hết</li>
+                <li>Đếm độ dài rồi đi đến vị trí n-k</li>
+                <li>Dùng hash map</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Two pointers.</strong> Cách (3) cũng đúng nhưng đi 2 lần. Two pointers chỉ 1 lần duyệt và O(1) space, đẹp hơn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> Merge K sorted linked lists tối ưu nhất là Big-O?</p>
+              <ul class="quiz-options">
+                <li>O(N) với N = tổng node</li>
+                <li>O(N · k)</li>
+                <li>O(N log k)</li>
+                <li>O(N²)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(N log k).</strong> Dùng heap (priority queue) hoặc divide &amp; conquer. Có log k tầng, mỗi tầng tổng O(N).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 3</h2>
+          <ul>
+            <li>✅ Linked list = chuỗi node nối qua pointer; truy cập index O(n) nhưng chèn/xoá O(1) khi đã có pointer</li>
+            <li>✅ Doubly LL cho phép xoá node bất kỳ O(1) — nền cho LRU Cache</li>
+            <li>✅ <strong>Dummy node</strong> giúp tránh edge case head, code thanh lịch hơn</li>
+            <li>✅ <strong>Fast &amp; Slow pointer</strong>: tìm middle, phát hiện cycle, tìm node thứ k từ cuối</li>
+            <li>✅ <strong>Floyd's algorithm</strong> phát hiện và tìm điểm vào cycle với O(1) space</li>
+            <li>✅ Reverse: cả iterative (3 con trỏ) và recursive — biết cả hai</li>
+            <li>✅ Linked list dùng <strong>merge sort</strong>, không phải quick sort</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong2.html">
+        <span class="label">← Chương trước</span>
+        Chương 02: Array &amp; String
+      </a>
+      <a href="chuong4.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 04: Stack &amp; Queue →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 03 · Linked List
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

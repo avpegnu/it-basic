@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 12 — TypeScript Compiler, Tooling &amp; Practical · JavaScript Sub-pillar</title>
+  <meta name="description" content="tsconfig.json anatomy, strict mode, module resolution, .d.ts declaration, project references, setup Node/Vite/library, typed patterns thực tế." />
+  <meta name="theme-color" content="#3178c6" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-ts">TS</span>
+        TS · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">JavaScript</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">JavaScript</a><span class="sep">/</span>
+        <span>Chương 12</span>
+      </div>
+      <div class="chapter-num ts">Chương 12 · TypeScript Compiler, Tooling &amp; Practical</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        TypeScript trong thực chiến — Compiler, Tooling và Patterns
+      </h1>
+      <p class="lead">
+        Sau khi đã quen với syntax, type system và advanced types, đây là chương "đưa TypeScript vào dự án thật".
+        Bạn sẽ master <strong>tsconfig.json</strong>, hiểu sâu <strong>module resolution</strong>, viết được
+        <strong>.d.ts declaration</strong> cho thư viện JS thuần, dựng <strong>project references</strong>
+        monorepo, và biết khi nào dùng <code>tsx</code>, <code>tsc</code>, <code>tsup</code>, hay <code>Vite</code>.
+        Đây cũng là chương <strong>tổng kết</strong> sub-pillar JavaScript.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 9-11</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose ts-section">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Đọc và viết được <code>tsconfig.json</code> đầy đủ — hiểu rõ <code>compilerOptions</code>, <code>include</code>, <code>exclude</code>, <code>references</code>.</li>
+            <li>Chọn đúng <code>target</code> / <code>module</code> / <code>moduleResolution</code> cho 3 ngữ cảnh: Node CLI, SPA browser, library publish.</li>
+            <li>Hiểu sâu strict mode — biết "strict": true bật bao nhiêu flag và mỗi flag bảo vệ gì.</li>
+            <li>Viết được file <code>.d.ts</code> đơn giản cho thư viện không có type.</li>
+            <li>Khai báo ambient module và mở rộng <code>Window</code>, <code>NodeJS.ProcessEnv</code>, ...</li>
+            <li>Dựng monorepo với project references — incremental build, isolate type-check.</li>
+            <li>Master pattern thực tế: typed env (zod), typed fetch wrapper, repository pattern.</li>
+            <li>Debug TypeScript với source map và VS Code.</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — TypeScript là một build tool</div>
+          <p>
+            Khác với Java/C# compile sang bytecode chạy thẳng, <strong>TypeScript chỉ làm 2 việc</strong>:
+            (1) kiểm tra type, (2) <em>strip</em> annotation type ra để xuất JavaScript thuần. Output đó mới
+            được Node/browser chạy. Vì vậy mọi đặc tả runtime (target ES version, module format, paths…)
+            phải <strong>khớp với môi trường chạy</strong>. Chương này dạy bạn cách khớp đúng.
+          </p>
+        </div>
+
+        <h2 id="tsconfig-anatomy">1. <code>tsconfig.json</code> — giải phẫu file config</h2>
+
+        <p>
+          <code>tsconfig.json</code> là file JSON đặt ở root dự án. Khi gõ <code>tsc</code> không tham số,
+          compiler tự tìm <code>tsconfig.json</code> ở thư mục hiện tại (rồi đi lên cha) và đọc config từ đó.
+        </p>
+
+        <p>4 phần chính:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Field</th><th>Mục đích</th><th>Bắt buộc</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>compilerOptions</code></td><td>Cấu hình compiler: target, module, strict, paths…</td><td>Có (gần như)</td></tr>
+              <tr><td><code>include</code></td><td>Glob các file/thư mục cần compile</td><td>Không (default tất cả .ts)</td></tr>
+              <tr><td><code>exclude</code></td><td>Loại trừ file khỏi compile (mặc định: <code>node_modules</code>, <code>bower_components</code>, <code>jspm_packages</code>, <code>outDir</code>)</td><td>Không</td></tr>
+              <tr><td><code>references</code></td><td>Liên kết tới các sub-project (monorepo)</td><td>Không</td></tr>
+              <tr><td><code>extends</code></td><td>Kế thừa từ tsconfig khác (vd: <code>@tsconfig/node20</code>)</td><td>Không</td></tr>
+              <tr><td><code>files</code></td><td>Liệt kê file cụ thể (thay vì glob)</td><td>Không</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Một <code>tsconfig.json</code> tối thiểu cho project mới:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tsconfig.json — minimal</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"target"</span>: <span class="tok-str">"ES2022"</span>,
+    <span class="tok-str">"module"</span>: <span class="tok-str">"ESNext"</span>,
+    <span class="tok-str">"moduleResolution"</span>: <span class="tok-str">"bundler"</span>,
+    <span class="tok-str">"strict"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"esModuleInterop"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"skipLibCheck"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"outDir"</span>: <span class="tok-str">"dist"</span>
+  },
+  <span class="tok-str">"include"</span>: [<span class="tok-str">"src"</span>],
+  <span class="tok-str">"exclude"</span>: [<span class="tok-str">"node_modules"</span>, <span class="tok-str">"dist"</span>]
+}</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Khởi tạo nhanh</div>
+          <p>
+            Chạy <code>npx tsc --init</code> để TypeScript sinh ra <code>tsconfig.json</code> mặc định có
+            comment giải thích từng option. Tốt cho người mới đọc trước, sau đó xoá các option không dùng.
+          </p>
+          <p>
+            Hoặc kế thừa template chính thức: <code>npm i -D @tsconfig/node20</code> rồi
+            <code>"extends": "@tsconfig/node20/tsconfig.json"</code>.
+          </p>
+        </div>
+
+        <h2 id="target-module">2. <code>target</code> và <code>module</code> — chọn đúng phiên bản</h2>
+
+        <p>
+          Hai option quan trọng nhất, hay bị nhầm. <code>target</code> = phiên bản JavaScript output;
+          <code>module</code> = format module (CommonJS, ESM, …).
+        </p>
+
+        <h3 id="target">2.1. <code>target</code> — phiên bản ECMAScript output</h3>
+
+        <p>
+          TypeScript sẽ down-level các tính năng JS hiện đại về phiên bản này. Ví dụ <code>target: "ES5"</code>
+          khiến optional chaining <code>?.</code> được biên dịch thành chuỗi <code>&amp;&amp;</code>.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>target</th><th>Khi nào dùng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>ES5</code></td><td>Hỗ trợ IE11 (đã chết). Tránh.</td></tr>
+              <tr><td><code>ES2015</code></td><td>Browser cũ. Hiếm dùng 2026.</td></tr>
+              <tr><td><code>ES2020</code></td><td>Node 14+, browser modern. Có optional chaining, nullish coalescing.</td></tr>
+              <tr><td><code>ES2022</code></td><td><strong>Sweet spot 2026.</strong> Có class fields, top-level await, <code>at()</code>.</td></tr>
+              <tr><td><code>ESNext</code></td><td>Bleeding edge. Output không down-level. Phù hợp library bundle bởi consumer.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="module">2.2. <code>module</code> — định dạng module output</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>module</th><th>Output dạng</th><th>Khi dùng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>CommonJS</code></td><td><code>module.exports</code> + <code>require()</code></td><td>Node legacy, package CJS</td></tr>
+              <tr><td><code>ESNext</code></td><td><code>import</code> / <code>export</code> giữ nguyên</td><td>Bundler (Vite, Webpack) tự xử lý</td></tr>
+              <tr><td><code>NodeNext</code></td><td>Mix CJS/ESM theo file extension</td><td>Node ESM thuần (package.json <code>"type":"module"</code>)</td></tr>
+              <tr><td><code>UMD</code> / <code>AMD</code> / <code>SystemJS</code></td><td>Format legacy</td><td>Hầu như không dùng nữa</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — target và module phải khớp runtime</div>
+          <p>
+            Đặt <code>target: "ES2022"</code> nhưng triển khai code lên Node 12 → top-level await không có,
+            crash. Đặt <code>module: "CommonJS"</code> nhưng dùng <code>import.meta.url</code> → lỗi.
+            Luôn check <em>matrix</em>: target ↔ runtime version ↔ module format ↔ package.json
+            <code>"type"</code>.
+          </p>
+        </div>
+
+        <h2 id="strict-mode">3. Strict mode — luôn bật</h2>
+
+        <p>
+          Cờ <code>"strict": true</code> bật <strong>8+ flag con</strong> cùng lúc. Đây là cách
+          TypeScript thực sự bảo vệ bạn khỏi bug. <strong>Luôn bật strict cho project mới.</strong>
+          Cho project cũ migrate dần thì bật từng flag.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Flag</th><th>Tác dụng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>strictNullChecks</code></td><td>Phân biệt <code>null</code>/<code>undefined</code> với type khác. Quan trọng nhất.</td></tr>
+              <tr><td><code>noImplicitAny</code></td><td>Bắt buộc khai báo type, không cho ngầm <code>any</code>.</td></tr>
+              <tr><td><code>strictFunctionTypes</code></td><td>Check contravariant tham số function chặt chẽ.</td></tr>
+              <tr><td><code>strictBindCallApply</code></td><td><code>.bind/.call/.apply</code> check type tham số.</td></tr>
+              <tr><td><code>strictPropertyInitialization</code></td><td>Class property phải init trong constructor hoặc khai báo.</td></tr>
+              <tr><td><code>alwaysStrict</code></td><td>Output có <code>'use strict'</code> (parse module ở strict mode).</td></tr>
+              <tr><td><code>noImplicitThis</code></td><td>Cấm <code>this</code> kiểu <code>any</code>.</td></tr>
+              <tr><td><code>useUnknownInCatchVariables</code></td><td><code>catch (e)</code> ngầm <code>unknown</code>, không phải <code>any</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Các flag bổ sung khuyên bật thêm (không trong <code>strict</code>):</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tsconfig — strict++ </span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"strict"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noUncheckedIndexedAccess"</span>: <span class="tok-kw">true</span>,   <span class="tok-com">// arr[i] có thể undefined</span>
+    <span class="tok-str">"noImplicitOverride"</span>: <span class="tok-kw">true</span>,        <span class="tok-com">// override method phải có keyword override</span>
+    <span class="tok-str">"noFallthroughCasesInSwitch"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noUnusedLocals"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noUnusedParameters"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"exactOptionalPropertyTypes"</span>: <span class="tok-kw">true</span>    <span class="tok-com">// { x?: number } khác { x: number | undefined }</span>
+  }
+}</code></pre>
+        </div>
+
+        <h2 id="module-resolution">4. Module resolution — cách TS tìm file</h2>
+
+        <p>
+          Khi bạn viết <code>import x from './foo'</code> hay <code>import lodash from 'lodash'</code>,
+          TypeScript phải <em>tìm file thực</em> tương ứng. Cách tìm phụ thuộc
+          <code>moduleResolution</code>:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>moduleResolution</th><th>Hành vi</th><th>Khi dùng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>classic</code></td><td>Legacy TS 1.x. Đừng dùng.</td><td>—</td></tr>
+              <tr><td><code>node</code></td><td>Bắt chước Node CommonJS: <code>./foo</code> → <code>./foo.ts</code>, <code>./foo/index.ts</code>, …</td><td>Node CJS classic, project cũ.</td></tr>
+              <tr><td><code>node16</code> / <code>nodenext</code></td><td>Node ESM: bắt buộc <code>.js</code> trong import (cả khi file là .ts!)</td><td>Node ESM với <code>"type":"module"</code>.</td></tr>
+              <tr><td><code>bundler</code></td><td>Bundler-friendly: không cần extension, hỗ trợ <code>paths</code>, <code>condition exports</code>.</td><td><strong>Mặc định cho Vite/Webpack/esbuild.</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — phải có .js trong NodeNext</div>
+          <p>
+            Với <code>moduleResolution: "nodenext"</code>, dù file của bạn là <code>foo.ts</code>,
+            bạn vẫn phải import bằng <code>import { x } from './foo.js'</code>. Lý do: sau khi compile
+            ra <code>foo.js</code>, Node ESM yêu cầu extension đầy đủ. TypeScript "nói trước" để code
+            output runnable.
+          </p>
+        </div>
+
+        <h2 id="output-options">5. Output options — controls cho file sinh ra</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Option</th><th>Mục đích</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>outDir</code></td><td>Thư mục chứa output. Mặc định cùng folder với file <code>.ts</code>.</td></tr>
+              <tr><td><code>rootDir</code></td><td>Thư mục gốc của source. Cấu trúc trong <code>rootDir</code> được giữ ở <code>outDir</code>.</td></tr>
+              <tr><td><code>declaration</code></td><td>Sinh kèm file <code>.d.ts</code>. Bắt buộc nếu publish library.</td></tr>
+              <tr><td><code>declarationMap</code></td><td>Sinh <code>.d.ts.map</code> để "Go to Definition" nhảy về file <code>.ts</code> gốc.</td></tr>
+              <tr><td><code>sourceMap</code></td><td>Sinh <code>.js.map</code> — debug breakpoint trên <code>.ts</code>.</td></tr>
+              <tr><td><code>removeComments</code></td><td>Loại bỏ comment trong output.</td></tr>
+              <tr><td><code>importHelpers</code></td><td>Dùng <code>tslib</code> để chia sẻ helper (giảm size khi nhiều file).</td></tr>
+              <tr><td><code>noEmit</code></td><td>Chỉ type-check, không xuất file. Hữu ích khi đã có Vite/esbuild compile.</td></tr>
+              <tr><td><code>incremental</code></td><td>Lưu cache <code>.tsbuildinfo</code>, build lần sau nhanh hơn.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="path-mapping">6. Path mapping — import alias đẹp</h2>
+
+        <p>
+          Thay vì <code>import Button from '../../../components/Button'</code>, ta muốn
+          <code>import Button from '@/components/Button'</code>. Cấu hình:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tsconfig.json — paths</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"baseUrl"</span>: <span class="tok-str">"."</span>,
+    <span class="tok-str">"paths"</span>: {
+      <span class="tok-str">"@/*"</span>:        [<span class="tok-str">"src/*"</span>],
+      <span class="tok-str">"@utils/*"</span>:   [<span class="tok-str">"src/utils/*"</span>],
+      <span class="tok-str">"@types"</span>:     [<span class="tok-str">"src/types/index.ts"</span>]
+    }
+  }
+}</code></pre>
+        </div>
+
+        <p>Code sau khi cấu hình:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com">// trước</span>
+<span class="tok-kw">import</span> Button <span class="tok-kw">from</span> <span class="tok-str">'../../../components/Button'</span>;
+
+<span class="tok-com">// sau</span>
+<span class="tok-kw">import</span> Button <span class="tok-kw">from</span> <span class="tok-str">'@/components/Button'</span>;</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Quan trọng — paths chỉ là "trick type-check"</div>
+          <p>
+            <code>tsc</code> hiểu path mapping <strong>khi type-check</strong>, nhưng <em>không rewrite</em>
+            import lúc emit. Khi runtime, Node sẽ vẫn cố tìm package tên "@". Bạn cần một trong các giải pháp:
+          </p>
+          <ul>
+            <li><strong>Vite</strong>: cấu hình thêm <code>resolve.alias</code> trong <code>vite.config.ts</code> (Vite có plugin <code>vite-tsconfig-paths</code> đọc tự động).</li>
+            <li><strong>esbuild/tsup</strong>: dùng plugin alias hoặc <code>esbuild-plugin-tsconfig-paths</code>.</li>
+            <li><strong>Node thuần (tsx/ts-node)</strong>: <code>tsx</code> hỗ trợ tự động; với <code>ts-node</code> cần <code>tsconfig-paths/register</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="dts">7. <code>.d.ts</code> — file khai báo type</h2>
+
+        <p>
+          File <code>.d.ts</code> chứa <strong>chỉ khai báo type, không có code chạy</strong>. Mục đích:
+          mô tả "shape" của 1 module JS thuần để TS hiểu type khi import.
+        </p>
+
+        <p>3 nguồn <code>.d.ts</code>:</p>
+
+        <ol>
+          <li><strong>Đi kèm package</strong>: nhiều thư viện modern (zod, react, vue) ship sẵn file <code>.d.ts</code> trong npm package.</li>
+          <li><strong>DefinitelyTyped</strong> — kho cộng đồng. Cài qua <code>npm i -D @types/lodash</code>, <code>@types/node</code>, <code>@types/express</code>, …</li>
+          <li><strong>Tự viết</strong> — khi không có 2 nguồn trên.</li>
+        </ol>
+
+        <p>Ví dụ <code>.d.ts</code> tự viết cho thư viện hypothesi <code>string-strip-html</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>types/string-strip-html.d.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">declare module</span> <span class="tok-str">'string-strip-html'</span> {
+  <span class="tok-kw">export function</span> <span class="tok-fn">stripHtml</span>(
+    html: <span class="tok-cls">string</span>,
+    opts?: { onlyStripTags?: <span class="tok-cls">string</span>[] }
+  ): { result: <span class="tok-cls">string</span> };
+}</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Đặt file <code>.d.ts</code> ở đâu?</div>
+          <p>
+            Tạo thư mục <code>src/types/</code> hoặc <code>types/</code> ở root. Đảm bảo nằm trong
+            <code>include</code> của <code>tsconfig.json</code> (hoặc khai báo thêm
+            <code>"typeRoots"</code>). TypeScript sẽ tự load các file <code>.d.ts</code> ở đó.
+          </p>
+        </div>
+
+        <h2 id="ambient">8. Ambient declaration — khai báo toàn cục</h2>
+
+        <p>Mở rộng kiểu của thứ "có sẵn" như <code>Window</code>, <code>globalThis</code>, hay <code>process.env</code>.</p>
+
+        <h3 id="declare-global">8.1. Mở rộng <code>Window</code> / <code>globalThis</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/types/global.d.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">declare global</span> {
+  <span class="tok-kw">interface</span> <span class="tok-cls">Window</span> {
+    myAnalytics: {
+      <span class="tok-fn">track</span>(event: <span class="tok-cls">string</span>): <span class="tok-cls">void</span>;
+    };
+  }
+}
+
+<span class="tok-com">// Cần dòng export để file thành module — declare global mới hiệu lực</span>
+<span class="tok-kw">export</span> {};</code></pre>
+        </div>
+
+        <p>Lưu ý dòng <code>export {};</code> ở cuối — nếu thiếu, file bị coi là script global, <code>declare global</code> không hoạt động.</p>
+
+        <h3 id="env-typing">8.2. Type hoá <code>process.env</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/types/env.d.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">declare global</span> {
+  <span class="tok-kw">namespace</span> <span class="tok-cls">NodeJS</span> {
+    <span class="tok-kw">interface</span> <span class="tok-cls">ProcessEnv</span> {
+      <span class="tok-cls">NODE_ENV</span>: <span class="tok-str">'development'</span> | <span class="tok-str">'production'</span> | <span class="tok-str">'test'</span>;
+      <span class="tok-cls">DATABASE_URL</span>: <span class="tok-cls">string</span>;
+      <span class="tok-cls">PORT</span>?: <span class="tok-cls">string</span>;
+    }
+  }
+}
+
+<span class="tok-kw">export</span> {};</code></pre>
+        </div>
+
+        <p>
+          Cách này <em>khai man</em> — chỉ tell TS, không validate runtime. Pattern an toàn hơn: dùng
+          <code>zod</code> validate <code>process.env</code> rồi infer type (xem §13).
+        </p>
+
+        <h3 id="declare-module">8.3. <code>declare module</code> cho CSS, ảnh, file lạ</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/types/assets.d.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">declare module</span> <span class="tok-str">'*.css'</span>;
+<span class="tok-kw">declare module</span> <span class="tok-str">'*.svg'</span> {
+  <span class="tok-kw">const</span> src: <span class="tok-cls">string</span>;
+  <span class="tok-kw">export default</span> src;
+}
+<span class="tok-kw">declare module</span> <span class="tok-str">'*.md?raw'</span> {
+  <span class="tok-kw">const</span> content: <span class="tok-cls">string</span>;
+  <span class="tok-kw">export default</span> content;
+}</code></pre>
+        </div>
+
+        <h2 id="project-references">9. Project references — Monorepo nhiều package</h2>
+
+        <p>
+          Khi dự án có nhiều package <em>cùng repo</em> (vd: <code>packages/utils</code>,
+          <code>packages/app</code>), bạn không muốn 1 file <code>tsconfig.json</code> khổng lồ. Mỗi
+          package có <code>tsconfig.json</code> riêng, link với nhau qua <code>references</code>.
+        </p>
+
+        <p>Cấu trúc thư mục mẫu:</p>
+
+        <div class="code-wrap">
+<pre><code>monorepo/
+├─ tsconfig.json                <span class="tok-com">// solution-style root: chỉ liệt kê references</span>
+├─ packages/
+│  ├─ utils/
+│  │  ├─ tsconfig.json
+│  │  └─ src/index.ts
+│  └─ app/
+│     ├─ tsconfig.json
+│     └─ src/index.ts
+└─ package.json</code></pre>
+        </div>
+
+        <p><strong>Root <code>tsconfig.json</code>:</strong></p>
+
+        <div class="code-wrap">
+<pre><code>{
+  <span class="tok-str">"files"</span>: [],
+  <span class="tok-str">"references"</span>: [
+    { <span class="tok-str">"path"</span>: <span class="tok-str">"./packages/utils"</span> },
+    { <span class="tok-str">"path"</span>: <span class="tok-str">"./packages/app"</span> }
+  ]
+}</code></pre>
+        </div>
+
+        <p><strong><code>packages/utils/tsconfig.json</code>:</strong></p>
+
+        <div class="code-wrap">
+<pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"composite"</span>: <span class="tok-kw">true</span>,           <span class="tok-com">// bắt buộc khi được reference</span>
+    <span class="tok-str">"declaration"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"outDir"</span>: <span class="tok-str">"dist"</span>,
+    <span class="tok-str">"rootDir"</span>: <span class="tok-str">"src"</span>,
+    <span class="tok-str">"target"</span>: <span class="tok-str">"ES2022"</span>,
+    <span class="tok-str">"module"</span>: <span class="tok-str">"ESNext"</span>,
+    <span class="tok-str">"strict"</span>: <span class="tok-kw">true</span>
+  },
+  <span class="tok-str">"include"</span>: [<span class="tok-str">"src"</span>]
+}</code></pre>
+        </div>
+
+        <p><strong><code>packages/app/tsconfig.json</code>:</strong></p>
+
+        <div class="code-wrap">
+<pre><code>{
+  <span class="tok-str">"extends"</span>: <span class="tok-str">"../utils/tsconfig.json"</span>,
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"outDir"</span>: <span class="tok-str">"dist"</span>,
+    <span class="tok-str">"rootDir"</span>: <span class="tok-str">"src"</span>
+  },
+  <span class="tok-str">"include"</span>: [<span class="tok-str">"src"</span>],
+  <span class="tok-str">"references"</span>: [{ <span class="tok-str">"path"</span>: <span class="tok-str">"../utils"</span> }]
+}</code></pre>
+        </div>
+
+        <p>Build:</p>
+
+        <div class="code-wrap">
+<pre><code>$ tsc -b              <span class="tok-com"># build tất cả references theo thứ tự</span>
+$ tsc -b --clean      <span class="tok-com"># xoá tất cả output</span>
+$ tsc -b --watch      <span class="tok-com"># incremental + watch</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Lợi ích project references</div>
+          <ul>
+            <li><strong>Incremental build</strong>: thay đổi <code>utils</code> chỉ rebuild <code>utils</code> + downstream phụ thuộc, không rebuild toàn bộ.</li>
+            <li><strong>Isolate</strong>: package có config riêng (vd target khác).</li>
+            <li><strong>Type-check song song</strong> trên CI.</li>
+          </ul>
+        </div>
+
+        <h2 id="setup-node">10. Setup case 1 — Node CLI</h2>
+
+        <p>
+          Mục tiêu: viết script Node bằng TypeScript, chạy nhanh trong dev, build sang JS để
+          deploy.
+        </p>
+
+        <p><strong>Bước 1: khởi tạo</strong></p>
+
+        <div class="code-wrap">
+<pre><code>$ mkdir my-cli &amp;&amp; cd my-cli
+$ npm init -y
+$ npm i -D typescript tsx @types/node
+$ npx tsc --init</code></pre>
+        </div>
+
+        <p><strong>Bước 2: <code>tsconfig.json</code></strong></p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tsconfig.json — Node CLI</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"target"</span>: <span class="tok-str">"ES2022"</span>,
+    <span class="tok-str">"module"</span>: <span class="tok-str">"NodeNext"</span>,
+    <span class="tok-str">"moduleResolution"</span>: <span class="tok-str">"NodeNext"</span>,
+    <span class="tok-str">"outDir"</span>: <span class="tok-str">"dist"</span>,
+    <span class="tok-str">"rootDir"</span>: <span class="tok-str">"src"</span>,
+    <span class="tok-str">"strict"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"esModuleInterop"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"skipLibCheck"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"declaration"</span>: <span class="tok-kw">false</span>,
+    <span class="tok-str">"sourceMap"</span>: <span class="tok-kw">true</span>
+  },
+  <span class="tok-str">"include"</span>: [<span class="tok-str">"src"</span>]
+}</code></pre>
+        </div>
+
+        <p>Trong <code>package.json</code> thêm <code>"type": "module"</code> và scripts:</p>
+
+        <div class="code-wrap">
+<pre><code>{
+  <span class="tok-str">"type"</span>: <span class="tok-str">"module"</span>,
+  <span class="tok-str">"scripts"</span>: {
+    <span class="tok-str">"dev"</span>:   <span class="tok-str">"tsx watch src/index.ts"</span>,
+    <span class="tok-str">"start"</span>: <span class="tok-str">"tsx src/index.ts"</span>,
+    <span class="tok-str">"build"</span>: <span class="tok-str">"tsc"</span>,
+    <span class="tok-str">"check"</span>: <span class="tok-str">"tsc --noEmit"</span>
+  }
+}</code></pre>
+        </div>
+
+        <p><strong>Bước 3: viết <code>src/index.ts</code></strong></p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">import</span> { readdir } <span class="tok-kw">from</span> <span class="tok-str">'node:fs/promises'</span>;
+
+<span class="tok-kw">async function</span> <span class="tok-fn">main</span>(): <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">void</span>&gt; {
+  <span class="tok-kw">const</span> dir = process.argv[<span class="tok-num">2</span>] ?? <span class="tok-str">'.'</span>;
+  <span class="tok-kw">const</span> entries = <span class="tok-kw">await</span> <span class="tok-fn">readdir</span>(dir);
+  <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">`</span><span class="tok-op">${</span>entries.length<span class="tok-op">}</span><span class="tok-str"> file/folder trong </span><span class="tok-op">${</span>dir<span class="tok-op">}</span><span class="tok-str">`</span>);
+}
+
+<span class="tok-fn">main</span>();</code></pre>
+        </div>
+
+        <p>Chạy dev: <code>npm run dev</code>. Build deploy: <code>npm run build</code> → <code>node dist/index.js</code>.</p>
+
+        <h2 id="setup-vite">11. Setup case 2 — SPA browser với Vite</h2>
+
+        <p>Vite tự xử lý TS — không cần chạy <code>tsc</code> trong dev (chỉ <code>tsc --noEmit</code> để type-check).</p>
+
+        <div class="code-wrap">
+<pre><code>$ npm create vite@latest my-app -- --template vanilla-ts
+$ cd my-app &amp;&amp; npm install
+$ npm run dev</code></pre>
+        </div>
+
+        <p><code>tsconfig.json</code> Vite sinh ra (đơn giản hoá):</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tsconfig.json — Vite SPA</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>{
+  <span class="tok-str">"compilerOptions"</span>: {
+    <span class="tok-str">"target"</span>: <span class="tok-str">"ES2022"</span>,
+    <span class="tok-str">"useDefineForClassFields"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"module"</span>: <span class="tok-str">"ESNext"</span>,
+    <span class="tok-str">"moduleResolution"</span>: <span class="tok-str">"bundler"</span>,
+    <span class="tok-str">"lib"</span>: [<span class="tok-str">"ES2022"</span>, <span class="tok-str">"DOM"</span>, <span class="tok-str">"DOM.Iterable"</span>],
+    <span class="tok-str">"skipLibCheck"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"strict"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noUnusedLocals"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noUnusedParameters"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noFallthroughCasesInSwitch"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"noEmit"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"isolatedModules"</span>: <span class="tok-kw">true</span>,
+    <span class="tok-str">"baseUrl"</span>: <span class="tok-str">"."</span>,
+    <span class="tok-str">"paths"</span>: {
+      <span class="tok-str">"@/*"</span>: [<span class="tok-str">"src/*"</span>]
+    }
+  },
+  <span class="tok-str">"include"</span>: [<span class="tok-str">"src"</span>]
+}</code></pre>
+        </div>
+
+        <p>Để Vite resolve <code>@/*</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>vite.config.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> { defineConfig } <span class="tok-kw">from</span> <span class="tok-str">'vite'</span>;
+<span class="tok-kw">import</span> path <span class="tok-kw">from</span> <span class="tok-str">'node:path'</span>;
+
+<span class="tok-kw">export default</span> <span class="tok-fn">defineConfig</span>({
+  resolve: {
+    alias: {
+      <span class="tok-str">'@'</span>: path.<span class="tok-fn">resolve</span>(__dirname, <span class="tok-str">'src'</span>)
+    }
+  }
+});</code></pre>
+        </div>
+
+        <p>
+          Hoặc nhanh hơn: cài <code>vite-tsconfig-paths</code>, plugin tự đọc <code>paths</code> trong
+          <code>tsconfig.json</code>.
+        </p>
+
+        <h2 id="setup-library">12. Setup case 3 — Publish library</h2>
+
+        <p>
+          Library cần xuất 3 thứ: <strong>CJS</strong> (cho Node CJS cũ), <strong>ESM</strong> (cho
+          Node modern + bundler), <strong>.d.ts</strong> (cho TS user). Công cụ đề xuất:
+          <strong><code>tsup</code></strong> (wrap esbuild, zero-config).
+        </p>
+
+        <div class="code-wrap">
+<pre><code>$ npm i -D tsup typescript</code></pre>
+        </div>
+
+        <p><code>tsup.config.ts</code>:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">import</span> { defineConfig } <span class="tok-kw">from</span> <span class="tok-str">'tsup'</span>;
+
+<span class="tok-kw">export default</span> <span class="tok-fn">defineConfig</span>({
+  entry: [<span class="tok-str">'src/index.ts'</span>],
+  format: [<span class="tok-str">'cjs'</span>, <span class="tok-str">'esm'</span>],
+  dts: <span class="tok-kw">true</span>,
+  sourcemap: <span class="tok-kw">true</span>,
+  clean: <span class="tok-kw">true</span>,
+  target: <span class="tok-str">'es2022'</span>
+});</code></pre>
+        </div>
+
+        <p><code>package.json</code> với <code>exports</code> map:</p>
+
+        <div class="code-wrap">
+<pre><code>{
+  <span class="tok-str">"name"</span>: <span class="tok-str">"my-lib"</span>,
+  <span class="tok-str">"version"</span>: <span class="tok-str">"1.0.0"</span>,
+  <span class="tok-str">"main"</span>:    <span class="tok-str">"./dist/index.cjs"</span>,
+  <span class="tok-str">"module"</span>:  <span class="tok-str">"./dist/index.js"</span>,
+  <span class="tok-str">"types"</span>:   <span class="tok-str">"./dist/index.d.ts"</span>,
+  <span class="tok-str">"exports"</span>: {
+    <span class="tok-str">"."</span>: {
+      <span class="tok-str">"types"</span>:   <span class="tok-str">"./dist/index.d.ts"</span>,
+      <span class="tok-str">"import"</span>:  <span class="tok-str">"./dist/index.js"</span>,
+      <span class="tok-str">"require"</span>: <span class="tok-str">"./dist/index.cjs"</span>
+    }
+  },
+  <span class="tok-str">"files"</span>: [<span class="tok-str">"dist"</span>],
+  <span class="tok-str">"scripts"</span>: {
+    <span class="tok-str">"build"</span>: <span class="tok-str">"tsup"</span>,
+    <span class="tok-str">"check"</span>: <span class="tok-str">"tsc --noEmit"</span>
+  }
+}</code></pre>
+        </div>
+
+        <p>
+          Build: <code>npm run build</code>. Publish: <code>npm publish</code>. User cài về sẽ thấy
+          autocomplete đầy đủ.
+        </p>
+
+        <h2 id="patterns">13. Patterns thực tế</h2>
+
+        <h3 id="zod-env">13.1. Typed env với <code>zod</code></h3>
+
+        <p>Validate <code>process.env</code> ngay khi app start. Sai → throw sớm, đỡ debug runtime mơ hồ.</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/env.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> { z } <span class="tok-kw">from</span> <span class="tok-str">'zod'</span>;
+
+<span class="tok-kw">const</span> <span class="tok-cls">EnvSchema</span> = z.<span class="tok-fn">object</span>({
+  <span class="tok-cls">NODE_ENV</span>: z.<span class="tok-fn">enum</span>([<span class="tok-str">'development'</span>, <span class="tok-str">'production'</span>, <span class="tok-str">'test'</span>]),
+  <span class="tok-cls">DATABASE_URL</span>: z.<span class="tok-fn">string</span>().<span class="tok-fn">url</span>(),
+  <span class="tok-cls">PORT</span>: z.<span class="tok-fn">coerce</span>.<span class="tok-fn">number</span>().<span class="tok-fn">int</span>().<span class="tok-fn">positive</span>().<span class="tok-fn">default</span>(<span class="tok-num">3000</span>)
+});
+
+<span class="tok-kw">export const</span> env = <span class="tok-cls">EnvSchema</span>.<span class="tok-fn">parse</span>(process.env);
+<span class="tok-com">// env có type: { NODE_ENV: 'development' | ..., DATABASE_URL: string, PORT: number }</span></code></pre>
+        </div>
+
+        <h3 id="typed-fetch">13.2. Typed fetch wrapper</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/api.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">export class</span> <span class="tok-cls">ApiError</span> <span class="tok-kw">extends</span> <span class="tok-cls">Error</span> {
+  <span class="tok-fn">constructor</span>(<span class="tok-kw">public readonly</span> status: <span class="tok-cls">number</span>, message: <span class="tok-cls">string</span>) {
+    <span class="tok-kw">super</span>(message);
+    <span class="tok-kw">this</span>.name = <span class="tok-str">'ApiError'</span>;
+  }
+}
+
+<span class="tok-kw">export async function</span> api&lt;<span class="tok-cls">T</span>&gt;(
+  url: <span class="tok-cls">string</span>,
+  init?: <span class="tok-cls">RequestInit</span>
+): <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">T</span>&gt; {
+  <span class="tok-kw">const</span> res = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url, init);
+  <span class="tok-kw">if</span> (!res.ok) {
+    <span class="tok-kw">throw new</span> <span class="tok-cls">ApiError</span>(res.status, <span class="tok-str">`HTTP </span><span class="tok-op">${</span>res.status<span class="tok-op">}</span><span class="tok-str">`</span>);
+  }
+  <span class="tok-kw">return</span> res.<span class="tok-fn">json</span>() <span class="tok-kw">as</span> <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">T</span>&gt;;
+}
+
+<span class="tok-com">// Usage:</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">User</span> { id: <span class="tok-cls">number</span>; name: <span class="tok-cls">string</span>; }
+<span class="tok-kw">const</span> u = <span class="tok-kw">await</span> api&lt;<span class="tok-cls">User</span>&gt;(<span class="tok-str">'/api/users/1'</span>);
+<span class="tok-com">// u tự động có type User</span></code></pre>
+        </div>
+
+        <p>
+          <em>Cảnh báo</em>: <code>as Promise&lt;T&gt;</code> là "tin tưởng server trả đúng type". Production
+          nên kết hợp <code>zod</code>: <code>UserSchema.parse(await res.json())</code> — runtime validation
+          luôn.
+        </p>
+
+        <h3 id="repository">13.3. Repository pattern</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/repository/user.ts</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">export interface</span> <span class="tok-cls">User</span> { id: <span class="tok-cls">number</span>; email: <span class="tok-cls">string</span>; }
+
+<span class="tok-kw">export interface</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-fn">findById</span>(id: <span class="tok-cls">number</span>): <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">User</span> | <span class="tok-kw">null</span>&gt;;
+  <span class="tok-fn">create</span>(data: <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">'id'</span>&gt;): <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">User</span>&gt;;
+}
+
+<span class="tok-com">// Triển khai 1: Sqlite</span>
+<span class="tok-kw">export class</span> <span class="tok-cls">SqliteUserRepo</span> <span class="tok-kw">implements</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-kw">async</span> <span class="tok-fn">findById</span>(id: <span class="tok-cls">number</span>) { <span class="tok-com">/* ... */</span> <span class="tok-kw">return null</span>; }
+  <span class="tok-kw">async</span> <span class="tok-fn">create</span>(data: <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">'id'</span>&gt;) { <span class="tok-com">/* ... */</span> <span class="tok-kw">return</span> { id: <span class="tok-num">1</span>, ...data }; }
+}
+
+<span class="tok-com">// Triển khai 2: In-memory (cho test)</span>
+<span class="tok-kw">export class</span> <span class="tok-cls">MockUserRepo</span> <span class="tok-kw">implements</span> <span class="tok-cls">UserRepository</span> {
+  <span class="tok-kw">private</span> users = <span class="tok-kw">new</span> <span class="tok-cls">Map</span>&lt;<span class="tok-cls">number</span>, <span class="tok-cls">User</span>&gt;();
+  <span class="tok-kw">async</span> <span class="tok-fn">findById</span>(id: <span class="tok-cls">number</span>) { <span class="tok-kw">return this</span>.users.<span class="tok-fn">get</span>(id) ?? <span class="tok-kw">null</span>; }
+  <span class="tok-kw">async</span> <span class="tok-fn">create</span>(data: <span class="tok-cls">Omit</span>&lt;<span class="tok-cls">User</span>, <span class="tok-str">'id'</span>&gt;) {
+    <span class="tok-kw">const</span> id = <span class="tok-kw">this</span>.users.size + <span class="tok-num">1</span>;
+    <span class="tok-kw">const</span> user = { id, ...data };
+    <span class="tok-kw">this</span>.users.<span class="tok-fn">set</span>(id, user);
+    <span class="tok-kw">return</span> user;
+  }
+}</code></pre>
+        </div>
+
+        <p>
+          Caller chỉ phụ thuộc vào <code>UserRepository</code> interface — đổi triển khai mà không phải
+          sửa logic. Đây là <strong>Dependency Inversion Principle</strong> (Pillar OOP) áp dụng vào
+          TypeScript thực tế.
+        </p>
+
+        <h2 id="debug">14. Debug TypeScript</h2>
+
+        <p>3 cách phổ biến:</p>
+
+        <ol>
+          <li><strong><code>console.log</code> ngon</strong>. Với <code>tsx</code>, log hiện ngay file <code>.ts</code> gốc (nhờ source map nội bộ).</li>
+          <li><strong>VS Code debugger</strong> với source map. Bật <code>"sourceMap": true</code> trong <code>tsconfig.json</code>, tạo launch config:</li>
+        </ol>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>.vscode/launch.json</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>{
+  <span class="tok-str">"version"</span>: <span class="tok-str">"0.2.0"</span>,
+  <span class="tok-str">"configurations"</span>: [
+    {
+      <span class="tok-str">"type"</span>: <span class="tok-str">"node"</span>,
+      <span class="tok-str">"request"</span>: <span class="tok-str">"launch"</span>,
+      <span class="tok-str">"name"</span>: <span class="tok-str">"Debug TS (tsx)"</span>,
+      <span class="tok-str">"runtimeExecutable"</span>: <span class="tok-str">"tsx"</span>,
+      <span class="tok-str">"args"</span>: [<span class="tok-str">"${workspaceFolder}/src/index.ts"</span>],
+      <span class="tok-str">"skipFiles"</span>: [<span class="tok-str">"&lt;node_internals&gt;/**"</span>]
+    }
+  ]
+}</code></pre>
+        </div>
+
+        <p>Đặt breakpoint trực tiếp trên file <code>.ts</code>, F5 chạy. Variable inspector hiện đúng tên biến TS.</p>
+
+        <ol start="3">
+          <li><strong>Chrome DevTools cho browser</strong>: Vite tự bật source map dev. Mở DevTools → tab Sources → tìm file <code>.ts</code> trong tree, đặt breakpoint như JS thường.</li>
+        </ol>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — TS Node CLI từ đầu</h4>
+            <div class="exercise-body">
+              <p>Tạo project Node CLI mới. Cài <code>tsx</code> + <code>typescript</code> + <code>vitest</code>.</p>
+              <ul>
+                <li>Viết <code>src/count-files.ts</code> nhận đường dẫn từ <code>process.argv[2]</code>, dùng <code>node:fs/promises</code> đếm file (không tính folder con).</li>
+                <li>Script <code>npm run dev</code> dùng <code>tsx</code> chạy trực tiếp.</li>
+                <li>Script <code>npm run build</code> compile <code>tsc</code> ra <code>dist/</code>. Verify chạy được bằng <code>node dist/count-files.js .</code>.</li>
+                <li>Viết test <code>vitest</code> đơn giản: tạo folder tạm, ghi 3 file, gọi hàm <code>countFiles</code>, expect <code>3</code>.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý cấu trúc</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-com">// src/count-files.ts</span>
+<span class="tok-kw">import</span> { readdir, stat } <span class="tok-kw">from</span> <span class="tok-str">'node:fs/promises'</span>;
+<span class="tok-kw">import</span> { join } <span class="tok-kw">from</span> <span class="tok-str">'node:path'</span>;
+
+<span class="tok-kw">export async function</span> <span class="tok-fn">countFiles</span>(dir: <span class="tok-cls">string</span>): <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">number</span>&gt; {
+  <span class="tok-kw">const</span> entries = <span class="tok-kw">await</span> <span class="tok-fn">readdir</span>(dir);
+  <span class="tok-kw">let</span> count = <span class="tok-num">0</span>;
+  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> e <span class="tok-kw">of</span> entries) {
+    <span class="tok-kw">const</span> s = <span class="tok-kw">await</span> <span class="tok-fn">stat</span>(<span class="tok-fn">join</span>(dir, e));
+    <span class="tok-kw">if</span> (s.<span class="tok-fn">isFile</span>()) count++;
+  }
+  <span class="tok-kw">return</span> count;
+}
+
+<span class="tok-kw">if</span> (<span class="tok-kw">import</span>.meta.url === <span class="tok-str">`file://</span><span class="tok-op">${</span>process.argv[<span class="tok-num">1</span>]<span class="tok-op">}</span><span class="tok-str">`</span>) {
+  <span class="tok-kw">const</span> dir = process.argv[<span class="tok-num">2</span>] ?? <span class="tok-str">'.'</span>;
+  <span class="tok-fn">countFiles</span>(dir).<span class="tok-fn">then</span>(n =&gt; <span class="tok-kw">console</span>.<span class="tok-fn">log</span>(n));
+}</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — Vite + path alias</h4>
+            <div class="exercise-body">
+              <p>
+                Khởi tạo Vite + framework yêu thích (vanilla-ts / vue-ts / svelte-ts / react-ts).
+                Sửa <code>tsconfig.json</code>:
+              </p>
+              <ul>
+                <li>Bật <code>"strict": true</code> + <code>"noUncheckedIndexedAccess": true</code>.</li>
+                <li>Thêm <code>"baseUrl": "."</code> và <code>"paths": { "@/*": ["src/*"] }</code>.</li>
+                <li>Cập nhật <code>vite.config.ts</code> với <code>resolve.alias</code> tương ứng (hoặc cài <code>vite-tsconfig-paths</code>).</li>
+                <li>Tạo <code>src/components/Hello.ts</code> export 1 function. Trong <code>src/main.ts</code> import bằng <code>@/components/Hello</code>. Verify hot reload hoạt động.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Tips</summary>
+                <div class="hint-content">
+                  <p>
+                    Nếu hot-reload báo lỗi "Cannot find module '@/components/Hello'", có thể bạn quên
+                    config alias bên Vite — TS only nhận paths cho type-check, runtime cần Vite biết alias.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Tự viết file <code>.d.ts</code></h4>
+            <div class="exercise-body">
+              <p>
+                Cài 1 npm package <em>không có type</em>. Ví dụ phiên bản cũ của <code>string-strip-html@4</code>
+                hoặc 1 package nhỏ tự chọn. Khi <code>import</code>, TS sẽ báo "Could not find a declaration file".
+              </p>
+              <ul>
+                <li>Tạo <code>src/types/&lt;ten-pkg&gt;.d.ts</code>.</li>
+                <li>Viết <code>declare module '...'</code> với type tối thiểu (signature 1-2 hàm bạn thật sự dùng).</li>
+                <li>Verify autocomplete hoạt động trong VS Code.</li>
+                <li>Đảm bảo file <code>.d.ts</code> nằm trong <code>include</code> của <code>tsconfig.json</code>.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Mẫu</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">declare module</span> <span class="tok-str">'string-strip-html'</span> {
+  <span class="tok-kw">export function</span> <span class="tok-fn">stripHtml</span>(
+    html: <span class="tok-cls">string</span>
+  ): { result: <span class="tok-cls">string</span> };
+}</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Typed fetch wrapper</h4>
+            <div class="exercise-body">
+              <p>Implement hàm <code>api&lt;T&gt;(url, init?)</code>:</p>
+              <ul>
+                <li>Generic <code>T</code> cho shape data trả về.</li>
+                <li>Throw <code>ApiError</code> nếu <code>!res.ok</code>, chứa <code>status</code>, <code>message</code>.</li>
+                <li>Test với <code>https://jsonplaceholder.typicode.com/users/1</code>. Khai báo <code>interface User</code>, gọi <code>api&lt;User&gt;(...)</code>, in tên.</li>
+                <li><strong>Bonus</strong>: thêm option timeout (dùng <code>AbortController</code>).</li>
+                <li><strong>Bonus 2</strong>: kết hợp <code>zod</code> để runtime-validate response.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Skeleton</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">export class</span> <span class="tok-cls">ApiError</span> <span class="tok-kw">extends</span> <span class="tok-cls">Error</span> {
+  <span class="tok-fn">constructor</span>(<span class="tok-kw">public</span> status: <span class="tok-cls">number</span>, msg: <span class="tok-cls">string</span>) { <span class="tok-kw">super</span>(msg); }
+}
+
+<span class="tok-kw">export async function</span> api&lt;<span class="tok-cls">T</span>&gt;(
+  url: <span class="tok-cls">string</span>,
+  init: <span class="tok-cls">RequestInit</span> &amp; { timeoutMs?: <span class="tok-cls">number</span> } = {}
+): <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">T</span>&gt; {
+  <span class="tok-kw">const</span> { timeoutMs = <span class="tok-num">10000</span>, ...rest } = init;
+  <span class="tok-kw">const</span> ctrl = <span class="tok-kw">new</span> <span class="tok-cls">AbortController</span>();
+  <span class="tok-kw">const</span> t = <span class="tok-fn">setTimeout</span>(() =&gt; ctrl.<span class="tok-fn">abort</span>(), timeoutMs);
+  <span class="tok-kw">try</span> {
+    <span class="tok-kw">const</span> res = <span class="tok-kw">await</span> <span class="tok-fn">fetch</span>(url, { ...rest, signal: ctrl.signal });
+    <span class="tok-kw">if</span> (!res.ok) <span class="tok-kw">throw new</span> <span class="tok-cls">ApiError</span>(res.status, res.statusText);
+    <span class="tok-kw">return</span> res.<span class="tok-fn">json</span>() <span class="tok-kw">as</span> <span class="tok-cls">Promise</span>&lt;<span class="tok-cls">T</span>&gt;;
+  } <span class="tok-kw">finally</span> {
+    <span class="tok-fn">clearTimeout</span>(t);
+  }
+}</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — Mini monorepo với project references</h4>
+            <div class="exercise-body">
+              <p>Tạo cấu trúc:</p>
+<pre><code>my-mono/
+├─ tsconfig.json
+├─ packages/
+│  ├─ utils/  (export function add)
+│  └─ app/    (import add từ utils, gọi log)</code></pre>
+              <ul>
+                <li>Mỗi package có <code>tsconfig.json</code> riêng, <code>composite: true</code> ở utils.</li>
+                <li>Root <code>tsconfig.json</code> chỉ chứa <code>references</code>.</li>
+                <li><code>app/tsconfig.json</code> có <code>references</code> trỏ tới <code>../utils</code>.</li>
+                <li>Build bằng <code>tsc -b</code>. Kiểm tra <code>.tsbuildinfo</code> được tạo.</li>
+                <li>Edit <code>utils/src/index.ts</code> → rebuild → confirm chỉ <code>utils</code> và <code>app</code> bị rebuild (chứ không phải toàn bộ).</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Tips</summary>
+                <div class="hint-content">
+                  <p>
+                    Import bên app: <code>import { add } from '../../utils/src/index'</code> sẽ chạy, nhưng
+                    xấu. Cách "đẹp": dùng workspace của <code>npm</code>/<code>pnpm</code>/<code>yarn</code>,
+                    rồi import bằng tên package (<code>import { add } from '@my-mono/utils'</code>). Đây là
+                    bước nâng cao — không bắt buộc trong bài này.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>"strict": true</code> trong tsconfig bật những flag con nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>8 flag: <code>strictNullChecks</code>, <code>noImplicitAny</code>, <code>strictFunctionTypes</code>, <code>strictBindCallApply</code>, <code>strictPropertyInitialization</code>, <code>alwaysStrict</code>, <code>noImplicitThis</code>, <code>useUnknownInCatchVariables</code>. Đây không phải set cố định mãi — TypeScript có thể thêm flag mới vào <code>strict</code> ở phiên bản sau (vd <code>useUnknownInCatchVariables</code> được thêm ở TS 4.4).</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Khác nhau giữa <code>tsx</code> và <code>ts-node</code>? Nên dùng cái nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>tsx</code> dùng <strong>esbuild</strong> bên dưới — chạy rất nhanh nhưng <em>chỉ strip type</em>,
+                không type-check. <code>ts-node</code> gọi <code>tsc</code> thật — chậm hơn nhưng type-check khi chạy.
+              </p>
+              <p>
+                Khuyến nghị 2026: <strong>tsx</strong> cho dev (nhanh), <code>tsc --noEmit</code> riêng để type-check
+                trên CI hoặc pre-commit. <code>ts-node</code> hiện vẫn dùng nhưng không còn là default.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>"moduleResolution": "bundler"</code> dùng khi nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Khi dự án của bạn được biên dịch/bundle bởi <strong>bundler hiện đại</strong> (Vite,
+                esbuild, Webpack, Rollup) chứ không phải Node ESM thuần. Bundler tự xử lý
+                extension <code>.js</code>, conditional exports, path mapping… nên <code>bundler</code>
+                cho phép import "loose": <code>import x from './foo'</code> không cần <code>.js</code>.
+              </p>
+              <p>
+                Khi nào <strong>không</strong> dùng? Code chạy thẳng Node ESM (không qua bundler) → dùng
+                <code>nodenext</code> để TS bắt bạn viết extension đầy đủ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>File <code>.d.ts</code> có chứa logic JavaScript không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không.</strong> File <code>.d.ts</code> chỉ chứa <em>khai báo</em>:
+                <code>declare</code>, <code>interface</code>, <code>type</code>, <code>export</code>
+                signature… Không có thân hàm, không có <code>console.log</code>, không có code chạy.
+              </p>
+              <p>
+                Nếu thử viết <code>export function foo() { return 1; }</code> trong <code>.d.ts</code>,
+                TS sẽ báo lỗi "An implementation cannot be declared in ambient contexts".
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Mặc định <code>tsconfig.json</code> không có <code>"include"</code> thì TS compile file nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Tất cả file <code>.ts</code>, <code>.tsx</code>, <code>.d.ts</code> (và <code>.js</code>/<code>.jsx</code>
+                nếu bật <code>allowJs</code>) trong thư mục chứa <code>tsconfig.json</code> và mọi thư mục con —
+                <strong>trừ</strong> những cái khớp <code>exclude</code> (mặc định <code>node_modules</code>,
+                <code>bower_components</code>, <code>jspm_packages</code>, và <code>outDir</code>).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Vì sao project Node luôn cần cài <code>@types/node</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Node.js là binary C++, không có source TypeScript. Các API built-in (<code>fs</code>,
+                <code>path</code>, <code>http</code>, <code>process</code>, <code>Buffer</code>…) cần
+                khai báo type bổ sung từ ngoài. Cộng đồng cung cấp qua <strong>DefinitelyTyped</strong>,
+                publish thành package <code>@types/node</code>. Cài về và TS tự dùng (do
+                <code>typeRoots</code> mặc định bao gồm <code>node_modules/@types</code>).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Project references giải quyết vấn đề gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                3 vấn đề trong monorepo nhiều package:
+              </p>
+              <ol>
+                <li><strong>Incremental build</strong>: <code>tsc -b</code> chỉ rebuild package đã đổi và downstream phụ thuộc, không scan lại toàn bộ.</li>
+                <li><strong>Type-check song song</strong>: mỗi package isolate, có thể chạy song song trên CI.</li>
+                <li><strong>Config riêng</strong>: mỗi package có target/lib/strict riêng nếu cần (vd: package frontend cần DOM, package CLI không cần).</li>
+              </ol>
+              <p>
+                Cần đặt <code>"composite": true</code> ở package được reference. Build qua
+                <code>tsc -b</code> thay vì <code>tsc</code> thường.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 12 bạn nên đã master:</p>
+        <ul>
+          <li><strong>tsconfig.json anatomy</strong> — 4 phần chính, biết cấu hình cho từng loại dự án.</li>
+          <li><strong>target / module / moduleResolution</strong> — chọn đúng matrix khớp runtime.</li>
+          <li><strong>Strict mode</strong> — bật 8+ flag, biết mỗi flag bảo vệ gì.</li>
+          <li><strong>Path mapping</strong> — <code>@/*</code> alias, nhớ cấu hình thêm phía bundler.</li>
+          <li><strong>.d.ts</strong> — đọc, viết, đặt đúng vị trí. <code>declare module</code> và <code>declare global</code>.</li>
+          <li><strong>Project references</strong> — monorepo nhiều package, build incremental.</li>
+          <li><strong>3 setup cases</strong> — Node CLI (tsx + tsc), Vite SPA, Library publish (tsup).</li>
+          <li><strong>Patterns thực tế</strong> — zod env, typed fetch, repository pattern.</li>
+          <li><strong>Debug TS</strong> — source map + VS Code launch config.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 9 (TS Types)</strong> — các type primitive và composite bạn đang viết trong <code>.d.ts</code>.</li>
+          <li><strong>Chương 10 (TS Generics)</strong> — generic <code>api&lt;T&gt;</code>, <code>UserRepository</code> dùng trong patterns ở §13.</li>
+          <li><strong>Chương 11 (TS Advanced)</strong> — utility types, mapped types, conditional types tỏ ra hữu dụng khi viết <code>.d.ts</code>.</li>
+          <li><strong>Chương 8 (Modules)</strong> — module resolution chính là cầu nối: TS map import path → file thực, hệt như Node module resolution.</li>
+          <li><strong>Pillar OOP — Dependency Inversion</strong> — repository pattern ở §13.3 là DIP trực tiếp.</li>
+          <li><strong>Dart Phase 2</strong> — Dart không có <code>tsconfig.json</code>; <code>pubspec.yaml</code> tương đương <code>package.json</code> + một phần <code>tsconfig.json</code> (target SDK), nhưng Dart compile native nên không có concept "moduleResolution".</li>
+        </ul>
+
+        <div class="callout callout-goal" style="margin-top: 32px; border-left-color: var(--ts-blue);">
+          <div class="callout-label">🎉 Chúc mừng — bạn đã hoàn thành sub-pillar JavaScript!</div>
+          <p>
+            12 chương, ~10.000 dòng kiến thức. Bạn đã đi từ <em>"Hello JavaScript"</em> qua biến/coercion,
+            functions/closures, objects/prototype, arrays/iterables, async/await, error handling, modules,
+            đến TypeScript đầy đủ với compiler và tooling thực chiến. Đây là nền tảng đủ mạnh để bạn:
+          </p>
+          <ul>
+            <li>Đọc hiểu mọi codebase JS/TS modern (Next.js, NestJS, Vue, Svelte, …).</li>
+            <li>Đóng góp pull request vào dự án open-source TypeScript.</li>
+            <li>Phỏng vấn vị trí Frontend / Fullstack / Node backend tự tin.</li>
+            <li>Tiếp tục học framework cụ thể mà không bị tắc ở "syntax JS lạ".</li>
+          </ul>
+          <p style="margin-top: 12px;">
+            <strong>Bước tiếp theo đề xuất</strong>: chuyển sang <a href="../../Python/index.html" style="color: var(--ts-blue); font-weight: 600;">sub-pillar Python</a>
+            — ngôn ngữ thứ hai cực kỳ giá trị (data, scripting, AI/ML, backend). Học song song
+            JS/TS ↔ Python sẽ giúp bạn thấy rõ trade-off design của từng ngôn ngữ.
+          </p>
+          <p>
+            Hoặc tiếp tục đào sâu hệ JS: học framework cụ thể (Next.js, NestJS), thư viện type-heavy
+            như <code>tRPC</code>, <code>Effect</code>, hoặc đọc source code TypeScript compiler để
+            hiểu type-checking phía sau.
+          </p>
+        </div>
+
+        <nav class="chapter-nav">
+          <a href="chuong11.html" class="prev">
+            <div class="dir">← Chương 11</div>
+            <div class="label">TS Advanced &amp; Patterns</div>
+          </a>
+          <a href="../index.html" class="next">
+            <div class="dir">✓ Hoàn thành</div>
+            <div class="label">Quay lại JavaScript TOC</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#tsconfig-anatomy">1. tsconfig.json anatomy</a></li>
+          <li><a href="#target-module">2. target &amp; module</a></li>
+          <li class="level-3"><a href="#target">2.1. target</a></li>
+          <li class="level-3"><a href="#module">2.2. module</a></li>
+          <li><a href="#strict-mode">3. Strict mode</a></li>
+          <li><a href="#module-resolution">4. Module resolution</a></li>
+          <li><a href="#output-options">5. Output options</a></li>
+          <li><a href="#path-mapping">6. Path mapping</a></li>
+          <li><a href="#dts">7. .d.ts files</a></li>
+          <li><a href="#ambient">8. Ambient declaration</a></li>
+          <li class="level-3"><a href="#declare-global">8.1. declare global</a></li>
+          <li class="level-3"><a href="#env-typing">8.2. process.env</a></li>
+          <li class="level-3"><a href="#declare-module">8.3. declare module</a></li>
+          <li><a href="#project-references">9. Project references</a></li>
+          <li><a href="#setup-node">10. Setup Node CLI</a></li>
+          <li><a href="#setup-vite">11. Setup Vite SPA</a></li>
+          <li><a href="#setup-library">12. Setup library publish</a></li>
+          <li><a href="#patterns">13. Patterns thực tế</a></li>
+          <li class="level-3"><a href="#zod-env">13.1. Typed env (zod)</a></li>
+          <li class="level-3"><a href="#typed-fetch">13.2. Typed fetch</a></li>
+          <li class="level-3"><a href="#repository">13.3. Repository pattern</a></li>
+          <li><a href="#debug">14. Debug TypeScript</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 12 — TypeScript Compiler, Tooling &amp; Practical · JavaScript sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong11.html">← Chương 11</a> · <a href="../index.html">JavaScript TOC ✓ Hoàn thành</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

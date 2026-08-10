@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — CDN, Rate Limiting, API Gateway, Security at Scale</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">System Design</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 07 · Edge & Security</div>
+      <h1>CDN, Rate Limiting, API Gateway, Security at Scale</h1>
+      <p class="subtitle">CDN architecture, 4 thuật toán rate limiting, API Gateway pattern, DDoS/WAF, edge auth, secret management, observability ở quy mô.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#cdn">1. CDN</a></li>
+        <li><a href="#rate-limit">2. Rate Limiting</a></li>
+        <li><a href="#gateway">3. API Gateway</a></li>
+        <li><a href="#ddos">4. DDoS Protection</a></li>
+        <li><a href="#waf">5. WAF & Security</a></li>
+        <li><a href="#edge-auth">6. Edge Auth</a></li>
+        <li><a href="#secrets">7. Secret Management</a></li>
+        <li><a href="#observability">8. Observability at Scale</a></li>
+        <li><a href="#exercises">9. Bài tập</a></li>
+        <li><a href="#quiz">10. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="cdn">
+        <h2>1. Content Delivery Network (CDN)</h2>
+
+        <h3>1.1. Khái niệm</h3>
+        <p>
+          CDN = mạng server (edge POP — Point of Presence) phân tán toàn cầu, cache content gần user. Request đi đến edge gần nhất thay vì origin xa.
+        </p>
+
+        <div class="ascii">              ╔══════════════════════╗
+              ║  Origin (US-East)    ║
+              ╚══════════════════════╝
+                       ▲
+                       │ Cache miss (rare)
+       ┌───────────────┼───────────────┐
+       │               │               │
+  ┌────▼─────┐  ┌──────▼──────┐  ┌────▼─────┐
+  │ POP US   │  │ POP EU      │  │ POP APAC │  ← edge cache
+  └──────────┘  └─────────────┘  └──────────┘
+       ▲              ▲                 ▲
+       │              │                 │
+   US user        EU user          APAC user</div>
+
+        <h3>1.2. Lợi ích</h3>
+        <ul>
+          <li><strong>Latency thấp</strong> — user APAC hit POP Singapore (~30ms) thay vì origin Virginia (~250ms).</li>
+          <li><strong>Giảm tải origin</strong> — 90%+ traffic phục vụ từ edge cache.</li>
+          <li><strong>Bandwidth tiết kiệm</strong> — cache hit không qua network origin.</li>
+          <li><strong>DDoS protection</strong> — edge hấp thụ traffic spike.</li>
+          <li><strong>Geographic redundancy</strong> — 1 region down, edge khác phục vụ.</li>
+        </ul>
+
+        <h3>1.3. Cache control</h3>
+<pre><code class="language-http"># Static asset — cache lâu, immutable URL versioning
+Cache-Control: public, max-age=31536000, immutable
+# /static/app.v123.js — đổi nội dung = đổi URL
+
+# HTML — cache ngắn vì có thể đổi
+Cache-Control: public, max-age=300, must-revalidate
+
+# Personalized API response — không cache hoặc private
+Cache-Control: private, max-age=60
+# private = chỉ browser cache, không CDN/proxy
+
+# Sensitive — không cache
+Cache-Control: no-store</code></pre>
+
+        <h3>1.4. CDN tools</h3>
+        <ul>
+          <li><strong>Cloudflare</strong> — phổ biến, free tier mạnh, edge compute (Workers).</li>
+          <li><strong>AWS CloudFront</strong> — tích hợp AWS ecosystem.</li>
+          <li><strong>Fastly</strong> — programmable VCL, low TTFB.</li>
+          <li><strong>Akamai</strong> — enterprise, lâu đời.</li>
+          <li><strong>Bunny.net</strong> — affordable, performance tốt.</li>
+        </ul>
+
+        <h3>1.5. CDN cho dynamic content</h3>
+        <p>Truyền thống CDN cache static. Hiện đại có thể cache dynamic ngắn hạn:</p>
+
+        <ul>
+          <li><strong>Edge SWR</strong> (Cloudflare, Vercel) — stale-while-revalidate ở edge.</li>
+          <li><strong>Edge SSR</strong> — render trang ở edge (Cloudflare Workers, Vercel Edge Functions).</li>
+          <li><strong>API caching</strong> — GET response với cache-friendly header.</li>
+        </ul>
+
+        <h3>1.6. Cache invalidation</h3>
+<pre><code class="language-bash"># Cloudflare API:
+curl -X POST "https://api.cloudflare.com/client/v4/zones/&lt;id&gt;/purge_cache" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"files":["https://example.com/api/products"]}'
+
+# Hoặc purge by tag:
+curl -X POST ... -d '{"tags":["product-list"]}'</code></pre>
+
+        <p>Pattern: tag CDN cache với <code>Cache-Tag</code> header → bulk purge khi data đổi.</p>
+      </section>
+
+      <section id="rate-limit">
+        <h2>2. Rate Limiting</h2>
+
+        <p>Giới hạn request từ 1 client để: tránh abuse, công bằng giữa user, bảo vệ backend.</p>
+
+        <h3>2.1. Bốn thuật toán</h3>
+
+        <h4>2.1.a. Fixed Window</h4>
+        <p>Đếm request trong window cố định (vd: mỗi phút). Reset mỗi window.</p>
+
+<pre><code class="language-typescript">// Window: 1 phút, max 100 req
+async function fixedWindow(userId: string) {
+  const window = Math.floor(Date.now() / 60_000);   // window key
+  const key = `rl:${userId}:${window}`;
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, 60);
+  if (count &gt; 100) throw new Error('Rate limit exceeded');
+}</code></pre>
+
+        <p><strong>Vấn đề</strong>: "burst boundary" — user request 100 lần ở giây 59 + 100 lần ở giây 1 phút sau = 200 request trong 2 giây.</p>
+
+        <h4>2.1.b. Sliding Window Log</h4>
+        <p>Lưu timestamp mọi request. Đếm request trong N giây gần nhất.</p>
+
+<pre><code class="language-typescript">async function slidingLog(userId: string, limit = 100, windowMs = 60_000) {
+  const key = `rl:${userId}`;
+  const now = Date.now();
+  const cutoff = now - windowMs;
+
+  // Xóa entry cũ
+  await redis.zremrangebyscore(key, '-inf', cutoff);
+
+  // Đếm trong window
+  const count = await redis.zcard(key);
+  if (count &gt;= limit) throw new Error('Rate limit exceeded');
+
+  // Add request mới
+  await redis.zadd(key, now, `${now}-${Math.random()}`);
+  await redis.expire(key, Math.ceil(windowMs / 1000));
+}</code></pre>
+
+        <p>(+) Chính xác. (−) Tốn memory (lưu mọi timestamp).</p>
+
+        <h4>2.1.c. Sliding Window Counter</h4>
+        <p>Compromise giữa fixed (rẻ) và log (chính xác). Weight 2 window kế nhau:</p>
+
+<pre><code class="language-typescript">// Tại giây 30 của window hiện tại:
+// rate = (count_previous_window * 30/60) + count_current_window
+// Smooth giữa 2 window cố định</code></pre>
+
+        <h4>2.1.d. Token Bucket</h4>
+        <p>Mỗi user có "bucket" với N token. Mỗi request tốn 1 token. Token tự refill rate R/s. Cho phép burst đến N nhưng sustained rate = R.</p>
+
+<pre><code class="language-typescript">async function tokenBucket(userId: string, capacity = 100, refillRatePerSec = 10) {
+  const key = `tb:${userId}`;
+  const now = Date.now();
+
+  // Lua script atomic — Redis EVAL
+  const lua = `
+    local key = KEYS[1]
+    local cap = tonumber(ARGV[1])
+    local rate = tonumber(ARGV[2])
+    local now = tonumber(ARGV[3])
+
+    local data = redis.call('HMGET', key, 'tokens', 'last')
+    local tokens = tonumber(data[1]) or cap
+    local last = tonumber(data[2]) or now
+
+    local elapsed = math.max(0, now - last) / 1000
+    tokens = math.min(cap, tokens + elapsed * rate)
+
+    if tokens &lt; 1 then return 0 end
+    tokens = tokens - 1
+
+    redis.call('HMSET', key, 'tokens', tokens, 'last', now)
+    redis.call('EXPIRE', key, 3600)
+    return 1
+  `;
+
+  const allowed = await redis.eval(lua, 1, key, capacity, refillRatePerSec, now);
+  if (!allowed) throw new Error('Rate limit exceeded');
+}</code></pre>
+
+        <p>Token Bucket là phổ biến nhất production. AWS, Stripe đều dùng.</p>
+
+        <h4>2.1.e. Leaky Bucket</h4>
+        <p>Queue với fixed leak rate. Request quá fast → queue đầy → reject. Smooth rate output.</p>
+
+        <p>Tương tự token bucket nhưng output rate cố định — không cho burst.</p>
+
+        <h3>2.2. So sánh</h3>
+
+        <table>
+          <thead><tr><th>Algorithm</th><th>Memory</th><th>Burst</th><th>Use case</th></tr></thead>
+          <tbody>
+            <tr><td>Fixed Window</td><td>Rất ít</td><td>Có boundary issue</td><td>Đơn giản, OK cho rough limit</td></tr>
+            <tr><td>Sliding Log</td><td>Cao (mọi timestamp)</td><td>Smooth</td><td>Cần chính xác cao</td></tr>
+            <tr><td>Sliding Counter</td><td>Ít</td><td>Smooth approximation</td><td>Production sweet spot</td></tr>
+            <tr><td>Token Bucket</td><td>Ít</td><td>Cho burst đến capacity</td><td>API rate limit (Stripe, AWS)</td></tr>
+            <tr><td>Leaky Bucket</td><td>Ít</td><td>Smooth output rate</td><td>Network shaping, queue</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.3. Distributed rate limiting</h3>
+        <p>Multiple instance share state qua Redis. Atomic operation (INCR, Lua script) đảm bảo accuracy.</p>
+
+        <p>Vấn đề: Redis hot key cho heavy user. Giải:</p>
+        <ul>
+          <li>Shard rate limit theo userId.</li>
+          <li>Sample-based (chỉ count 1/10 request, multiply).</li>
+          <li>Two-tier: per-instance counter + sync với Redis định kỳ.</li>
+        </ul>
+
+        <h3>2.4. HTTP response</h3>
+<pre><code class="language-http">HTTP/1.1 429 Too Many Requests
+Retry-After: 60                # client retry sau 60s
+X-RateLimit-Limit: 100          # max
+X-RateLimit-Remaining: 0        # còn lại
+X-RateLimit-Reset: 1709337600   # Unix timestamp khi reset</code></pre>
+
+        <h3>2.5. Rate limit theo gì?</h3>
+        <ul>
+          <li><strong>IP address</strong> — cho anonymous request. Cẩn thận NAT (nhiều user share IP).</li>
+          <li><strong>API key / userId</strong> — cho authenticated.</li>
+          <li><strong>Endpoint-specific</strong> — login khắt khe hơn search.</li>
+          <li><strong>Tier-based</strong> — free user 100/h, pro user 10000/h.</li>
+        </ul>
+      </section>
+
+      <section id="gateway">
+        <h2>3. API Gateway</h2>
+
+        <h3>3.1. Vai trò</h3>
+        <p>Single entry point cho tất cả API. Đứng giữa client và microservice.</p>
+
+        <div class="ascii">  Client ──► API Gateway ──► User Service
+                       │
+                       ├──► Order Service
+                       │
+                       ├──► Search Service
+                       │
+                       └──► Notification Service</div>
+
+        <p>Gateway xử lý "cross-cutting concerns":</p>
+        <ul>
+          <li><strong>Authn / Authz</strong> — verify JWT, OAuth.</li>
+          <li><strong>Rate limiting</strong>.</li>
+          <li><strong>Request/Response transformation</strong> — REST ↔ gRPC.</li>
+          <li><strong>Routing</strong> — path → service.</li>
+          <li><strong>Caching</strong>.</li>
+          <li><strong>Logging / Metrics</strong>.</li>
+          <li><strong>Versioning</strong> — /v1/, /v2/.</li>
+          <li><strong>Aggregation</strong> — 1 client request → query nhiều service, gộp response.</li>
+        </ul>
+
+        <h3>3.2. BFF — Backend For Frontend</h3>
+        <p>Pattern: 1 gateway riêng cho mỗi client type (web, mobile, public API). BFF gọi nhiều microservice và assemble response phù hợp với UI.</p>
+
+<pre><code>     Web ──────────► BFF Web ──────► User svc
+                                  └─► Product svc
+                                  └─► Cart svc
+
+     Mobile ───────► BFF Mobile ──► (same services, optimized payload)
+
+     3rd-party ────► Public API GW ─► (rate-limited, restricted)</code></pre>
+
+        <h3>3.3. Tools</h3>
+        <ul>
+          <li><strong>Kong</strong> — open-source, plugin system phong phú.</li>
+          <li><strong>AWS API Gateway</strong> — managed, tích hợp Lambda.</li>
+          <li><strong>Apigee</strong> (Google) — enterprise.</li>
+          <li><strong>Tyk</strong> — open-source.</li>
+          <li><strong>Envoy</strong> + custom config — flexible.</li>
+          <li><strong>nginx + Lua / OpenResty</strong> — DIY.</li>
+        </ul>
+
+        <h3>3.4. Anti-pattern: God Gateway</h3>
+        <p>Gateway tích hợp business logic → biến thành monolith trá hình. Quy tắc: gateway chỉ làm <em>infrastructure concern</em> — auth, rate limit, route. Business logic ở service.</p>
+      </section>
+
+      <section id="ddos">
+        <h2>4. DDoS Protection</h2>
+
+        <p>Distributed Denial-of-Service — attacker phối hợp nhiều máy gửi flood traffic làm app sập.</p>
+
+        <h3>4.1. Phân loại</h3>
+        <ul>
+          <li><strong>Volumetric (L3/L4)</strong> — flood bandwidth. UDP flood, ICMP flood, amplification (DNS, NTP).</li>
+          <li><strong>Protocol (L4)</strong> — exploit protocol. SYN flood, Ping of Death.</li>
+          <li><strong>Application (L7)</strong> — request hợp lệ nhưng đắt (heavy SQL, scrape data). Khó phát hiện hơn.</li>
+        </ul>
+
+        <h3>4.2. Defense layers</h3>
+
+        <ol class="steps">
+          <li><strong>CDN edge absorption</strong> — Cloudflare, AWS Shield. Edge có hàng Tbps capacity, hấp thụ volumetric attack.</li>
+          <li><strong>Rate limiting</strong> — per IP, per session, per endpoint.</li>
+          <li><strong>Geographic filtering</strong> — block country bạn không phục vụ.</li>
+          <li><strong>Challenge</strong> — CAPTCHA, JS challenge khi suspect bot.</li>
+          <li><strong>Anycast</strong> — distribute attack tự nhiên qua nhiều POP.</li>
+          <li><strong>Anomaly detection</strong> — ML model phát hiện pattern bất thường.</li>
+          <li><strong>Capacity buffer</strong> — autoscale up khi traffic tăng.</li>
+        </ol>
+
+        <h3>4.3. AWS Shield Standard / Advanced</h3>
+        <ul>
+          <li>Standard: free, tự động, bảo vệ L3/L4.</li>
+          <li>Advanced: $3000/month, bảo vệ L7, hỗ trợ chuyên gia, refund khi attack.</li>
+        </ul>
+
+        <h3>4.4. Phòng tránh ở app code</h3>
+        <ul>
+          <li>Pagination max size — không cho query 1M record/request.</li>
+          <li>Query timeout (statement_timeout Postgres).</li>
+          <li>Connection pool max — không vô hạn.</li>
+          <li>Idempotency check.</li>
+          <li>Negative cache — tránh ai đó request id không tồn tại spam DB.</li>
+        </ul>
+      </section>
+
+      <section id="waf">
+        <h2>5. WAF — Web Application Firewall</h2>
+
+        <p>Filter HTTP request theo rule. Chặn request độc hại trước khi đến app.</p>
+
+        <h3>5.1. Bảo vệ những gì</h3>
+        <ul>
+          <li><strong>SQL Injection</strong> — pattern <code>' OR 1=1</code>, <code>UNION SELECT</code>.</li>
+          <li><strong>XSS</strong> — <code>&lt;script&gt;</code>, <code>onerror=</code>.</li>
+          <li><strong>CSRF</strong> — referer check.</li>
+          <li><strong>Path traversal</strong> — <code>../../../etc/passwd</code>.</li>
+          <li><strong>Bot</strong> — User-Agent suspicious, signature.</li>
+          <li><strong>Account takeover</strong> — credential stuffing.</li>
+        </ul>
+
+        <h3>5.2. OWASP Core Rule Set</h3>
+        <p>Bộ rule open-source phổ biến. Tools (ModSecurity, Cloudflare WAF, AWS WAF) đều support.</p>
+
+        <h3>5.3. Trade-off</h3>
+        <ul>
+          <li>(+) Block known attack pattern tự động.</li>
+          <li>(−) False positive — block request hợp lệ.</li>
+          <li>(−) Chỉ chặn known pattern; zero-day vẫn lọt.</li>
+        </ul>
+
+        <p>Quy tắc: WAF là 1 layer; không phải solution duy nhất. Combine với input validation, prepared statement (cho SQLi), CSP (cho XSS).</p>
+      </section>
+
+      <section id="edge-auth">
+        <h2>6. Edge Authentication</h2>
+
+        <p>Verify auth token ở edge thay vì để mỗi service. Tiết kiệm latency, centralize auth logic.</p>
+
+        <h3>6.1. JWT validation at edge</h3>
+        <p>Stateless: edge có public key, verify JWT signature. Không cần round-trip về central auth service.</p>
+
+<pre><code class="language-typescript">// Cloudflare Worker / Lambda@Edge
+export default {
+  async fetch(request: Request) {
+    const auth = request.headers.get('Authorization');
+    if (!auth?.startsWith('Bearer ')) return new Response('401', { status: 401 });
+
+    const token = auth.slice(7);
+    try {
+      const payload = await jwtVerify(token, PUBLIC_KEY);
+      // Forward request với userId trong header
+      const newReq = new Request(request);
+      newReq.headers.set('X-User-Id', payload.sub);
+      return fetch(newReq);
+    } catch {
+      return new Response('401', { status: 401 });
+    }
+  },
+};</code></pre>
+
+        <h3>6.2. Trade-off</h3>
+        <ul>
+          <li>(+) Latency thấp — verify ở edge gần user.</li>
+          <li>(+) Backend service không cần verify lại (trust X-User-Id header từ edge).</li>
+          <li>(−) Stateless JWT không thể "logout immediate" — phải đợi expire.</li>
+          <li>(−) JWT lớn hơn session ID nhiều → bandwidth.</li>
+          <li>(−) Compromise key = compromise toàn hệ.</li>
+        </ul>
+
+        <p>Pattern thực dụng: Short-lived JWT (15 phút) + refresh token (lâu hơn, có thể revoke ở DB).</p>
+
+        <h3>6.3. mTLS giữa service</h3>
+        <p>Mutual TLS — client và server đều có cert. Service Mesh (Istio, Linkerd) handle tự động qua sidecar.</p>
+
+        <p>Lợi: zero-trust network — kể cả attacker đã vào internal network, không gọi được service mà không có cert.</p>
+      </section>
+
+      <section id="secrets">
+        <h2>7. Secret Management</h2>
+
+        <p>Database password, API key, encryption key — KHÔNG hardcode trong code, KHÔNG commit git.</p>
+
+        <h3>7.1. Anti-patterns</h3>
+        <ul>
+          <li>Secret trong git repo (kể cả .env không gitignore).</li>
+          <li>Secret trong Dockerfile.</li>
+          <li>Secret trong Slack message / email.</li>
+          <li>Secret trong log file.</li>
+          <li>Cùng secret cho dev/staging/prod.</li>
+        </ul>
+
+        <h3>7.2. Tools</h3>
+        <ul>
+          <li><strong>HashiCorp Vault</strong> — open-source, feature đầy đủ, dynamic secrets.</li>
+          <li><strong>AWS Secrets Manager / Parameter Store</strong> — managed, tích hợp IAM.</li>
+          <li><strong>GCP Secret Manager</strong>.</li>
+          <li><strong>Azure Key Vault</strong>.</li>
+          <li><strong>Doppler, Infisical</strong> — SaaS, simpler.</li>
+          <li><strong>Kubernetes Secrets</strong> — base64 (NOT encryption!), thường dùng with KMS.</li>
+        </ul>
+
+        <h3>7.3. Best practices</h3>
+        <ul>
+          <li><strong>Rotation</strong> — đổi secret định kỳ (90 ngày). Tools support automated rotation.</li>
+          <li><strong>Least privilege</strong> — service chỉ access secret cần thiết.</li>
+          <li><strong>Audit log</strong> — mọi access đến secret được log.</li>
+          <li><strong>Encryption at rest</strong> — secret luôn encrypted khi lưu.</li>
+          <li><strong>Encryption in transit</strong> — TLS giữa app và secret store.</li>
+          <li><strong>Short-lived</strong> — dynamic secrets (Vault sinh password 1h cho DB).</li>
+        </ul>
+
+        <h3>7.4. Detect leak</h3>
+        <ul>
+          <li><strong>git-secrets</strong>, <strong>truffleHog</strong> — pre-commit hook scan secret.</li>
+          <li><strong>GitHub Secret Scanning</strong> — auto detect commit có pattern API key.</li>
+          <li><strong>Snyk</strong>, <strong>SonarQube</strong> — CI scan.</li>
+        </ul>
+
+        <p>Khi secret leak: <strong>rotate immediate</strong>, không "thôi để cho qua". Attacker monitor public repo.</p>
+      </section>
+
+      <section id="observability">
+        <h2>8. Observability at Scale</h2>
+
+        <p>Đã đề cập tracing ở Ch6. Đây tổng hợp 3 pillars + best practice ở scale.</p>
+
+        <h3>8.1. Three pillars</h3>
+        <ul>
+          <li><strong>Logs</strong> — text events, structured (JSON). Tools: ELK, Loki, Splunk, Datadog Logs.</li>
+          <li><strong>Metrics</strong> — numeric time-series. Tools: Prometheus, InfluxDB, Datadog, Grafana.</li>
+          <li><strong>Traces</strong> — request path. Tools: Jaeger, Tempo, Honeycomb, Datadog APM.</li>
+        </ul>
+
+        <h3>8.2. Cost control</h3>
+        <p>Logs ở scale tốn nhiều: 1M req/day × 1KB/req = 1GB/day, nhân 30 service. Đắt khi dùng SaaS.</p>
+
+        <p>Strategies:</p>
+        <ul>
+          <li><strong>Log levels</strong> — INFO/WARN/ERROR ở prod; DEBUG chỉ khi cần.</li>
+          <li><strong>Sampling</strong> — log 1% successful + 100% errors.</li>
+          <li><strong>Retention tier</strong> — hot 7 ngày, cold 90 ngày, archive 1 năm.</li>
+          <li><strong>Self-host</strong> — Loki/Grafana cho cost-conscious team.</li>
+          <li><strong>Cardinality control</strong> — metric label phải bounded (KHÔNG put userId làm label).</li>
+        </ul>
+
+        <h3>8.3. Structured logging</h3>
+<pre><code class="language-typescript">// ❌ Plain text
+logger.info(`User ${userId} created order ${orderId}`);
+
+// ✓ Structured JSON
+logger.info('order.created', {
+  user_id: userId,
+  order_id: orderId,
+  amount: order.total,
+  trace_id: ctx.traceId,
+});</code></pre>
+
+        <p>Lợi: queryable. <code>{level=error AND trace_id=xxx}</code>. Faceted search.</p>
+
+        <h3>8.4. Correlation ID</h3>
+        <p>Mỗi request có unique ID propagate qua mọi service. Log mọi service kèm ID này → search 1 request flow.</p>
+
+<pre><code class="language-typescript">app.use((req, res, next) =&gt; {
+  req.traceId = req.header('X-Trace-Id') || crypto.randomUUID();
+  res.setHeader('X-Trace-Id', req.traceId);
+  next();
+});
+
+// Mọi log:
+logger.info('event', { traceId: req.traceId, ... });</code></pre>
+
+        <p>Tốt nhất: tích hợp với OpenTelemetry → trace_id tự động trong log.</p>
+
+        <h3>8.5. Metrics quan trọng — Golden Signals (Google SRE)</h3>
+        <ol>
+          <li><strong>Latency</strong> — P50, P95, P99 (cả success và error).</li>
+          <li><strong>Traffic</strong> — request/s.</li>
+          <li><strong>Errors</strong> — rate of 5xx, 4xx.</li>
+          <li><strong>Saturation</strong> — CPU, memory, disk, queue depth.</li>
+        </ol>
+
+        <h3>8.6. Alerting</h3>
+        <p>Alert based on SLO violation, không noise:</p>
+
+        <ul>
+          <li>Error rate &gt; 1% trong 5 phút → page on-call.</li>
+          <li>P99 &gt; 1s trong 10 phút → warning.</li>
+          <li>Disk &gt; 80% → warning.</li>
+          <li>Disk &gt; 95% → page.</li>
+          <li>Replication lag &gt; 30s → warning.</li>
+        </ul>
+
+        <p>Alert fatigue là enemy. 1 alert &lt;-&gt; 1 actionable problem.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>9. Bài tập</h2>
+
+        <ol>
+          <li>Setup Cloudflare cho 1 static site: cache control header, Cache-Tag, purge by tag.</li>
+
+          <li>Implement 4 thuật toán rate limiting trong Node.js + Redis. Đo memory, accuracy, performance khác biệt.</li>
+
+          <li>Token Bucket atomic với Lua script: chi tiết. Test với concurrent request đồng thời, đảm bảo không over-allow.</li>
+
+          <li>Setup Kong API Gateway local: route /users/* → user-service, /orders/* → order-service. Thêm plugin: rate limit, JWT auth, request logging.</li>
+
+          <li>Phòng thủ cơ bản:
+            <ul>
+              <li>Setup CSP cho 1 web app (đã học Networking Ch10).</li>
+              <li>Add rate limit cho /login (5 attempt/15 phút per IP).</li>
+              <li>JWT verify ở edge với Cloudflare Worker.</li>
+            </ul>
+          </li>
+
+          <li>Secret management: cài Vault local, store DB password, app fetch dynamic secret. Test rotation.</li>
+
+          <li>Setup Prometheus + Grafana cho 1 service Node.js. Expose 4 golden signals. Tạo dashboard + alert khi error rate &gt; 1%.</li>
+
+          <li>OpenTelemetry: integrate vào 2 service Node.js. Trace request cross-service. Visualize trên Jaeger.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>10. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 7</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">CDN giải vấn đề chính:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Encryption</li>
+              <li class="quiz-option">Database scaling</li>
+              <li class="quiz-option">Latency cho user xa origin + giảm tải origin + DDoS absorption + bandwidth tiết kiệm</li>
+              <li class="quiz-option">Compute</li>
+            </ul>
+            <div class="quiz-explain">CDN = mạng edge cache toàn cầu. User APAC hit POP Singapore (~30ms) thay origin Virginia (~250ms). 90%+ traffic phục vụ từ edge → origin rảnh. Edge có Tbps capacity hấp thụ DDoS. Cloudflare/CloudFront/Fastly là common.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Token Bucket rate limiter:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Đếm fixed window</li>
+              <li class="quiz-option">Lưu mọi timestamp</li>
+              <li class="quiz-option">Smooth output rate cố định</li>
+              <li class="quiz-option">Bucket có N token, mỗi request tốn 1 token, refill rate R/s; cho phép burst đến N nhưng sustained = R</li>
+            </ul>
+            <div class="quiz-explain">Phổ biến nhất production. AWS, Stripe đều dùng. User offline lâu → bucket đầy → cho burst trở lại. Rate sustained không đổi. Implement atomic qua Redis Lua. Token Bucket = (capacity, refill_rate). Leaky Bucket khác: output rate cố định, không cho burst.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Fixed Window rate limiting có vấn đề "burst boundary":</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">User có thể request 100 lần ở giây 59 + 100 lần ở giây 1 phút sau = 200 trong 2 giây</li>
+              <li class="quiz-option">Tốn nhiều memory</li>
+              <li class="quiz-option">Slow</li>
+              <li class="quiz-option">Không atomic</li>
+            </ul>
+            <div class="quiz-explain">Window cố định reset mỗi N giây. Ở ranh giới window, có thể double rate. Sửa: Sliding Window (Log hoặc Counter), Token Bucket. Sliding Counter là sweet spot — chính xác như Sliding Log nhưng tốn ít memory.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">API Gateway xử lý cross-cutting concerns:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Business logic</li>
+              <li class="quiz-option">Auth, rate limit, route, logging, transformation, caching — KHÔNG business logic</li>
+              <li class="quiz-option">Database query</li>
+              <li class="quiz-option">UI rendering</li>
+            </ul>
+            <div class="quiz-explain">Gateway là infrastructure layer. Khi gateway tích business logic → "God Gateway" anti-pattern. Quy tắc: gateway làm "đường" (auth, route, rate, log); service làm "nhà" (business logic). BFF cũng tương tự nhưng riêng cho mỗi client type.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">DDoS L7 (application layer) khó phát hiện hơn L3/L4 vì:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cần thêm hardware</li>
+              <li class="quiz-option">Network limit</li>
+              <li class="quiz-option">Request hợp lệ về syntax (đúng HTTP, đúng API), chỉ "đắt" khi xử lý — khó phân biệt với traffic thật</li>
+              <li class="quiz-option">CDN không protect</li>
+            </ul>
+            <div class="quiz-explain">L3/L4 attack có pattern rõ (SYN flood, UDP amplification) — CDN/firewall block dễ. L7: attacker gửi request hợp lệ vào endpoint đắt (search complex query). Detect cần ML/anomaly + rate limit khôn ngoan + capacity buffer.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">JWT validation at edge tradeoff chính:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Slow</li>
+              <li class="quiz-option">Tốn RAM</li>
+              <li class="quiz-option">Không secure</li>
+              <li class="quiz-option">(+) Latency thấp, không cần round-trip auth service. (−) Stateless → không "logout immediate", phải đợi expire — pattern: short-lived JWT (15min) + refresh token có thể revoke</li>
+            </ul>
+            <div class="quiz-explain">JWT tự chứa info, edge có public key verify. Backend trust X-User-Id từ edge. Nhược: revoke khó. Pattern thực dụng: access token 15min stateless + refresh token với DB lookup (revoke được). Cloudflare Worker, Lambda@Edge phổ biến cho pattern này.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Secret management best practice:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Lưu trong Vault/Secrets Manager, rotation định kỳ, least privilege, audit log; KHÔNG hardcode/commit/log</li>
+              <li class="quiz-option">.env file commit git</li>
+              <li class="quiz-option">Secret giống nhau dev/prod</li>
+              <li class="quiz-option">Cùng app code chứa</li>
+            </ul>
+            <div class="quiz-explain">Mỗi env (dev/staging/prod) có secret riêng. Vault/AWS Secrets Manager/Doppler quản lý. Tools rotation tự động. Audit log mọi access. Detect leak qua git-secrets/truffleHog. Khi leak: ROTATE NGAY, không "thôi cho qua".</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Google SRE "Four Golden Signals" cho monitoring:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">CPU, RAM, Disk, Network</li>
+              <li class="quiz-option">Latency, Traffic, Errors, Saturation — base cho alert SLO</li>
+              <li class="quiz-option">QPS, BPS, IPS, FPS</li>
+              <li class="quiz-option">Health, Memory, Cache, Threads</li>
+            </ul>
+            <div class="quiz-explain">SRE Book của Google. Latency P50/P95/P99 (cả success/error). Traffic = req/s. Errors = rate 5xx/4xx. Saturation = CPU/mem/disk/queue. Đủ để alert SLO violation. Alert ít noise: 1 alert ↔ 1 actionable problem; tránh alert fatigue.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 7. Tiếp theo: <a href="chuong8.html"><strong>Chương 8 — Design Case Studies →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>System Design · Chương 7 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

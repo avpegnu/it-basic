@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2: File operations &amp; Permissions — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong1.html">← Chương 1</a></li>
+        <li><a href="chuong2.html" class="active">Chương 2</a></li>
+        <li><a href="chuong3.html">Chương 3 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 02 — File operations &amp; Permissions</h1>
+        <p>
+          Tạo, copy, di chuyển, xóa file an toàn. Hiểu mô hình quyền truy cập của Unix —
+          công cụ phân biệt giữa <em>"chỉ đọc được"</em>, <em>"chạy được"</em>, và <em>"sửa được"</em>.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. Tạo file &amp; folder</h2>
+
+      <h3><code>mkdir</code> — make directory</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">mkdir</span> notes              <span class="comment"># tạo folder "notes"</span>
+<span class="prompt">$ </span><span class="cmd">mkdir</span> a b c              <span class="comment"># tạo nhiều folder cùng lúc</span>
+<span class="prompt">$ </span><span class="cmd">mkdir</span> <span class="flag">-p</span> proj/src/utils  <span class="comment"># -p: tạo cả parent nếu chưa có</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Không có <code>-p</code> sẽ lỗi</div>
+        <code>mkdir proj/src/utils</code> chỉ chạy được nếu <code>proj/src</code> đã tồn tại.
+        Cờ <code>-p</code> bảo: "tạo hết các parent còn thiếu, không báo lỗi nếu đã có".
+      </div>
+
+      <h3><code>touch</code> — tạo file rỗng / cập nhật mtime</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">touch</span> README.md         <span class="comment"># tạo file rỗng</span>
+<span class="prompt">$ </span><span class="cmd">touch</span> a.txt b.txt c.txt <span class="comment"># nhiều file</span>
+<span class="prompt">$ </span><span class="cmd">touch</span> README.md         <span class="comment"># nếu đã có: chỉ update modified time</span></code></pre>
+
+      <p class="text-dim">Trick hay: <code>touch</code> tạo file rỗng để placeholder, hoặc bump mtime để build system rebuild lại file đó.</p>
+    </section>
+
+    <section>
+      <h2>2. Copy &amp; di chuyển</h2>
+
+      <h3><code>cp</code> — copy</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cp</span> a.txt b.txt           <span class="comment"># copy file → file (b.txt là bản sao của a.txt)</span>
+<span class="prompt">$ </span><span class="cmd">cp</span> a.txt notes/          <span class="comment"># copy vào folder notes/</span>
+<span class="prompt">$ </span><span class="cmd">cp</span> <span class="flag">-r</span> notes backup        <span class="comment"># -r: copy đệ quy (cho folder)</span>
+<span class="prompt">$ </span><span class="cmd">cp</span> <span class="flag">-i</span> a.txt b.txt        <span class="comment"># -i: hỏi trước khi ghi đè (an toàn)</span>
+<span class="prompt">$ </span><span class="cmd">cp</span> <span class="flag">-v</span> a.txt b.txt        <span class="comment"># -v: verbose, in ra việc đang làm</span></code></pre>
+
+      <h3><code>mv</code> — move <em>HOẶC</em> rename</h3>
+      <p>Một mánh hay biết: trên Unix <strong>không có lệnh "rename" riêng</strong>. <code>mv</code> đảm nhiệm cả hai:</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">mv</span> old.txt new.txt        <span class="comment"># rename: cùng folder, khác tên</span>
+<span class="prompt">$ </span><span class="cmd">mv</span> file.txt ~/Documents/  <span class="comment"># move: khác folder</span>
+<span class="prompt">$ </span><span class="cmd">mv</span> a.txt b.txt notes/     <span class="comment"># nhiều file → 1 folder</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Trick rename hàng loạt</div>
+        Để đổi đuôi nhiều file (vd <code>.txt</code> → <code>.md</code>), kết hợp với <code>for</code> loop — bạn sẽ học chi tiết ở Chương 7.
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Xóa — phải cẩn thận</h2>
+
+      <h3><code>rm</code> — remove (KHÔNG có thùng rác!)</h3>
+      <div class="callout danger">
+        <div class="callout-title">🛑 Quan trọng nhất chương này</div>
+        <code>rm</code> không đưa file vào Trash. <strong>Một khi xóa là mất luôn</strong>, không có Cmd+Z.
+        Hãy nhớ điều này trước khi gõ enter.
+      </div>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">rm</span> a.txt              <span class="comment"># xóa 1 file</span>
+<span class="prompt">$ </span><span class="cmd">rm</span> a.txt b.txt c.txt  <span class="comment"># xóa nhiều file</span>
+<span class="prompt">$ </span><span class="cmd">rm</span> <span class="flag">-r</span> notes            <span class="comment"># -r: xóa folder và mọi thứ bên trong</span>
+<span class="prompt">$ </span><span class="cmd">rm</span> <span class="flag">-i</span> a.txt           <span class="comment"># -i: hỏi xác nhận từng file</span>
+<span class="prompt">$ </span><span class="cmd">rm</span> <span class="flag">-rf</span> /tmp/build      <span class="comment"># -f: force, không hỏi gì hết — RẤT NGUY HIỂM</span></code></pre>
+
+      <h3><code>rmdir</code> — chỉ xóa folder RỖNG</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">rmdir</span> empty-folder    <span class="comment"># OK</span>
+<span class="prompt">$ </span><span class="cmd">rmdir</span> notes           <span class="comment"># Lỗi nếu notes/ có file bên trong</span></code></pre>
+      <p class="text-dim">Tại sao tồn tại? Vì <code>rmdir</code> an toàn hơn <code>rm -r</code> — nó không thể xóa nhầm file quan trọng.</p>
+
+      <div class="callout danger">
+        <div class="callout-title">☠️ Lệnh KHÔNG BAO GIỜ được gõ</div>
+        <pre style="margin-top:8px"><code>rm -rf /        <span class="comment"># xóa toàn bộ máy</span>
+rm -rf /*       <span class="comment"># tương đương</span>
+rm -rf ~        <span class="comment"># xóa toàn bộ home directory</span>
+rm -rf "$VAR"   <span class="comment"># nếu $VAR chưa set → thành rm -rf "" → vẫn nguy hiểm</span></code></pre>
+        Đừng cười — có cả engineer dày dạn từng vô tình chạy <code>rm -rf /</code> trên server production.
+        Luôn <em>nhìn lại lệnh</em> trước khi enter, đặc biệt khi có <code>-rf</code>.
+      </div>
+
+      <h3>Cách an toàn hơn</h3>
+      <ul>
+        <li>Dùng <code>rm -i</code> để được hỏi xác nhận — chậm hơn nhưng an toàn.</li>
+        <li>Cài <code>brew install trash</code> trên macOS — gõ <code>trash file</code> sẽ chuyển vào Trash thay vì xóa hẳn.</li>
+        <li>Tạo alias trong <code>~/.zshrc</code>: <code>alias rm='rm -i'</code></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. Wildcards (glob pattern)</h2>
+      <p>Khi muốn áp dụng lệnh cho <strong>nhiều file cùng lúc</strong> theo pattern, dùng wildcard. Shell sẽ <em>expand</em> chúng ra danh sách file thật trước khi gọi lệnh.</p>
+
+      <table>
+        <thead><tr><th>Pattern</th><th>Khớp với</th><th>Ví dụ</th></tr></thead>
+        <tbody>
+          <tr><td><code>*</code></td><td>Bất kỳ chuỗi nào (kể cả rỗng)</td><td><code>*.txt</code> → tất cả file .txt</td></tr>
+          <tr><td><code>?</code></td><td>Đúng 1 ký tự</td><td><code>file?.txt</code> → file1.txt, fileA.txt</td></tr>
+          <tr><td><code>[abc]</code></td><td>Một trong các ký tự</td><td><code>[abc].txt</code> → a.txt, b.txt, c.txt</td></tr>
+          <tr><td><code>[a-z]</code></td><td>Khoảng ký tự</td><td><code>file[0-9].txt</code> → file0…file9</td></tr>
+          <tr><td><code>{a,b,c}</code></td><td>Brace expansion</td><td><code>{src,test}/main.js</code></td></tr>
+        </tbody>
+      </table>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> *.txt                <span class="comment"># mọi file .txt trong folder hiện tại</span>
+<span class="prompt">$ </span><span class="cmd">rm</span> tmp_*                <span class="comment"># xóa mọi file bắt đầu bằng tmp_</span>
+<span class="prompt">$ </span><span class="cmd">cp</span> *.{js,ts} backup/    <span class="comment"># copy mọi .js và .ts</span>
+<span class="prompt">$ </span><span class="cmd">mv</span> img-?.png images/    <span class="comment"># img-1.png, img-2.png... vào images/</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Cẩn thận khi kết hợp với <code>rm</code></div>
+        <code>rm *</code> không xóa file ẩn nhưng xóa hết file thường. Trước khi <code>rm pattern</code>, gõ
+        <code>ls pattern</code> trước để xem pattern khớp đúng những file gì.
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Quyền truy cập (Permissions) — phần cốt lõi</h2>
+
+      <p>Chạy <code>ls -l</code> bạn sẽ thấy đầu mỗi dòng có 10 ký tự kỳ lạ:</p>
+      <pre><code><span class="output">-rw-r--r--  1 you  staff   42 May  8  README.md
+drwxr-xr-x  3 you  staff  128 May  8  notes</span></code></pre>
+
+      <h3>Đọc 10 ký tự</h3>
+      <pre><code> d  rwx  r-x  r-x
+ │   │    │    └── <span class="text-cyan">other (mọi user khác)</span>
+ │   │    └─────── <span class="text-cyan">group (nhóm của file)</span>
+ │   └──────────── <span class="text-cyan">user (chủ file)</span>
+ └──────────────── <span class="text-cyan">type</span>: d=dir, -=file, l=symlink</code></pre>
+
+      <h3>3 quyền cơ bản</h3>
+      <table>
+        <thead><tr><th>Ký tự</th><th>File</th><th>Folder</th></tr></thead>
+        <tbody>
+          <tr><td><code>r</code> (read)</td><td>Đọc nội dung</td><td>Liệt kê tên file bên trong</td></tr>
+          <tr><td><code>w</code> (write)</td><td>Sửa nội dung</td><td>Tạo/xóa/đổi tên file bên trong</td></tr>
+          <tr><td><code>x</code> (execute)</td><td>Chạy file (script/binary)</td><td><strong>Vào</strong> folder (cd)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Lưu ý quan trọng về folder</div>
+        <code>r</code> trên folder = <em>biết tên</em> file bên trong. <code>x</code> = <em>vào được</em> bên trong.
+        Có <code>r</code> mà không có <code>x</code>: <code>ls</code> thấy tên nhưng không <code>cd</code> được, không <code>cat</code> được.
+      </div>
+
+      <h3>Octal notation (cách phổ biến nhất)</h3>
+      <p>Mỗi nhóm 3 ký tự được mã hóa thành 1 chữ số 0-7:</p>
+      <table>
+        <thead><tr><th>Octal</th><th>Binary</th><th>Quyền</th></tr></thead>
+        <tbody>
+          <tr><td><code>7</code></td><td>111</td><td>rwx</td></tr>
+          <tr><td><code>6</code></td><td>110</td><td>rw-</td></tr>
+          <tr><td><code>5</code></td><td>101</td><td>r-x</td></tr>
+          <tr><td><code>4</code></td><td>100</td><td>r--</td></tr>
+          <tr><td><code>0</code></td><td>000</td><td>---</td></tr>
+        </tbody>
+      </table>
+
+      <p>Các giá trị thường gặp:</p>
+      <table>
+        <thead><tr><th>Octal</th><th>Ý nghĩa</th><th>Dùng cho</th></tr></thead>
+        <tbody>
+          <tr><td><code>755</code></td><td>rwxr-xr-x</td><td>Folder, script chạy được — owner toàn quyền, người khác đọc + chạy</td></tr>
+          <tr><td><code>644</code></td><td>rw-r--r--</td><td>File text bình thường — owner sửa được, người khác chỉ đọc</td></tr>
+          <tr><td><code>700</code></td><td>rwx------</td><td>Folder/file chỉ owner truy cập (vd: <code>~/.ssh</code>)</td></tr>
+          <tr><td><code>600</code></td><td>rw-------</td><td>File nhạy cảm — chỉ owner đọc/ghi (vd: <code>~/.ssh/id_rsa</code>)</td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>chmod</code> — change mode</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">chmod</span> 755 script.sh          <span class="comment"># octal</span>
+<span class="prompt">$ </span><span class="cmd">chmod</span> +x script.sh           <span class="comment"># symbolic: thêm execute cho mọi người</span>
+<span class="prompt">$ </span><span class="cmd">chmod</span> u+x script.sh          <span class="comment"># chỉ thêm execute cho user (owner)</span>
+<span class="prompt">$ </span><span class="cmd">chmod</span> go-w file.txt          <span class="comment"># bỏ write cho group và other</span>
+<span class="prompt">$ </span><span class="cmd">chmod</span> <span class="flag">-R</span> 755 my-project       <span class="comment"># đệ quy cho cả thư mục con</span></code></pre>
+
+      <p>Symbolic notation: <code>[ugoa][+-=][rwx]</code></p>
+      <ul>
+        <li><strong>Đối tượng:</strong> <code>u</code> = user, <code>g</code> = group, <code>o</code> = other, <code>a</code> = all</li>
+        <li><strong>Toán tử:</strong> <code>+</code> thêm, <code>-</code> bớt, <code>=</code> set chính xác</li>
+        <li><strong>Quyền:</strong> <code>r</code>, <code>w</code>, <code>x</code></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>6. Owner &amp; <code>sudo</code></h2>
+      <pre><code><span class="prompt">$ </span><span class="cmd">chown</span> alice file.txt         <span class="comment"># đổi owner thành alice</span>
+<span class="prompt">$ </span><span class="cmd">chown</span> alice:devs file.txt    <span class="comment"># owner=alice, group=devs</span>
+<span class="prompt">$ </span><span class="cmd">chgrp</span> devs file.txt          <span class="comment"># chỉ đổi group</span></code></pre>
+
+      <p>Đổi owner thường yêu cầu <code>sudo</code> (chạy với quyền root):</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sudo</span> chown root /etc/myconfig
+<span class="output">Password: ********</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Khi nào cần <code>sudo</code>?</div>
+        Khi đụng vào file <strong>không thuộc về bạn</strong>: thường là file trong <code>/etc</code>, <code>/usr</code>, <code>/var</code>, hoặc cài đặt package toàn hệ thống. <em>File trong <code>~/</code> của bạn không cần sudo</em>. Nếu bạn thấy mình đang gõ <code>sudo</code> ở home directory, có lẽ đã sai chỗ nào.
+      </div>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>Simulator đã hỗ trợ các lệnh mới — thử các kịch bản:</p>
+      <ol>
+        <li>Tạo cấu trúc: <code>mkdir -p workspace/notes</code></li>
+        <li>Tạo file: <code>touch workspace/notes/idea.txt</code></li>
+        <li>Vào kiểm tra: <code>cd workspace && ls -la</code></li>
+        <li>Copy: <code>cp notes/idea.txt notes/idea-backup.txt</code></li>
+        <li>Đổi tên: <code>mv notes/idea.txt notes/great-idea.txt</code></li>
+        <li>Xóa file: <code>rm notes/idea-backup.txt</code></li>
+        <li>Xóa folder: <code>cd .. && rm -r workspace</code></li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong2 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Trên Terminal thật, làm tuần tự (xong báo lại tôi check):</p>
+      <ol>
+        <li>Vào <code>~/Developer/IT Basic/CLI</code>. Tạo folder <code>practice</code>, vào trong.</li>
+        <li>Tạo cấu trúc: <code>practice/src/main.js</code> và <code>practice/src/utils.js</code> chỉ bằng <strong>2 lệnh</strong> (gợi ý: <code>mkdir -p</code> + <code>touch</code> với multiple args).</li>
+        <li>Trong <code>practice/</code>, tạo 5 file: <code>note1.txt</code>, <code>note2.txt</code>, ..., <code>note5.txt</code> bằng <strong>1 lệnh</strong> dùng brace expansion.</li>
+        <li>Copy toàn bộ folder <code>src/</code> sang <code>src-backup/</code>.</li>
+        <li>Đổi tên <code>main.js</code> thành <code>app.js</code>.</li>
+        <li>Tạo file <code>hello.sh</code> chứa nội dung <code>echo "Hi"</code> (gợi ý: <code>echo ... &gt; hello.sh</code> — sẽ học chi tiết ở Chương 3, giờ cứ thử).</li>
+        <li>Cấp quyền chạy cho <code>hello.sh</code>: <code>chmod +x hello.sh</code>. Chạy nó: <code>./hello.sh</code>.</li>
+        <li>Kiểm tra <code>ls -l</code> — quyền đã đổi thành gì?</li>
+        <li>Dọn dẹp: xóa toàn bộ <code>practice/</code>. Dùng <code>rm -r</code> hay <code>rm -rf</code>? Vì sao?</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ Tạo file/folder: <code>mkdir -p</code>, <code>touch</code></li>
+        <li>✅ Copy/move: <code>cp -r</code>, <code>mv</code> (cũng dùng để rename)</li>
+        <li>✅ Xóa cẩn thận: <code>rm</code> không có Trash; cảnh giác với <code>-rf</code></li>
+        <li>✅ Wildcards: <code>*</code>, <code>?</code>, <code>[abc]</code>, <code>{a,b}</code></li>
+        <li>✅ Hiểu <code>rwx</code> cho user/group/other; đọc được <code>ls -l</code></li>
+        <li>✅ Dùng <code>chmod 755</code> / <code>chmod +x</code> thành thạo</li>
+        <li>✅ Biết khi nào cần <code>sudo</code>, khi nào không</li>
+      </ul>
+      <p class="text-dim">Chương 3 chúng ta sẽ học <em>pipes &amp; redirects</em> — chỗ CLI thật sự thể hiện sức mạnh: ghép nhiều lệnh thành chuỗi xử lý.</p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong1.html">
+        <span class="label">Trước</span>
+        ← Chương 01: Navigation
+      </a>
+      <a href="chuong3.html">
+        <span class="label">Tiếp theo</span>
+        Chương 03: Pipes &amp; Redirects →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 02
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Lệnh nào tạo cả thư mục cha nếu chưa tồn tại?",
+        options: ["mkdir a/b/c", "mkdir -p a/b/c", "mkdir -r a/b/c", "mkdir --parents-only a/b/c"],
+        correct: 1,
+        explain: "-p (parents) là cờ chuẩn để mkdir tự tạo các thư mục trung gian."
+      },
+      {
+        q: "Đang ở thư mục có 2 file a.txt, A.TXT. Gõ 'rm *.txt' (trên macOS mặc định case-insensitive nhưng filesystem APFS phân biệt hoa/thường). Wildcard * khớp gì?",
+        options: [
+          "Chỉ a.txt",
+          "Cả a.txt và A.TXT",
+          "Chỉ A.TXT",
+          "Báo lỗi"
+        ],
+        correct: 1,
+        explain: "Wildcard * trong shell so khớp byte tên file — cả 2 đều khớp pattern *.txt vì đều kết thúc bằng .txt (hoặc .TXT đều khớp với *.txt theo cách shell expand). Bài học: TRƯỚC KHI rm *, hãy ls * để kiểm chứng pattern."
+      },
+      {
+        q: "chmod 644 file.txt cấp quyền gì?",
+        options: [
+          "rwxr--r--",
+          "rw-r--r--",
+          "rw-rw-r--",
+          "r--r--rw-"
+        ],
+        correct: 1,
+        explain: "6=rw-, 4=r--, 4=r--. Tức owner đọc/ghi, group và other chỉ đọc."
+      },
+      {
+        q: "Quyền x trên một THƯ MỤC nghĩa là gì?",
+        options: [
+          "Chạy thư mục như script",
+          "Liệt kê file bên trong (ls)",
+          "Vào được bên trong (cd, truy cập file con)",
+          "Xóa thư mục"
+        ],
+        correct: 2,
+        explain: "Trên folder: r = list tên, w = thêm/xóa file con, x = vào được (cd, mở file con theo path). Có r mà không x: ls thấy tên nhưng không cd được."
+      },
+      {
+        q: "rm vs rmdir, đâu là khác biệt chính?",
+        options: [
+          "rmdir nhanh hơn",
+          "rmdir chỉ xóa folder rỗng — an toàn hơn",
+          "rm chỉ xóa file, rmdir chỉ xóa folder",
+          "Không khác gì cả"
+        ],
+        correct: 1,
+        explain: "rmdir từ chối xóa nếu folder có nội dung — đó là tính năng an toàn. rm -r xóa hết. Khi cần chắc chắn folder rỗng: dùng rmdir."
+      },
+      {
+        q: "Cần đổi tên file old.txt thành new.txt, dùng lệnh nào?",
+        options: ["rename old.txt new.txt", "ren old.txt new.txt", "mv old.txt new.txt", "cp old.txt new.txt && rm old.txt"],
+        correct: 2,
+        explain: "Unix không có lệnh rename riêng. mv đảm nhiệm cả move và rename — chỉ là 'move sang tên mới trong cùng folder'."
+      },
+      {
+        q: "Lệnh nào KHÔNG BAO GIỜ nên gõ?",
+        options: [
+          "rm -rf node_modules",
+          "rm -rf /tmp/*",
+          "rm -rf /",
+          "rm -rf ~/.cache"
+        ],
+        correct: 2,
+        explain: "rm -rf / xóa toàn bộ máy. Các lệnh khác xóa thư mục cụ thể đều OK (dù vẫn cần cẩn thận)."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

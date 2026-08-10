@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B4 · HTTP & REST cơ bản</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-b">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">B4 · HTTP & REST cơ bản</b></div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand"><div class="logo">◉</div><div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div></div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần B · Node.js Core</div>
+      <nav class="nav">
+        <a href="B1-kien-truc-nodejs.html">B1 · Kiến trúc Node.js</a>
+        <a href="B2-module-npm.html">B2 · Module, npm, môi trường</a>
+        <a href="B3-streams-buffer-events.html">B3 · Streams, Buffer, Events</a>
+        <a href="B4-http-rest-co-ban.html" class="active">B4 · HTTP & REST cơ bản</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#httpmod">① Module http thuần</a>
+        <a href="#reqres">② Request & Response</a>
+        <a href="#routing">③ Routing thủ công</a>
+        <a href="#body">④ Đọc body & parse</a>
+        <a href="#status">⑤ Status code & headers</a>
+        <a href="#cors">⑥ CORS & bảo mật cơ bản</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần B · Node.js Core &nbsp;›&nbsp; <b>B4 · HTTP & REST cơ bản</b></div>
+      <div class="live-pill"><span class="blink"></span> http server</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần B · Chương 4</span>
+        <h1>HTTP thuần & REST API cơ bản</h1>
+        <p class="lead">Dựng HTTP server bằng module http thuần để hiểu điều mà framework che giấu, rồi thấy vì sao Express ra đời.</p>
+      </div>
+
+<!-- ===== CONTENT START ===== -->
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Dựng được một HTTP server <b>không cần framework</b> bằng module <code>http</code> thuần, hiểu rõ vòng đời request/response.</p>
+        <p>• Đọc đúng <code>req.method</code>, <code>req.url</code>, <code>req.headers</code> và ghi response bằng <code>writeHead</code> / <code>setHeader</code> / <code>end</code>.</p>
+        <p>• Tự viết <b>routing thủ công</b> theo URL + method, và cảm nhận tận xương vì sao ta cần Express/NestJS.</p>
+        <p>• Đọc <b>body từ stream</b> (chunks), parse JSON an toàn, giới hạn payload chống tấn công.</p>
+        <p>• Nắm các <b>nhóm status code</b> (1xx–5xx), header quan trọng, và cấu hình <b>CORS / preflight</b> đúng cách.</p>
+        <p>• Phân biệt HTTP vs HTTPS, keep-alive, statelessness — những câu hỏi phỏng vấn kinh điển.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Liên hệ thực tế hệ thống Contact Center</div>
+        <p>Mọi thao tác của tổng đài viên (agent) đều là HTTP request: tải danh sách hội thoại đang chờ, nhận một ticket,
+        gửi tin nhắn vào cuộc chat, cập nhật trạng thái cuộc gọi. Realtime (WebSocket) lo phần đẩy sự kiện tức thời, nhưng
+        <b>xương sống REST</b> vẫn lo CRUD: tạo ticket, đọc lịch sử, phân công agent. Hiểu HTTP ở tầng thấp giúp bạn biết
+        đặt status code nào khi queue đầy (503), khi agent thao tác trùng (409), và vì sao một request "treo" có thể do
+        quên gọi <code>res.end()</code>.</p>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="httpmod"><span class="ico">①</span> Module <code>http</code> thuần</h2>
+      <p>Node tích hợp sẵn module <code>http</code> — không cần cài gì thêm. Mọi framework web (Express, Fastify, NestJS)
+      đều xây <b>bên trên</b> module này. Hàm cốt lõi là <code>http.createServer</code>: nó nhận một
+      <strong>request listener</strong> được gọi <em>mỗi khi</em> có request đến, với hai tham số <code>(req, res)</code>.</p>
+      <div class="flow">
+        <span class="node">Client (browser/agent app)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">TCP socket</span><span class="arr">→</span>
+        <span class="node">http server (Node)</span><span class="arr">→</span>
+        <span class="node">request listener (req,res)</span><span class="arr">→</span>
+        <span class="node">res.end()</span>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">server.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-key">const</span> http = <span class="tok-fn">require</span>(<span class="tok-str">'http'</span>);
+
+<span class="tok-com">// request listener: chạy MỖI khi có request tới</span>
+<span class="tok-key">const</span> server = http.<span class="tok-fn">createServer</span>((req, res) => {
+  <span class="tok-com">// req = IncomingMessage (readable stream) — dữ liệu KHÁCH gửi lên</span>
+  <span class="tok-com">// res = ServerResponse (writable stream) — dữ liệu TA gửi về</span>
+  res.<span class="tok-fn">writeHead</span>(<span class="tok-num">200</span>, { <span class="tok-str">'Content-Type'</span>: <span class="tok-str">'text/plain; charset=utf-8'</span> });
+  res.<span class="tok-fn">end</span>(<span class="tok-str">'Contact Center API đang chạy'</span>);
+});
+
+<span class="tok-typ">server</span>.<span class="tok-fn">listen</span>(<span class="tok-num">3000</span>, () => {
+  console.<span class="tok-fn">log</span>(<span class="tok-str">'Server lắng nghe tại http://localhost:3000'</span>);
+});</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Bắt buộc gọi <code>res.end()</code></div>
+        <p>Nếu không gọi <code>res.end()</code> (hoặc <code>res.write()</code> rồi <code>end()</code>), response <b>không bao giờ kết thúc</b> —
+        client treo cho tới khi timeout. Đây là lỗi "request bị pending" kinh điển. Một request → đúng <b>một</b> lần kết thúc response.</p>
+      </div>
+      <p>Một điểm hay bị nhầm: <code>createServer</code> chỉ <em>tạo</em> server, phải gọi <code>listen(port)</code> nó mới thực sự
+      mở socket và nhận kết nối. <code>server</code> là một <code>EventEmitter</code> — bạn có thể nghe các sự kiện như
+      <code>'request'</code>, <code>'connection'</code>, <code>'clientError'</code> (xem lại Events ở <a href="B3-streams-buffer-events.html">B3</a>).</p>
+
+      <!-- 2 -->
+      <h2 id="reqres"><span class="ico">②</span> Request & Response</h2>
+      <p>Hai object <code>req</code> và <code>res</code> là trung tâm của mọi xử lý. <code>req</code> là một
+      <strong>readable stream</strong> (đọc dữ liệu khách gửi lên), còn <code>res</code> là một
+      <strong>writable stream</strong> (ghi dữ liệu trả về). Hiểu chúng là stream giải thích vì sao body không đến ngay
+      mà phải gom dần — sẽ nói ở phần ④.</p>
+      <h3>req — IncomingMessage</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Thuộc tính</th><th>Ý nghĩa</th><th>Ví dụ Contact Center</th></tr></thead>
+          <tbody>
+            <tr><td><code>req.method</code></td><td>Phương thức HTTP (chuỗi viết HOA)</td><td><code>'GET'</code>, <code>'POST'</code>, <code>'PATCH'</code></td></tr>
+            <tr><td><code>req.url</code></td><td>Đường dẫn + query string (KHÔNG gồm domain)</td><td><code>'/api/tickets?status=open'</code></td></tr>
+            <tr><td><code>req.headers</code></td><td>Object các header (key viết thường)</td><td><code>req.headers['authorization']</code></td></tr>
+            <tr><td><code>req.httpVersion</code></td><td>Phiên bản HTTP của kết nối</td><td><code>'1.1'</code></td></tr>
+            <tr><td><code>req.socket</code></td><td>Socket TCP bên dưới (lấy IP từ xa)</td><td><code>req.socket.remoteAddress</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 <code>req.url</code> KHÔNG phải URL đầy đủ</div>
+        <p>Trong server HTTP, <code>req.url</code> chỉ là phần <b>path + query</b> (vd <code>/api/calls?agent=42</code>), không có
+        <code>http://host</code>. Muốn tách path và query, dùng <code>new URL(req.url, 'http://'+req.headers.host)</code> rồi đọc
+        <code>url.pathname</code> và <code>url.searchParams</code>.</p>
+      </div>
+      <h3>res — ServerResponse</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Phương thức</th><th>Tác dụng</th></tr></thead>
+          <tbody>
+            <tr><td><code>res.statusCode = 201</code></td><td>Đặt status code (cách 1, đặt thuộc tính)</td></tr>
+            <tr><td><code>res.setHeader(k, v)</code></td><td>Đặt 1 header — phải gọi <b>TRƯỚC</b> khi gửi body</td></tr>
+            <tr><td><code>res.writeHead(code, headers)</code></td><td>Đặt status + nhiều header cùng lúc (cách 2, gọn)</td></tr>
+            <tr><td><code>res.write(chunk)</code></td><td>Ghi một phần body (có thể gọi nhiều lần — streaming)</td></tr>
+            <tr><td><code>res.end([data])</code></td><td>Kết thúc response, gửi nốt (nếu có) và đóng</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">reqres.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-key">const</span> server = http.<span class="tok-fn">createServer</span>((req, res) => {
+  <span class="tok-com">// Tách pathname & query an toàn</span>
+  <span class="tok-key">const</span> url = <span class="tok-key">new</span> <span class="tok-typ">URL</span>(req.url, <span class="tok-str">`http://`</span> + req.headers.host);
+  <span class="tok-key">const</span> pathname = url.pathname;            <span class="tok-com">// '/api/tickets'</span>
+  <span class="tok-key">const</span> status = url.searchParams.<span class="tok-fn">get</span>(<span class="tok-str">'status'</span>); <span class="tok-com">// 'open'</span>
+
+  <span class="tok-com">// Trả JSON đúng chuẩn</span>
+  <span class="tok-key">const</span> body = <span class="tok-typ">JSON</span>.<span class="tok-fn">stringify</span>({ pathname, method: req.method, status });
+  res.<span class="tok-fn">writeHead</span>(<span class="tok-num">200</span>, {
+    <span class="tok-str">'Content-Type'</span>: <span class="tok-str">'application/json; charset=utf-8'</span>,
+    <span class="tok-str">'Content-Length'</span>: <span class="tok-typ">Buffer</span>.<span class="tok-fn">byteLength</span>(body) <span class="tok-com">// tính theo BYTE, không phải ký tự</span>
+  });
+  res.<span class="tok-fn">end</span>(body);
+});</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ "Headers already sent"</div>
+        <p>Header chỉ gửi được <b>một lần</b>, trước body. Nếu gọi <code>setHeader</code>/<code>writeHead</code> sau khi đã
+        <code>write</code> body, Node ném <code>ERR_HTTP_HEADERS_SENT</code>. Quy tắc: set status + header trước → write body → end.</p>
+      </div>
+
+      <!-- 3 -->
+      <h2 id="routing"><span class="ico">③</span> Routing thủ công</h2>
+      <p>Module http <b>không có khái niệm route</b>. Bạn chỉ nhận được một listener cho <em>mọi</em> request. Muốn phân biệt
+      "GET danh sách ticket" với "POST tạo ticket", bạn phải tự kiểm tra <code>req.method</code> và <code>req.url</code> bằng
+      tay — thường là một chuỗi <code>if/else</code> hoặc <code>switch</code> dài.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">router-tay.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-key">const</span> server = http.<span class="tok-fn">createServer</span>((req, res) => {
+  <span class="tok-key">const</span> { method } = req;
+  <span class="tok-key">const</span> url = <span class="tok-key">new</span> <span class="tok-typ">URL</span>(req.url, <span class="tok-str">`http://`</span> + req.headers.host);
+  <span class="tok-key">const</span> path = url.pathname;
+
+  <span class="tok-com">// GET /api/tickets — danh sách ticket trong queue</span>
+  <span class="tok-key">if</span> (method === <span class="tok-str">'GET'</span> &amp;&amp; path === <span class="tok-str">'/api/tickets'</span>) {
+    <span class="tok-key">return</span> <span class="tok-fn">sendJson</span>(res, <span class="tok-num">200</span>, { tickets: [] });
+  }
+
+  <span class="tok-com">// POST /api/tickets — tạo ticket mới</span>
+  <span class="tok-key">if</span> (method === <span class="tok-str">'POST'</span> &amp;&amp; path === <span class="tok-str">'/api/tickets'</span>) {
+    <span class="tok-key">return</span> <span class="tok-fn">handleCreateTicket</span>(req, res);
+  }
+
+  <span class="tok-com">// GET /api/tickets/:id — KHỔ SỞ: phải tự match param bằng regex/split</span>
+  <span class="tok-key">const</span> m = path.<span class="tok-fn">match</span>(<span class="tok-op">/^\/api\/tickets\/(\w+)$/</span>);
+  <span class="tok-key">if</span> (method === <span class="tok-str">'GET'</span> &amp;&amp; m) {
+    <span class="tok-key">const</span> id = m[<span class="tok-num">1</span>];
+    <span class="tok-key">return</span> <span class="tok-fn">sendJson</span>(res, <span class="tok-num">200</span>, { id });
+  }
+
+  <span class="tok-com">// Không khớp route nào → 404</span>
+  <span class="tok-fn">sendJson</span>(res, <span class="tok-num">404</span>, { error: <span class="tok-str">'Not Found'</span> });
+});
+
+<span class="tok-key">function</span> <span class="tok-fn">sendJson</span>(res, code, obj) {
+  <span class="tok-key">const</span> body = <span class="tok-typ">JSON</span>.<span class="tok-fn">stringify</span>(obj);
+  res.<span class="tok-fn">writeHead</span>(code, { <span class="tok-str">'Content-Type'</span>: <span class="tok-str">'application/json; charset=utf-8'</span> });
+  res.<span class="tok-fn">end</span>(body);
+}</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Vì sao routing thủ công "mệt" → cần framework</div>
+        <p>Với 3 route đã thấy rối; một Contact Center thật có hàng trăm route (agents, calls, chats, queues, tickets, reports).
+        Tự tay bạn phải lo: match path động (<code>:id</code>), parse query, gom body, xử lý 404/405, chạy logic chung
+        (auth, log, CORS) cho mọi route. Tất cả lặp lại, dễ sai, khó test. <b>Express ra đời chính để giải quyết việc này</b>:
+        cung cấp router, middleware, param matching, body parser sẵn. Xem chương <a href="../C/C1-express-middleware.html">C1</a>.</p>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Việc phải tự làm với http thuần</th><th>Express lo giúp</th></tr></thead>
+          <tbody>
+            <tr><td>Match path động <code>/tickets/:id</code> bằng regex tay</td><td><code>app.get('/tickets/:id', ...)</code> → <code>req.params.id</code></td></tr>
+            <tr><td>Phân biệt 404 (không có path) vs 405 (sai method)</td><td>Router tự xử lý, hỗ trợ <code>app.all</code>, fallback</td></tr>
+            <tr><td>Gom body stream + parse JSON thủ công</td><td><code>express.json()</code> middleware</td></tr>
+            <tr><td>Chạy logic chung (auth, log) trước mọi route</td><td>Chuỗi <b>middleware</b> dùng <code>next()</code></td></tr>
+            <tr><td>Parse query string bằng <code>URL</code> mỗi lần</td><td><code>req.query</code> có sẵn</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 4 -->
+      <h2 id="body"><span class="ico">④</span> Đọc body & parse</h2>
+      <p>Đây là phần khiến nhiều người mới bối rối nhất. Khác với <code>req.url</code> hay <code>req.headers</code> (có ngay),
+      <strong>body không có sẵn</strong>. Vì <code>req</code> là một readable stream, dữ liệu đến theo <b>từng chunk</b> (mẩu
+      Buffer) qua sự kiện <code>'data'</code>, và chỉ khi sự kiện <code>'end'</code> bắn ra bạn mới có đủ body.</p>
+      <div class="flow">
+        <span class="node">req (stream)</span><span class="arr">→</span>
+        <span class="node">'data' → chunk 1</span><span class="arr">→</span>
+        <span class="node">'data' → chunk 2…</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">'end'</span><span class="arr">→</span>
+        <span class="node">Buffer.concat → parse</span>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">read-body.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-com">// Đọc body, parse JSON, GIỚI HẠN payload chống tấn công</span>
+<span class="tok-key">function</span> <span class="tok-fn">readJsonBody</span>(req, limitBytes = <span class="tok-num">1_000_000</span>) {
+  <span class="tok-key">return</span> <span class="tok-key">new</span> <span class="tok-typ">Promise</span>((resolve, reject) => {
+    <span class="tok-key">const</span> chunks = [];
+    <span class="tok-key">let</span> size = <span class="tok-num">0</span>;
+
+    req.<span class="tok-fn">on</span>(<span class="tok-str">'data'</span>, (chunk) => {
+      size += chunk.length;
+      <span class="tok-key">if</span> (size &gt; limitBytes) {                <span class="tok-com">// payload quá lớn → cắt sớm</span>
+        reject(<span class="tok-typ">Object</span>.<span class="tok-fn">assign</span>(<span class="tok-key">new</span> <span class="tok-typ">Error</span>(<span class="tok-str">'Payload too large'</span>), { status: <span class="tok-num">413</span> }));
+        req.<span class="tok-fn">destroy</span>();                       <span class="tok-com">// đóng kết nối, ngừng nhận thêm</span>
+        <span class="tok-key">return</span>;
+      }
+      chunks.<span class="tok-fn">push</span>(chunk);
+    });
+
+    req.<span class="tok-fn">on</span>(<span class="tok-str">'end'</span>, () => {
+      <span class="tok-key">const</span> raw = <span class="tok-typ">Buffer</span>.<span class="tok-fn">concat</span>(chunks).<span class="tok-fn">toString</span>(<span class="tok-str">'utf8'</span>);
+      <span class="tok-key">if</span> (!raw) <span class="tok-key">return</span> resolve({});         <span class="tok-com">// body rỗng cũng hợp lệ</span>
+      <span class="tok-key">try</span> {
+        resolve(<span class="tok-typ">JSON</span>.<span class="tok-fn">parse</span>(raw));        <span class="tok-com">// PHẢI bọc try/catch — JSON hỏng làm crash</span>
+      } <span class="tok-key">catch</span> {
+        reject(<span class="tok-typ">Object</span>.<span class="tok-fn">assign</span>(<span class="tok-key">new</span> <span class="tok-typ">Error</span>(<span class="tok-str">'Invalid JSON'</span>), { status: <span class="tok-num">400</span> }));
+      }
+    });
+
+    req.<span class="tok-fn">on</span>(<span class="tok-str">'error'</span>, reject);          <span class="tok-com">// lỗi mạng giữa chừng</span>
+  });
+}
+
+<span class="tok-com">// Dùng khi tạo ticket mới</span>
+<span class="tok-key">async</span> <span class="tok-key">function</span> <span class="tok-fn">handleCreateTicket</span>(req, res) {
+  <span class="tok-key">try</span> {
+    <span class="tok-key">const</span> data = <span class="tok-key">await</span> <span class="tok-fn">readJsonBody</span>(req);
+    <span class="tok-key">if</span> (!data.subject) <span class="tok-key">return</span> <span class="tok-fn">sendJson</span>(res, <span class="tok-num">400</span>, { error: <span class="tok-str">'subject là bắt buộc'</span> });
+    <span class="tok-key">const</span> ticket = { id: <span class="tok-fn">genId</span>(), subject: data.subject, status: <span class="tok-str">'open'</span> };
+    <span class="tok-fn">sendJson</span>(res, <span class="tok-num">201</span>, ticket);   <span class="tok-com">// 201 Created + nên kèm Location header</span>
+  } <span class="tok-key">catch</span> (err) {
+    <span class="tok-fn">sendJson</span>(res, err.status || <span class="tok-num">500</span>, { error: err.message });
+  }
+}</code></pre>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ Ba điều luôn phải nhớ khi đọc body</div>
+        <p><b>(1) Try/catch quanh <code>JSON.parse</code></b> — client gửi JSON hỏng là chuyện thường, không được để crash server.<br>
+        <b>(2) Giới hạn kích thước</b> — không giới hạn thì kẻ xấu gửi 10GB làm cạn RAM (DoS). Đặt limit và trả 413.<br>
+        <b>(3) Kiểm tra <code>Content-Type</code></b> — chỉ parse JSON khi header là <code>application/json</code>; form thì khác.</p>
+      </div>
+      <p>Express che toàn bộ đoạn này sau một dòng <code>app.use(express.json({ limit: '1mb' }))</code>. Hiểu rõ cơ chế gốc
+      giúp bạn biết tham số <code>limit</code> thực sự bảo vệ điều gì, và vì sao đôi khi <code>req.body</code> bị
+      <code>undefined</code> (do quên middleware hoặc sai Content-Type).</p>
+
+      <!-- 5 -->
+      <h2 id="status"><span class="ico">⑤</span> Status code & headers</h2>
+      <p>Status code là <b>hợp đồng</b> giữa server và client: nó nói kết quả request <em>thuộc loại gì</em> để client phản ứng
+      đúng (hiển thị lỗi, thử lại, redirect…). Chia làm 5 nhóm theo chữ số đầu.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Nhóm</th><th>Ý nghĩa</th><th>Ví dụ trong Contact Center</th></tr></thead>
+          <tbody>
+            <tr><td><b>1xx</b> Informational</td><td>Tạm thời, request đang xử lý</td><td><code>101 Switching Protocols</code> khi nâng cấp lên WebSocket</td></tr>
+            <tr><td><b>2xx</b> Success</td><td>Thành công</td><td><code>200</code> đọc lịch sử chat · <code>201</code> tạo ticket · <code>204</code> xóa, không body</td></tr>
+            <tr><td><b>3xx</b> Redirect</td><td>Cần đi nơi khác / dùng cache</td><td><code>301</code> đổi domain API · <code>304 Not Modified</code> dùng cache</td></tr>
+            <tr><td><b>4xx</b> Client Error</td><td>Lỗi do client</td><td><code>400</code> body sai · <code>401</code> chưa đăng nhập · <code>403</code> agent không đủ quyền · <code>404</code> không có ticket · <code>409</code> nhận trùng ticket · <code>429</code> gọi quá nhanh</td></tr>
+            <tr><td><b>5xx</b> Server Error</td><td>Lỗi do server</td><td><code>500</code> bug · <code>502/504</code> upstream lỗi/timeout · <code>503</code> queue quá tải / đang bảo trì</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 401 vs 403 vs 409 — hay bị nhầm</div>
+        <p><b>401 Unauthorized</b>: bạn <em>chưa</em> xác thực (thiếu/hết hạn token) → đăng nhập đi.<br>
+        <b>403 Forbidden</b>: bạn <em>đã</em> xác thực nhưng <em>không có quyền</em> (agent thường cố mở dashboard của supervisor).<br>
+        <b>409 Conflict</b>: trạng thái xung đột — vd hai agent cùng bấm "nhận" một ticket; người sau nhận 409.</p>
+      </div>
+      <h3>Header quan trọng</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Header</th><th>Vai trò</th></tr></thead>
+          <tbody>
+            <tr><td><code>Content-Type</code></td><td>Kiểu dữ liệu body (<code>application/json</code>, <code>text/html</code>…). Sai → client parse sai</td></tr>
+            <tr><td><code>Content-Length</code></td><td>Độ dài body tính theo <b>byte</b>. Tính bằng <code>Buffer.byteLength()</code>, không dùng <code>.length</code> của chuỗi (tiếng Việt nhiều byte)</td></tr>
+            <tr><td><code>Cache-Control</code></td><td>Quy định cache: <code>no-store</code> cho dữ liệu nhạy cảm, <code>max-age</code> cho tài nguyên tĩnh</td></tr>
+            <tr><td><code>ETag</code> / <code>If-None-Match</code></td><td>Xác thực cache: server trả <code>304</code> nếu nội dung không đổi → tiết kiệm băng thông</td></tr>
+            <tr><td><code>Authorization</code></td><td>Mang token (<code>Bearer ...</code>) để xác thực agent</td></tr>
+            <tr><td><code>Connection: keep-alive</code></td><td>Giữ kết nối TCP để dùng lại cho request sau (mặc định ở HTTP/1.1)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="c-title">⚠️ <code>Content-Length</code> tính theo BYTE</div>
+        <p>Chuỗi <code>'Xin chào'</code> có 8 ký tự nhưng <b>nhiều hơn 8 byte</b> ở UTF-8 (dấu tiếng Việt là 2–3 byte). Dùng
+        <code>str.length</code> sẽ báo sai độ dài → client cắt cụt body hoặc treo. Luôn dùng <code>Buffer.byteLength(str)</code>.</p>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="cors"><span class="ico">⑥</span> CORS & bảo mật cơ bản</h2>
+      <p><strong>CORS</strong> (Cross-Origin Resource Sharing) là cơ chế của <em>trình duyệt</em>: theo Same-Origin Policy, trang
+      web ở origin A (vd <code>https://agent.app</code>) <b>không được</b> đọc response từ API ở origin B
+      (<code>https://api.app</code>) trừ khi server B <em>cho phép</em> qua các header <code>Access-Control-Allow-*</code>.
+      Đây là bảo vệ ở phía browser, không phải xác thực — vẫn cần auth riêng.</p>
+      <div class="callout info">
+        <div class="c-title">ℹ️ Preflight là gì?</div>
+        <p>Với các request "không đơn giản" (method <code>PUT/PATCH/DELETE</code>, hoặc có header tùy chỉnh như
+        <code>Authorization</code>, hoặc Content-Type <code>application/json</code>), trình duyệt gửi <b>trước</b> một request
+        thăm dò <code>OPTIONS</code> — gọi là <b>preflight</b>. Server phải trả về quyền cho phép; nếu hợp lệ, browser mới gửi
+        request thật. Bạn sẽ thấy 2 request trong Network tab: một <code>OPTIONS</code>, rồi một <code>POST</code>.</p>
+      </div>
+      <div class="flow">
+        <span class="node">Browser (agent.app)</span><span class="arr">→</span>
+        <span class="node" style="border-color:var(--cyan)">OPTIONS (preflight)</span><span class="arr">→</span>
+        <span class="node">Server trả Allow-*</span><span class="arr">→</span>
+        <span class="node">POST thật</span><span class="arr">→</span>
+        <span class="node">Response</span>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">cors.js</span><span class="lang">Node.js</span></div>
+        <pre><code><span class="tok-key">const</span> ALLOWED = [<span class="tok-str">'https://agent.app'</span>, <span class="tok-str">'https://supervisor.app'</span>];
+
+<span class="tok-key">function</span> <span class="tok-fn">applyCors</span>(req, res) {
+  <span class="tok-key">const</span> origin = req.headers.origin;
+  <span class="tok-com">// CHỈ cho phép origin trong whitelist — đừng dùng '*' với API có auth</span>
+  <span class="tok-key">if</span> (ALLOWED.<span class="tok-fn">includes</span>(origin)) {
+    res.<span class="tok-fn">setHeader</span>(<span class="tok-str">'Access-Control-Allow-Origin'</span>, origin);
+    res.<span class="tok-fn">setHeader</span>(<span class="tok-str">'Vary'</span>, <span class="tok-str">'Origin'</span>);          <span class="tok-com">// để cache phân biệt theo origin</span>
+    res.<span class="tok-fn">setHeader</span>(<span class="tok-str">'Access-Control-Allow-Credentials'</span>, <span class="tok-str">'true'</span>);
+  }
+  res.<span class="tok-fn">setHeader</span>(<span class="tok-str">'Access-Control-Allow-Methods'</span>, <span class="tok-str">'GET,POST,PATCH,DELETE,OPTIONS'</span>);
+  res.<span class="tok-fn">setHeader</span>(<span class="tok-str">'Access-Control-Allow-Headers'</span>, <span class="tok-str">'Content-Type, Authorization'</span>);
+  res.<span class="tok-fn">setHeader</span>(<span class="tok-str">'Access-Control-Max-Age'</span>, <span class="tok-str">'600'</span>); <span class="tok-com">// cache preflight 10 phút</span>
+}
+
+<span class="tok-key">const</span> server = http.<span class="tok-fn">createServer</span>((req, res) => {
+  <span class="tok-fn">applyCors</span>(req, res);
+
+  <span class="tok-com">// Trả lời preflight NGAY — không vào logic route</span>
+  <span class="tok-key">if</span> (req.method === <span class="tok-str">'OPTIONS'</span>) {
+    res.<span class="tok-fn">writeHead</span>(<span class="tok-num">204</span>);  <span class="tok-com">// 204 No Content</span>
+    <span class="tok-key">return</span> res.<span class="tok-fn">end</span>();
+  }
+  <span class="tok-com">// ... routing thật ở đây</span>
+});</code></pre>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">🐛 Bảo mật cơ bản — đừng quên</div>
+        <p>• Đừng đặt <code>Access-Control-Allow-Origin: *</code> cho API có cookie/credentials — kết hợp với
+        <code>Allow-Credentials: true</code> là cấu hình <b>bị trình duyệt từ chối</b> và là lỗ hổng. Dùng whitelist.<br>
+        • Luôn giới hạn payload (413), validate input (400), rate-limit (429) để chống DoS/abuse.<br>
+        • Dùng <b>HTTPS</b> ở production: HTTP gửi token/dữ liệu cuộc gọi dưới dạng <em>plaintext</em>, ai bắt gói tin cũng đọc được.</p>
+      </div>
+      <div class="callout tip">
+        <div class="c-title">💡 Statelessness của HTTP</div>
+        <p>HTTP <b>không nhớ</b> gì giữa các request — mỗi request là độc lập, server không biết request này đến từ "phiên" nào
+        trừ khi client tự gửi kèm thông tin (cookie/token). Vì vậy auth phải đính token vào <em>mỗi</em> request. Tính stateless
+        này chính là thứ giúp ta <b>scale ngang</b> dễ dàng: request có thể rơi vào bất kỳ instance Node nào sau load balancer,
+        không cần "dính" một server cố định (trừ khi dùng session in-memory — khi đó cần sticky session hoặc store dùng chung).</p>
+      </div>
+
+      <!-- PITFALLS -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Quên <code>res.end()</code></div><p>Response không đóng → client treo tới timeout. Mọi nhánh xử lý phải kết thúc response đúng một lần.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> <code>JSON.parse</code> không try/catch</div><p>Body hỏng làm crash cả process. Luôn bọc try/catch và trả 400.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Không giới hạn body</div><p>Kẻ xấu gửi payload khổng lồ làm cạn RAM. Đặt limit, trả 413.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Set header sau khi gửi body</div><p><code>ERR_HTTP_HEADERS_SENT</code>. Set status + header TRƯỚC khi <code>write</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Dùng <code>str.length</code> cho Content-Length</div><p>Sai với UTF-8 nhiều byte. Dùng <code>Buffer.byteLength</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Trả 200 cho cả lỗi</div><p>Status code phải phản ánh đúng kết quả để client xử lý đúng (retry, hiện lỗi).</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> <code>Allow-Origin: *</code> + credentials</div><p>Bị browser chặn và là rủi ro bảo mật. Dùng whitelist origin.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">✅</span> Tách lớp sớm</div><p>Khi route &gt; vài cái, chuyển sang Express/Fastify thay vì if/else tay.</p></div>
+      </div>
+
+      <!-- EXERCISE -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+      <div class="exercise"><div class="x-title">🧪 Bài 1 — Mini REST API không framework</div>
+        <p>Dùng module <code>http</code> thuần, viết server hỗ trợ: <code>GET /api/tickets</code> (trả mảng), <code>POST /api/tickets</code>
+        (tạo ticket từ JSON body, validate <code>subject</code>), <code>GET /api/tickets/:id</code>. Trả đúng status code (200/201/400/404)
+        và <code>Content-Type: application/json</code>.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Dùng <code>new URL(req.url, 'http://'+req.headers.host)</code> để lấy <code>pathname</code>;
+        match <code>:id</code> bằng regex <code>/^\/api\/tickets\/(\w+)$/</code>. Tái sử dụng hàm <code>readJsonBody</code> và <code>sendJson</code>
+        ở phần ④. Lưu ticket vào một <code>Map</code> trong bộ nhớ. Nhớ nhánh cuối trả 404.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 2 — Chặn payload & JSON hỏng</div>
+        <p>Mở rộng <code>POST /api/tickets</code>: nếu body &gt; 100KB trả <b>413</b>; nếu JSON sai cú pháp trả <b>400</b> với thông báo rõ ràng,
+        và server <b>không được crash</b>. Tự test bằng <code>curl</code> gửi JSON hỏng và file lớn.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Đếm <code>size += chunk.length</code> trong sự kiện <code>'data'</code>, vượt limit thì <code>reject</code> + <code>req.destroy()</code>.
+        Bọc <code>JSON.parse</code> trong try/catch. Gán <code>err.status</code> để hàm xử lý lỗi chọn đúng code. Test:
+        <code>curl -X POST -d '{bad json' http://localhost:3000/api/tickets</code>.</p></details>
+      </div>
+      <div class="exercise"><div class="x-title">🧪 Bài 3 — Bật CORS cho app agent</div>
+        <p>Thêm CORS cho phép origin <code>https://agent.app</code> gọi API: xử lý preflight <code>OPTIONS</code> trả 204, cho phép method
+        <code>POST/PATCH</code> và header <code>Authorization</code>. Giải thích vì sao gọi từ <code>localhost:5173</code> (Vite dev) sẽ bị chặn.</p>
+        <details><summary>Gợi ý</summary><p style="margin-top:8px">Đặt <code>Access-Control-Allow-Origin</code> khớp <code>req.headers.origin</code> nếu nằm trong whitelist; thêm
+        <code>Allow-Methods</code>, <code>Allow-Headers</code>. Trả lời <code>OPTIONS</code> sớm bằng 204. <code>localhost:5173</code> bị chặn vì không
+        nằm trong danh sách origin cho phép → thêm nó vào whitelist khi dev.</p></details>
+      </div>
+
+      <!-- QUIZ -->
+      <h2 class="quiz-head"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+        <div class="q"><div class="q-text"><span class="num">Q1.</span> Trong server HTTP, <code>req.url</code> chứa gì?</div>
+          <div class="opt">URL đầy đủ gồm <code>https://host</code></div>
+          <div class="opt" data-correct="true">Chỉ path + query, vd <code>/api/tickets?status=open</code></div>
+          <div class="opt">Chỉ tên miền</div>
+          <div class="explain"><b>Path + query.</b> Muốn URL đầy đủ phải ghép với <code>req.headers.host</code> qua <code>new URL()</code>.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q2.</span> Body của request trong http thuần đến như thế nào?</div>
+          <div class="opt">Có sẵn trong <code>req.body</code></div>
+          <div class="opt" data-correct="true">Theo từng chunk qua sự kiện <code>'data'</code>, đủ khi <code>'end'</code></div>
+          <div class="opt">Trong <code>req.headers</code></div>
+          <div class="explain"><b>Stream.</b> <code>req</code> là readable stream; phải gom chunk rồi parse. <code>req.body</code> là thứ Express thêm vào.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q3.</span> Hai agent cùng bấm "nhận" một ticket, người sau nên nhận status nào?</div>
+          <div class="opt">403 Forbidden</div>
+          <div class="opt" data-correct="true">409 Conflict</div>
+          <div class="opt">500 Internal Server Error</div>
+          <div class="explain"><b>409 Conflict.</b> Trạng thái tài nguyên xung đột với thao tác. 403 là không đủ quyền; 500 là bug server.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q4.</span> Request preflight là gì?</div>
+          <div class="opt">Một request HEAD kiểm tra tốc độ</div>
+          <div class="opt" data-correct="true">Request <code>OPTIONS</code> browser gửi trước để hỏi quyền CORS</div>
+          <div class="opt">Request đầu tiên khi mở trang</div>
+          <div class="explain"><b>OPTIONS.</b> Browser tự gửi với request "không đơn giản" để xác nhận server cho phép trước khi gửi request thật.</div></div>
+        <div class="q"><div class="q-text"><span class="num">Q5.</span> Vì sao không nên tính <code>Content-Length</code> bằng <code>str.length</code>?</div>
+          <div class="opt">Vì nó chậm</div>
+          <div class="opt" data-correct="true">Vì UTF-8 có ký tự nhiều byte (tiếng Việt) → độ dài byte ≠ số ký tự</div>
+          <div class="opt">Vì <code>str.length</code> luôn trả 0</div>
+          <div class="explain"><b>Byte ≠ ký tự.</b> Dùng <code>Buffer.byteLength(str)</code> để khớp số byte thực sự gửi đi.</div></div>
+      </div>
+
+      <!-- INTERVIEW -->
+      <div class="iv-head" id="interview"><div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>HTTP & REST nền tảng — hỏi để đo mức độ hiểu "dưới capo" của framework.</p></div></div>
+
+      <details class="iv"><summary><span class="qn">Q1</span><span>Dựng HTTP server bằng module http thuần như thế nào?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Dùng <code>http.createServer((req, res) =&gt; {...})</code> truyền một request listener, rồi gọi <code>server.listen(port)</code>.
+        Mỗi request đến, listener nhận <code>req</code> (IncomingMessage, readable stream chứa dữ liệu khách gửi) và <code>res</code> (ServerResponse, writable
+        stream để trả về). Ghi response bằng <code>res.writeHead(code, headers)</code> rồi <code>res.end(body)</code>. Mọi framework đều xây trên module này.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q2</span><span>Phân biệt HTTP và HTTPS.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> HTTPS = HTTP chạy trên lớp <b>TLS/SSL</b> (cổng 443 mặc định). Nó mã hóa toàn bộ dữ liệu giữa client và server,
+        xác thực danh tính server qua chứng chỉ, và đảm bảo toàn vẹn dữ liệu (chống sửa giữa đường). HTTP thường (cổng 80) gửi plaintext — ai bắt gói tin
+        cũng đọc được. Với Contact Center mang token đăng nhập và nội dung cuộc gọi/chat nhạy cảm, HTTPS là <b>bắt buộc</b> ở production.</p>
+        <p class="trap">⚠️ Bẫy: HTTPS không tự xác thực <em>người dùng</em> — nó bảo vệ kênh truyền. Auth (token/cookie) vẫn cần riêng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q3</span><span>Làm sao đọc body của POST request trong Node thuần?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Vì <code>req</code> là readable stream, body không có ngay. Phải lắng nghe sự kiện <code>'data'</code> để gom các chunk (Buffer)
+        vào một mảng, đếm tổng kích thước; khi <code>'end'</code> bắn ra thì <code>Buffer.concat(chunks).toString('utf8')</code> rồi <code>JSON.parse</code>
+        (bọc try/catch). Cần giới hạn kích thước để chống payload khổng lồ và xử lý sự kiện <code>'error'</code>.</p>
+        <p class="trap">⚠️ Bẫy: quên try/catch quanh <code>JSON.parse</code> → JSON hỏng làm crash process. Và <code>req.body</code> chỉ tồn tại khi có middleware như <code>express.json()</code>.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q4</span><span>Kể các nhóm status code và cho ví dụ.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> 5 nhóm theo chữ số đầu: <b>1xx</b> thông tin (101 nâng cấp WebSocket); <b>2xx</b> thành công (200 OK, 201 Created, 204 No Content);
+        <b>3xx</b> chuyển hướng/cache (301 Moved, 304 Not Modified); <b>4xx</b> lỗi client (400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found,
+        409 Conflict, 429 Too Many Requests); <b>5xx</b> lỗi server (500 Internal, 502 Bad Gateway, 503 Service Unavailable, 504 Gateway Timeout).</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q5</span><span>Khác nhau giữa 401, 403 và 409?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> <b>401 Unauthorized</b>: chưa xác thực (thiếu/hết hạn token) — cần đăng nhập. <b>403 Forbidden</b>: đã xác thực nhưng
+        không đủ quyền (vd agent cố mở dashboard supervisor). <b>409 Conflict</b>: trạng thái tài nguyên xung đột với thao tác (vd hai agent cùng nhận một ticket).
+        Mỗi mã dẫn client tới một xử lý khác nhau, nên không được trả nhầm.</p>
+        <p class="trap">⚠️ Bẫy: tên là "Unauthorized" nhưng 401 thực ra là "chưa xác thực"; "không đủ quyền" mới là 403.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q6</span><span>Vì sao header <code>Content-Type</code> quan trọng?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Nó cho client/server biết body là kiểu gì để parse đúng: <code>application/json</code> thì parse JSON, <code>text/html</code> thì render,
+        <code>application/x-www-form-urlencoded</code> hay <code>multipart/form-data</code> cho form/upload. Nếu server trả JSON nhưng đặt <code>text/plain</code>,
+        trình duyệt có thể không parse; nếu client gửi sai Content-Type, middleware như <code>express.json()</code> bỏ qua khiến <code>req.body</code> rỗng.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q7</span><span>CORS là gì? Preflight hoạt động ra sao?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> CORS là cơ chế của <b>trình duyệt</b>, dựa trên Same-Origin Policy: trang ở origin A không được đọc response từ API origin B
+        trừ khi B trả các header <code>Access-Control-Allow-Origin/Methods/Headers</code>. Với request "không đơn giản" (PUT/PATCH/DELETE, header tùy chỉnh, JSON),
+        browser gửi trước một <b>preflight</b> <code>OPTIONS</code>; nếu server đáp ứng quyền (và có thể cache qua <code>Access-Control-Max-Age</code>), browser mới
+        gửi request thật.</p>
+        <p class="trap">⚠️ Bẫy: CORS chỉ áp dụng trong browser — gọi từ server-to-server hay curl không bị CORS. Nó cũng không phải cơ chế bảo mật xác thực.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q8</span><span>Vì sao nên dùng Express thay vì http thuần?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> http thuần bắt bạn tự làm tất cả: match path động bằng regex, phân biệt 404/405, gom body và parse, parse query, và lặp lại logic chung
+        (auth, log, CORS) cho mọi route. Khi có hàng trăm route, code rối, dễ sai, khó test. Express cung cấp router với param (<code>req.params.id</code>),
+        middleware chuỗi qua <code>next()</code>, body parser, <code>req.query</code> sẵn — gọn và chuẩn hơn. Hiểu http thuần giúp biết Express che giấu gì.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q9</span><span>HTTP keep-alive là gì? Vì sao quan trọng?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Keep-alive (mặc định ở HTTP/1.1) giữ kết nối TCP <b>mở</b> sau khi hoàn thành một request để tái sử dụng cho request tiếp theo,
+        thay vì bắt tay TCP (và TLS) lại từ đầu mỗi lần. Điều này giảm độ trễ và tải đáng kể khi một agent app bắn nhiều request liên tục. Header
+        <code>Connection: keep-alive</code> và <code>Keep-Alive: timeout=...</code> điều khiển hành vi này.</p>
+        <p class="trap">⚠️ Bẫy: HTTP/1.1 vẫn bị "head-of-line blocking" — một kết nối xử lý tuần tự từng request; HTTP/2 multiplexing mới giải quyết triệt để.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q10</span><span>Statelessness của HTTP nghĩa là gì? Liên hệ với scale.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> HTTP không nhớ trạng thái giữa các request — mỗi request độc lập, server không tự biết request đến từ phiên nào trừ khi client gửi kèm
+        token/cookie. Tính stateless này cho phép <b>scale ngang</b> dễ: request có thể rơi vào bất kỳ instance Node nào sau load balancer mà vẫn xử lý đúng.
+        Hệ quả thiết kế: tránh lưu session in-memory trên từng instance (sẽ phải dùng sticky session hoặc store dùng chung như Redis); với realtime/WebSocket cần
+        chú ý vì kết nối là stateful, thường cần adapter (Redis pub/sub) để các instance chia sẻ sự kiện.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q11</span><span>So sánh sơ lược HTTP/1.1 và HTTP/2.<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> HTTP/1.1 dạng text, một kết nối xử lý request tuần tự (keep-alive tái dùng kết nối nhưng vẫn head-of-line blocking), header lặp lại không nén.
+        HTTP/2 dạng nhị phân, hỗ trợ <b>multiplexing</b> (nhiều request/response song song trên một kết nối TCP), <b>nén header</b> (HPACK), server push, ưu tiên stream —
+        giảm độ trễ rõ rệt khi tải nhiều tài nguyên. Trade-off: vẫn dính TCP head-of-line ở tầng dưới (mất gói chặn cả kết nối), điều mà HTTP/3 (QUIC trên UDP) khắc phục.</p></div></details>
+
+      <details class="iv"><summary><span class="qn">Q12</span><span>Một API tạo ticket nên trả status và header gì để đúng REST?<span class="lvl sr">Senior</span></span><span class="chev">›</span></summary>
+        <div class="ans"><p><b>Trả lời:</b> Tạo thành công trả <b>201 Created</b>, kèm header <code>Location</code> trỏ tới URL tài nguyên mới (vd <code>/api/tickets/abc123</code>) và body chứa
+        ticket vừa tạo. Body sai/thiếu trường → <b>400</b>; chưa auth → <b>401</b>; không đủ quyền → <b>403</b>; trùng (idempotency key đã dùng) → <b>409</b>; quá tải/limit → <b>429/503</b>.
+        Đặt <code>Content-Type: application/json</code> và cân nhắc idempotency key để client retry an toàn không tạo ticket trùng.</p>
+        <p class="trap">⚠️ Bẫy: trả 200 cho mọi thứ (kể cả tạo mới hay lỗi) là phản REST — client mất khả năng phản ứng đúng theo status.</p></div></details>
+
+<!-- ===== CONTENT END ===== -->
+
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương B4</button>
+      </div>
+
+      <div class="pager">
+        <a href="B3-streams-buffer-events.html"><span class="dir">← Trước</span><span class="ttl">B3 · Streams, Buffer, Events</span></a>
+        <a href="../C/C1-express-middleware.html" class="next"><span class="dir">Phần C →</span><span class="ttl">C1 · Express: routing, middleware</span></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#quiz .q').forEach(q=>{ const opts=q.querySelectorAll('.opt'),exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{ opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong'); exp.classList.add('show'); })); });
+  const CH='B4',KEY='fcc_done',btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(),on=d.includes(CH); btn.textContent=on?'✓ Đã hoàn thành B4 — bấm để bỏ':'✓ Đánh dấu hoàn thành chương B4'; btn.style.opacity=on?'.75':'1'; }
+  btn.addEventListener('click',()=>{ let d=done(); d.includes(CH)?d=d.filter(x=>x!==CH):d.push(CH); localStorage.setItem(KEY,JSON.stringify(d)); refresh(); }); refresh();
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id], .quiz[id]')],tl=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{ let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120)cur=s.id; });
+    tl.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+cur)); });
+</script>
+</body>
+</html>

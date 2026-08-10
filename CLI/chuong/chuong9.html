@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 9: Tmux &amp; productivity — CLI Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong8.html">← Chương 8</a></li>
+        <li><a href="chuong9.html" class="active">Chương 9</a></li>
+        <li><a href="chuong10.html">Chương 10 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 09 — Tmux &amp; productivity</h1>
+        <p>
+          Đây là chỗ bạn biến terminal thành <em>môi trường làm việc thực sự</em>:
+          nhiều panes song song, session không chết khi mất Wi-Fi, alias gõ tắt,
+          prompt đẹp và config dotfiles version-control như code.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. Vì sao tmux</h2>
+      <p>
+        <strong>tmux</strong> (terminal multiplexer) cho phép bạn chạy <em>nhiều shell trong cùng 1 cửa sổ</em>,
+        chia màn hình thành panes, gom panes thành windows, gom windows thành sessions —
+        và quan trọng nhất: <strong>session vẫn sống ngay cả khi bạn ngắt kết nối</strong>.
+      </p>
+
+      <h3>So sánh với mở nhiều tab iTerm</h3>
+      <table>
+        <thead><tr><th>Tình huống</th><th>iTerm tabs</th><th>tmux</th></tr></thead>
+        <tbody>
+          <tr><td>Đóng cửa sổ → tiến trình</td><td>Bị kill</td><td><strong>Vẫn chạy</strong> trong session</td></tr>
+          <tr><td>SSH lên server, mất mạng</td><td>Tiến trình chết</td><td>Detach tự động, attach lại sau</td></tr>
+          <tr><td>Layout nhiều pane song song</td><td>Phải kéo chuột chia split</td><td>Vài phím tắt là xong</td></tr>
+          <tr><td>Mở lại đúng layout cũ</td><td>Không có</td><td>Session lưu sẵn, attach là nguyên xi</td></tr>
+        </tbody>
+      </table>
+
+      <p class="text-dim">
+        Use case kinh điển: bạn SSH lên VPS, chạy <code>npm run build</code> mất 20 phút.
+        Đóng laptop đi café — về nhà attach lại session, build vẫn đang chạy hoặc đã xong, log còn nguyên.
+      </p>
+    </section>
+
+    <section>
+      <h2>2. Cài đặt &amp; lệnh cơ bản</h2>
+
+      <h3>Cài tmux</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">brew</span> install tmux         <span class="comment"># macOS</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> <span class="flag">-V</span>                   <span class="comment"># kiểm tra phiên bản</span>
+<span class="output">tmux 3.4</span></code></pre>
+
+      <h3>Vòng đời session</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">tmux</span> new <span class="flag">-s</span> work          <span class="comment"># tạo session tên "work"</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> ls                    <span class="comment"># liệt kê session đang có</span>
+<span class="output">work: 1 windows (created Thu May  8 09:12:33 2026)</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> attach <span class="flag">-t</span> work        <span class="comment"># quay lại session work (gõ tắt: tmux a -t work)</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> a                     <span class="comment"># attach session gần nhất</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> kill-session <span class="flag">-t</span> work  <span class="comment"># xóa hẳn session work</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> kill-server           <span class="comment"># tắt sạch mọi session</span></code></pre>
+
+      <h3>Prefix key — phím "kích hoạt"</h3>
+      <p>
+        Mọi phím tắt trong tmux đều bắt đầu bằng <strong>prefix</strong>. Mặc định là
+        <code>Ctrl-b</code> (giữ Ctrl + bấm b, <em>thả ra</em>, rồi mới bấm phím lệnh kế tiếp).
+      </p>
+      <p>
+        Cú pháp ta sẽ dùng xuyên suốt: <code>Ctrl-b %</code> nghĩa là "bấm prefix, thả, rồi bấm <code>%</code>".
+      </p>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Tip: remap prefix sang <code>Ctrl-a</code></div>
+        <code>Ctrl-b</code> bắt tay phải vươn xa, dễ mỏi. Đa số tmux user remap sang <code>Ctrl-a</code>
+        (gần Caps Lock, tay trái với tới rất thoải mái — quen thuộc với ai từng dùng GNU screen).
+        Cách làm sẽ ở phần <em>~/.tmux.conf</em> và bài tập về nhà.
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Pane &amp; window</h2>
+      <p>
+        Hierarchy của tmux: <strong>session</strong> chứa nhiều <strong>window</strong> (như tab),
+        mỗi window chia thành nhiều <strong>pane</strong> (như split pane trong iTerm).
+      </p>
+
+      <h3>Pane — chia màn hình</h3>
+      <pre><code><span class="comment"># Bên trong tmux, gõ prefix rồi:</span>
+Ctrl-b %        <span class="comment"># split dọc (chia trái/phải)</span>
+Ctrl-b "        <span class="comment"># split ngang (chia trên/dưới)</span>
+Ctrl-b ←/→/↑/↓  <span class="comment"># di chuyển giữa các pane</span>
+Ctrl-b o        <span class="comment"># nhảy qua pane kế tiếp</span>
+Ctrl-b z        <span class="comment"># zoom: phóng to pane hiện tại (toggle)</span>
+Ctrl-b x        <span class="comment"># đóng pane hiện tại (hỏi xác nhận)</span>
+Ctrl-b {        <span class="comment"># swap pane sang trái</span>
+Ctrl-b }        <span class="comment"># swap pane sang phải</span></code></pre>
+
+      <h3>Window — như tab</h3>
+      <pre><code>Ctrl-b c        <span class="comment"># tạo window mới</span>
+Ctrl-b n        <span class="comment"># next window</span>
+Ctrl-b p        <span class="comment"># previous window</span>
+Ctrl-b 0..9     <span class="comment"># nhảy thẳng tới window số đó</span>
+Ctrl-b ,        <span class="comment"># rename window hiện tại</span>
+Ctrl-b w        <span class="comment"># mở list window có sẵn để chọn</span>
+Ctrl-b &amp;        <span class="comment"># kill window hiện tại</span></code></pre>
+
+      <h3>Bảng phím tắt cần thuộc</h3>
+      <table>
+        <thead><tr><th>Phím</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>Ctrl-b %</code></td><td>Split pane dọc</td></tr>
+          <tr><td><code>Ctrl-b "</code></td><td>Split pane ngang</td></tr>
+          <tr><td><code>Ctrl-b ←↑→↓</code></td><td>Move giữa pane</td></tr>
+          <tr><td><code>Ctrl-b z</code></td><td>Zoom toggle pane</td></tr>
+          <tr><td><code>Ctrl-b x</code></td><td>Close pane</td></tr>
+          <tr><td><code>Ctrl-b c</code></td><td>New window</td></tr>
+          <tr><td><code>Ctrl-b n / p</code></td><td>Next/prev window</td></tr>
+          <tr><td><code>Ctrl-b ,</code></td><td>Rename window</td></tr>
+          <tr><td><code>Ctrl-b w</code></td><td>List windows</td></tr>
+          <tr><td><code>Ctrl-b d</code></td><td>Detach session</td></tr>
+          <tr><td><code>Ctrl-b $</code></td><td>Rename session</td></tr>
+          <tr><td><code>Ctrl-b ?</code></td><td>Hiện toàn bộ key bindings (cứu cánh khi quên)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. Detach &amp; resume — siêu năng lực thật sự</h2>
+      <p>
+        Đây là lý do chính người ta dùng tmux. <code>Ctrl-b d</code> sẽ <strong>detach</strong> —
+        tách bạn ra khỏi session, nhưng tiến trình bên trong <em>vẫn tiếp tục chạy</em>. Quay lại bằng <code>tmux a</code>.
+      </p>
+
+      <pre><code><span class="prompt">$ </span><span class="cmd">tmux</span> new <span class="flag">-s</span> deploy
+<span class="comment"># bên trong session, chạy lệnh dài:</span>
+<span class="prompt">$ </span><span class="cmd">npm</span> run build &amp;&amp; rsync <span class="flag">-avz</span> dist/ user@server:/var/www/
+
+<span class="comment"># Bấm Ctrl-b d → quay về terminal thường, build vẫn chạy ngầm</span>
+
+<span class="prompt">$ </span><span class="cmd">tmux</span> ls
+<span class="output">deploy: 1 windows (attached)</span>
+<span class="prompt">$ </span><span class="cmd">tmux</span> a <span class="flag">-t</span> deploy        <span class="comment"># vào lại xem tiến độ</span></code></pre>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Use case thật</div>
+        <ul style="margin:6px 0 0 18px">
+          <li>SSH lên server, chạy migration database 30 phút → detach, đóng laptop, attach lại sau khi về.</li>
+          <li>Chạy <code>npm run dev</code> + <code>npm run watch</code> + log tail trong 3 pane → ngày hôm sau attach lại đúng layout.</li>
+          <li>Pair programming: 2 người cùng attach 1 session, gõ chung 1 màn hình.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Alias &amp; <code>~/.zshrc</code></h2>
+      <p>
+        Mỗi lần mở terminal, zsh đọc file <code>~/.zshrc</code>. Đây là chỗ bạn định nghĩa alias,
+        biến môi trường, function — tóm lại là <em>biến terminal thành của riêng mình</em>.
+      </p>
+
+      <h3>Alias — gõ tắt</h3>
+      <pre><code><span class="comment"># Mở file config:</span>
+<span class="prompt">$ </span><span class="cmd">nano</span> ~/.zshrc
+
+<span class="comment"># Thêm các dòng:</span>
+alias gs=<span class="str">"git status"</span>
+alias gd=<span class="str">"git diff"</span>
+alias gco=<span class="str">"git checkout"</span>
+alias ll=<span class="str">"ls -lah"</span>
+alias ..=<span class="str">"cd .."</span>
+alias rmi=<span class="str">"rm -i"</span>           <span class="comment"># rm có hỏi xác nhận, an toàn hơn</span></code></pre>
+
+      <p>Sau khi sửa file, reload mà không cần đóng terminal:</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">source</span> ~/.zshrc
+<span class="prompt">$ </span><span class="cmd">gs</span>                       <span class="comment"># giờ chạy được rồi</span></code></pre>
+
+      <h3>Bảng alias khuyến nghị</h3>
+      <table>
+        <thead><tr><th>Alias</th><th>Lệnh thật</th><th>Khi nào dùng</th></tr></thead>
+        <tbody>
+          <tr><td><code>gs</code></td><td><code>git status</code></td><td>Gõ liên tục mỗi vài phút</td></tr>
+          <tr><td><code>gd</code></td><td><code>git diff</code></td><td>Trước khi commit</td></tr>
+          <tr><td><code>gl</code></td><td><code>git log --oneline -20</code></td><td>Xem lịch sử nhanh</td></tr>
+          <tr><td><code>ll</code></td><td><code>ls -lah</code></td><td>List có size + hidden</td></tr>
+          <tr><td><code>..</code></td><td><code>cd ..</code></td><td>Lùi 1 cấp</td></tr>
+          <tr><td><code>...</code></td><td><code>cd ../..</code></td><td>Lùi 2 cấp</td></tr>
+          <tr><td><code>tn</code></td><td><code>tmux new -s</code></td><td>Tạo session nhanh</td></tr>
+          <tr><td><code>ta</code></td><td><code>tmux attach -t</code></td><td>Attach nhanh</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Biến môi trường &amp; PATH</h3>
+      <pre><code><span class="comment"># Trong ~/.zshrc:</span>
+<span class="cmd">export</span> EDITOR=<span class="str">"nvim"</span>
+<span class="cmd">export</span> PATH=<span class="str">"$HOME/bin:$PATH"</span>     <span class="comment"># thêm ~/bin vào đầu PATH</span>
+
+<span class="comment"># Kiểm tra:</span>
+<span class="prompt">$ </span><span class="cmd">echo</span> $PATH
+<span class="prompt">$ </span><span class="cmd">echo</span> $EDITOR</code></pre>
+
+      <p class="text-dim">Nguyên tắc: bất kỳ lệnh nào bạn gõ &gt; 3 lần/ngày — hãy đặt alias.</p>
+    </section>
+
+    <section>
+      <h2>6. Dotfiles, oh-my-zsh, starship</h2>
+
+      <h3>Dotfiles — config là code</h3>
+      <p>
+        Các file cấu hình bắt đầu bằng dấu chấm (<code>.zshrc</code>, <code>.tmux.conf</code>,
+        <code>.gitconfig</code>) gọi chung là <strong>dotfiles</strong>. Best practice: đẩy
+        chúng lên 1 git repo riêng (vd <code>github.com/you/dotfiles</code>) để máy mới chỉ cần clone là có toàn bộ setup.
+      </p>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Pattern dotfiles repo</div>
+        Tạo folder <code>~/dotfiles/</code>, đưa file thật vào trong, rồi <em>symlink</em> ra home:
+        <pre style="margin-top:8px"><code><span class="prompt">$ </span><span class="cmd">mv</span> ~/.zshrc ~/dotfiles/zshrc
+<span class="prompt">$ </span><span class="cmd">ln</span> <span class="flag">-s</span> ~/dotfiles/zshrc ~/.zshrc
+<span class="prompt">$ </span><span class="cmd">cd</span> ~/dotfiles &amp;&amp; <span class="cmd">git</span> init &amp;&amp; <span class="cmd">git</span> add . &amp;&amp; <span class="cmd">git</span> commit <span class="flag">-m</span> <span class="str">"init"</span></code></pre>
+        Sửa file ở repo = sửa file thật. Có version control, push lên GitHub, máy mới
+        <code>git clone</code> + chạy script là xong.
+      </div>
+
+      <h3>oh-my-zsh — framework cho zsh</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">sh</span> <span class="flag">-c</span> <span class="str">"$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"</span></code></pre>
+      <p>
+        Sau khi cài, sửa <code>ZSH_THEME</code> và <code>plugins=(...)</code> trong <code>~/.zshrc</code>.
+        Plugins hữu ích: <code>git</code>, <code>z</code> (jump tới folder hay dùng),
+        <code>zsh-autosuggestions</code> (gợi ý lệnh xám xám theo lịch sử),
+        <code>zsh-syntax-highlighting</code>.
+      </p>
+
+      <h3>starship — prompt đẹp, nhanh</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">brew</span> install starship
+<span class="comment"># thêm vào CUỐI ~/.zshrc:</span>
+<span class="cmd">eval</span> <span class="str">"$(starship init zsh)"</span></code></pre>
+      <p>
+        Starship hiện ra git branch, ngôn ngữ project (Node version, Python venv...),
+        thời gian chạy lệnh trước đó. Cấu hình ở <code>~/.config/starship.toml</code> — chỉ chỉnh khi cần.
+      </p>
+
+      <p class="text-dim">
+        Khuyến nghị tối thiểu cho người mới: vài alias gõ tắt, prompt rõ ràng (starship hoặc
+        oh-my-zsh theme <code>robbyrussell</code>), không cần cài hết plugin trên đời.
+        Thêm dần khi thấy <em>thật sự thiếu</em>.
+      </p>
+    </section>
+
+    <section>
+      <h2>7. Thử ngay trong terminal giả lập</h2>
+      <p>
+        Lưu ý: simulator này <strong>không chạy tmux thật</strong> (tmux cần TTY). Nhưng bạn có thể
+        thử các lệnh quanh việc cấu hình shell:
+      </p>
+      <ol>
+        <li>Xem PATH hiện tại: <code>echo $PATH</code></li>
+        <li>Xem editor mặc định: <code>echo $EDITOR</code></li>
+        <li>Liệt kê alias có sẵn: <code>alias</code></li>
+        <li>Tạo alias tạm: <code>alias gs="git status"</code> rồi gõ <code>gs</code></li>
+        <li>Export biến tạm: <code>export FOO=bar &amp;&amp; echo $FOO</code></li>
+      </ol>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong9 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Bài tập về nhà</h2>
+      <p>Trên Terminal thật (không phải simulator), làm tuần tự:</p>
+      <ol>
+        <li>Cài tmux: <code>brew install tmux</code>. Kiểm tra <code>tmux -V</code>.</li>
+        <li>Tạo session đầu tiên: <code>tmux new -s learn</code>. Bên trong, split pane dọc (<code>Ctrl-b %</code>), chạy <code>top</code> ở pane phải, gõ lệnh ở pane trái.</li>
+        <li>Detach (<code>Ctrl-b d</code>), kiểm tra <code>tmux ls</code>, attach lại bằng <code>tmux a -t learn</code>.</li>
+        <li>Tạo window thứ 2 (<code>Ctrl-b c</code>), rename thành <code>logs</code> bằng <code>Ctrl-b ,</code>. Nhảy qua lại bằng <code>Ctrl-b n/p</code>.</li>
+        <li>Mở <code>~/.zshrc</code>, viết <strong>5 alias</strong> hữu ích cho bản thân (tham khảo bảng ở mục 5). <code>source ~/.zshrc</code> rồi test từng alias.</li>
+        <li>Cài starship (<code>brew install starship</code>) và thêm <code>eval "$(starship init zsh)"</code> vào cuối <code>~/.zshrc</code>. Mở terminal mới — prompt khác chưa?</li>
+        <li>Tạo file <code>~/.tmux.conf</code> với nội dung sau (đặt prefix thành <code>Ctrl-a</code> + bật chuột):
+<pre><code><span class="comment"># remap prefix Ctrl-b → Ctrl-a</span>
+unbind C-b
+<span class="cmd">set</span> <span class="flag">-g</span> prefix C-a
+bind C-a send-prefix
+
+<span class="comment"># bật mouse: kéo chia pane, scroll</span>
+<span class="cmd">set</span> <span class="flag">-g</span> mouse on
+
+<span class="comment"># bắt đầu đếm window/pane từ 1 thay vì 0</span>
+<span class="cmd">set</span> <span class="flag">-g</span> base-index 1
+<span class="cmd">setw</span> <span class="flag">-g</span> pane-base-index 1</code></pre>
+        </li>
+        <li>Reload config từ trong tmux: <code>Ctrl-a :</code> rồi gõ <code>source-file ~/.tmux.conf</code>. Test prefix mới.</li>
+        <li>Tạo repo <code>~/dotfiles</code>, đưa <code>.zshrc</code> và <code>.tmux.conf</code> vào, push lên GitHub (private repo cũng được).</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>9. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. Tổng kết</h2>
+      <ul>
+        <li>✅ tmux: terminal multiplexer — nhiều pane/window/session, sống sót qua disconnect</li>
+        <li>✅ Vòng đời: <code>tmux new -s</code>, <code>tmux ls</code>, <code>tmux a -t</code>, <code>kill-session</code></li>
+        <li>✅ Prefix mặc định <code>Ctrl-b</code> (hay remap thành <code>Ctrl-a</code>); thuộc &gt; 10 phím tắt cốt lõi</li>
+        <li>✅ Detach <code>Ctrl-b d</code> = đóng cửa sổ mà tiến trình vẫn chạy</li>
+        <li>✅ Alias trong <code>~/.zshrc</code>; reload bằng <code>source ~/.zshrc</code></li>
+        <li>✅ Dotfiles version-control bằng git repo riêng; cài <code>oh-my-zsh</code> hoặc <code>starship</code> cho prompt đẹp</li>
+      </ul>
+      <p class="text-dim">
+        Chương 10 chúng ta sẽ học <em>Automation &amp; cron</em> — tự động hoá các tác vụ
+        lặp lại: backup hằng ngày, fetch dữ liệu định kỳ, dọn rác cuối tuần. Terminal của bạn
+        sẽ làm việc <strong>cả khi bạn đang ngủ</strong>.
+      </p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="chuong8.html">
+        <span class="label">Trước</span>
+        ← Chương 08: Networking &amp; SSH
+      </a>
+      <a href="chuong10.html">
+        <span class="label">Tiếp theo</span>
+        Chương 10: Automation &amp; cron →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 09
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Trong tmux, đâu là thứ tự bao bọc đúng từ ngoài vào trong?",
+        options: [
+          "pane → window → session",
+          "session → window → pane",
+          "window → session → pane",
+          "session → pane → window"
+        ],
+        correct: 1,
+        explain: "Session là cấp cao nhất, chứa nhiều window (như tab); mỗi window chia thành nhiều pane (split). Khi bạn 'tmux ls' bạn liệt kê session — không phải window hay pane."
+      },
+      {
+        q: "Prefix key mặc định của tmux là gì?",
+        options: ["Ctrl-a", "Ctrl-b", "Ctrl-x", "Esc"],
+        correct: 1,
+        explain: "Mặc định là Ctrl-b. Nhiều người remap thành Ctrl-a (gần Caps Lock, tay trái thoải hơn) bằng cách sửa ~/.tmux.conf — giống GNU screen quen thuộc."
+      },
+      {
+        q: "Bạn đang chạy 'npm run build' trong tmux qua SSH. Mạng yếu, bạn muốn ngắt kết nối nhưng để build TIẾP TỤC chạy. Bấm gì?",
+        options: [
+          "Ctrl-c rồi exit",
+          "Ctrl-b x (close pane)",
+          "Ctrl-b d (detach)",
+          "Ctrl-d (logout)"
+        ],
+        correct: 2,
+        explain: "Ctrl-b d = detach: bạn rời session nhưng tiến trình tiếp tục chạy. Ctrl-c sẽ KILL build. Ctrl-d/exit sẽ đóng shell. Ctrl-b x đóng pane và cũng giết tiến trình."
+      },
+      {
+        q: "Alias 'alias gs=\"git status\"' nên đặt ở file nào để áp dụng cho mọi terminal mới mở?",
+        options: [
+          "~/.tmux.conf",
+          "~/.zshrc",
+          "~/.gitconfig",
+          "/etc/hosts"
+        ],
+        correct: 1,
+        explain: "~/.zshrc được zsh đọc mỗi khi mở shell mới. ~/.tmux.conf chỉ cho tmux. ~/.gitconfig chỉ cho git. Sau khi sửa ~/.zshrc, gõ 'source ~/.zshrc' để áp dụng ngay không cần mở terminal mới."
+      },
+      {
+        q: "Trong tmux, 'Ctrl-b %' và 'Ctrl-b \"' khác nhau như thế nào?",
+        options: [
+          "% tạo window mới, \" tạo pane mới",
+          "% split dọc (trái/phải), \" split ngang (trên/dưới)",
+          "Cả hai đều split dọc, chỉ tên khác",
+          "% chỉ trong macOS, \" chỉ trong Linux"
+        ],
+        correct: 1,
+        explain: "% = split vertical (đường chia thẳng đứng → 2 pane trái/phải). \" = split horizontal (đường chia ngang → 2 pane trên/dưới). Cách nhớ: ký tự % có vạch nghiêng dọc, \" nằm trên đầu chữ — gợi ý hướng chia."
+      },
+      {
+        q: "Sau khi sửa ~/.zshrc, làm gì để config có hiệu lực ngay trong terminal hiện tại (không phải mở terminal mới)?",
+        options: [
+          "exit rồi mở lại",
+          "source ~/.zshrc",
+          "tmux kill-server",
+          "echo $PATH"
+        ],
+        correct: 1,
+        explain: "'source ~/.zshrc' (hay tương đương '. ~/.zshrc') ép shell hiện tại đọc lại file config. exit rồi mở lại cũng được nhưng mất context (cd, biến tạm...). Mẹo: đặt alias 'reload=\"source ~/.zshrc\"'."
+      },
+      {
+        q: "Bạn cài starship để có prompt đẹp. Dòng 'eval \"$(starship init zsh)\"' phải nằm ở đâu?",
+        options: [
+          "Đầu file ~/.zshrc",
+          "Cuối file ~/.zshrc",
+          "Trong ~/.tmux.conf",
+          "Trong ~/.bash_profile"
+        ],
+        correct: 1,
+        explain: "Cuối ~/.zshrc — vì starship cần ghi đè PROMPT sau khi mọi thứ khác (oh-my-zsh, theme cũ...) đã chạy xong. Nếu đặt ở đầu, các config sau có thể ghi đè ngược lại prompt của starship."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

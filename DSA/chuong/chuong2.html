@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 02 — Array & String · DSA Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo"><a href="../index.html" style="color:inherit;text-decoration:none"><span class="logo-mark">◇</span> dsa-mastery</a></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong1.html">← Ch.01</a></li>
+        <li><a href="chuong2.html" class="active">Ch.02</a></li>
+        <li><a href="chuong3.html">Ch.03 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 02 · LINEAR DS · ~120 phút</div>
+      <h1>Array &amp;<br/><span class="text-amber">String</span></h1>
+      <p class="lead">
+        Cấu trúc dữ liệu phổ biến nhất, xuất hiện ~40% bài phỏng vấn coding.
+        Trong chương này bạn sẽ làm chủ 4 pattern <strong>vũ khí</strong>: Two Pointers, Sliding Window, Prefix Sum, Difference Array —
+        giúp giảm độ phức tạp O(n²) xuống O(n) trong rất nhiều bài toán.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#internals">2.1 Array internals</a></li>
+          <li><a href="#operations">2.2 Big-O thao tác</a></li>
+          <li><a href="#two-pointers">2.3 Two Pointers</a></li>
+          <li><a href="#sliding-window">2.4 Sliding Window</a></li>
+          <li><a href="#prefix-sum">2.5 Prefix Sum</a></li>
+          <li><a href="#diff-array">2.6 Difference Array</a></li>
+          <li><a href="#string">2.7 String trong JS</a></li>
+          <li><a href="#string-algo">2.8 String matching</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 2.1 -->
+        <section id="internals">
+          <h2>2.1 Array internals — bên trong array là gì?</h2>
+
+          <p>
+            Khi nói "array", lập trình viên C/C++ hiểu khác lập trình viên JS. Hãy phân biệt rõ vì điều này
+            ảnh hưởng đến cách bạn nói về Big-O trong phỏng vấn.
+          </p>
+
+          <h3>Array trong C/C++ — cố định, contiguous</h3>
+          <ul>
+            <li>Kích thước cố định khi khai báo</li>
+            <li>Phần tử nằm liên tiếp trong RAM (contiguous memory)</li>
+            <li>Truy cập <code>arr[i]</code> = <code>base_address + i × sizeof(type)</code> → O(1) thật sự</li>
+            <li>Tất cả phần tử cùng kiểu (homogeneous)</li>
+          </ul>
+
+          <h3>Array trong JS — dynamic, heterogeneous</h3>
+          <ul>
+            <li>Kích thước thay đổi được (push, pop, splice...)</li>
+            <li>Có thể chứa nhiều kiểu khác nhau: <code>[1, "hello", true, {a: 1}]</code></li>
+            <li>Bên trong, V8 tối ưu hai kiểu lưu trữ:
+              <ul>
+                <li><strong>Packed/Holey Smi</strong>: array chỉ chứa số nguyên nhỏ → lưu liên tiếp như C array</li>
+                <li><strong>Dictionary mode</strong>: khi array thưa hoặc có lỗ → chuyển sang lưu giống object</li>
+              </ul>
+            </li>
+          </ul>
+
+          <pre data-lang="javascript"><code>// Packed elements (nhanh nhất)
+const a = [1, 2, 3, 4, 5];
+
+// Holey array (V8 deopt - chậm hơn)
+const b = [1, 2, 3];
+b[100] = 100;  // tạo "lỗ" → array trở thành holey
+
+// Mixed types (chậm nhất)
+const c = [1, "two", true, {}];</code></pre>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Performance tip</div>
+            Trong code thực tế, giữ array <em>cùng kiểu</em> (toàn số hoặc toàn object) và <em>không tạo lỗ</em>
+            (đừng <code>arr[100] = x</code> khi array đang có 5 phần tử). V8 sẽ tối ưu tốt hơn rất nhiều.
+          </div>
+        </section>
+
+        <!-- 2.2 -->
+        <section id="operations">
+          <h2>2.2 Big-O của các thao tác Array</h2>
+
+          <p>Bảng này (đã xuất hiện ở Chương 1, ôn lại):</p>
+
+          <table>
+            <thead>
+              <tr><th>Thao tác</th><th>Big-O</th><th>Vì sao</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>arr[i]</code></td><td>O(1)</td><td>Index trực tiếp qua memory offset</td></tr>
+              <tr><td><code>push / pop</code></td><td>O(1) amortized</td><td>Thao tác cuối mảng, không phải dịch</td></tr>
+              <tr><td><code>shift / unshift</code></td><td class="text-red">O(n)</td><td>Phải dịch tất cả phần tử</td></tr>
+              <tr><td><code>splice(i, k)</code></td><td>O(n)</td><td>Cắt + dịch phần còn lại</td></tr>
+              <tr><td><code>indexOf / includes / find</code></td><td>O(n)</td><td>Quét tuyến tính</td></tr>
+              <tr><td><code>sort</code></td><td>O(n log n)</td><td>TimSort</td></tr>
+              <tr><td><code>concat / slice</code></td><td>O(n)</td><td>Copy phần tử sang mảng mới</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Đừng dùng shift() trong vòng lặp</div>
+            <pre data-lang="javascript"><code>// ❌ SAI — chạy O(n²)
+while (queue.length) {
+  const item = queue.shift();
+  process(item);
+}
+
+// ✅ ĐÚNG — dùng index thủ công, O(n)
+let head = 0;
+while (head &lt; queue.length) {
+  process(queue[head]);
+  head++;
+}</code></pre>
+          </div>
+        </section>
+
+        <!-- 2.3 -->
+        <section id="two-pointers">
+          <h2>2.3 Pattern: Two Pointers — vũ khí số 1</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> dùng 2 con trỏ (index) di chuyển trên array để giảm O(n²) xuống O(n).
+            Hai biến thể chính:
+          </p>
+
+          <ol>
+            <li><strong>Opposite direction</strong> (đối nghịch): một con trỏ ở đầu, một ở cuối, di chuyển vào giữa.</li>
+            <li><strong>Same direction</strong> (cùng hướng): cả hai cùng đi từ trái sang phải, một nhanh một chậm.</li>
+          </ol>
+
+          <h3>2.3.1 Opposite direction — Two Sum trên mảng đã sort</h3>
+
+          <p><strong>Bài toán:</strong> Cho mảng đã sort tăng dần và target. Tìm 2 số có tổng = target.</p>
+
+          <pre data-lang="javascript"><code>// Brute force — O(n²)
+function twoSumBrute(arr, target) {
+  for (let i = 0; i &lt; arr.length; i++) {
+    for (let j = i + 1; j &lt; arr.length; j++) {
+      if (arr[i] + arr[j] === target) return [i, j];
+    }
+  }
+  return null;
+}
+
+// Two pointers — O(n) khi mảng đã sort
+function twoSumPtr(arr, target) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo &lt; hi) {
+    const sum = arr[lo] + arr[hi];
+    if (sum === target) return [lo, hi];
+    if (sum &lt; target) lo++;   // cần tổng lớn hơn → đẩy lo phải
+    else                hi--;  // cần tổng nhỏ hơn → kéo hi trái
+  }
+  return null;
+}</code></pre>
+
+          <p><strong>Tại sao đúng?</strong></p>
+          <ul>
+            <li>Nếu <code>arr[lo] + arr[hi] &lt; target</code>: <code>arr[hi]</code> là phần tử <em>lớn nhất</em> còn lại,
+              nên <code>arr[lo]</code> không thể là đáp án (ghép với bất kỳ phần tử nào khác đều &lt; target). Bỏ <code>lo</code>.</li>
+            <li>Tương tự khi tổng &gt; target: bỏ <code>hi</code>.</li>
+          </ul>
+
+          <h3>Visualizer: Two Pointers</h3>
+          <p>Tìm tổng = 13 trong <code>[1, 3, 5, 7, 9, 11]</code>:</p>
+
+          <div class="viz-array">
+            <div class="viz-cell highlight" data-index="lo">1</div>
+            <div class="viz-cell" data-index="">3</div>
+            <div class="viz-cell" data-index="">5</div>
+            <div class="viz-cell" data-index="">7</div>
+            <div class="viz-cell" data-index="">9</div>
+            <div class="viz-cell highlight" data-index="hi">11</div>
+          </div>
+          <p class="text-dim">1 + 11 = 12 &lt; 13 → lo++</p>
+
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="">1</div>
+            <div class="viz-cell highlight" data-index="lo">3</div>
+            <div class="viz-cell" data-index="">5</div>
+            <div class="viz-cell" data-index="">7</div>
+            <div class="viz-cell" data-index="">9</div>
+            <div class="viz-cell highlight" data-index="hi">11</div>
+          </div>
+          <p class="text-dim">3 + 11 = 14 &gt; 13 → hi--</p>
+
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="">1</div>
+            <div class="viz-cell highlight" data-index="lo">3</div>
+            <div class="viz-cell" data-index="">5</div>
+            <div class="viz-cell" data-index="">7</div>
+            <div class="viz-cell highlight" data-index="hi">9</div>
+            <div class="viz-cell dim" data-index="">11</div>
+          </div>
+          <p class="text-dim">3 + 9 = 12 &lt; 13 → lo++</p>
+
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="">1</div>
+            <div class="viz-cell dim" data-index="">3</div>
+            <div class="viz-cell highlight" data-index="lo">5</div>
+            <div class="viz-cell" data-index="">7</div>
+            <div class="viz-cell highlight" data-index="hi">9</div>
+            <div class="viz-cell dim" data-index="">11</div>
+          </div>
+          <p class="text-dim">5 + 9 = 14 &gt; 13 → hi--</p>
+
+          <div class="viz-array">
+            <div class="viz-cell dim" data-index="">1</div>
+            <div class="viz-cell dim" data-index="">3</div>
+            <div class="viz-cell highlight" data-index="lo">5</div>
+            <div class="viz-cell highlight" data-index="hi">7</div>
+            <div class="viz-cell dim" data-index="">9</div>
+            <div class="viz-cell dim" data-index="">11</div>
+          </div>
+          <p class="text-dim">5 + 7 = 12... à không phải 13. Trong ví dụ này không có cặp tổng 13. Nhưng cách di chuyển bạn đã thấy.</p>
+
+          <h3>2.3.2 Same direction — Remove duplicates in-place</h3>
+
+          <p><strong>Bài toán:</strong> Mảng đã sort, xoá phần tử trùng <em>tại chỗ</em>, trả về độ dài mới.</p>
+
+          <pre data-lang="javascript"><code>// Two pointers cùng hướng — O(n)
+function removeDuplicates(arr) {
+  if (arr.length === 0) return 0;
+  let slow = 0;  // vị trí ghi
+  for (let fast = 1; fast &lt; arr.length; fast++) {
+    if (arr[fast] !== arr[slow]) {
+      slow++;
+      arr[slow] = arr[fast];
+    }
+  }
+  return slow + 1;  // độ dài mới
+}
+
+// Demo:
+// arr = [1, 1, 2, 2, 3]
+// slow=0 fast=1: arr[1]=1 == arr[0]=1 → bỏ qua
+// slow=0 fast=2: arr[2]=2 != arr[0]=1 → slow=1, arr[1]=2
+// slow=1 fast=3: arr[3]=2 == arr[1]=2 → bỏ qua
+// slow=1 fast=4: arr[4]=3 != arr[1]=2 → slow=2, arr[2]=3
+// Kết quả: arr = [1, 2, 3, ...], length = 3</code></pre>
+
+          <h3>Khi nào dùng Two Pointers?</h3>
+          <ul>
+            <li>Mảng đã sort + tìm cặp/bộ ba có tổng/hiệu nhất định</li>
+            <li>Đảo ngược mảng/chuỗi tại chỗ</li>
+            <li>Loại bỏ phần tử / lấy phần tử duy nhất tại chỗ</li>
+            <li>Kiểm tra palindrome</li>
+            <li>Container with most water, trapping rain water</li>
+          </ul>
+        </section>
+
+        <!-- 2.4 -->
+        <section id="sliding-window">
+          <h2>2.4 Pattern: Sliding Window — cửa sổ trượt</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> duy trì 1 "cửa sổ" liên tiếp (subarray) trên mảng, trượt cửa sổ để tìm subarray
+            tốt nhất theo điều kiện. Hai biến thể:
+          </p>
+
+          <ol>
+            <li><strong>Fixed-size window</strong>: kích thước cửa sổ cố định k.</li>
+            <li><strong>Variable-size window</strong>: kích thước thay đổi theo điều kiện.</li>
+          </ol>
+
+          <h3>2.4.1 Fixed window — Tổng max của subarray có k phần tử</h3>
+
+          <pre data-lang="javascript"><code>// Brute force — O(n × k)
+function maxSumK(arr, k) {
+  let max = -Infinity;
+  for (let i = 0; i &lt;= arr.length - k; i++) {
+    let sum = 0;
+    for (let j = i; j &lt; i + k; j++) sum += arr[j];
+    max = Math.max(max, sum);
+  }
+  return max;
+}
+
+// Sliding window — O(n)
+function maxSumKWindow(arr, k) {
+  let sum = 0;
+  // Tính tổng cửa sổ đầu tiên
+  for (let i = 0; i &lt; k; i++) sum += arr[i];
+  let max = sum;
+  // Trượt cửa sổ: thêm phần tử mới, bỏ phần tử cũ
+  for (let i = k; i &lt; arr.length; i++) {
+    sum += arr[i] - arr[i - k];
+    max = Math.max(max, sum);
+  }
+  return max;
+}</code></pre>
+
+          <h3>2.4.2 Variable window — Longest Substring Without Repeating</h3>
+
+          <p><strong>Bài toán kinh điển:</strong> tìm substring dài nhất không có ký tự lặp.</p>
+
+          <pre data-lang="javascript"><code>// Sliding window + hash set — O(n)
+function lengthOfLongestSubstring(s) {
+  const seen = new Set();
+  let left = 0, max = 0;
+  for (let right = 0; right &lt; s.length; right++) {
+    // Thu nhỏ cửa sổ từ trái cho đến khi không còn ký tự lặp
+    while (seen.has(s[right])) {
+      seen.delete(s[left]);
+      left++;
+    }
+    seen.add(s[right]);
+    max = Math.max(max, right - left + 1);
+  }
+  return max;
+}
+
+// Demo: s = "abcabcbb"
+// right=0 'a': seen={a}, max=1
+// right=1 'b': seen={a,b}, max=2
+// right=2 'c': seen={a,b,c}, max=3
+// right=3 'a': 'a' đã có → xoá s[left=0]='a', seen={b,c}; thêm 'a' → seen={b,c,a}, window [1,3]
+// ...</code></pre>
+
+          <h3>Template Sliding Window biến đổi</h3>
+
+          <pre data-lang="javascript"><code>function slidingWindow(arr, isValid) {
+  let left = 0;
+  let result = 0;  // hoặc khởi tạo phù hợp
+  for (let right = 0; right &lt; arr.length; right++) {
+    // Mở rộng cửa sổ: thêm arr[right] vào state
+    addToWindow(arr[right]);
+
+    // Thu nhỏ cửa sổ nếu vi phạm điều kiện
+    while (!isValid()) {
+      removeFromWindow(arr[left]);
+      left++;
+    }
+
+    // Cập nhật kết quả
+    result = Math.max(result, right - left + 1);
+  }
+  return result;
+}</code></pre>
+
+          <h3>Khi nào dùng Sliding Window?</h3>
+          <ul>
+            <li>Bài toán tìm subarray/substring "dài nhất" / "ngắn nhất" / "chứa đúng k phần tử khác nhau"</li>
+            <li>Tổng/tích/đếm trong cửa sổ</li>
+            <li>Substring chứa các ký tự nhất định</li>
+            <li>Bất kỳ bài nào cần "khoảng liên tiếp"</li>
+          </ul>
+        </section>
+
+        <!-- 2.5 -->
+        <section id="prefix-sum">
+          <h2>2.5 Prefix Sum — tính tổng đoạn trong O(1)</h2>
+
+          <p>
+            <strong>Ý tưởng:</strong> tiền xử lý mảng trong O(n) để sau đó trả lời <em>tổng từ index i đến j</em>
+            trong O(1) cho mọi truy vấn.
+          </p>
+
+          <pre data-lang="javascript"><code>// Khởi tạo prefix sum
+function buildPrefix(arr) {
+  const prefix = [0];  // prefix[0] = 0 (sentinel)
+  for (let i = 0; i &lt; arr.length; i++) {
+    prefix.push(prefix[i] + arr[i]);
+  }
+  return prefix;
+}
+
+// arr   = [3, 1, 4, 1, 5, 9, 2, 6]
+// prefix= [0, 3, 4, 8, 9, 14, 23, 25, 31]
+//          ^idx 0 1 2 3 4  5   6   7   8
+
+// Tổng từ index i đến j (inclusive) = prefix[j+1] - prefix[i]
+function sumRange(prefix, i, j) {
+  return prefix[j + 1] - prefix[i];
+}
+
+// Vd: tổng từ index 2 đến 5 = 4+1+5+9 = 19
+//   = prefix[6] - prefix[2] = 23 - 4 = 19 ✓</code></pre>
+
+          <h3>Bài toán: Subarray Sum Equals K</h3>
+          <p>Đếm số subarray có tổng = k. Đây là bài <strong>cực kinh điển</strong>, hỏi rất nhiều.</p>
+
+          <pre data-lang="javascript"><code>// Brute force — O(n²)
+function subarraySumBrute(arr, k) {
+  let count = 0;
+  for (let i = 0; i &lt; arr.length; i++) {
+    let sum = 0;
+    for (let j = i; j &lt; arr.length; j++) {
+      sum += arr[j];
+      if (sum === k) count++;
+    }
+  }
+  return count;
+}
+
+// Prefix sum + Hash Map — O(n)
+// Ý tưởng: nếu prefix[j+1] - prefix[i] = k → prefix[i] = prefix[j+1] - k
+// Đếm xem prefix[i] đã xuất hiện bao nhiêu lần trong các prefix trước
+function subarraySum(arr, k) {
+  const map = new Map();
+  map.set(0, 1);  // prefix sum 0 đã xuất hiện 1 lần (trước khi bắt đầu)
+  let sum = 0, count = 0;
+  for (const x of arr) {
+    sum += x;
+    if (map.has(sum - k)) count += map.get(sum - k);
+    map.set(sum, (map.get(sum) || 0) + 1);
+  }
+  return count;
+}</code></pre>
+
+          <h3>2D Prefix Sum</h3>
+          <p>Áp dụng tương tự cho ma trận: tổng vùng chữ nhật trong O(1) sau O(m·n) preprocessing.</p>
+
+          <pre data-lang="javascript"><code>function build2DPrefix(matrix) {
+  const m = matrix.length, n = matrix[0].length;
+  const p = Array.from({length: m + 1}, () =&gt; Array(n + 1).fill(0));
+  for (let i = 1; i &lt;= m; i++) {
+    for (let j = 1; j &lt;= n; j++) {
+      p[i][j] = p[i-1][j] + p[i][j-1] - p[i-1][j-1] + matrix[i-1][j-1];
+    }
+  }
+  return p;
+}
+
+// Tổng vùng [r1..r2][c1..c2]
+function sumRegion(p, r1, c1, r2, c2) {
+  return p[r2+1][c2+1] - p[r1][c2+1] - p[r2+1][c1] + p[r1][c1];
+}</code></pre>
+        </section>
+
+        <!-- 2.6 -->
+        <section id="diff-array">
+          <h2>2.6 Difference Array — range update O(1)</h2>
+
+          <p>
+            Anh em song sinh của Prefix Sum. Difference array dùng để <strong>cập nhật một đoạn</strong> mảng
+            trong O(1), sau đó dựng lại mảng cuối trong O(n).
+          </p>
+
+          <pre data-lang="javascript"><code>// Bài toán: cho mảng arr, có Q truy vấn dạng "thêm v vào tất cả arr[l..r]"
+// Sau Q truy vấn, in mảng cuối.
+
+// Brute force — O(Q × n)
+// Difference array — O(Q + n)
+
+function rangeUpdate(arr, queries) {
+  const n = arr.length;
+  const diff = new Array(n + 1).fill(0);
+
+  // Mỗi query (l, r, v):
+  // diff[l] += v, diff[r+1] -= v
+  for (const [l, r, v] of queries) {
+    diff[l] += v;
+    diff[r + 1] -= v;
+  }
+
+  // Dựng lại bằng prefix sum của diff
+  let acc = 0;
+  for (let i = 0; i &lt; n; i++) {
+    acc += diff[i];
+    arr[i] += acc;
+  }
+  return arr;
+}
+
+// Demo:
+// arr = [0, 0, 0, 0, 0], queries = [[1,3,5], [0,2,2]]
+// Sau query 1: arr nên là [0, 5, 5, 5, 0]
+// Sau query 2: arr nên là [2, 7, 7, 5, 0]
+// Difference array: diff = [2, 5, 0, -5, 0, -2]
+// Prefix: 2, 7, 7, 2, 2, 0 → arr cuối = [2, 7, 7, 2, 2] (≈ ý tưởng)</code></pre>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Cặp đôi Prefix Sum / Difference Array</div>
+            <ul>
+              <li><strong>Prefix sum:</strong> truy vấn tổng đoạn O(1), update phần tử O(n)</li>
+              <li><strong>Difference array:</strong> update đoạn O(1), truy vấn phần tử O(n) (sau dựng lại)</li>
+            </ul>
+            Hai kỹ thuật này là "đối ngẫu" của nhau — cùng ý tưởng, ngược chiều thông tin.
+          </div>
+        </section>
+
+        <!-- 2.7 -->
+        <section id="string">
+          <h2>2.7 String trong JavaScript</h2>
+
+          <h3>Tính chất quan trọng</h3>
+          <ul>
+            <li><strong>Immutable:</strong> không thể thay đổi tại chỗ. <code>s[0] = 'A'</code> không có hiệu lực.</li>
+            <li><strong>UTF-16 encoding:</strong> mỗi ký tự thường là 1 code unit (16 bit), nhưng emoji có thể chiếm 2.</li>
+            <li><strong>Concatenation tốn kém:</strong> <code>s + t</code> tạo string mới → tránh trong vòng lặp lớn.</li>
+          </ul>
+
+          <pre data-lang="javascript"><code>// ❌ SAI — tạo n string mới, O(n²) tổng cộng
+function joinSlow(words) {
+  let s = '';
+  for (const w of words) s += w;
+  return s;
+}
+
+// ✅ ĐÚNG — dùng Array + join, O(n)
+function joinFast(words) {
+  return words.join('');
+}
+
+// ✅ ĐÚNG — dùng template literal hoặc Array.push + join
+const parts = [];
+for (const w of words) parts.push(w);
+const s = parts.join('');</code></pre>
+
+          <h3>Các phương thức quan trọng</h3>
+          <table>
+            <thead>
+              <tr><th>Method</th><th>Mục đích</th><th>Big-O</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>str.length</code></td><td>Số code unit</td><td>O(1)</td></tr>
+              <tr><td><code>str[i]</code> hoặc <code>charAt(i)</code></td><td>Lấy ký tự thứ i</td><td>O(1)</td></tr>
+              <tr><td><code>str.charCodeAt(i)</code></td><td>Lấy mã UTF-16</td><td>O(1)</td></tr>
+              <tr><td><code>String.fromCharCode(n)</code></td><td>Số → ký tự</td><td>O(1)</td></tr>
+              <tr><td><code>str.includes(s)</code></td><td>Có chứa s không?</td><td>O(n·m)</td></tr>
+              <tr><td><code>str.indexOf(s)</code></td><td>Vị trí đầu của s</td><td>O(n·m)</td></tr>
+              <tr><td><code>str.split(sep)</code></td><td>Tách thành array</td><td>O(n)</td></tr>
+              <tr><td><code>str.slice(i, j)</code></td><td>Substring</td><td>O(j-i)</td></tr>
+              <tr><td><code>str.replace / replaceAll</code></td><td>Thay thế</td><td>O(n)</td></tr>
+              <tr><td><code>str.toLowerCase / toUpperCase</code></td><td>Đổi case</td><td>O(n)</td></tr>
+              <tr><td><code>str === t</code></td><td>So sánh</td><td>O(n)</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Convert string ↔ array</h3>
+          <pre data-lang="javascript"><code>// String → Array để dùng các method array
+const arr = "hello".split("");        // ["h","e","l","l","o"]
+const arr2 = [..."hello"];            // tương tự
+const arr3 = Array.from("hello");     // tương tự
+
+// Array → String
+const s = ["h","e","l","l","o"].join("");  // "hello"
+
+// Đảo ngược string (vì string immutable, phải qua array)
+const reversed = "hello".split("").reverse().join("");  // "olleh"</code></pre>
+
+          <div class="callout warning">
+            <div class="callout-title">⚠️ Bẫy với emoji & Unicode</div>
+            <pre data-lang="javascript"><code>const s = "👋hello";
+s.length;              // 7 (emoji chiếm 2 code unit!)
+s[0];                  // '\uD83D' — half emoji, hỏng
+[...s][0];             // '👋' — đúng, vì spread chia theo Unicode
+s.charAt(0);           // '\uD83D' — vẫn hỏng
+[...s].length;         // 6 — đúng số ký tự "thấy được"</code></pre>
+          </div>
+        </section>
+
+        <!-- 2.8 -->
+        <section id="string-algo">
+          <h2>2.8 String Matching — tìm pattern trong text</h2>
+
+          <h3>Naive (Brute Force) — O(n·m)</h3>
+          <pre data-lang="javascript"><code>function naiveSearch(text, pattern) {
+  const n = text.length, m = pattern.length;
+  for (let i = 0; i &lt;= n - m; i++) {
+    let j = 0;
+    while (j &lt; m &amp;&amp; text[i + j] === pattern[j]) j++;
+    if (j === m) return i;
+  }
+  return -1;
+}</code></pre>
+
+          <h3>KMP (Knuth-Morris-Pratt) — O(n+m)</h3>
+          <p>
+            Dùng "failure function" để khi mismatch, không phải bắt đầu lại từ đầu pattern.
+            Chi tiết KMP sẽ học sâu ở chương <em>String advanced</em> nâng cao (tham khảo).
+          </p>
+
+          <pre data-lang="javascript"><code>function buildLPS(pattern) {
+  const lps = new Array(pattern.length).fill(0);
+  let len = 0, i = 1;
+  while (i &lt; pattern.length) {
+    if (pattern[i] === pattern[len]) {
+      lps[i++] = ++len;
+    } else if (len &gt; 0) {
+      len = lps[len - 1];
+    } else {
+      lps[i++] = 0;
+    }
+  }
+  return lps;
+}
+
+function kmpSearch(text, pattern) {
+  const lps = buildLPS(pattern);
+  let i = 0, j = 0;
+  while (i &lt; text.length) {
+    if (text[i] === pattern[j]) {
+      i++; j++;
+      if (j === pattern.length) return i - j;
+    } else if (j &gt; 0) {
+      j = lps[j - 1];
+    } else {
+      i++;
+    }
+  }
+  return -1;
+}</code></pre>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Trong phỏng vấn thực tế</div>
+            Hiếm khi bạn phải code KMP từ đầu trên giấy. Nhưng <strong>biết tên</strong> nó tồn tại + biết Big-O O(n+m)
+            là đủ để gây ấn tượng. Nếu phỏng vấn FAANG, bạn nên hiểu cơ chế failure function.
+          </div>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Reverse Array tại chỗ</div>
+            <p>Viết hàm <code>reverse(arr)</code> đảo ngược mảng <em>tại chỗ</em>, không tạo mảng mới. (Two pointers)</p>
+            <pre data-lang="javascript"><code>// Input:  [1, 2, 3, 4, 5]
+// Output: [5, 4, 3, 2, 1]</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Valid Palindrome</div>
+            <p>Kiểm tra string có phải palindrome không, bỏ qua khoảng trắng và ký tự không phải chữ. Case-insensitive.</p>
+            <pre data-lang="javascript"><code>"A man, a plan, a canal: Panama" → true
+"race a car"                      → false</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Maximum Sum Subarray of Size K</div>
+            <p>Cho mảng số và k. Tìm tổng lớn nhất của subarray có đúng k phần tử liên tiếp. (Fixed sliding window)</p>
+            <pre data-lang="javascript"><code>arr = [2, 1, 5, 1, 3, 2], k = 3 → 9 (5+1+3)</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — 3Sum</div>
+            <p>Cho mảng, tìm tất cả bộ ba <code>[a, b, c]</code> có tổng = 0 (không trùng). Hint: sort + two pointers, O(n²).</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Minimum Window Substring</div>
+            <p>Cho string s và t. Tìm substring ngắn nhất của s chứa tất cả ký tự của t. (Variable sliding window)</p>
+            <pre data-lang="javascript"><code>s = "ADOBECODEBANC", t = "ABC" → "BANC"</code></pre>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Product of Array Except Self</div>
+            <p>Cho mảng <code>nums</code>, trả về mảng <code>res</code> mà <code>res[i]</code> = tích tất cả phần tử trừ <code>nums[i]</code>. <strong>Không dùng phép chia</strong>, O(n).</p>
+            <pre data-lang="javascript"><code>[1,2,3,4] → [24,12,8,6]</code></pre>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 1.</strong> Two Pointers (opposite direction) hoạt động đúng khi nào?</p>
+              <ul class="quiz-options">
+                <li>Trên mọi mảng</li>
+                <li>Mảng đã được sort</li>
+                <li>Mảng có ít hơn 100 phần tử</li>
+                <li>Mảng chỉ chứa số dương</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Mảng đã được sort.</strong> Logic "tổng bé thì lo++, tổng lớn thì hi--" chỉ đúng khi mảng sort.
+                Nếu không sort thì việc di chuyển con trỏ không đảm bảo loại được phần tử an toàn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 2.</strong> Big-O của bài Two Sum dùng Hash Map trên mảng KHÔNG sort là?</p>
+              <ul class="quiz-options">
+                <li>O(n²)</li>
+                <li>O(n log n)</li>
+                <li>O(n) time, O(n) space</li>
+                <li>O(1)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n) time, O(n) space.</strong> Với hash map: duyệt 1 lần, mỗi phần tử check + insert đều O(1) trung bình → O(n). Space O(n) cho map.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 3.</strong> Sliding window phù hợp nhất với loại bài nào?</p>
+              <ul class="quiz-options">
+                <li>Tìm kiếm trên mảng đã sort</li>
+                <li>Đảo ngược mảng</li>
+                <li>Tìm subarray/substring liên tiếp thoả mãn điều kiện</li>
+                <li>Sắp xếp</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Tìm subarray/substring liên tiếp thoả mãn điều kiện.</strong> Bản chất sliding window là duy trì một "khoảng liên tiếp" mở rộng/thu hẹp theo điều kiện.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 4.</strong> Prefix Sum giúp giảm độ phức tạp của thao tác nào?</p>
+              <ul class="quiz-options">
+                <li>Truy vấn tổng đoạn từ O(n) xuống O(1)</li>
+                <li>Cập nhật đoạn từ O(n) xuống O(1)</li>
+                <li>Sắp xếp từ O(n²) xuống O(n log n)</li>
+                <li>Tìm kiếm từ O(n) xuống O(log n)</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Truy vấn tổng đoạn từ O(n) xuống O(1).</strong> Sau khi build prefix array trong O(n), mỗi range query chỉ là 1 phép trừ.
+                Cập nhật đoạn O(1) là Difference Array — kỹ thuật khác.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> <code>"👋hello".length</code> trong JS bằng?</p>
+              <ul class="quiz-options">
+                <li>5</li>
+                <li>6</li>
+                <li>7</li>
+                <li>1</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: 7.</strong> Emoji <code>👋</code> ngoài BMP (Basic Multilingual Plane), được encode thành <strong>2 code unit UTF-16</strong>, cộng với "hello" 5 ký tự = 7.
+                Đây là bẫy phỏng vấn JS rất hay.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 6.</strong> Đoạn nào tính tổng đoạn trên mảng <em>tĩnh</em> hiệu quả nhất khi có nhiều truy vấn?</p>
+              <ul class="quiz-options">
+                <li>Quét tuyến tính mỗi lần truy vấn</li>
+                <li>Sort rồi binary search</li>
+                <li>Build prefix sum một lần, sau đó mỗi truy vấn O(1)</li>
+                <li>Hash map từ index tới giá trị</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Prefix sum.</strong> Build O(n) một lần, sau đó Q truy vấn × O(1) = tổng O(n + Q). Hiệu quả nhất khi Q lớn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 7.</strong> Tại sao <code>arr.shift()</code> trong vòng lặp gây bug performance?</p>
+              <ul class="quiz-options">
+                <li>Vì shift() là O(n), gọi n lần thành O(n²)</li>
+                <li>Vì shift() làm thay đổi reference của array</li>
+                <li>Vì shift() trả về undefined với array rỗng</li>
+                <li>Vì shift() chỉ chạy được trên array number</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: O(n) × n lần = O(n²).</strong> Mỗi shift dịch toàn bộ phần tử về trước 1 vị trí. Nếu cần "queue", dùng index thủ công hoặc linked list.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 8.</strong> Bài "Subarray Sum Equals K" giải tối ưu bằng kỹ thuật nào?</p>
+              <ul class="quiz-options">
+                <li>Brute force — O(n²)</li>
+                <li>Sliding window thuần</li>
+                <li>Prefix Sum + Hash Map — O(n)</li>
+                <li>Binary search</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Prefix Sum + Hash Map — O(n).</strong> Sliding window không hoạt động vì mảng có thể có số âm (cửa sổ co lại không đảm bảo giảm sum).
+                Prefix sum + hash map là kỹ thuật chuẩn cho dạng này.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 2</h2>
+          <ul>
+            <li>✅ Array trong JS có thể chậm bất ngờ với <code>shift/unshift/splice</code> — nhớ Big-O từng method</li>
+            <li>✅ <strong>Two Pointers</strong>: giảm O(n²) → O(n) cho bài cặp/bộ ba trên mảng sort</li>
+            <li>✅ <strong>Sliding Window</strong>: tốt cho bài "subarray/substring liên tiếp" với điều kiện</li>
+            <li>✅ <strong>Prefix Sum</strong>: range query O(1) sau O(n) preprocessing</li>
+            <li>✅ <strong>Difference Array</strong>: range update O(1)</li>
+            <li>✅ String trong JS immutable — không concat trong vòng lặp lớn, dùng <code>arr.join('')</code></li>
+            <li>✅ Cẩn thận với Unicode/emoji — dùng <code>[...str]</code> thay <code>str[i]</code></li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong1.html">
+        <span class="label">← Chương trước</span>
+        Chương 01: Big-O
+      </a>
+      <a href="chuong3.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 03: Linked List →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">◇</span> DSA Mastery · Chương 02 · Array &amp; String
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

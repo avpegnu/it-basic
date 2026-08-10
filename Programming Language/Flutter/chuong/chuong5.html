@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — Navigation · Flutter Sub-pillar</title>
+  <meta name="description" content="Navigator 1.0 imperative, named routes, go_router declarative, ShellRoute, deep linking, bottom nav, drawer, modal, dialog." />
+  <meta name="theme-color" content="#0468d7" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-flutter">F</span>
+        Flutter · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
+          <li><a href="../index.html" class="active">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Flutter</a><span class="sep">/</span>
+        <span>Chương 5</span>
+      </div>
+      <div class="chapter-num">Chương 05 · Navigation</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Navigation
+      </h1>
+      <p class="lead">
+        App thật luôn nhiều screen. Navigator 1.0 ổn cho project nhỏ nhưng vỡ ở deep link và Web URL.
+        <strong><code>go_router</code></strong> là chuẩn industry hiện tại (Flutter team maintain). Chương này cover cả 2 + khi nào dùng.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1170 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 2, 3, 4</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phân biệt Navigator 1.0 (imperative) vs Navigator 2.0 (declarative).</li>
+            <li>Sử dụng <code>Navigator.push/pop/pushNamed/pushReplacement/pushAndRemoveUntil</code>.</li>
+            <li>Pass data giữa screen qua constructor (push) và <code>Navigator.pop(result)</code>.</li>
+            <li>Named routes setup.</li>
+            <li><code>go_router</code> package — recommend cho production app.</li>
+            <li>Deep linking + URL strategies cho Web.</li>
+            <li>Bottom navigation, drawer, tab bar.</li>
+            <li>Modal: dialog, bottom sheet, snackbar.</li>
+          </ul>
+        </div>
+
+        <h2 id="nav-1-vs-2">1. Navigator 1.0 vs 2.0 — bức tranh chung</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Navigator 1.0</th><th>Navigator 2.0</th></tr></thead>
+            <tbody>
+              <tr><td>Style</td><td>Imperative — push/pop stack</td><td>Declarative — UI = f(URL state)</td></tr>
+              <tr><td>Learning curve</td><td>Thấp</td><td>Cao (raw); medium qua wrapper</td></tr>
+              <tr><td>Web URL sync</td><td>Không</td><td>Có</td></tr>
+              <tr><td>Deep link</td><td>Custom code</td><td>Built-in</td></tr>
+              <tr><td>Recommend</td><td>Project nhỏ, prototype</td><td>Production app, đặc biệt có Web</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="navigator-push-pop">2. Navigator 1.0 — <code>push</code>, <code>pop</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">Navigator</span>.<span class="tok-fn">push</span>(
+  context,
+  <span class="tok-fn">MaterialPageRoute</span>(
+    builder: (ctx) =&gt; <span class="tok-fn">DetailsPage</span>(item: <span class="tok-fn">myItem</span>),
+  ),
+);
+
+<span class="tok-com">// Bên trong DetailsPage</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">pop</span>(context);              <span class="tok-com">// quay lại</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">pop</span>(context, <span class="tok-str">'result'</span>);     <span class="tok-com">// pop kèm value</span></code></pre>
+
+        <p>Caller nhận result:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> result = <span class="tok-kw">await</span> <span class="tok-cls">Navigator</span>.<span class="tok-fn">push</span>&lt;<span class="tok-type">String</span>&gt;(
+  context,
+  <span class="tok-fn">MaterialPageRoute</span>(builder: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">EditPage</span>()),
+);
+<span class="tok-kw">if</span> (result != <span class="tok-kw">null</span>) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'Got: $result'</span>);
+}</code></pre>
+
+        <h2 id="nav-replacement">3. <code>pushReplacement</code>, <code>pushAndRemoveUntil</code></h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Replace top route — pattern sau login</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">pushReplacement</span>(
+  context,
+  <span class="tok-fn">MaterialPageRoute</span>(builder: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">HomePage</span>()),
+);
+
+<span class="tok-com">// Pop till predicate match, push mới — pattern logout</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">pushAndRemoveUntil</span>(
+  context,
+  <span class="tok-fn">MaterialPageRoute</span>(builder: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">LoginPage</span>()),
+  (route) =&gt; <span class="tok-kw">false</span>,    <span class="tok-com">// pop tất cả</span>
+);
+
+<span class="tok-com">// Pop tới named route</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">popUntil</span>(context, <span class="tok-cls">ModalRoute</span>.<span class="tok-fn">withName</span>(<span class="tok-str">'/home'</span>));</code></pre>
+
+        <h2 id="named-routes">4. Named routes Navigator 1.0</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">MaterialApp</span>(
+  initialRoute: <span class="tok-str">'/'</span>,
+  routes: {
+    <span class="tok-str">'/'</span>: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">HomePage</span>(),
+    <span class="tok-str">'/login'</span>: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">LoginPage</span>(),
+    <span class="tok-str">'/profile'</span>: (ctx) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">ProfilePage</span>(),
+  },
+)
+
+<span class="tok-com">// Navigate</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">pushNamed</span>(context, <span class="tok-str">'/profile'</span>);
+
+<span class="tok-com">// Pass data qua arguments</span>
+<span class="tok-cls">Navigator</span>.<span class="tok-fn">pushNamed</span>(context, <span class="tok-str">'/details'</span>, arguments: myItem);
+
+<span class="tok-com">// Đọc args trong page</span>
+<span class="tok-kw">final</span> args = <span class="tok-cls">ModalRoute</span>.<span class="tok-fn">of</span>(context)!.settings.arguments <span class="tok-kw">as</span> <span class="tok-cls">Item</span>;</code></pre>
+
+        <h3 id="on-generate-route"><code>onGenerateRoute</code> — dynamic route</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">MaterialApp</span>(
+  onGenerateRoute: (settings) {
+    <span class="tok-kw">final</span> uri = <span class="tok-cls">Uri</span>.<span class="tok-fn">parse</span>(settings.name ?? <span class="tok-str">'/'</span>);
+    <span class="tok-kw">if</span> (uri.pathSegments.length == <span class="tok-num">2</span> &amp;&amp; uri.pathSegments.first == <span class="tok-str">'user'</span>) {
+      <span class="tok-kw">final</span> id = <span class="tok-cls">int</span>.<span class="tok-fn">parse</span>(uri.pathSegments[<span class="tok-num">1</span>]);
+      <span class="tok-kw">return</span> <span class="tok-fn">MaterialPageRoute</span>(builder: (_) =&gt; <span class="tok-fn">UserPage</span>(id: id));
+    }
+    <span class="tok-kw">return</span> <span class="tok-kw">null</span>;   <span class="tok-com">// fallback xuống onUnknownRoute</span>
+  },
+  onUnknownRoute: (settings) =&gt; <span class="tok-fn">MaterialPageRoute</span>(builder: (_) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">NotFoundPage</span>()),
+)</code></pre>
+
+        <h2 id="nav1-pitfall">5. Pitfall Navigator 1.0</h2>
+        <ul>
+          <li>Không tự sync URL Web — URL bar không update khi navigate.</li>
+          <li>Deep link cần custom logic (handle <code>FlutterDeepLinkApi</code>).</li>
+          <li>Tab navigation phức tạp — mỗi tab cần Navigator riêng.</li>
+          <li>State recovery (app restore từ background) chỉ work cơ bản.</li>
+        </ul>
+
+        <h2 id="go-router">6. <code>go_router</code> — chuẩn industry</h2>
+        <pre data-lang="bash"><code class="language-bash">flutter pub add go_router</code></pre>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:go_router/go_router.dart'</span>;
+
+<span class="tok-kw">final</span> _router = <span class="tok-fn">GoRouter</span>(
+  initialLocation: <span class="tok-str">'/'</span>,
+  routes: [
+    <span class="tok-fn">GoRoute</span>(
+      path: <span class="tok-str">'/'</span>,
+      builder: (context, state) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">HomePage</span>(),
+    ),
+    <span class="tok-fn">GoRoute</span>(
+      path: <span class="tok-str">'/user/:id'</span>,                    <span class="tok-com">// path param</span>
+      builder: (context, state) {
+        <span class="tok-kw">final</span> id = state.pathParameters[<span class="tok-str">'id'</span>]!;
+        <span class="tok-kw">return</span> <span class="tok-fn">UserPage</span>(id: <span class="tok-cls">int</span>.<span class="tok-fn">parse</span>(id));
+      },
+    ),
+    <span class="tok-fn">GoRoute</span>(
+      path: <span class="tok-str">'/search'</span>,
+      builder: (context, state) {
+        <span class="tok-kw">final</span> q = state.uri.queryParameters[<span class="tok-str">'q'</span>] ?? <span class="tok-str">''</span>;
+        <span class="tok-kw">return</span> <span class="tok-fn">SearchPage</span>(query: q);
+      },
+    ),
+  ],
+  errorBuilder: (context, state) =&gt; <span class="tok-fn">NotFoundPage</span>(error: state.error),
+);
+
+<span class="tok-fn">MaterialApp.router</span>(
+  routerConfig: _router,
+  theme: <span class="tok-cls">ThemeData</span>(<span class="tok-com">/*...*/</span>),
+)</code></pre>
+
+        <p>Navigate:</p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">context</span>.<span class="tok-fn">go</span>(<span class="tok-str">'/user/42'</span>);            <span class="tok-com">// replace stack</span>
+<span class="tok-cls">context</span>.<span class="tok-fn">push</span>(<span class="tok-str">'/user/42'</span>);          <span class="tok-com">// push lên stack</span>
+<span class="tok-cls">context</span>.<span class="tok-fn">pop</span>();
+<span class="tok-cls">context</span>.<span class="tok-fn">go</span>(<span class="tok-str">'/search?q=flutter'</span>);
+
+<span class="tok-com">// Type-safe param (cần build_runner — package go_router_builder)</span>
+<span class="tok-fn">UserRoute</span>(id: <span class="tok-num">42</span>).<span class="tok-fn">go</span>(context);</code></pre>
+
+        <h3 id="redirect">Redirect — auth flow</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">GoRouter</span>(
+  routes: [<span class="tok-com">/*...*/</span>],
+  redirect: (context, state) {
+    <span class="tok-kw">final</span> loggedIn = <span class="tok-cls">AuthService</span>.instance.isLoggedIn;
+    <span class="tok-kw">final</span> goingToLogin = state.matchedLocation == <span class="tok-str">'/login'</span>;
+
+    <span class="tok-kw">if</span> (!loggedIn &amp;&amp; !goingToLogin) <span class="tok-kw">return</span> <span class="tok-str">'/login'</span>;
+    <span class="tok-kw">if</span> (loggedIn &amp;&amp; goingToLogin) <span class="tok-kw">return</span> <span class="tok-str">'/'</span>;
+    <span class="tok-kw">return</span> <span class="tok-kw">null</span>;     <span class="tok-com">// không redirect</span>
+  },
+)</code></pre>
+
+        <h3 id="shell-route">ShellRoute — persistent shell (vd bottom nav)</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">GoRouter</span>(
+  routes: [
+    <span class="tok-fn">ShellRoute</span>(
+      builder: (context, state, child) =&gt; <span class="tok-fn">Scaffold</span>(
+        body: child,
+        bottomNavigationBar: <span class="tok-fn">MyBottomNav</span>(currentIndex: <span class="tok-fn">_indexFor</span>(state.uri.path)),
+      ),
+      routes: [
+        <span class="tok-fn">GoRoute</span>(path: <span class="tok-str">'/home'</span>, builder: (_, __) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">HomeTab</span>()),
+        <span class="tok-fn">GoRoute</span>(path: <span class="tok-str">'/profile'</span>, builder: (_, __) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">ProfileTab</span>()),
+        <span class="tok-fn">GoRoute</span>(path: <span class="tok-str">'/settings'</span>, builder: (_, __) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">SettingsTab</span>()),
+      ],
+    ),
+    <span class="tok-fn">GoRoute</span>(path: <span class="tok-str">'/login'</span>, builder: (_, __) =&gt; <span class="tok-kw">const</span> <span class="tok-cls">LoginPage</span>()),  <span class="tok-com">// ngoài shell</span>
+  ],
+)</code></pre>
+
+        <h2 id="web-url">7. Web URL strategy</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">import</span> <span class="tok-str">'package:flutter_web_plugins/url_strategy.dart'</span>;
+
+<span class="tok-kw">void</span> <span class="tok-fn">main</span>() {
+  <span class="tok-fn">usePathUrlStrategy</span>();    <span class="tok-com">// bỏ # khỏi URL Web</span>
+  <span class="tok-fn">runApp</span>(<span class="tok-kw">const</span> <span class="tok-cls">MyApp</span>());
+}
+
+<span class="tok-com">// URL Web sẽ là /user/42 thay vì /#/user/42</span>
+<span class="tok-com">// Yêu cầu server redirect 404 về index.html</span></code></pre>
+
+        <h2 id="bottom-nav">8. Bottom navigation</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">class</span> <span class="tok-cls">HomePage</span> <span class="tok-kw">extends</span> <span class="tok-cls">StatefulWidget</span> {
+  <span class="tok-kw">const</span> <span class="tok-fn">HomePage</span>({<span class="tok-kw">super</span>.key});
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">State</span>&lt;<span class="tok-cls">HomePage</span>&gt; <span class="tok-fn">createState</span>() =&gt; <span class="tok-fn">_HomePageState</span>();
+}
+
+<span class="tok-kw">class</span> <span class="tok-cls">_HomePageState</span> <span class="tok-kw">extends</span> <span class="tok-cls">State</span>&lt;<span class="tok-cls">HomePage</span>&gt; {
+  <span class="tok-type">int</span> _index = <span class="tok-num">0</span>;
+
+  <span class="tok-kw">final</span> _pages = <span class="tok-kw">const</span> [
+    <span class="tok-cls">HomeTab</span>(),
+    <span class="tok-cls">SearchTab</span>(),
+    <span class="tok-cls">ProfileTab</span>(),
+  ];
+
+  <span class="tok-kw">@override</span>
+  <span class="tok-cls">Widget</span> <span class="tok-fn">build</span>(<span class="tok-cls">BuildContext</span> context) {
+    <span class="tok-kw">return</span> <span class="tok-fn">Scaffold</span>(
+      body: <span class="tok-fn">IndexedStack</span>(           <span class="tok-com">// giữ state mỗi tab</span>
+        index: _index,
+        children: _pages,
+      ),
+      bottomNavigationBar: <span class="tok-fn">NavigationBar</span>(
+        selectedIndex: _index,
+        onDestinationSelected: (i) =&gt; <span class="tok-fn">setState</span>(() =&gt; _index = i),
+        destinations: <span class="tok-kw">const</span> [
+          <span class="tok-fn">NavigationDestination</span>(icon: <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.home), label: <span class="tok-str">'Home'</span>),
+          <span class="tok-fn">NavigationDestination</span>(icon: <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.search), label: <span class="tok-str">'Search'</span>),
+          <span class="tok-fn">NavigationDestination</span>(icon: <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.person), label: <span class="tok-str">'Profile'</span>),
+        ],
+      ),
+    );
+  }
+}</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 <code>IndexedStack</code> vs swap widget</div>
+          <p>
+            <code>IndexedStack</code> giữ tất cả tab trong tree, hide non-active. Pros: giữ state, scroll position. Cons: tốn memory hơn.
+            Swap widget (return <code>_pages[_index]</code>): tab inactive bị dispose, state reset khi switch lại.
+          </p>
+        </div>
+
+        <h2 id="drawer">9. Drawer &amp; EndDrawer</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">Scaffold</span>(
+  appBar: <span class="tok-fn">AppBar</span>(title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'My App'</span>)),
+  drawer: <span class="tok-cls">Drawer</span>(
+    child: <span class="tok-fn">ListView</span>(
+      children: [
+        <span class="tok-kw">const</span> <span class="tok-fn">DrawerHeader</span>(
+          decoration: <span class="tok-cls">BoxDecoration</span>(color: <span class="tok-cls">Colors</span>.blue),
+          child: <span class="tok-cls">Text</span>(<span class="tok-str">'Menu'</span>, style: <span class="tok-cls">TextStyle</span>(color: <span class="tok-cls">Colors</span>.white, fontSize: <span class="tok-num">24</span>)),
+        ),
+        <span class="tok-fn">ListTile</span>(
+          leading: <span class="tok-kw">const</span> <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.home),
+          title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Home'</span>),
+          onTap: () {
+            <span class="tok-cls">Navigator</span>.<span class="tok-fn">pop</span>(context);   <span class="tok-com">// đóng drawer</span>
+            <span class="tok-cls">context</span>.<span class="tok-fn">go</span>(<span class="tok-str">'/'</span>);
+          },
+        ),
+      ],
+    ),
+  ),
+  body: <span class="tok-kw">const</span> <span class="tok-cls">Center</span>(child: <span class="tok-cls">Text</span>(<span class="tok-str">'Body'</span>)),
+)</code></pre>
+
+        <h2 id="tab-bar">10. TabBar + TabBarView</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">DefaultTabController</span>(
+  length: <span class="tok-num">3</span>,
+  child: <span class="tok-fn">Scaffold</span>(
+    appBar: <span class="tok-fn">AppBar</span>(
+      title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Tabs'</span>),
+      bottom: <span class="tok-kw">const</span> <span class="tok-fn">TabBar</span>(
+        tabs: [
+          <span class="tok-fn">Tab</span>(icon: <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.cloud)),
+          <span class="tok-fn">Tab</span>(icon: <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.beach_access)),
+          <span class="tok-fn">Tab</span>(icon: <span class="tok-cls">Icon</span>(<span class="tok-cls">Icons</span>.brightness_5)),
+        ],
+      ),
+    ),
+    body: <span class="tok-kw">const</span> <span class="tok-fn">TabBarView</span>(
+      children: [<span class="tok-cls">CloudTab</span>(), <span class="tok-cls">BeachTab</span>(), <span class="tok-cls">SunTab</span>()],
+    ),
+  ),
+)</code></pre>
+
+        <h2 id="modal-dialog">11. Modal — Dialog</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> result = <span class="tok-kw">await</span> <span class="tok-fn">showDialog</span>&lt;<span class="tok-type">bool</span>&gt;(
+  context: context,
+  builder: (ctx) =&gt; <span class="tok-fn">AlertDialog</span>(
+    title: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Xác nhận'</span>),
+    content: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Xóa item này?'</span>),
+    actions: [
+      <span class="tok-fn">TextButton</span>(
+        onPressed: () =&gt; <span class="tok-cls">Navigator</span>.<span class="tok-fn">pop</span>(ctx, <span class="tok-kw">false</span>),
+        child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Hủy'</span>),
+      ),
+      <span class="tok-fn">FilledButton</span>(
+        onPressed: () =&gt; <span class="tok-cls">Navigator</span>.<span class="tok-fn">pop</span>(ctx, <span class="tok-kw">true</span>),
+        child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Xóa'</span>),
+      ),
+    ],
+  ),
+);
+
+<span class="tok-kw">if</span> (result == <span class="tok-kw">true</span>) {
+  <span class="tok-fn">_delete</span>();
+}</code></pre>
+
+        <h2 id="modal-bottom-sheet">12. Modal — Bottom sheet</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-fn">showModalBottomSheet</span>(
+  context: context,
+  isScrollControlled: <span class="tok-kw">true</span>,
+  shape: <span class="tok-kw">const</span> <span class="tok-fn">RoundedRectangleBorder</span>(
+    borderRadius: <span class="tok-cls">BorderRadius</span>.<span class="tok-fn">vertical</span>(top: <span class="tok-cls">Radius</span>.<span class="tok-fn">circular</span>(<span class="tok-num">20</span>)),
+  ),
+  builder: (ctx) =&gt; <span class="tok-fn">Padding</span>(
+    padding: <span class="tok-cls">EdgeInsets</span>.<span class="tok-fn">only</span>(bottom: <span class="tok-cls">MediaQuery</span>.<span class="tok-fn">of</span>(ctx).viewInsets.bottom),
+    child: <span class="tok-fn">Container</span>(
+      padding: <span class="tok-kw">const</span> <span class="tok-cls">EdgeInsets</span>.<span class="tok-fn">all</span>(<span class="tok-num">16</span>),
+      child: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Bottom sheet content'</span>),
+    ),
+  ),
+);</code></pre>
+
+        <h2 id="snackbar">13. SnackBar</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-cls">ScaffoldMessenger</span>.<span class="tok-fn">of</span>(context).<span class="tok-fn">showSnackBar</span>(
+  <span class="tok-kw">const</span> <span class="tok-fn">SnackBar</span>(
+    content: <span class="tok-cls">Text</span>(<span class="tok-str">'Saved successfully'</span>),
+    duration: <span class="tok-cls">Duration</span>(seconds: <span class="tok-num">3</span>),
+  ),
+);
+
+<span class="tok-com">// Với action</span>
+<span class="tok-cls">ScaffoldMessenger</span>.<span class="tok-fn">of</span>(context).<span class="tok-fn">showSnackBar</span>(
+  <span class="tok-fn">SnackBar</span>(
+    content: <span class="tok-kw">const</span> <span class="tok-cls">Text</span>(<span class="tok-str">'Item deleted'</span>),
+    action: <span class="tok-fn">SnackBarAction</span>(label: <span class="tok-str">'Undo'</span>, onPressed: _undo),
+  ),
+);</code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>ScaffoldMessenger</code> chứ không <code>Scaffold.of</code></div>
+          <p>
+            Pre-Flutter 1.22 dùng <code>Scaffold.of(context).showSnackBar(...)</code> — context phải descendant của Scaffold.
+            Modern dùng <code>ScaffoldMessenger.of(context)</code> — ancestor là MaterialApp, không cần Scaffold parent ngay.
+          </p>
+        </div>
+
+        <h2 id="bai-tap" class="exercises">14. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>3-screen app với Navigator 1.0 named routes</h4>
+          <div class="exercise-body">
+            <p>
+              Build app 3 screen: Home → List → Detail. Dùng named routes. Pass item từ List → Detail qua arguments.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">MaterialApp(
+  initialRoute: '/',
+  routes: {
+    '/': (_) =&gt; const HomePage(),
+    '/list': (_) =&gt; const ListPage(),
+    '/detail': (ctx) {
+      final item = ModalRoute.of(ctx)!.settings.arguments as String;
+      return DetailPage(item: item);
+    },
+  },
+)
+
+// List → Detail
+Navigator.pushNamed(context, '/detail', arguments: 'item-1');</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Migrate sang go_router</h4>
+          <div class="exercise-body">
+            <p>
+              Migrate bài 1 sang go_router. Path: <code>/</code>, <code>/list</code>, <code>/list/:id</code>.
+              URL Web hiển thị đúng <code>/list/42</code> khi xem item id=42.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">final router = GoRouter(routes: [
+  GoRoute(path: '/', builder: (_, __) =&gt; const HomePage()),
+  GoRoute(path: '/list', builder: (_, __) =&gt; const ListPage()),
+  GoRoute(
+    path: '/list/:id',
+    builder: (_, state) =&gt; DetailPage(id: state.pathParameters['id']!),
+  ),
+]);
+
+// Navigate
+context.push('/list/42');</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>ShellRoute bottom nav</h4>
+          <div class="exercise-body">
+            <p>
+              Add ShellRoute với bottom nav 3 tab (Home, Profile, Settings). Mỗi tab có nested screen — switch tab giữ history.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 6 (ShellRoute). Để giữ state mỗi tab, dùng <code>StatefulShellRoute</code> thay <code>ShellRoute</code> thường.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Auth redirect flow</h4>
+          <div class="exercise-body">
+            <p>
+              Implement: chưa login → redirect <code>/login</code>. Login xong → <code>/home</code>. Logout → clear, redirect <code>/login</code>.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <p>Tham khảo section 6 (redirect). Auth state cần ValueNotifier để go_router rebuild khi auth đổi.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Modal bottom sheet form</h4>
+          <div class="exercise-body">
+            <p>
+              Show modal bottom sheet với form input (1 TextField + Submit button). Return data via pop.
+              Caller hiển thị data trong snackbar.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">final result = await showModalBottomSheet&lt;String&gt;(
+  context: context,
+  isScrollControlled: true,
+  builder: (ctx) {
+    final ctrl = TextEditingController();
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(controller: ctrl),
+          ),
+          ElevatedButton(
+            onPressed: () =&gt; Navigator.pop(ctx, ctrl.text),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+  },
+);
+
+if (result != null &amp;&amp; context.mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
+}</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">15. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>Navigator.push</code> return type?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Future&lt;T?&gt;</code> — complete khi route pop. T là type result <code>Navigator.pop(result)</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p>Pass data qua named route — dùng property nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Navigator.pushNamed(context, '/x', arguments: data)</code>. Đọc: <code>ModalRoute.of(context)!.settings.arguments</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>pushReplacement</code> khác <code>pushAndRemoveUntil</code>?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>pushReplacement</code> chỉ replace top. <code>pushAndRemoveUntil</code> pop nhiều route cho đến predicate match, sau đó push mới.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p>go_router path <code>/user/:id</code> — đọc id thế nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>state.pathParameters['id']</code> trong builder. Query param: <code>state.uri.queryParameters['q']</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>usePathUrlStrategy()</code> bỏ gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Bỏ <code>#/</code> (hash routing) khỏi URL Web. Yêu cầu server config redirect 404 về index.html.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>ShellRoute vs nested GoRoute?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> ShellRoute = persistent shell widget (vd bottom nav) bao quanh inner route. Nested GoRoute = full screen swap không có persistent shell.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p><code>ScaffoldMessenger</code> vs <code>Scaffold.of</code> cũ?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> ScaffoldMessenger là pattern mới (Flutter 1.22+). Không phải descendant Scaffold ngay; snackbar persist qua navigation.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p>Modal bottom sheet scrollable — property nào?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>isScrollControlled: true</code> + dùng <code>DraggableScrollableSheet</code> cho behavior drag.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">16. Tổng kết</h2>
+        <ul>
+          <li>✅ Navigator 1.0: imperative push/pop stack. Đủ cho project nhỏ.</li>
+          <li>✅ Named routes + onGenerateRoute cho dynamic.</li>
+          <li>✅ Navigator 1.0 hạn chế: URL Web, deep link, tab navigation.</li>
+          <li>✅ <code>go_router</code> = chuẩn industry. Declarative, URL-first.</li>
+          <li>✅ Redirect — auth flow.</li>
+          <li>✅ ShellRoute — persistent shell (bottom nav).</li>
+          <li>✅ Web URL strategy: <code>usePathUrlStrategy</code>.</li>
+          <li>✅ Bottom nav với <code>IndexedStack</code> để giữ state.</li>
+          <li>✅ Drawer, TabBar.</li>
+          <li>✅ Modal: dialog, bottom sheet, snackbar (ScaffoldMessenger).</li>
+        </ul>
+
+        <h2 id="ket-noi">17. Kết nối</h2>
+        <ul>
+          <li><a href="chuong6.html"><strong>Chương 6+:</strong></a> state management consistent across navigation.</li>
+          <li><strong>Chương 11 — Local Storage:</strong> persistent auth state.</li>
+          <li><strong>Chương 14 — Testing:</strong> test navigation flow.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong4.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">04 · Theming</div>
+          </a>
+          <a href="chuong6.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">06 · State Management — setState &amp; InheritedWidget</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#nav-1-vs-2">1. Navigator 1.0 vs 2.0</a></li>
+          <li><a href="#navigator-push-pop">2. push / pop</a></li>
+          <li><a href="#nav-replacement">3. pushReplacement</a></li>
+          <li><a href="#named-routes">4. Named routes</a></li>
+          <li><a href="#nav1-pitfall">5. Pitfall Nav 1.0</a></li>
+          <li><a href="#go-router">6. go_router</a></li>
+          <li><a href="#web-url">7. Web URL</a></li>
+          <li><a href="#bottom-nav">8. Bottom navigation</a></li>
+          <li><a href="#drawer">9. Drawer</a></li>
+          <li><a href="#tab-bar">10. TabBar</a></li>
+          <li><a href="#modal-dialog">11. Dialog</a></li>
+          <li><a href="#modal-bottom-sheet">12. Bottom sheet</a></li>
+          <li><a href="#snackbar">13. SnackBar</a></li>
+          <li><a href="#bai-tap">14. Bài tập</a></li>
+          <li><a href="#quiz">15. Quiz</a></li>
+          <li><a href="#tong-ket">16. Tổng kết</a></li>
+          <li><a href="#ket-noi">17. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Flutter Chương 5 · Pillar 9 — IT Basic<br/>
+        <a href="chuong4.html">← Chương 4</a> · <a href="../index.html">Flutter sub-pillar</a> · <a href="chuong6.html">Chương 6 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

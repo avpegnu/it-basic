@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 07 — Deadlock · OS Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">os-mastery <span class="logo-mark"></span></div>
+      <ul>
+        <li><a href="../index.html">Trang chủ</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+        <li><a href="chuong6.html">← Ch.06</a></li>
+        <li><a href="chuong7.html" class="active">Ch.07</a></li>
+        <li><a href="chuong8.html">Ch.08 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="hero">
+      <div class="badge">CHƯƠNG 07 · CONCURRENCY · ~100 phút</div>
+      <h1>Deadlock<br/><span class="text-accent">"Tê liệt vĩnh viễn"</span></h1>
+      <p class="lead">
+        Một trong những bug khó tìm nhất. Học chương này, bạn nhận diện được dấu hiệu deadlock, biết
+        <strong>4 điều kiện Coffman</strong>, và biết cách phòng tránh từ đầu (lock ordering, timeout) thay vì để xảy ra.
+      </p>
+    </div>
+
+    <div class="chapter-layout">
+      <aside class="chapter-toc">
+        <h4>Mục lục</h4>
+        <ul>
+          <li><a href="#what">7.1 Deadlock là gì?</a></li>
+          <li><a href="#coffman">7.2 4 điều kiện Coffman</a></li>
+          <li><a href="#rag">7.3 Resource Allocation Graph</a></li>
+          <li><a href="#prevention">7.4 Prevention</a></li>
+          <li><a href="#avoidance">7.5 Avoidance — Banker's</a></li>
+          <li><a href="#detection">7.6 Detection &amp; Recovery</a></li>
+          <li><a href="#ordering">7.7 Lock Ordering — best practice</a></li>
+          <li><a href="#vs">7.8 Deadlock vs Livelock vs Starvation</a></li>
+          <li><a href="#db">7.9 Database deadlock</a></li>
+          <li><a href="#exercises">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+        </ul>
+      </aside>
+
+      <article>
+
+        <!-- 7.1 -->
+        <section id="what">
+          <h2>7.1 Deadlock là gì?</h2>
+
+          <p>
+            <strong>Deadlock</strong> = tình huống 2+ process/thread <em>đợi nhau vĩnh viễn</em> — không ai chạy được nữa.
+            Hệ thống "đứng hình" ở phần đó.
+          </p>
+
+          <h3>Ví dụ kinh điển</h3>
+
+          <pre data-lang="c"><code>// Thread 1
+pthread_mutex_lock(&amp;A);   // chiếm A
+sleep(1);
+pthread_mutex_lock(&amp;B);   // đợi B (đang bị Thread 2 giữ)
+
+// Thread 2
+pthread_mutex_lock(&amp;B);   // chiếm B
+sleep(1);
+pthread_mutex_lock(&amp;A);   // đợi A (đang bị Thread 1 giữ)
+
+// → Cả 2 thread đợi nhau mãi mãi. DEADLOCK.</code></pre>
+
+          <div class="ascii-art">
+   Thread 1                    Thread 2
+   ────────                    ────────
+   holds A  ──── waits ────▶   holds B
+              ◀──── waits ────
+
+   Vòng tròn chờ đợi → deadlock
+          </div>
+        </section>
+
+        <!-- 7.2 -->
+        <section id="coffman">
+          <h2>7.2 4 điều kiện Coffman — phải có ĐỦ 4 mới deadlock</h2>
+
+          <p>Edward Coffman (1971) chứng minh deadlock xảy ra khi và chỉ khi đủ 4 điều kiện:</p>
+
+          <ol>
+            <li>
+              <strong>Mutual Exclusion (loại trừ lẫn nhau):</strong> Tài nguyên chỉ cấp được cho 1 process tại 1 thời điểm
+              (vd mutex, file lock).
+            </li>
+            <li>
+              <strong>Hold &amp; Wait:</strong> Process đang giữ ít nhất 1 resource và đang chờ resource khác (đang bị process khác giữ).
+            </li>
+            <li>
+              <strong>No Preemption:</strong> Resource không thể bị "cướp" — chỉ process đang giữ mới giải phóng được.
+            </li>
+            <li>
+              <strong>Circular Wait:</strong> Có vòng tròn chờ đợi: P1 → P2 → ... → Pn → P1.
+            </li>
+          </ol>
+
+          <div class="callout note">
+            <div class="callout-title">📐 Quan trọng</div>
+            <p>
+              Phá <strong>1 trong 4</strong> điều kiện = không có deadlock. Đây là cơ sở của các kỹ thuật <em>Prevention</em> (xem 7.4).
+            </p>
+          </div>
+        </section>
+
+        <!-- 7.3 -->
+        <section id="rag">
+          <h2>7.3 Resource Allocation Graph (RAG)</h2>
+
+          <p>
+            Cách trực quan để phát hiện deadlock: vẽ graph với:
+          </p>
+          <ul>
+            <li>Node <strong>P</strong> = process; <strong>R</strong> = resource</li>
+            <li>Cạnh <strong>P → R</strong>: process P đang đợi resource R</li>
+            <li>Cạnh <strong>R → P</strong>: resource R đang được P giữ</li>
+          </ul>
+
+          <p><strong>Có cycle trong graph</strong> = có khả năng deadlock (single instance) hoặc deadlock chắc chắn (1 instance / resource).</p>
+
+          <div class="ascii-art">
+   Deadlock state:
+
+       ┌──── holds ────┐
+   P1 ─┤               │
+       └────waits────▶ R2  ◀── holds ──┐
+                                       │
+                                       P2
+       ┌────waits────▶ R1 ◀── holds ───┤
+   P2 ─┤
+       └──────────────┘
+
+   Có cycle P1 → R2 → P2 → R1 → P1 → DEADLOCK
+          </div>
+        </section>
+
+        <!-- 7.4 -->
+        <section id="prevention">
+          <h2>7.4 Prevention — phá 1 trong 4 điều kiện</h2>
+
+          <h3>Phá Mutual Exclusion</h3>
+          <p>Không thể cho mutex/lock — vì bản chất chúng là exclusive. Có thể với một số resource (vd file đọc-only).</p>
+
+          <h3>Phá Hold &amp; Wait</h3>
+          <p>Bắt process xin <strong>tất cả resource cùng lúc</strong> hoặc không xin gì.</p>
+          <pre data-lang="c"><code>// Thay vì
+pthread_mutex_lock(&amp;A);
+pthread_mutex_lock(&amp;B);
+
+// Dùng try_lock_all hoặc xin từ đầu
+if (try_lock_both(&amp;A, &amp;B)) {
+    // ok, thành công
+} else {
+    // không có gì, thử lại sau
+}</code></pre>
+          <p>Nhược: utilization thấp (process giữ resource lâu mà không dùng), có thể starve.</p>
+
+          <h3>Phá No Preemption</h3>
+          <p>Cho phép "cướp" resource từ process. Khó với mutex/file. Khả thi với CPU, memory page.</p>
+
+          <h3>Phá Circular Wait — phổ biến nhất, hiệu quả nhất</h3>
+          <p>Áp đặt <strong>thứ tự tổng</strong> trên các resource. Process phải lock theo thứ tự tăng dần.</p>
+          <pre data-lang="c"><code>// Tất cả thread phải lock A trước B (theo thứ tự id)
+// Thread 1
+lock(A); lock(B); ... unlock(B); unlock(A);
+// Thread 2 (đáng lẽ lock B rồi A → fix lại):
+lock(A); lock(B); ... unlock(B); unlock(A);
+
+// Đảm bảo: không có circular dependency vì mọi thread cùng order</code></pre>
+
+          <p>Đây là <strong>Lock Ordering</strong> — kỹ thuật prevention phổ biến nhất trong production.</p>
+        </section>
+
+        <!-- 7.5 -->
+        <section id="avoidance">
+          <h2>7.5 Avoidance — Banker's Algorithm</h2>
+
+          <p>
+            Trước khi cấp resource cho process, kiểm tra xem việc cấp có dẫn đến state có thể deadlock không.
+            Nếu có nguy cơ → từ chối cấp ngay cả khi resource đang free.
+          </p>
+
+          <h3>Banker's Algorithm (Dijkstra)</h3>
+
+          <p>Mỗi process khai báo trước <em>nhu cầu tối đa</em> mỗi loại resource. OS theo dõi:</p>
+          <ul>
+            <li><code>Allocation[i]</code>: process i đang giữ bao nhiêu</li>
+            <li><code>Max[i]</code>: tối đa cần</li>
+            <li><code>Need[i] = Max[i] - Allocation[i]</code>: còn cần</li>
+            <li><code>Available</code>: resource còn dư</li>
+          </ul>
+
+          <p>Khi có request, OS chạy <strong>Safety Check</strong>: thử cấp giả + xem có sequence hoàn thành mọi process được không. Nếu có → "safe state" → cấp. Nếu không → từ chối.</p>
+
+          <p>
+            <strong>Trong thực tế ít dùng</strong> vì đòi hỏi biết trước max need (khó), và overhead chạy safety check mỗi lần.
+            Mostly academic.
+          </p>
+        </section>
+
+        <!-- 7.6 -->
+        <section id="detection">
+          <h2>7.6 Detection &amp; Recovery</h2>
+
+          <p>
+            Cho phép deadlock xảy ra, định kỳ chạy thuật toán phát hiện (vd RAG cycle), recovery khi phát hiện.
+          </p>
+
+          <h3>Detection</h3>
+          <ul>
+            <li>Build RAG, tìm cycle (DFS) → có cycle = (có thể) deadlock</li>
+            <li>Linux: lockdep tool trong kernel detect lock ordering bug</li>
+            <li>Database: thread monitor đếm thời gian wait, detect cycle qua lock graph</li>
+          </ul>
+
+          <h3>Recovery</h3>
+          <ol>
+            <li><strong>Process termination</strong>: kill 1 process trong cycle</li>
+            <li><strong>Resource preemption</strong>: cướp resource từ 1 process, rollback nó</li>
+          </ol>
+
+          <p>
+            <strong>Database (MySQL/PostgreSQL):</strong> phát hiện deadlock → chọn 1 transaction "victim" (thường ưu tiên kill transaction trẻ hơn, ít cost rollback hơn) → rollback nó. App nhận error, retry.
+          </p>
+        </section>
+
+        <!-- 7.7 -->
+        <section id="ordering">
+          <h2>7.7 Lock Ordering — best practice trong production code</h2>
+
+          <p>
+            Đây là kỹ thuật <strong>thực tế nhất</strong> để phòng deadlock. Quy tắc:
+          </p>
+
+          <div class="callout tip">
+            <div class="callout-title">💡 Quy tắc vàng</div>
+            <p>Tất cả thread phải <strong>lock các resource theo cùng 1 thứ tự</strong> (thường là theo địa chỉ memory hoặc ID).</p>
+          </div>
+
+          <pre data-lang="c"><code>// Sai: thứ tự lock khác nhau
+void transfer(Account *from, Account *to, int amount) {
+    lock(&amp;from-&gt;mutex);
+    lock(&amp;to-&gt;mutex);
+    // ...
+}
+// transfer(A, B) lock A→B
+// transfer(B, A) lock B→A
+// → 2 thread chạy song song → DEADLOCK
+
+// Đúng: lock theo address
+void transfer(Account *from, Account *to, int amount) {
+    Account *first  = (from &lt; to) ? from : to;
+    Account *second = (from &lt; to) ? to : from;
+    lock(&amp;first-&gt;mutex);
+    lock(&amp;second-&gt;mutex);
+    // ...
+    unlock(&amp;second-&gt;mutex);
+    unlock(&amp;first-&gt;mutex);
+}</code></pre>
+
+          <h3>Timeout-based Detection</h3>
+          <pre data-lang="c"><code>// pthread_mutex_timedlock — fail nếu không lock được trong T giây
+struct timespec ts = {.tv_sec = 5};
+if (pthread_mutex_timedlock(&amp;mutex, &amp;ts) != 0) {
+    // có thể đang deadlock — log + retry với strategy khác
+    handle_potential_deadlock();
+}</code></pre>
+
+          <p>Many DB drivers, distributed systems dùng timeout làm "phao cứu sinh".</p>
+        </section>
+
+        <!-- 7.8 -->
+        <section id="vs">
+          <h2>7.8 Deadlock vs Livelock vs Starvation</h2>
+
+          <div class="compare">
+            <div class="good">
+              <h4 class="text-red">Deadlock</h4>
+              <p>Process bị block <strong>vĩnh viễn</strong>, đợi nhau. CPU usage = 0% ở thread đó.</p>
+              <p>Vd: 2 thread đợi mutex của nhau.</p>
+            </div>
+            <div class="good">
+              <h4 class="text-red">Livelock</h4>
+              <p>Process <strong>đang chạy</strong> nhưng không tiến triển. CPU usage cao mà không xong việc.</p>
+              <p>Vd: 2 người tránh nhau ở hành lang — cứ né cùng hướng. 2 thread cùng "lùi" rồi "tiến" liên tục.</p>
+            </div>
+            <div class="good">
+              <h4 class="text-red">Starvation</h4>
+              <p>Process bị treo <strong>không vô hạn</strong> nhưng rất lâu, do priority thấp / không công bằng.</p>
+              <p>Vd: pure priority scheduling, low-priority process bị bỏ rơi.</p>
+            </div>
+          </div>
+
+          <p>
+            <strong>Sự khác biệt:</strong> deadlock = không ai chạy; livelock = tất cả chạy nhưng vô ích; starvation = một số chạy, một số bị bỏ rơi.
+          </p>
+        </section>
+
+        <!-- 7.9 -->
+        <section id="db">
+          <h2>7.9 Database Deadlock</h2>
+
+          <p>
+            DB như MySQL/PostgreSQL có lock cấp row/table. Hai transaction có thể deadlock:
+          </p>
+
+          <pre data-lang="sql"><code>-- Tx1
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+-- (chiếm row 1)
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+-- (đợi row 2)
+
+-- Tx2 (chạy đồng thời)
+BEGIN;
+UPDATE accounts SET balance = balance - 50 WHERE id = 2;
+-- (chiếm row 2)
+UPDATE accounts SET balance = balance + 50 WHERE id = 1;
+-- (đợi row 1) → DEADLOCK</code></pre>
+
+          <h3>DB tự xử lý ra sao?</h3>
+          <ul>
+            <li>DB engine định kỳ check deadlock (mỗi vài giây hoặc on-demand)</li>
+            <li>Build wait-for graph, detect cycle</li>
+            <li>Chọn "victim" transaction, rollback. App nhận error: <code>"Deadlock detected"</code></li>
+            <li>App nên retry transaction sau vài ms</li>
+          </ul>
+
+          <pre data-lang="javascript"><code>// Pattern retry trong code
+async function transferWithRetry(from, to, amount, retries = 3) {
+  for (let i = 0; i &lt; retries; i++) {
+    try {
+      return await db.transaction(async (tx) =&gt; {
+        await tx.query('UPDATE accounts ... WHERE id = ?', [from]);
+        await tx.query('UPDATE accounts ... WHERE id = ?', [to]);
+      });
+    } catch (e) {
+      if (e.code === 'ER_LOCK_DEADLOCK' &amp;&amp; i &lt; retries - 1) {
+        await new Promise(r =&gt; setTimeout(r, 50 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+}</code></pre>
+
+          <h3>Phòng tránh DB deadlock</h3>
+          <ul>
+            <li><strong>Always lock rows in same order</strong> (vd <code>ORDER BY id</code>)</li>
+            <li>Giữ transaction ngắn — ít chiếm lock lâu</li>
+            <li>Dùng <code>SELECT FOR UPDATE</code> sớm để chiếm lock đầu</li>
+            <li>Tránh transaction phức tạp với nhiều bảng</li>
+          </ul>
+        </section>
+
+        <!-- Bài tập -->
+        <section id="exercises">
+          <h2>Bài tập</h2>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 1 — Tạo deadlock</div>
+            <p>Viết C/Java program với 2 thread + 2 mutex. Cố tình tạo deadlock. Quan sát: cả 2 thread đứng hình, CPU 0%.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 2 — Fix bằng lock ordering</div>
+            <p>Sửa bài 1 bằng cách lock theo address mutex tăng dần. Verify không deadlock.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 3 — Phá điều kiện Coffman</div>
+            <p>4 điều kiện Coffman. Cho 1 ví dụ thực tế phá mỗi điều kiện trong production code.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 4 — DB deadlock với MySQL/PostgreSQL</div>
+            <p>Mở 2 mysql session. Bắt đầu transaction trong cả 2. Tạo deadlock bằng cách UPDATE chéo. Quan sát error.</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 5 — Livelock vs Deadlock</div>
+            <p>Code 2 thread gây livelock (không deadlock). Vd: 2 người tránh nhau (cùng "step left").</p>
+          </div>
+
+          <div class="exercise">
+            <div class="exercise-title">Bài 6 — Banker's algorithm</div>
+            <p>Cho ma trận Allocation, Max, Available. Viết code kiểm tra "safe state" theo Banker's.</p>
+          </div>
+        </section>
+
+        <!-- Quiz -->
+        <section id="quiz">
+          <div class="quiz">
+            <h3>🧪 Quiz cuối chương</h3>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 1.</strong> 4 điều kiện Coffman gồm những gì?</p>
+              <ul class="quiz-options">
+                <li>Mutex, Semaphore, Monitor, Spinlock</li>
+                <li>Critical Section, Race Condition, Lock, Unlock</li>
+                <li>Mutual Exclusion, Hold &amp; Wait, No Preemption, Circular Wait</li>
+                <li>Process, Thread, Resource, Allocation</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: ME, Hold&amp;Wait, No Preemption, Circular Wait.</strong> Phải đủ 4 mới deadlock; phá 1 cái = an toàn.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 2.</strong> Kỹ thuật prevention phổ biến nhất trong production?</p>
+              <ul class="quiz-options">
+                <li>Banker's Algorithm</li>
+                <li>Lock Ordering — phá Circular Wait</li>
+                <li>Tăng số resource</li>
+                <li>Giảm số process</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: Lock ordering.</strong> Đơn giản, hiệu quả, không cần biết trước max need như Banker's.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 3.</strong> Deadlock vs Livelock khác nhau?</p>
+              <ul class="quiz-options">
+                <li>Deadlock: thread block, CPU 0%; Livelock: thread chạy nhưng không tiến triển, CPU cao</li>
+                <li>Deadlock chỉ trên Linux</li>
+                <li>Livelock không có thật</li>
+                <li>Hai cái giống nhau</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: deadlock = stuck, livelock = chạy vô ích.</strong> Cả 2 đều không tiến, nhưng cách khác nhau.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 4.</strong> Database (MySQL/PostgreSQL) xử lý deadlock thế nào?</p>
+              <ul class="quiz-options">
+                <li>Restart cả server</li>
+                <li>Đợi infinite</li>
+                <li>Detect cycle, kill 1 transaction (rollback), trả error cho app — app retry</li>
+                <li>Không thể xảy ra trong DB</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: detect + kill victim + retry.</strong> App phải handle deadlock error và retry.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 5.</strong> Banker's Algorithm nhược điểm gì khiến ít dùng thực tế?</p>
+              <ul class="quiz-options">
+                <li>Quá phức tạp</li>
+                <li>Chỉ chạy trên Linux</li>
+                <li>Phải biết trước max need của mọi process — khó trong app thực</li>
+                <li>Tốn 100% CPU</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: phải biết trước max need.</strong> App thực tế khó khai báo "tôi cần tối đa X mutex". Mostly academic.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="1">
+              <p><strong>Câu 6.</strong> Trong Resource Allocation Graph, cycle nghĩa là?</p>
+              <ul class="quiz-options">
+                <li>Mọi thứ ổn</li>
+                <li>Có khả năng deadlock (chắc chắn deadlock nếu mỗi resource chỉ 1 instance)</li>
+                <li>Process bị treo do priority</li>
+                <li>Resource leak</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: deadlock.</strong> Cycle = vòng tròn chờ đợi. Multiple instances per resource → cần check thêm.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="2">
+              <p><strong>Câu 7.</strong> Pattern code <code>transfer(A, B)</code> để tránh deadlock?</p>
+              <ul class="quiz-options">
+                <li>Lock A trước, sau đó B</li>
+                <li>Lock B trước, sau đó A</li>
+                <li>Lock theo địa chỉ tăng dần — đảm bảo mọi caller cùng order</li>
+                <li>Không cần lock</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: order theo address.</strong> Nếu transfer(A,B) lock A→B, transfer(B,A) cũng lock A→B (cùng order) → no circular wait.
+              </p>
+            </div>
+
+            <div class="quiz-question" data-correct="0">
+              <p><strong>Câu 8.</strong> Khi gặp DB deadlock error, app nên?</p>
+              <ul class="quiz-options">
+                <li>Retry transaction sau delay nhỏ (vài ms ~ vài trăm ms)</li>
+                <li>Crash app</li>
+                <li>Restart database</li>
+                <li>Ignore error</li>
+              </ul>
+              <p class="quiz-explain">
+                <strong>Đáp án: retry với backoff.</strong> Deadlock thường tạm thời — retry thường thành công. Có thể exponential backoff nếu retry lần đầu fail.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Tổng kết chương 7</h2>
+          <ul>
+            <li>✅ Deadlock = 2+ process đợi nhau vĩnh viễn, không ai tiến triển</li>
+            <li>✅ <strong>4 điều kiện Coffman</strong>: Mutual Exclusion + Hold&amp;Wait + No Preemption + Circular Wait. Phá 1 = an toàn.</li>
+            <li>✅ <strong>Resource Allocation Graph (RAG)</strong>: cycle → deadlock</li>
+            <li>✅ Phòng tránh: Prevention (phá điều kiện), Avoidance (Banker's), Detection + Recovery</li>
+            <li>✅ <strong>Lock Ordering</strong> là kỹ thuật phổ biến nhất trong production</li>
+            <li>✅ Deadlock (stuck) ≠ Livelock (chạy vô ích) ≠ Starvation (bỏ rơi)</li>
+            <li>✅ DB deadlock: tự detect + kill victim transaction → app retry</li>
+            <li>✅ Best practice code: lock theo address, dùng <code>try_lock</code> với timeout</li>
+          </ul>
+        </section>
+
+      </article>
+    </div>
+
+    <div class="lesson-nav">
+      <a href="chuong6.html">
+        <span class="label">← Chương trước</span>
+        Chương 06: Synchronization
+      </a>
+      <a href="chuong8.html">
+        <span class="label">Chương kế tiếp</span>
+        Chương 08: Memory Management →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <span class="footer-mark">●</span> OS Mastery · Chương 07 · Deadlock
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

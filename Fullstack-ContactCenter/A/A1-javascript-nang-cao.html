@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A1 · JavaScript chuyên sâu cho Backend</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="part-a">
+
+<div class="mobile-bar"><a href="../index.html">← Hub</a><b style="font-size:13px">A1 · JavaScript chuyên sâu</b></div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <a href="../index.html" style="text-decoration:none;color:inherit">
+      <div class="brand">
+        <div class="logo">◉</div>
+        <div class="brand-txt"><b>Contact Center Prep</b><span>Fullstack Realtime Track</span></div>
+      </div>
+    </a>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Phần A · Nền tảng</div>
+      <nav class="nav">
+        <a href="A1-javascript-nang-cao.html" class="active">A1 · JavaScript chuyên sâu</a>
+        <a href="A2-bat-dong-bo-event-loop.html">A2 · Bất đồng bộ & Event Loop</a>
+        <a href="A3-typescript-backend.html">A3 · TypeScript cho Backend</a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label"><span class="dot"></span> Trong chương này</div>
+      <nav class="nav toc">
+        <a href="#muctieu">🎯 Mục tiêu</a>
+        <a href="#types">① Kiểu dữ liệu & so sánh</a>
+        <a href="#scope">② Scope, hoisting, TDZ</a>
+        <a href="#closure">③ Closure</a>
+        <a href="#this">④ this & binding</a>
+        <a href="#proto">⑤ Prototype & class</a>
+        <a href="#module">⑥ Module (ESM/CJS)</a>
+        <a href="#fp">⑦ Hàm bậc cao & bất biến</a>
+        <a href="#pitfalls">⚠️ Lỗi thường gặp</a>
+        <a href="#baitap">🧪 Bài tập</a>
+        <a href="#quiz">✅ Quiz</a>
+        <a href="#interview">🎤 Câu hỏi phỏng vấn</a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Phần A · Nền tảng &nbsp;›&nbsp; <b>A1 · JavaScript chuyên sâu cho Backend</b></div>
+      <div class="live-pill"><span class="blink"></span> 12 agents online</div>
+    </div>
+
+    <div class="content">
+      <div class="chapter-head" id="muctieu">
+        <span class="eyebrow">◉ Phần A · Chương 1</span>
+        <h1>JavaScript chuyên sâu cho Backend</h1>
+        <p class="lead">
+          Ôn lại JavaScript ở tầng <b>cơ chế hoạt động</b> — không phải cú pháp, mà là cách
+          ngôn ngữ thực sự vận hành: closure, <code>this</code>, prototype, scope, module.
+          Đây là nền tảng để hiểu Node.js, NestJS và mọi đoạn code bất đồng bộ phía sau.
+        </p>
+      </div>
+
+      <div class="callout info">
+        <div class="c-title">🎯 Học xong chương này bạn sẽ</div>
+        <p>• Giải thích được chính xác <b>closure</b>, <b>TDZ</b>, <b>hoisting</b> và <code>this</code> trong mọi ngữ cảnh.</p>
+        <p>• Phân biệt primitive vs reference, hiểu vì sao <code>===</code> luôn được ưu tiên.</p>
+        <p>• Nắm prototype chain & cú pháp <code>class</code> hiện đại — gốc của OOP trong Node/Nest.</p>
+        <p>• Tự tin trả lời các câu hỏi phỏng vấn JS "bẫy" thường gặp với Junior Fullstack.</p>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💼 Vì sao quan trọng với hệ thống Contact Center?</div>
+        <p>Backend của một Contact Center xử lý <b>hàng nghìn sự kiện đồng thời</b> (cuộc gọi đến, tin nhắn chat,
+        cập nhật trạng thái agent). Toàn bộ logic này dựa trên <b>callback, closure và event-driven</b> —
+        nếu không hiểu rõ JS ở tầng cơ chế, bạn sẽ tạo ra bug rò rỉ bộ nhớ, mất ngữ cảnh <code>this</code>,
+        hoặc race condition rất khó debug.</p>
+      </div>
+
+      <!-- ===================== 1. TYPES ===================== -->
+      <h2 id="types"><span class="ico">①</span> Kiểu dữ liệu & so sánh giá trị</h2>
+
+      <p>JavaScript có <strong>7 kiểu primitive</strong> và 1 kiểu <strong>object</strong>. Hiểu rõ ranh giới này
+      quyết định cách bạn truyền, sao chép và so sánh dữ liệu.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Nhóm</th><th>Kiểu</th><th>Đặc điểm</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="2"><b>Primitive</b><br>(truyền theo <i>giá trị</i>)</td>
+                <td><code>string</code> <code>number</code> <code>boolean</code> <code>null</code> <code>undefined</code></td>
+                <td>Bất biến (immutable), so sánh theo giá trị</td></tr>
+            <tr><td><code>symbol</code> <code>bigint</code></td><td>symbol: khoá duy nhất; bigint: số nguyên lớn</td></tr>
+            <tr><td><b>Reference</b><br>(truyền theo <i>tham chiếu</i>)</td>
+                <td><code>object</code> (gồm array, function, Date...)</td>
+                <td>Lưu địa chỉ vùng nhớ; so sánh theo tham chiếu</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Primitive vs Reference — cái bẫy kinh điển</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">value-vs-reference.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-com">// Primitive: sao chép GIÁ TRỊ</span>
+<span class="tok-key">let</span> a = <span class="tok-num">10</span>;
+<span class="tok-key">let</span> b = a;        <span class="tok-com">// b là bản sao độc lập</span>
+b = <span class="tok-num">20</span>;
+console.<span class="tok-fn">log</span>(a, b); <span class="tok-com">// 10 20  ✅ a không đổi</span>
+
+<span class="tok-com">// Reference: sao chép ĐỊA CHỈ (cùng trỏ tới 1 object)</span>
+<span class="tok-key">const</span> agent1 = { name: <span class="tok-str">'An'</span>, status: <span class="tok-str">'available'</span> };
+<span class="tok-key">const</span> agent2 = agent1;       <span class="tok-com">// KHÔNG sao chép, chỉ copy con trỏ</span>
+agent2.status = <span class="tok-str">'busy'</span>;
+console.<span class="tok-fn">log</span>(agent1.status); <span class="tok-com">// 'busy' ⚠️ agent1 cũng đổi!</span></code></pre>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">⚠️ Hệ quả thực tế</div>
+        <p>Khi bạn lưu danh sách agent đang online trong một mảng và "sao chép" để gửi qua API, nếu chỉ gán
+        <code>const copy = agents</code> thì mọi thay đổi vẫn ảnh hưởng bản gốc. Phải <b>clone</b> đúng cách:
+        <code>structuredClone(obj)</code>, <code>{...obj}</code> (nông), hoặc <code>JSON.parse(JSON.stringify(obj))</code> (sâu, nhưng mất Date/undefined).</p>
+      </div>
+
+      <h3><code>==</code> vs <code>===</code> và type coercion</h3>
+      <p><code>==</code> thực hiện <strong>ép kiểu ngầm</strong> (coercion) trước khi so sánh — nguồn gốc của vô số bug.
+      Luôn dùng <code>===</code> trừ khi bạn cố tình kiểm tra <code>null/undefined</code> cùng lúc bằng <code>== null</code>.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">coercion.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-num">0</span> == <span class="tok-str">''</span>          <span class="tok-com">// true  😱</span>
+<span class="tok-num">0</span> == <span class="tok-str">'0'</span>         <span class="tok-com">// true</span>
+<span class="tok-str">''</span> == <span class="tok-str">'0'</span>        <span class="tok-com">// false (!) — không bắc cầu</span>
+<span class="tok-key">null</span> == <span class="tok-key">undefined</span> <span class="tok-com">// true</span>
+[] == <span class="tok-key">false</span>      <span class="tok-com">// true</span>
+NaN === NaN      <span class="tok-com">// false — dùng Number.isNaN()</span>
+
+<span class="tok-com">// Quy tắc vàng: dùng === ; chỉ "== null" để gộp null & undefined</span>
+<span class="tok-key">if</span> (agent.endedAt == <span class="tok-key">null</span>) { <span class="tok-com">/* cuộc gọi chưa kết thúc */</span> }</code></pre>
+      </div>
+
+      <h4>Falsy values cần thuộc lòng</h4>
+      <p>Chỉ có <strong>8 giá trị falsy</strong>: <code>false</code>, <code>0</code>, <code>-0</code>, <code>0n</code>,
+      <code>""</code>, <code>null</code>, <code>undefined</code>, <code>NaN</code>. Mọi thứ còn lại (kể cả
+      <code>[]</code>, <code>{}</code>, <code>"0"</code>) đều <strong>truthy</strong>.</p>
+
+      <!-- ===================== 2. SCOPE ===================== -->
+      <h2 id="scope"><span class="ico">②</span> Scope, Hoisting & TDZ</h2>
+
+      <p><strong>Scope</strong> = vùng mà một biến "nhìn thấy được". JavaScript có 3 loại: <em>global</em>,
+      <em>function</em>, và <em>block</em> (từ ES6 với <code>let/const</code>).</p>
+
+      <div class="card-grid cols-3">
+        <div class="mini-card"><div class="t"><span class="e">🌍</span> var</div><p>Function-scoped, được hoisted lên đầu hàm với giá trị <code>undefined</code>. Tránh dùng.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">📦</span> let</div><p>Block-scoped, có TDZ, có thể gán lại. Dùng khi giá trị thay đổi.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🔒</span> const</div><p>Block-scoped, có TDZ, không gán lại (nhưng object bên trong vẫn mutable). Mặc định nên dùng.</p></div>
+      </div>
+
+      <h3>Hoisting & Temporal Dead Zone (TDZ)</h3>
+      <p><strong>Hoisting</strong>: khai báo được "kéo" lên đầu scope khi biên dịch. Nhưng <code>let/const</code>
+      tuy được hoisted lại nằm trong <strong>TDZ</strong> — không thể truy cập trước dòng khai báo.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">hoisting.js</span><span class="lang">JavaScript</span></div>
+        <pre><code>console.<span class="tok-fn">log</span>(callCount); <span class="tok-com">// undefined (var được hoisted)</span>
+<span class="tok-key">var</span> callCount = <span class="tok-num">5</span>;
+
+console.<span class="tok-fn">log</span>(maxAgents); <span class="tok-com">// ❌ ReferenceError: Cannot access before initialization</span>
+<span class="tok-key">let</span> maxAgents = <span class="tok-num">10</span>;   <span class="tok-com">// ← biến nằm trong TDZ tới dòng này</span>
+
+<span class="tok-com">// Function declaration được hoisted TOÀN BỘ (gọi được trước khi định nghĩa)</span>
+<span class="tok-fn">routeCall</span>();                <span class="tok-com">// ✅ chạy được</span>
+<span class="tok-key">function</span> <span class="tok-fn">routeCall</span>() { <span class="tok-com">/* ... */</span> }
+
+<span class="tok-com">// Function expression thì KHÔNG</span>
+<span class="tok-fn">routeChat</span>();                <span class="tok-com">// ❌ TypeError: routeChat is not a function</span>
+<span class="tok-key">const</span> routeChat = () => {};</code></pre>
+      </div>
+
+      <!-- ===================== 3. CLOSURE ===================== -->
+      <h2 id="closure"><span class="ico">③</span> Closure — "trái tim" của JavaScript</h2>
+
+      <p><strong>Closure</strong> là khi một hàm "nhớ" và tiếp tục truy cập được các biến ở scope nơi nó
+      <em>được định nghĩa</em>, ngay cả khi hàm đó được gọi ở nơi khác. Đây là cơ chế nền tảng của
+      <b>private state, callback, currying, memoization</b> — và xuất hiện ở mọi nơi trong Node.js.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">closure-counter.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-com">// Bộ đếm cuộc gọi cho mỗi agent — state riêng tư, không lộ ra ngoài</span>
+<span class="tok-key">function</span> <span class="tok-fn">createCallCounter</span>() {
+  <span class="tok-key">let</span> count = <span class="tok-num">0</span>;            <span class="tok-com">// biến riêng tư, "đóng gói" trong closure</span>
+  <span class="tok-key">return</span> {
+    increment() { count++; <span class="tok-key">return</span> count; },
+    get()       { <span class="tok-key">return</span> count; }
+  };
+}
+
+<span class="tok-key">const</span> agentA = <span class="tok-fn">createCallCounter</span>();
+agentA.<span class="tok-fn">increment</span>(); <span class="tok-com">// 1</span>
+agentA.<span class="tok-fn">increment</span>(); <span class="tok-com">// 2</span>
+console.<span class="tok-fn">log</span>(agentA.<span class="tok-fn">get</span>());  <span class="tok-com">// 2</span>
+console.<span class="tok-fn">log</span>(agentA.count);    <span class="tok-com">// undefined — không truy cập trực tiếp được ✅</span></code></pre>
+      </div>
+
+      <h3>Ứng dụng thực tế: rate limiter cho API</h3>
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">rate-limiter.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-com">// Giới hạn số request mỗi agent được gửi trong 1 cửa sổ thời gian</span>
+<span class="tok-key">function</span> <span class="tok-fn">createRateLimiter</span>(maxCalls, windowMs) {
+  <span class="tok-key">const</span> hits = <span class="tok-key">new</span> <span class="tok-typ">Map</span>(); <span class="tok-com">// closure giữ state qua nhiều lần gọi</span>
+  <span class="tok-key">return</span> <span class="tok-key">function</span> <span class="tok-fn">allow</span>(agentId) {
+    <span class="tok-key">const</span> now = <span class="tok-typ">Date</span>.<span class="tok-fn">now</span>();
+    <span class="tok-key">const</span> times = (hits.<span class="tok-fn">get</span>(agentId) || []).<span class="tok-fn">filter</span>(t => now - t &lt; windowMs);
+    <span class="tok-key">if</span> (times.length &gt;= maxCalls) <span class="tok-key">return</span> <span class="tok-key">false</span>;
+    times.<span class="tok-fn">push</span>(now);
+    hits.<span class="tok-fn">set</span>(agentId, times);
+    <span class="tok-key">return</span> <span class="tok-key">true</span>;
+  };
+}
+
+<span class="tok-key">const</span> limiter = <span class="tok-fn">createRateLimiter</span>(<span class="tok-num">5</span>, <span class="tok-num">1000</span>); <span class="tok-com">// 5 req / giây</span>
+<span class="tok-key">if</span> (!<span class="tok-fn">limiter</span>(<span class="tok-str">'agent-42'</span>)) <span class="tok-key">throw</span> <span class="tok-key">new</span> <span class="tok-typ">Error</span>(<span class="tok-str">'Too many requests'</span>);</code></pre>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">🐛 Bẫy closure trong vòng lặp (câu hỏi phỏng vấn kinh điển)</div>
+        <pre style="margin:8px 0 0;font-family:var(--mono);font-size:13px;color:#c8d3e6"><span class="tok-key">for</span> (<span class="tok-key">var</span> i = 0; i &lt; 3; i++) setTimeout(() => console.log(i)); <span class="tok-com">// 3 3 3 ❌</span>
+<span class="tok-key">for</span> (<span class="tok-key">let</span> i = 0; i &lt; 3; i++) setTimeout(() => console.log(i)); <span class="tok-com">// 0 1 2 ✅</span></pre>
+        <p style="margin-top:8px"><code>var</code> chỉ có <b>một</b> binding dùng chung cho cả vòng lặp; <code>let</code> tạo
+        binding <b>mới mỗi vòng</b>, nên mỗi closure bắt đúng giá trị.</p>
+      </div>
+
+      <!-- ===================== 4. THIS ===================== -->
+      <h2 id="this"><span class="ico">④</span> <code>this</code> & cơ chế binding</h2>
+
+      <p><code>this</code> <strong>không</strong> phụ thuộc vào nơi hàm được định nghĩa, mà vào <strong>cách hàm được gọi</strong>.
+      Đây là nguồn gây bug số một khi truyền method làm callback.</p>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Cách gọi</th><th><code>this</code> trỏ tới</th><th>Ví dụ</th></tr></thead>
+          <tbody>
+            <tr><td>Gọi thường</td><td><code>undefined</code> (strict) / global</td><td><code>fn()</code></td></tr>
+            <tr><td>Method</td><td>Object đứng trước dấu chấm</td><td><code>obj.fn()</code></td></tr>
+            <tr><td><code>new</code></td><td>Object mới được tạo</td><td><code>new Fn()</code></td></tr>
+            <tr><td>call/apply/bind</td><td>Tham số đầu bạn truyền</td><td><code>fn.call(ctx)</code></td></tr>
+            <tr><td>Arrow function</td><td><b>Kế thừa</b> từ scope cha (lexical)</td><td><code>() => this</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">this-binding.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-key">class</span> <span class="tok-typ">CallQueue</span> {
+  constructor() { <span class="tok-key">this</span>.calls = []; }
+
+  add(call) { <span class="tok-key">this</span>.calls.<span class="tok-fn">push</span>(call); }
+
+  <span class="tok-com">// Method thường: mất 'this' khi truyền làm callback</span>
+  processAll() { <span class="tok-key">this</span>.calls.<span class="tok-fn">forEach</span>(<span class="tok-key">function</span>(c) {
+    <span class="tok-com">// ❌ 'this' ở đây KHÔNG phải instance — là undefined</span>
+  }); }
+}
+
+<span class="tok-key">const</span> q = <span class="tok-key">new</span> <span class="tok-typ">CallQueue</span>();
+<span class="tok-key">const</span> add = q.add;
+<span class="tok-fn">add</span>({ id: <span class="tok-num">1</span> }); <span class="tok-com">// ❌ TypeError: Cannot read 'push' of undefined — 'this' bị mất</span>
+
+<span class="tok-com">// 3 cách sửa:</span>
+<span class="tok-key">const</span> bound = q.add.<span class="tok-fn">bind</span>(q);     <span class="tok-com">// (1) bind cứng</span>
+q.calls.<span class="tok-fn">forEach</span>(c => <span class="tok-key">this</span>);     <span class="tok-com">// (2) arrow giữ this</span>
+<span class="tok-com">// (3) class field: process = () => {...} luôn bind vào instance</span></code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="c-title">💡 Quy tắc thực dụng</div>
+        <p>Trong class của NestJS/Node, khi cần truyền method làm event handler (vd <code>socket.on('msg', this.onMsg)</code>),
+        hãy dùng <b>arrow function class field</b> hoặc <code>.bind(this)</code> trong constructor để không mất ngữ cảnh.</p>
+      </div>
+
+      <!-- ===================== 5. PROTOTYPE ===================== -->
+      <h2 id="proto"><span class="ico">⑤</span> Prototype, kế thừa & <code>class</code></h2>
+
+      <p>JavaScript dùng <strong>prototype-based inheritance</strong>: mỗi object có liên kết ẩn
+      <code>[[Prototype]]</code> tới object khác. Khi truy cập thuộc tính không tồn tại, JS đi ngược
+      <strong>prototype chain</strong> để tìm. <code>class</code> chỉ là "lớp áo cú pháp" (syntactic sugar) cho cơ chế này.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">prototype.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-key">class</span> <span class="tok-typ">Agent</span> {
+  constructor(name) { <span class="tok-key">this</span>.name = name; <span class="tok-key">this</span>.status = <span class="tok-str">'available'</span>; }
+  greet() { <span class="tok-key">return</span> <span class="tok-str">`Agent </span>${<span class="tok-key">this</span>.name}<span class="tok-str">`</span>; }   <span class="tok-com">// nằm trên Agent.prototype (dùng chung)</span>
+}
+
+<span class="tok-key">class</span> <span class="tok-typ">Supervisor</span> <span class="tok-key">extends</span> <span class="tok-typ">Agent</span> {
+  constructor(name, team) { <span class="tok-key">super</span>(name); <span class="tok-key">this</span>.team = team; }
+  greet() { <span class="tok-key">return</span> <span class="tok-key">super</span>.<span class="tok-fn">greet</span>() + <span class="tok-str">` (Supervisor of </span>${<span class="tok-key">this</span>.team}<span class="tok-str">)`</span>; }
+}
+
+<span class="tok-key">const</span> s = <span class="tok-key">new</span> <span class="tok-typ">Supervisor</span>(<span class="tok-str">'Lan'</span>, <span class="tok-str">'Sales'</span>);
+s.<span class="tok-fn">greet</span>(); <span class="tok-com">// "Agent Lan (Supervisor of Sales)"</span>
+
+<span class="tok-com">// Prototype chain: s → Supervisor.prototype → Agent.prototype → Object.prototype → null</span>
+s <span class="tok-key">instanceof</span> <span class="tok-typ">Agent</span>;            <span class="tok-com">// true</span>
+<span class="tok-typ">Object</span>.<span class="tok-fn">getPrototypeOf</span>(s) === <span class="tok-typ">Supervisor</span>.prototype; <span class="tok-com">// true</span></code></pre>
+      </div>
+
+      <div class="callout info">
+        <div class="c-title">ℹ️ Method dùng chung — vì sao quan trọng</div>
+        <p>Method khai báo trong <code>class</code> nằm trên <code>prototype</code>, nên <b>10.000 agent chỉ chia sẻ
+        1 bản <code>greet</code></b> thay vì mỗi instance giữ một bản sao → tiết kiệm bộ nhớ. Ngược lại, arrow-function
+        class field tạo bản riêng mỗi instance (đánh đổi để bind <code>this</code>).</p>
+      </div>
+
+      <!-- ===================== 6. MODULE ===================== -->
+      <h2 id="module"><span class="ico">⑥</span> Module: ESM vs CommonJS</h2>
+
+      <p>Node.js hỗ trợ 2 hệ module. Hiểu khác biệt giúp bạn tránh lỗi <code>require is not defined</code> /
+      <code>Cannot use import outside a module</code> thường gặp khi cấu hình dự án.</p>
+
+      <div class="two-col">
+        <div class="code">
+          <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">CommonJS (.cjs)</span></div>
+          <pre><code><span class="tok-com">// export</span>
+<span class="tok-var">module</span>.exports = { routeCall };
+exports.helper = helper;
+
+<span class="tok-com">// import (đồng bộ)</span>
+<span class="tok-key">const</span> { routeCall } = <span class="tok-fn">require</span>(<span class="tok-str">'./router'</span>);</code></pre>
+        </div>
+        <div class="code">
+          <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">ES Module (.mjs)</span></div>
+          <pre><code><span class="tok-com">// export</span>
+<span class="tok-key">export</span> { routeCall };
+<span class="tok-key">export default</span> Router;
+
+<span class="tok-com">// import (tĩnh, hoisted)</span>
+<span class="tok-key">import</span> { routeCall } <span class="tok-key">from</span> <span class="tok-str">'./router.js'</span>;</code></pre>
+        </div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Tiêu chí</th><th>CommonJS</th><th>ES Module</th></tr></thead>
+          <tbody>
+            <tr><td>Cú pháp</td><td><code>require</code> / <code>module.exports</code></td><td><code>import</code> / <code>export</code></td></tr>
+            <tr><td>Thời điểm tải</td><td>Runtime, đồng bộ</td><td>Tĩnh, phân tích lúc parse</td></tr>
+            <tr><td>Tree-shaking</td><td>Khó</td><td>Tốt (loại code thừa)</td></tr>
+            <tr><td>Top-level await</td><td>❌</td><td>✅</td></tr>
+            <tr><td>Bật bằng</td><td>Mặc định</td><td><code>"type":"module"</code> hoặc <code>.mjs</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ===================== 7. FP ===================== -->
+      <h2 id="fp"><span class="ico">⑦</span> Hàm bậc cao & tính bất biến</h2>
+
+      <p>Phong cách <strong>functional</strong> (map/filter/reduce, pure function, immutability) giúp code backend
+      dễ test, dễ suy luận và an toàn với dữ liệu chia sẻ — cực kỳ quan trọng trong hệ thống nhiều luồng sự kiện.</p>
+
+      <div class="code">
+        <div class="code-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="fname">functional.js</span><span class="lang">JavaScript</span></div>
+        <pre><code><span class="tok-key">const</span> agents = [
+  { name: <span class="tok-str">'An'</span>,  status: <span class="tok-str">'available'</span>, calls: <span class="tok-num">3</span> },
+  { name: <span class="tok-str">'Lan'</span>, status: <span class="tok-str">'busy'</span>,      calls: <span class="tok-num">7</span> },
+  { name: <span class="tok-str">'Huy'</span>, status: <span class="tok-str">'available'</span>, calls: <span class="tok-num">1</span> },
+];
+
+<span class="tok-com">// Pure: không sửa input, luôn trả cùng output với cùng input</span>
+<span class="tok-key">const</span> available = agents
+  .<span class="tok-fn">filter</span>(a => a.status === <span class="tok-str">'available'</span>)
+  .<span class="tok-fn">sort</span>((x, y) => x.calls - y.calls); <span class="tok-com">// agent rảnh nhất lên đầu (least-busy routing)</span>
+
+<span class="tok-key">const</span> totalCalls = agents.<span class="tok-fn">reduce</span>((sum, a) => sum + a.calls, <span class="tok-num">0</span>); <span class="tok-com">// 11</span>
+
+<span class="tok-com">// Bất biến: tạo bản mới thay vì sửa tại chỗ</span>
+<span class="tok-key">const</span> updated = agents.<span class="tok-fn">map</span>(a =>
+  a.name === <span class="tok-str">'An'</span> ? { ...a, status: <span class="tok-str">'busy'</span> } : a
+);</code></pre>
+      </div>
+
+      <!-- ===================== PITFALLS ===================== -->
+      <h2 id="pitfalls"><span class="ico">⚠️</span> Lỗi thường gặp & Best practices</h2>
+
+      <div class="card-grid cols-2">
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Dùng <code>==</code> tùy tiện</div><p>Luôn dùng <code>===</code>. Chỉ <code>== null</code> khi cố ý gộp null/undefined.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Mutate object chia sẻ</div><p>Dùng spread/structuredClone. Tránh sửa trực tiếp state dùng chung.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Mất <code>this</code> khi truyền method</div><p>Dùng arrow class field hoặc <code>.bind(this)</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Lạm dụng <code>var</code></div><p>Dùng <code>const</code> mặc định, <code>let</code> khi cần gán lại.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> So sánh <code>NaN</code></div><p>Dùng <code>Number.isNaN()</code>, không dùng <code>=== NaN</code>.</p></div>
+        <div class="mini-card"><div class="t"><span class="e">🚫</span> Closure giữ tham chiếu lớn</div><p>Closure giữ biến → có thể gây rò rỉ bộ nhớ nếu giữ object lớn không cần thiết.</p></div>
+      </div>
+
+      <!-- ===================== EXERCISE ===================== -->
+      <h2 id="baitap"><span class="ico">🧪</span> Bài tập</h2>
+
+      <div class="exercise">
+        <div class="x-title">🧪 Bài 1 — Closure: bộ nhớ trạng thái agent</div>
+        <p>Viết hàm <code>createAgentSession()</code> trả về object với <code>login()</code>, <code>logout()</code>,
+        <code>isOnline()</code>. Trạng thái <code>online</code> phải <b>riêng tư</b>, không truy cập trực tiếp được từ bên ngoài.</p>
+        <details>
+          <summary>Xem gợi ý lời giải</summary>
+          <div class="code" style="margin-top:10px">
+            <pre><code><span class="tok-key">function</span> <span class="tok-fn">createAgentSession</span>() {
+  <span class="tok-key">let</span> online = <span class="tok-key">false</span>; <span class="tok-com">// riêng tư nhờ closure</span>
+  <span class="tok-key">return</span> {
+    login()    { online = <span class="tok-key">true</span>; },
+    logout()   { online = <span class="tok-key">false</span>; },
+    isOnline() { <span class="tok-key">return</span> online; }
+  };
+}</code></pre>
+          </div>
+        </details>
+      </div>
+
+      <div class="exercise">
+        <div class="x-title">🧪 Bài 2 — <code>this</code>: sửa bug callback</div>
+        <p>Cho class <code>Dispatcher</code> có method <code>dispatch()</code> được truyền vào
+        <code>setInterval(d.dispatch, 1000)</code> nhưng báo lỗi mất <code>this</code>. Hãy nêu <b>2 cách sửa</b>.</p>
+        <details>
+          <summary>Xem gợi ý lời giải</summary>
+          <p style="margin-top:8px">(1) <code>setInterval(() =&gt; d.dispatch(), 1000)</code> — bọc trong arrow giữ ngữ cảnh.
+          (2) Khai báo <code>dispatch = () =&gt; {...}</code> dạng class field để luôn bind vào instance.
+          (3) <code>setInterval(d.dispatch.bind(d), 1000)</code>.</p>
+        </details>
+      </div>
+
+      <!-- ===================== QUIZ ===================== -->
+      <h2 id="quiz"><span class="ico">✅</span> Quiz kiểm tra nhanh</h2>
+      <div class="quiz" id="quiz">
+
+        <div class="q">
+          <div class="q-text"><span class="num">Q1.</span> Kết quả của <code>[] == false</code> là gì?</div>
+          <div class="opt" data-correct="true">true — cả hai bị ép kiểu về số 0</div>
+          <div class="opt">false — kiểu khác nhau</div>
+          <div class="opt">TypeError</div>
+          <div class="explain"><b>Đáp án: true.</b> <code>[]</code> → <code>""</code> → <code>0</code>, <code>false</code> → <code>0</code>. Đây là lý do nên luôn dùng <code>===</code>.</div>
+        </div>
+
+        <div class="q">
+          <div class="q-text"><span class="num">Q2.</span> Vòng lặp <code>for(var i=0;i&lt;3;i++) setTimeout(()=&gt;console.log(i))</code> in ra?</div>
+          <div class="opt">0 1 2</div>
+          <div class="opt" data-correct="true">3 3 3</div>
+          <div class="opt">0 1 2 3</div>
+          <div class="explain"><b>Đáp án: 3 3 3.</b> <code>var</code> dùng chung 1 binding; khi callback chạy, vòng lặp đã kết thúc với <code>i=3</code>. Dùng <code>let</code> để được 0 1 2.</div>
+        </div>
+
+        <div class="q">
+          <div class="q-text"><span class="num">Q3.</span> <code>this</code> trong một method khai báo bằng <b>arrow function</b> được xác định bởi?</div>
+          <div class="opt">Cách hàm được gọi</div>
+          <div class="opt" data-correct="true">Scope cha nơi hàm được định nghĩa (lexical)</div>
+          <div class="opt">Luôn là global object</div>
+          <div class="explain"><b>Đáp án: lexical.</b> Arrow function không có <code>this</code> riêng — nó lấy <code>this</code> từ scope bao quanh lúc định nghĩa.</div>
+        </div>
+
+        <div class="q">
+          <div class="q-text"><span class="num">Q4.</span> Đâu KHÔNG phải giá trị falsy?</div>
+          <div class="opt">""</div>
+          <div class="opt">NaN</div>
+          <div class="opt" data-correct="true">"0"</div>
+          <div class="explain"><b>Đáp án: "0".</b> Chuỗi không rỗng luôn truthy. Chỉ 8 giá trị falsy: false, 0, -0, 0n, "", null, undefined, NaN.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================== INTERVIEW ===================== -->
+      <div class="iv-head" id="interview">
+        <div class="mic">🎤</div>
+        <div><h2>Ngân hàng câu hỏi phỏng vấn</h2><p>Các câu hỏi JavaScript thường gặp cho vị trí Fullstack — kèm đáp án mẫu & "bẫy".</p></div>
+      </div>
+
+      <details class="iv">
+        <summary><span class="qn">Q1</span><span>Closure là gì? Cho một ví dụ thực tế bạn từng dùng.<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> Closure là khả năng một hàm "ghi nhớ" và truy cập các biến ở scope nơi nó được định nghĩa,
+          kể cả khi được gọi ở scope khác. Về bản chất, hàm con giữ tham chiếu tới môi trường biến (lexical environment) của hàm cha.</p>
+          <p><b>Ví dụ thực tế:</b> tạo bộ đếm riêng tư, rate limiter, memoization cache, hoặc factory function trả về
+          handler đã "gắn" sẵn cấu hình (vd <code>createLogger(serviceName)</code>).</p>
+          <p class="trap">⚠️ Bẫy: hỏi tiếp "closure có thể gây memory leak không?" → Có, nếu closure giữ tham chiếu tới
+          object lớn không còn cần (vd event listener không gỡ), GC không thể thu hồi.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q2</span><span>Phân biệt <code>var</code>, <code>let</code>, <code>const</code>. TDZ là gì?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> <code>var</code> function-scoped, được hoisted với giá trị <code>undefined</code>, cho phép redeclare.
+          <code>let/const</code> block-scoped, không redeclare. <code>const</code> không cho gán lại binding (nhưng object bên trong vẫn mutable).</p>
+          <p><b>TDZ (Temporal Dead Zone):</b> khoảng từ đầu block tới dòng khai báo <code>let/const</code>, trong đó biến
+          tồn tại nhưng truy cập sẽ ném <code>ReferenceError</code>. Điều này buộc code phải khai báo trước khi dùng.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q3</span><span>Sự khác nhau giữa primitive và reference type? Truyền tham số hoạt động ra sao?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> Primitive (string, number, boolean, null, undefined, symbol, bigint) lưu trực tiếp giá trị,
+          truyền/gán theo <b>bản sao giá trị</b>. Reference (object, array, function) lưu địa chỉ, truyền/gán theo
+          <b>bản sao tham chiếu</b> → sửa qua biến này ảnh hưởng biến kia.</p>
+          <p>JavaScript luôn truyền tham số theo giá trị, nhưng với object thì "giá trị" đó là <b>con trỏ</b> → giống pass-by-reference khi mutate, nhưng gán lại biến thì không ảnh hưởng bên ngoài.</p>
+          <p class="trap">⚠️ Bẫy: clone nông (<code>{...obj}</code>) không sao chép object lồng nhau — cần <code>structuredClone</code> cho deep clone.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q4</span><span>Giải thích <code>this</code> trong JavaScript. Có những cách nào để kiểm soát nó?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> <code>this</code> được xác định lúc <b>gọi hàm</b>, không phải lúc định nghĩa. Quy tắc: gọi thường →
+          undefined/global; method → object trước dấu chấm; <code>new</code> → instance mới; <code>call/apply/bind</code> →
+          giá trị truyền vào; arrow function → kế thừa lexical từ scope cha.</p>
+          <p><b>Kiểm soát:</b> <code>fn.call(ctx, ...args)</code>, <code>fn.apply(ctx, argsArray)</code>,
+          <code>fn.bind(ctx)</code> (tạo hàm mới đã gắn cứng), hoặc dùng arrow function.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q5</span><span><code>==</code> khác <code>===</code> thế nào? Khi nào chấp nhận dùng <code>==</code>?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> <code>===</code> so sánh nghiêm ngặt (cả kiểu lẫn giá trị). <code>==</code> ép kiểu ngầm trước
+          khi so sánh → dễ gây kết quả bất ngờ (<code>0 == ''</code> là true). Quy ước: luôn dùng <code>===</code>.</p>
+          <p>Trường hợp chấp nhận <code>==</code>: kiểm tra <code>x == null</code> để gộp cả <code>null</code> và <code>undefined</code> trong một biểu thức.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q6</span><span>Prototype chain là gì? <code>class</code> trong JS có phải kế thừa thực sự không?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> Mỗi object có liên kết <code>[[Prototype]]</code> tới object khác. Khi truy cập thuộc tính,
+          JS tìm trên object, không thấy thì đi ngược chuỗi prototype tới khi gặp hoặc tới <code>null</code>.</p>
+          <p><code>class</code> là <b>syntactic sugar</b> trên prototype — không phải kế thừa lớp kiểu Java. <code>extends</code>
+          thiết lập prototype chain, <code>super</code> gọi constructor/method cha. Bản chất vẫn là prototype-based.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q7</span><span>ESM và CommonJS khác nhau ra sao? Khi nào gặp lỗi "Cannot use import outside a module"?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> CommonJS (<code>require</code>/<code>module.exports</code>) tải đồng bộ lúc runtime, mặc định trong Node.
+          ESM (<code>import</code>/<code>export</code>) là chuẩn tĩnh, phân tích lúc parse, hỗ trợ tree-shaking & top-level await.</p>
+          <p>Lỗi xuất hiện khi dùng cú pháp <code>import</code> trong file được Node hiểu là CommonJS. Khắc phục: thêm
+          <code>"type": "module"</code> vào <code>package.json</code>, đổi đuôi <code>.mjs</code>, hoặc dùng bundler/transpiler.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q8</span><span>Vì sao output của vòng lặp với <code>var</code> + <code>setTimeout</code> lại sai? Cách sửa?<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> Với <code>var</code>, tất cả callback chia sẻ cùng một biến <code>i</code>; khi timeout chạy
+          (sau khi vòng lặp kết thúc) thì <code>i</code> đã đạt giá trị cuối. Dùng <code>let</code> tạo binding mới mỗi vòng,
+          hoặc bọc trong IIFE để "đóng băng" giá trị tại thời điểm đó.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q9</span><span>Phân biệt <code>null</code> và <code>undefined</code>. <code>typeof</code> trả về gì cho mỗi loại?<span class="lvl jr">Junior</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> <code>undefined</code> nghĩa là biến đã khai báo nhưng <b>chưa gán giá trị</b> (mặc định của JS). <code>null</code> là giá trị <b>cố ý gán</b> để biểu thị "không có gì". <code>typeof undefined === 'undefined'</code>, còn <code>typeof null === 'object'</code> (một lỗi lịch sử của JS). Chúng bằng nhau với <code>==</code> (<code>null == undefined</code> là true) nhưng khác nhau với <code>===</code>.</p>
+        </div>
+      </details>
+
+      <details class="iv">
+        <summary><span class="qn">Q10</span><span>Shallow copy vs deep copy? Liệt kê các cách clone object và hạn chế.<span class="lvl mid">Middle</span></span><span class="chev">›</span></summary>
+        <div class="ans">
+          <p><b>Trả lời:</b> <b>Shallow copy</b> chỉ sao chép cấp một; các object lồng bên trong vẫn dùng chung tham chiếu — dùng <code>{...obj}</code>, <code>Object.assign({}, obj)</code>, <code>arr.slice()</code>. <b>Deep copy</b> sao chép toàn bộ cây — dùng <code>structuredClone(obj)</code> (hiện đại, giữ Date/Map/Set), hoặc <code>JSON.parse(JSON.stringify(obj))</code> (mất <code>undefined</code>/Date/hàm, lỗi với vòng lặp tham chiếu), hoặc thư viện như lodash <code>cloneDeep</code>.</p>
+          <p class="trap">⚠️ Bẫy: nhiều bug do "tưởng đã copy" nhưng thực ra shallow → sửa bản sao vô tình sửa object lồng của bản gốc (xem lại phần primitive vs reference).</p>
+        </div>
+      </details>
+
+      <!-- DONE BUTTON + PAGER -->
+      <div style="margin-top:40px;text-align:center">
+        <button id="markDone" style="background:var(--accent);color:#06210f;border:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer">✓ Đánh dấu hoàn thành chương A1</button>
+      </div>
+
+      <div class="pager">
+        <a href="../index.html"><span class="dir">← Quay lại</span><span class="ttl">Hub · Bản đồ lộ trình</span></a>
+        <a href="A2-bat-dong-bo-event-loop.html" class="next"><span class="dir">Tiếp theo →</span><span class="ttl">A2 · Bất đồng bộ & Event Loop</span></a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  /* Quiz tương tác */
+  document.querySelectorAll('#quiz .q').forEach(q=>{
+    const opts=q.querySelectorAll('.opt'), exp=q.querySelector('.explain');
+    opts.forEach(o=>o.addEventListener('click',()=>{
+      opts.forEach(x=>{x.classList.add('disabled'); if(x.dataset.correct)x.classList.add('correct');});
+      if(!o.dataset.correct)o.classList.add('wrong');
+      exp.classList.add('show');
+    }));
+  });
+  /* Đánh dấu hoàn thành → lưu localStorage để Hub đọc tiến độ */
+  const CH='A1', KEY='fcc_done';
+  const btn=document.getElementById('markDone');
+  function done(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+  function refresh(){ const d=done(); const on=d.includes(CH);
+    btn.textContent = on ? '✓ Đã hoàn thành A1 — bấm để bỏ' : '✓ Đánh dấu hoàn thành chương A1';
+    btn.style.opacity = on ? '.75' : '1';
+  }
+  btn.addEventListener('click',()=>{ let d=done();
+    d.includes(CH) ? d=d.filter(x=>x!==CH) : d.push(CH);
+    localStorage.setItem(KEY,JSON.stringify(d)); refresh();
+  });
+  refresh();
+  /* Active TOC khi cuộn */
+  const secs=[...document.querySelectorAll('h2[id], .chapter-head[id]')];
+  const tocLinks=[...document.querySelectorAll('.toc a')];
+  window.addEventListener('scroll',()=>{
+    let cur=''; secs.forEach(s=>{ if(window.scrollY>=s.offsetTop-120) cur=s.id; });
+    tocLinks.forEach(l=>l.classList.toggle('active', l.getAttribute('href')==='#'+cur));
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 6 — Collections &amp; Iterables · Dart Sub-pillar</title>
+  <meta name="description" content="List/Set/Map, lazy Iterable, higher-order map/where/fold, spread, collection-if/for, sort, unmodifiable." />
+  <meta name="theme-color" content="#0568b9" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Crimson+Pro:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-dart">D</span>
+        Dart · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Dart</a></li>
+          <li><a href="../../Flutter/index.html">Flutter</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Dart</a><span class="sep">/</span>
+        <span>Chương 6</span>
+      </div>
+      <div class="chapter-num">Chương 06 · Collections &amp; Iterables</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.8rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Collections &amp; Iterables
+      </h1>
+      <p class="lead">
+        Collection là tool dùng mỗi ngày. Higher-order method (<code>map</code>/<code>where</code>/<code>fold</code>) là pattern functional cốt lõi —
+        Flutter UI build từ list widget (<code>children: items.map(...).toList()</code>), state class lưu collection (<code>List&lt;Todo&gt;</code>).
+        <strong>Collection-if/for</strong> là cú pháp <em>rất Flutter-friendly</em> để xây widget tree có điều kiện.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~950 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Ch 2, 3</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Sử dụng thành thạo <code>List</code>, <code>Set</code>, <code>Map</code> với generic type.</li>
+            <li>Phân biệt growable / fixed / unmodifiable list.</li>
+            <li>Hiểu <code>Iterable</code> là <strong>lazy</strong> — chỉ compute khi consume.</li>
+            <li>Dùng higher-order method: <code>map</code>, <code>where</code>, <code>fold</code>, <code>reduce</code>, <code>expand</code>, <code>take</code>, <code>skip</code>, <code>any</code>, <code>every</code>, <code>firstWhere</code>.</li>
+            <li>Dùng spread operator <code>...</code> và <code>...?</code>.</li>
+            <li>Dùng collection-if / collection-for: <code>[if (cond) x, for (var i in xs) i]</code>.</li>
+            <li>Hiểu khi nào tách Iterable → List bằng <code>.toList()</code>.</li>
+            <li>Sort, group by, unique.</li>
+          </ul>
+        </div>
+
+        <h2 id="three-collections">1. 3 collection cơ bản</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// List — sequence ordered, allow duplicate</span>
+<span class="tok-type">List</span>&lt;<span class="tok-type">int</span>&gt; numbers = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">2</span>];   <span class="tok-com">// length 4</span>
+
+<span class="tok-com">// Set — unique, unordered nominal</span>
+<span class="tok-type">Set</span>&lt;<span class="tok-type">int</span>&gt; uniqs = {<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">2</span>};      <span class="tok-com">// {1, 2, 3}</span>
+
+<span class="tok-com">// Map — key-value</span>
+<span class="tok-type">Map</span>&lt;<span class="tok-type">String</span>, <span class="tok-type">int</span>&gt; ages = {<span class="tok-str">'Việt'</span>: <span class="tok-num">25</span>, <span class="tok-str">'Anh'</span>: <span class="tok-num">30</span>};</code></pre>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>List</th><th>Set</th><th>Map</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ordered</td><td>Có (insertion)</td><td>Không (default), có với LinkedHashSet</td><td>Có (insertion) với LinkedHashMap default</td></tr>
+              <tr><td>Unique</td><td>Không</td><td>Có</td><td>Key unique</td></tr>
+              <tr><td>Lookup</td><td>O(n) contains</td><td>O(1) avg contains</td><td>O(1) avg by key</td></tr>
+              <tr><td>Literal</td><td><code>[]</code></td><td><code>{}</code> (có element)</td><td><code>{}</code> (có :)</td></tr>
+              <tr><td>Use case</td><td>Sequence, order matter</td><td>Dedup, fast contains</td><td>Lookup by key</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="list-literal">2. List — literal &amp; constructor</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Literal — type inferred</span>
+<span class="tok-kw">final</span> a = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];               <span class="tok-com">// List&lt;int&gt;</span>
+<span class="tok-kw">final</span> b = &lt;<span class="tok-type">String</span>&gt;[];                <span class="tok-com">// Empty List&lt;String&gt; growable</span>
+
+<span class="tok-com">// Constructor</span>
+<span class="tok-kw">final</span> c = <span class="tok-type">List</span>.<span class="tok-fn">filled</span>(<span class="tok-num">5</span>, <span class="tok-num">0</span>);          <span class="tok-com">// [0,0,0,0,0]</span>
+<span class="tok-kw">final</span> d = <span class="tok-type">List</span>.<span class="tok-fn">generate</span>(<span class="tok-num">5</span>, (i) =&gt; i*<span class="tok-num">2</span>); <span class="tok-com">// [0,2,4,6,8]</span>
+<span class="tok-kw">final</span> e = <span class="tok-type">List</span>.<span class="tok-fn">of</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);          <span class="tok-com">// copy</span>
+<span class="tok-kw">final</span> f = <span class="tok-type">List</span>.<span class="tok-fn">from</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]);        <span class="tok-com">// copy (lenient type)</span></code></pre>
+
+        <h3 id="growable-fixed">Growable vs fixed-length</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-com">// Growable (default)</span>
+<span class="tok-kw">final</span> g = &lt;<span class="tok-type">int</span>&gt;[];
+g.<span class="tok-fn">add</span>(<span class="tok-num">1</span>);  <span class="tok-com">// OK</span>
+
+<span class="tok-com">// Fixed</span>
+<span class="tok-kw">final</span> f = <span class="tok-type">List</span>.<span class="tok-fn">filled</span>(<span class="tok-num">5</span>, <span class="tok-num">0</span>, growable: <span class="tok-kw">false</span>);
+f[<span class="tok-num">0</span>] = <span class="tok-num">99</span>;       <span class="tok-com">// OK — assign</span>
+<span class="tok-com">// f.add(1);     // ❌ UnsupportedError</span></code></pre>
+
+        <h3 id="list-ops">Method thông dụng</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+xs.<span class="tok-fn">add</span>(<span class="tok-num">4</span>);                  <span class="tok-com">// [1,2,3,4]</span>
+xs.<span class="tok-fn">insert</span>(<span class="tok-num">0</span>, <span class="tok-num">0</span>);              <span class="tok-com">// [0,1,2,3,4]</span>
+xs.<span class="tok-fn">remove</span>(<span class="tok-num">3</span>);               <span class="tok-com">// remove value 3 → [0,1,2,4]</span>
+xs.<span class="tok-fn">removeAt</span>(<span class="tok-num">0</span>);             <span class="tok-com">// remove index 0 → [1,2,4]</span>
+xs.length;                  <span class="tok-com">// 3</span>
+xs.<span class="tok-fn">indexOf</span>(<span class="tok-num">2</span>);              <span class="tok-com">// 1</span>
+xs.<span class="tok-fn">contains</span>(<span class="tok-num">99</span>);            <span class="tok-com">// false</span>
+xs.reversed.<span class="tok-fn">toList</span>();        <span class="tok-com">// [4,2,1]</span>
+xs.<span class="tok-fn">sublist</span>(<span class="tok-num">1</span>, <span class="tok-num">3</span>);            <span class="tok-com">// [2,4]</span>
+xs.<span class="tok-fn">sort</span>();                  <span class="tok-com">// in-place mutate</span></code></pre>
+
+        <h2 id="set">3. Set</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> a = {<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>};
+<span class="tok-kw">final</span> b = {<span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>};
+
+a.<span class="tok-fn">union</span>(b);              <span class="tok-com">// {1, 2, 3, 4}</span>
+a.<span class="tok-fn">intersection</span>(b);       <span class="tok-com">// {2, 3}</span>
+a.<span class="tok-fn">difference</span>(b);         <span class="tok-com">// {1}</span>
+
+a.<span class="tok-fn">contains</span>(<span class="tok-num">1</span>);          <span class="tok-com">// true — O(1) avg, nhanh hơn List.contains O(n)</span>
+
+<span class="tok-com">// Empty set — phải dùng constructor vì {} mặc định là Map</span>
+<span class="tok-kw">final</span> empty1 = &lt;<span class="tok-type">int</span>&gt;{};         <span class="tok-com">// Set rỗng</span>
+<span class="tok-kw">final</span> empty2 = &lt;<span class="tok-type">int</span>&gt;[]                 .<span class="tok-fn">toSet</span>();
+<span class="tok-com">// final empty3 = {};     // ❌ Đây là Map rỗng</span></code></pre>
+
+        <h2 id="map">4. Map</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> ages = {<span class="tok-str">'Việt'</span>: <span class="tok-num">25</span>, <span class="tok-str">'Anh'</span>: <span class="tok-num">30</span>};
+
+<span class="tok-fn">print</span>(ages[<span class="tok-str">'Việt'</span>]);          <span class="tok-com">// 25</span>
+<span class="tok-fn">print</span>(ages[<span class="tok-str">'X'</span>]);              <span class="tok-com">// null (key không tồn tại)</span>
+ages[<span class="tok-str">'Phương'</span>] = <span class="tok-num">22</span>;            <span class="tok-com">// add or update</span>
+ages.<span class="tok-fn">remove</span>(<span class="tok-str">'Anh'</span>);
+ages.<span class="tok-fn">containsKey</span>(<span class="tok-str">'Việt'</span>);        <span class="tok-com">// true</span>
+ages.<span class="tok-fn">containsValue</span>(<span class="tok-num">25</span>);          <span class="tok-com">// true</span>
+ages.keys;                        <span class="tok-com">// Iterable&lt;String&gt;</span>
+ages.values;                      <span class="tok-com">// Iterable&lt;int&gt;</span>
+ages.entries;                     <span class="tok-com">// Iterable&lt;MapEntry&lt;String, int&gt;&gt;</span>
+
+<span class="tok-kw">for</span> (<span class="tok-kw">final</span> entry <span class="tok-kw">in</span> ages.entries) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'$</span>{entry.key}<span class="tok-str">: $</span>{entry.value}<span class="tok-str">'</span>);
+}
+
+<span class="tok-com">// putIfAbsent — pattern thường gặp</span>
+<span class="tok-kw">final</span> counts = &lt;<span class="tok-type">String</span>, <span class="tok-type">int</span>&gt;{};
+<span class="tok-kw">for</span> (<span class="tok-kw">final</span> word <span class="tok-kw">in</span> [<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>, <span class="tok-str">'a'</span>, <span class="tok-str">'c'</span>, <span class="tok-str">'a'</span>]) {
+  counts[word] = (counts[word] ?? <span class="tok-num">0</span>) + <span class="tok-num">1</span>;
+}
+<span class="tok-fn">print</span>(counts);  <span class="tok-com">// {a: 3, b: 1, c: 1}</span></code></pre>
+
+        <h2 id="iterable-lazy">5. <code>Iterable</code> — lazy by design</h2>
+        <p>
+          <code>Iterable</code> là parent của <code>List</code>, <code>Set</code> (cùng cả Stream, sẽ học chương 7).
+          Method <code>map</code>, <code>where</code>, <code>take</code> trả về <code>Iterable</code> — <strong>không compute đến khi consume</strong>.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> result = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>].<span class="tok-fn">map</span>((x) {
+  <span class="tok-fn">print</span>(<span class="tok-str">'mapping $x'</span>);
+  <span class="tok-kw">return</span> x * <span class="tok-num">2</span>;
+});
+
+<span class="tok-fn">print</span>(<span class="tok-str">'created'</span>);              <span class="tok-com">// Không in mapping nào!</span>
+
+<span class="tok-fn">print</span>(result.<span class="tok-fn">toList</span>());          <span class="tok-com">// Bây giờ mới in:</span>
+<span class="tok-com">// mapping 1
+// mapping 2
+// mapping 3
+// [2, 4, 6]</span></code></pre>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Lazy != bad — chain dài không cost gấp</div>
+          <p>
+            Chain dài như <code>xs.where(p).map(f).take(5)</code> KHÔNG iterate 3 lần. Mỗi element đi qua pipe một lần — lazy đảm bảo.
+            Chỉ khi <code>.toList()</code> hoặc <code>for-in</code> consume, pipe mới chạy.
+          </p>
+          <p style="margin-top: 8px;">
+            <strong>So với JS Array</strong>: JS <code>.map().filter().take(5)</code> tạo array trung gian mỗi step — eager. Dart lazy hiệu quả hơn.
+          </p>
+        </div>
+
+        <h2 id="higher-order">6. Higher-order methods</h2>
+
+        <h3 id="map-transform"><code>map</code> — transform</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> nums = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+<span class="tok-kw">final</span> doubled = nums.<span class="tok-fn">map</span>((x) =&gt; x * <span class="tok-num">2</span>).<span class="tok-fn">toList</span>();   <span class="tok-com">// [2, 4, 6]
+</span><span class="tok-kw">final</span> labels = nums.<span class="tok-fn">map</span>((x) =&gt; <span class="tok-str">'#$x'</span>).<span class="tok-fn">toList</span>();   <span class="tok-com">// ['#1', '#2', '#3']</span></code></pre>
+
+        <h3 id="where-filter"><code>where</code> — filter</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> evens = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>].<span class="tok-fn">where</span>((x) =&gt; x % <span class="tok-num">2</span> == <span class="tok-num">0</span>);
+<span class="tok-fn">print</span>(evens.<span class="tok-fn">toList</span>());  <span class="tok-com">// [2, 4]</span></code></pre>
+
+        <h3 id="fold-reduce"><code>fold</code> và <code>reduce</code></h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>];
+
+<span class="tok-com">// fold — có initial value, type kết quả có thể khác element type</span>
+<span class="tok-kw">final</span> sum = xs.<span class="tok-fn">fold</span>&lt;<span class="tok-type">int</span>&gt;(<span class="tok-num">0</span>, (acc, x) =&gt; acc + x);
+<span class="tok-fn">print</span>(sum);  <span class="tok-com">// 10</span>
+
+<span class="tok-kw">final</span> labels = xs.<span class="tok-fn">fold</span>&lt;<span class="tok-type">String</span>&gt;(<span class="tok-str">''</span>, (acc, x) =&gt; <span class="tok-str">'$acc-$x'</span>);
+<span class="tok-fn">print</span>(labels);  <span class="tok-com">// '-1-2-3-4'</span>
+
+<span class="tok-com">// reduce — không initial, type acc phải == element type</span>
+<span class="tok-kw">final</span> sum2 = xs.<span class="tok-fn">reduce</span>((a, b) =&gt; a + b);
+<span class="tok-fn">print</span>(sum2);  <span class="tok-com">// 10</span>
+
+<span class="tok-com">// reduce throw nếu Iterable rỗng — fold an toàn hơn</span>
+<span class="tok-com">// [].reduce((a, b) =&gt; a + b);  // Bad state: No element</span></code></pre>
+
+        <h3 id="other-methods">Khác</h3>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>];
+
+xs.<span class="tok-fn">expand</span>((x) =&gt; [x, x*<span class="tok-num">10</span>]).<span class="tok-fn">toList</span>();   <span class="tok-com">// [1,10,2,20,3,30,4,40,5,50] — flatMap</span>
+xs.<span class="tok-fn">take</span>(<span class="tok-num">3</span>).<span class="tok-fn">toList</span>();                    <span class="tok-com">// [1,2,3]</span>
+xs.<span class="tok-fn">skip</span>(<span class="tok-num">2</span>).<span class="tok-fn">toList</span>();                    <span class="tok-com">// [3,4,5]</span>
+xs.<span class="tok-fn">any</span>((x) =&gt; x &gt; <span class="tok-num">4</span>);                  <span class="tok-com">// true</span>
+xs.<span class="tok-fn">every</span>((x) =&gt; x &gt; <span class="tok-num">0</span>);                <span class="tok-com">// true</span>
+xs.<span class="tok-fn">firstWhere</span>((x) =&gt; x &gt; <span class="tok-num">3</span>);           <span class="tok-com">// 4 (throw nếu không có)</span>
+xs.<span class="tok-fn">firstWhere</span>((x) =&gt; x &gt; <span class="tok-num">99</span>, orElse: () =&gt; -<span class="tok-num">1</span>);  <span class="tok-com">// -1</span></code></pre>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔀 So với JavaScript Array</div>
+          <div class="table-wrap" style="margin-top: 8px;">
+            <table>
+              <thead><tr><th>JS</th><th>Dart</th></tr></thead>
+              <tbody>
+                <tr><td><code>arr.map(f)</code></td><td><code>xs.map(f).toList()</code> hoặc <code>.toSet()</code></td></tr>
+                <tr><td><code>arr.filter(p)</code></td><td><code>xs.where(p).toList()</code></td></tr>
+                <tr><td><code>arr.reduce(...)</code></td><td><code>xs.fold(initial, ...)</code> hoặc <code>xs.reduce(...)</code></td></tr>
+                <tr><td><code>arr.flatMap(f)</code></td><td><code>xs.expand(f).toList()</code></td></tr>
+                <tr><td><code>arr.find(p)</code></td><td><code>xs.firstWhere(p, orElse: () =&gt; null)</code></td></tr>
+                <tr><td><code>arr.some(p)</code></td><td><code>xs.any(p)</code></td></tr>
+                <tr><td><code>arr.every(p)</code></td><td><code>xs.every(p)</code></td></tr>
+                <tr><td><code>arr.sort()</code> (mutate)</td><td><code>xs.sort()</code> (mutate)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h2 id="spread">7. Spread operator</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> a = [<span class="tok-num">1</span>, <span class="tok-num">2</span>];
+<span class="tok-kw">final</span> b = [<span class="tok-num">3</span>, <span class="tok-num">4</span>];
+
+<span class="tok-kw">final</span> merged = [...a, ...b, <span class="tok-num">5</span>];        <span class="tok-com">// [1,2,3,4,5]</span>
+
+<span class="tok-com">// Spread null-safe</span>
+<span class="tok-type">List</span>&lt;<span class="tok-type">int</span>&gt;? maybe;
+<span class="tok-kw">final</span> safe = [<span class="tok-num">0</span>, ...?maybe, <span class="tok-num">99</span>];        <span class="tok-com">// [0, 99]</span></code></pre>
+
+        <h2 id="collection-if-for">8. Collection-if / collection-for</h2>
+        <p>
+          Cú pháp <strong>cực Flutter-friendly</strong> — xây List/Set/Map có conditional inline.
+        </p>
+
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> isAdmin = <span class="tok-kw">true</span>;
+<span class="tok-kw">final</span> menu = [
+  <span class="tok-str">'Home'</span>,
+  <span class="tok-str">'Profile'</span>,
+  <span class="tok-kw">if</span> (isAdmin) <span class="tok-str">'Admin Panel'</span>,
+  <span class="tok-str">'Settings'</span>,
+];
+<span class="tok-fn">print</span>(menu);
+<span class="tok-com">// [Home, Profile, Admin Panel, Settings]</span>
+
+<span class="tok-com">// Collection-for</span>
+<span class="tok-kw">final</span> doubled = [<span class="tok-kw">for</span> (<span class="tok-kw">var</span> x <span class="tok-kw">in</span> [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]) x * <span class="tok-num">2</span>];
+<span class="tok-fn">print</span>(doubled);  <span class="tok-com">// [2, 4, 6]</span>
+
+<span class="tok-com">// Kết hợp</span>
+<span class="tok-kw">final</span> grid = [
+  <span class="tok-kw">for</span> (<span class="tok-kw">var</span> row = <span class="tok-num">0</span>; row &lt; <span class="tok-num">3</span>; row++)
+    <span class="tok-kw">for</span> (<span class="tok-kw">var</span> col = <span class="tok-num">0</span>; col &lt; <span class="tok-num">3</span>; col++)
+      <span class="tok-kw">if</span> (row + col == <span class="tok-num">2</span>) <span class="tok-str">'($row,$col)'</span>,
+];
+<span class="tok-fn">print</span>(grid);  <span class="tok-com">// [(0,2), (1,1), (2,0)]</span></code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Flutter widget tree dùng pattern này</div>
+          <pre data-lang="dart" style="margin-top: 8px;"><code class="language-dart"><span class="tok-fn">Column</span>(
+  children: [
+    <span class="tok-kw">const</span> <span class="tok-type">Text</span>(<span class="tok-str">'Welcome'</span>),
+    <span class="tok-kw">if</span> (user.isPremium) <span class="tok-kw">const</span> <span class="tok-cls">PremiumBadge</span>(),
+    <span class="tok-kw">for</span> (<span class="tok-kw">final</span> item <span class="tok-kw">in</span> items) <span class="tok-fn">ListTile</span>(title: <span class="tok-fn">Text</span>(item.title)),
+  ],
+)</code></pre>
+        </div>
+
+        <h2 id="sort">9. Sort &amp; comparator</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> xs = [<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">4</span>, <span class="tok-num">1</span>, <span class="tok-num">5</span>, <span class="tok-num">9</span>, <span class="tok-num">2</span>];
+xs.<span class="tok-fn">sort</span>();                <span class="tok-com">// In-place: [1, 1, 2, 3, 4, 5, 9]</span>
+
+<span class="tok-com">// Comparator custom</span>
+xs.<span class="tok-fn">sort</span>((a, b) =&gt; b.<span class="tok-fn">compareTo</span>(a));   <span class="tok-com">// descending</span>
+
+<span class="tok-com">// Sort object — bằng compareTo</span>
+<span class="tok-kw">class</span> <span class="tok-cls">User</span> { <span class="tok-kw">final</span> <span class="tok-type">String</span> name; <span class="tok-kw">final</span> <span class="tok-type">int</span> age; <span class="tok-fn">User</span>(<span class="tok-kw">this</span>.name, <span class="tok-kw">this</span>.age); }
+
+<span class="tok-kw">final</span> users = [<span class="tok-fn">User</span>(<span class="tok-str">'A'</span>, <span class="tok-num">30</span>), <span class="tok-fn">User</span>(<span class="tok-str">'B'</span>, <span class="tok-num">25</span>), <span class="tok-fn">User</span>(<span class="tok-str">'C'</span>, <span class="tok-num">30</span>)];
+
+<span class="tok-com">// Sort theo age tăng, nếu cùng age thì theo tên A-Z</span>
+users.<span class="tok-fn">sort</span>((a, b) {
+  <span class="tok-kw">final</span> byAge = a.age.<span class="tok-fn">compareTo</span>(b.age);
+  <span class="tok-kw">if</span> (byAge != <span class="tok-num">0</span>) <span class="tok-kw">return</span> byAge;
+  <span class="tok-kw">return</span> a.name.<span class="tok-fn">compareTo</span>(b.name);
+});</code></pre>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 <code>sort</code> mutate, không trả new</div>
+          <p>
+            Khác Kotlin <code>.sorted()</code> trả list mới — Dart <code>sort</code> mutate in-place, return <code>void</code>.
+            Muốn không mutate: <code>[...xs]..sort()</code> (copy trước).
+          </p>
+        </div>
+
+        <h2 id="convert">10. Convert giữa types</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+<span class="tok-kw">final</span> set = xs.<span class="tok-fn">toSet</span>();              <span class="tok-com">// {1, 2, 3}</span>
+
+<span class="tok-kw">final</span> entries = [<span class="tok-fn">MapEntry</span>(<span class="tok-str">'a'</span>, <span class="tok-num">1</span>), <span class="tok-fn">MapEntry</span>(<span class="tok-str">'b'</span>, <span class="tok-num">2</span>)];
+<span class="tok-kw">final</span> m = <span class="tok-type">Map</span>.<span class="tok-fn">fromEntries</span>(entries);  <span class="tok-com">// {a: 1, b: 2}</span>
+
+<span class="tok-com">// Map.fromIterable — flexible</span>
+<span class="tok-kw">final</span> nameAges = [<span class="tok-str">'Việt:25'</span>, <span class="tok-str">'Anh:30'</span>];
+<span class="tok-kw">final</span> map = <span class="tok-type">Map</span>.<span class="tok-fn">fromIterable</span>(
+  nameAges,
+  key: (e) =&gt; e.<span class="tok-fn">split</span>(<span class="tok-str">':'</span>)[<span class="tok-num">0</span>],
+  value: (e) =&gt; <span class="tok-type">int</span>.<span class="tok-fn">parse</span>(e.<span class="tok-fn">split</span>(<span class="tok-str">':'</span>)[<span class="tok-num">1</span>]),
+);
+<span class="tok-fn">print</span>(map);  <span class="tok-com">// {Việt: 25, Anh: 30}</span></code></pre>
+
+        <h2 id="unmodifiable">11. Unmodifiable view</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">final</span> xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+<span class="tok-kw">final</span> view = <span class="tok-type">List</span>.<span class="tok-fn">unmodifiable</span>(xs);
+<span class="tok-com">// view.add(4);   // UnsupportedError
+
+</span><span class="tok-com">// Note: thay đổi xs vẫn ảnh hưởng đến view (cùng underlying data)</span>
+xs.<span class="tok-fn">add</span>(<span class="tok-num">99</span>);
+<span class="tok-fn">print</span>(view);   <span class="tok-com">// [1, 2, 3, 99]</span></code></pre>
+
+        <p>Để hoàn toàn isolate: <code>List.unmodifiable([...xs])</code> — copy + lock.</p>
+
+        <h2 id="const-collection">12. <code>const</code> collection</h2>
+        <pre data-lang="dart"><code class="language-dart"><span class="tok-kw">const</span> a = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];           <span class="tok-com">// const list — immutable + canonical</span>
+<span class="tok-com">// a.add(4);   // ❌ Unsupported</span>
+
+<span class="tok-kw">const</span> b = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+<span class="tok-fn">print</span>(<span class="tok-fn">identical</span>(a, b));  <span class="tok-com">// true — canonical</span>
+
+<span class="tok-com">// var với const literal — vẫn canonical</span>
+<span class="tok-kw">var</span> c = <span class="tok-kw">const</span> [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>];
+<span class="tok-fn">print</span>(<span class="tok-fn">identical</span>(a, c));  <span class="tok-com">// true</span></code></pre>
+
+        <h2 id="performance">13. Performance note</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Operation</th><th>List</th><th>Set</th><th>Map</th></tr></thead>
+            <tbody>
+              <tr><td>contains</td><td>O(n)</td><td>O(1) avg</td><td>O(1) avg by key</td></tr>
+              <tr><td>add</td><td>O(1) amortized end</td><td>O(1) avg</td><td>O(1) avg</td></tr>
+              <tr><td>insert at front</td><td>O(n)</td><td>—</td><td>—</td></tr>
+              <tr><td>removeAt(0)</td><td>O(n)</td><td>—</td><td>—</td></tr>
+              <tr><td>sort</td><td>O(n log n)</td><td>—</td><td>—</td></tr>
+              <tr><td>iterate</td><td>O(n)</td><td>O(n)</td><td>O(n)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Khi nào dùng Set thay List?</div>
+          <p>
+            Khi cần (a) uniqueness, hoặc (b) <code>contains</code> nhanh. Vd: blacklist 1000 user ID — List.contains O(n), Set.contains O(1).
+            Convert one-time: <code>final blocked = ids.toSet();</code>.
+          </p>
+        </div>
+
+        <h2 id="bai-tap" class="exercises">14. Bài tập</h2>
+
+        <div class="exercise">
+          <h4>Top 3 premium HN user</h4>
+          <div class="exercise-body">
+            <p>
+              Cho <code>List&lt;User&gt;</code> với field <code>age, city, premium</code>. Viết 1 expression chain
+              lấy <strong>email</strong> của <strong>top 3 premium user</strong> theo <strong>age giảm dần</strong>, ở city <code>'HN'</code>.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">final emails = users
+    .where((u) =&gt; u.premium &amp;&amp; u.city == 'HN')
+    .toList()
+    ..sort((a, b) =&gt; b.age.compareTo(a.age));
+
+final result = emails.take(3).map((u) =&gt; u.email).toList();</code></pre>
+              <p>
+                Lưu ý: phải <code>.toList()</code> trước <code>..sort()</code> vì <code>where</code> trả Iterable lazy
+                không có method <code>sort</code>. <code>..</code> là cascade — trả về list sau sort.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Tổng giỏ hàng với fold</h4>
+          <div class="exercise-body">
+            <p>Refactor for-loop tính tổng giá trị giỏ hàng (List of Item với field <code>price</code>, <code>qty</code>) thành <code>.fold</code>.</p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">// Cách for-loop
+int total = 0;
+for (final item in cart) {
+  total += item.price * item.qty;
+}
+
+// Cách fold
+final total = cart.fold&lt;int&gt;(0, (acc, i) =&gt; acc + i.price * i.qty);</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Group books by author</h4>
+          <div class="exercise-body">
+            <p>
+              Cho <code>List&lt;Book&gt;</code> với field <code>author, title</code>. Group thành
+              <code>Map&lt;String, List&lt;Book&gt;&gt;</code>.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">// Manual với fold
+final grouped = books.fold&lt;Map&lt;String, List&lt;Book&gt;&gt;&gt;({}, (acc, book) {
+  acc.putIfAbsent(book.author, () =&gt; []).add(book);
+  return acc;
+});
+
+// Hoặc với for-loop trực tiếp
+final grouped = &lt;String, List&lt;Book&gt;&gt;{};
+for (final book in books) {
+  grouped.putIfAbsent(book.author, () =&gt; []).add(book);
+}</code></pre>
+              <p>Package <code>collection</code> có helper <code>groupBy</code> sẵn. Tự implement giúp hiểu logic.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Build menu theo role</h4>
+          <div class="exercise-body">
+            <p>
+              Build menu items cho 3 role user khác nhau (guest / user / admin) dùng collection-if.
+              So sánh với cách viết if/else thông thường — đếm số dòng.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">List&lt;String&gt; buildMenu(String role) =&gt; [
+  'Home',
+  if (role != 'guest') 'Profile',
+  if (role == 'user' || role == 'admin') 'Settings',
+  if (role == 'admin') 'Admin Panel',
+  if (role == 'admin') 'User Management',
+  'Help',
+];
+
+print(buildMenu('guest'));   // [Home, Help]
+print(buildMenu('user'));    // [Home, Profile, Settings, Help]
+print(buildMenu('admin'));   // tất cả</code></pre>
+              <p>Cách if/else cần var + push: dài 2-3x dòng. Collection-if đẹp hơn.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="exercise">
+          <h4>Lazy prime generator</h4>
+          <div class="exercise-body">
+            <p>
+              Tạo function <code>Iterable&lt;int&gt; primes()</code> trả về vô hạn prime — dùng generator (sync*).
+              Demo <code>primes().take(10).toList()</code> không loop vô hạn.
+            </p>
+          </div>
+          <details class="exercise-hint">
+            <summary>💡 Gợi ý đáp án</summary>
+            <div class="hint-content">
+              <pre data-lang="dart"><code class="language-dart">Iterable&lt;int&gt; primes() sync* {
+  var n = 2;
+  while (true) {
+    if (isPrime(n)) yield n;
+    n++;
+  }
+}
+
+bool isPrime(int n) {
+  if (n &lt; 2) return false;
+  for (var i = 2; i * i &lt;= n; i++) {
+    if (n % i == 0) return false;
+  }
+  return true;
+}
+
+void main() {
+  print(primes().take(10).toList());
+  // [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+}</code></pre>
+              <p>
+                <code>sync*</code> + <code>yield</code> là generator. <code>take(10)</code> stop generator sau 10 giá trị —
+                không phải loop vô hạn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="quiz">15. Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q1</div><div class="quiz-q-text"><p><code>&lt;int&gt;[].runtimeType</code> ≈ gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>List&lt;int&gt;</code> (growable). Cụ thể là <code>JSArray&lt;int&gt;</code> ở web hoặc <code>_GrowableList&lt;int&gt;</code> ở native — internal.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q2</div><div class="quiz-q-text"><p><code>{1, 2, 3}</code> là Set hay Map?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Set. Analyzer infer qua nội dung — không có <code>:</code> → set. <code>{1: 'a'}</code> là Map.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q3</div><div class="quiz-q-text"><p><code>{}</code> rỗng là Set hay Map?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Map. Không có context infer. Set rỗng phải <code>&lt;int&gt;{}</code> hoặc <code>&lt;String&gt;{}</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q4</div><div class="quiz-q-text"><p><code>[1,2,3].map((x) =&gt; x * 2)</code> trả type gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>Iterable&lt;int&gt;</code>, không phải <code>List&lt;int&gt;</code>. Lazy. Cần <code>.toList()</code> để materialize.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q5</div><div class="quiz-q-text"><p><code>xs.sort()</code> mutate xs hay trả mới?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Mutate in-place. Return <code>void</code>. Khác Kotlin <code>.sorted()</code> (immutable). Muốn không mutate: <code>[...xs]..sort()</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q6</div><div class="quiz-q-text"><p>Cách tìm element đầu thỏa điều kiện hoặc null nếu không có?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>xs.firstWhere(pred, orElse: () =&gt; defaultValue)</code>. Hoặc dùng <code>firstWhereOrNull</code> từ package <code>collection</code>.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q7</div><div class="quiz-q-text"><p>Spread <code>[...xs, ...?maybeYs]</code> — khi maybeYs null, kết quả?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> Chỉ chứa elements của xs. <code>...?</code> null-safe skip. <code>...</code> thường sẽ throw nếu null.</p></div></details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question"><div class="quiz-num">Q8</div><div class="quiz-q-text"><p><code>Map.fromEntries([MapEntry('a', 1), MapEntry('b', 2)])</code> ≈ gì?</p></div></div>
+          <details><summary>Xem đáp án</summary><div class="quiz-answer"><p><span class="answer-label">Đáp án:</span> <code>{'a': 1, 'b': 2}</code>. Pattern thường dùng khi build map từ list pair.</p></div></details>
+        </div>
+
+        <h2 id="tong-ket">16. Tổng kết</h2>
+        <ul>
+          <li>✅ 3 collection: List (ordered), Set (unique), Map (key-value).</li>
+          <li>✅ Iterable lazy — compute on consume.</li>
+          <li>✅ Higher-order: <code>map</code>, <code>where</code>, <code>fold</code>, <code>reduce</code>, <code>expand</code>, <code>take</code>, <code>skip</code>, <code>any</code>, <code>every</code>, <code>firstWhere</code>.</li>
+          <li>✅ Spread <code>...</code> + null-safe <code>...?</code>.</li>
+          <li>✅ Collection-if / collection-for — Flutter-friendly.</li>
+          <li>✅ Sort in-place + comparator custom.</li>
+          <li>✅ <code>const</code> collection canonical.</li>
+          <li>✅ Performance: List contains O(n), Set/Map O(1) avg.</li>
+        </ul>
+
+        <h2 id="ket-noi">17. Kết nối</h2>
+        <ul>
+          <li><a href="chuong7.html"><strong>Chương 7 — Stream:</strong></a> Stream là Iterable async.</li>
+          <li><a href="chuong8.html"><strong>Chương 8:</strong></a> Generic List&lt;T&gt;, collection pattern matching.</li>
+          <li><strong>Flutter chương 3 — Layout:</strong> <code>children: &lt;Widget&gt;[...]</code> với collection-if.</li>
+          <li><strong>Flutter chương 9+:</strong> state list entity (List&lt;Todo&gt;, etc).</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong5.html" class="prev">
+            <div class="dir">← Chương trước</div>
+            <div class="label">05 · Null Safety</div>
+          </a>
+          <a href="chuong7.html" class="next">
+            <div class="dir">Chương tiếp →</div>
+            <div class="label">07 · Async, Future &amp; Stream</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Mục lục chương</div>
+        <ul>
+          <li><a href="#three-collections">1. 3 collection</a></li>
+          <li><a href="#list-literal">2. List</a></li>
+          <li><a href="#set">3. Set</a></li>
+          <li><a href="#map">4. Map</a></li>
+          <li><a href="#iterable-lazy">5. Iterable lazy</a></li>
+          <li><a href="#higher-order">6. Higher-order</a></li>
+          <li><a href="#spread">7. Spread</a></li>
+          <li><a href="#collection-if-for">8. Collection-if/for</a></li>
+          <li><a href="#sort">9. Sort</a></li>
+          <li><a href="#convert">10. Convert types</a></li>
+          <li><a href="#unmodifiable">11. Unmodifiable</a></li>
+          <li><a href="#const-collection">12. const collection</a></li>
+          <li><a href="#performance">13. Performance</a></li>
+          <li><a href="#bai-tap">14. Bài tập</a></li>
+          <li><a href="#quiz">15. Quiz</a></li>
+          <li><a href="#tong-ket">16. Tổng kết</a></li>
+          <li><a href="#ket-noi">17. Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Dart Chương 6 · Pillar 9 — IT Basic<br/>
+        <a href="chuong5.html">← Chương 5</a> · <a href="../index.html">Dart sub-pillar</a> · <a href="chuong7.html">Chương 7 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

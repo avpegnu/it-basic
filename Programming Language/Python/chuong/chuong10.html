@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — Testing, Packaging &amp; Tooling · Python Sub-pillar</title>
+  <meta name="description" content="pytest từ A đến Z, fixture, parametrize, mock, coverage; pyproject.toml, build wheel, publish PyPI, ruff, mypy, pre-commit — đưa Python lên production." />
+  <meta name="theme-color" content="#306998" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-py">Py</span>
+        Python · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../index.html" class="active">Python</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Python</a><span class="sep">/</span>
+        <span>Chương 10</span>
+      </div>
+      <div class="chapter-num">Chương 10 · Testing, Packaging &amp; Tooling</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
+        Đưa Python lên Production — Testing, Packaging và Tooling hiện đại
+      </h1>
+      <p class="lead">
+        Code đẹp, type chuẩn nhưng nếu không có <strong>test</strong> đảm bảo hành vi, không có
+        <strong>linter</strong> giữ chất lượng, không có <strong>format</strong> nhất quán, và không
+        có cách <strong>đóng gói</strong> để chia sẻ — thì project Python chỉ là bản nháp. Chương cuối
+        này dạy bạn toàn bộ <em>vòng đời production</em> của một dự án Python năm 2026:
+        <code>pytest</code>, <code>coverage</code>, <code>ruff</code>, <code>mypy</code>,
+        <code>pyproject.toml</code>, <code>build</code>, <code>twine</code>, và
+        <code>pre-commit</code>.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1100 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-9</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose py-section">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Viết test với <code>pytest</code> — function, fixture, parametrize, marker, conftest.</li>
+            <li>Quản lý <em>side effect</em> bằng <code>unittest.mock</code> và <code>pytest-mock</code>.</li>
+            <li>Đo độ phủ test với <code>coverage</code> / <code>pytest-cov</code> và biết khi nào % coverage là <em>lừa dối</em>.</li>
+            <li>Viết <code>pyproject.toml</code> đầy đủ — metadata, dependency, config cho tất cả tool.</li>
+            <li>Build <code>.whl</code> và <code>.tar.gz</code> bằng <code>python -m build</code>.</li>
+            <li>Publish package lên <strong>PyPI</strong> bằng <code>twine</code>.</li>
+            <li>Lint + format bằng <code>ruff</code> (Rust, thay <code>flake8</code> + <code>black</code> + <code>isort</code>).</li>
+            <li>Cài <strong>pre-commit hook</strong> chặn commit code bẩn ngay tại máy lập trình.</li>
+          </ul>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — Tooling là "phanh xe" cho dev</div>
+          <p>
+            Khi xe chạy nhanh, phanh tốt giúp bạn <em>dám</em> tăng tốc. Tooling production cũng vậy:
+            <strong>test</strong> giúp bạn dám refactor lớn, <strong>type checker</strong> bắt bug trước
+            khi runtime, <strong>linter/format</strong> giữ codebase nhất quán dù nhiều người chạm vào,
+            <strong>packaging</strong> đảm bảo người khác cài và chạy được code của bạn. Chương này
+            không thêm tính năng — nó thêm <em>tự tin</em>.
+          </p>
+        </div>
+
+        <h2 id="pytest-why">1. <code>pytest</code> — vì sao thay <code>unittest</code></h2>
+
+        <p>
+          Python <em>có sẵn</em> framework test trong stdlib: <code>unittest</code>. Nhưng phần lớn
+          codebase Python 2026 dùng <code>pytest</code> (3rd-party). Lý do?
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th><code>unittest</code> (stdlib)</th><th><code>pytest</code> (3rd-party)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Cú pháp</td><td>Class <code>TestCase</code>, method <code>setUp/tearDown</code></td><td>Function thuần, <code>def test_*</code></td></tr>
+              <tr><td>Assertion</td><td><code>self.assertEqual(a, b)</code></td><td><code>assert a == b</code> — Python built-in</td></tr>
+              <tr><td>Setup/teardown</td><td>Method trong class</td><td><strong>Fixture</strong> dạng function — composable</td></tr>
+              <tr><td>Parametrize</td><td>Phải subclass hoặc dùng <code>subTest</code></td><td><code>@pytest.mark.parametrize</code> — 1 dòng</td></tr>
+              <tr><td>Plugin</td><td>Hạn chế</td><td>Hệ sinh thái lớn: <code>pytest-cov</code>, <code>pytest-mock</code>, <code>pytest-asyncio</code>, …</td></tr>
+              <tr><td>Verbose</td><td>Có (boilerplate class)</td><td>Tối thiểu</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>So sánh trực tiếp cùng 1 test:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>unittest style</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> unittest
+<span class="tok-kw">from</span> calc <span class="tok-kw">import</span> add
+
+<span class="tok-kw">class</span> <span class="tok-cls">TestAdd</span>(unittest.TestCase):
+    <span class="tok-kw">def</span> <span class="tok-fn">test_positive</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">self</span>.assertEqual(add(<span class="tok-num">1</span>, <span class="tok-num">2</span>), <span class="tok-num">3</span>)
+
+    <span class="tok-kw">def</span> <span class="tok-fn">test_negative</span>(<span class="tok-kw">self</span>):
+        <span class="tok-kw">self</span>.assertEqual(add(-<span class="tok-num">1</span>, -<span class="tok-num">2</span>), -<span class="tok-num">3</span>)
+
+<span class="tok-kw">if</span> __name__ == <span class="tok-str">"__main__"</span>:
+    unittest.main()</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pytest style</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> calc <span class="tok-kw">import</span> add
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_positive</span>():
+    <span class="tok-kw">assert</span> add(<span class="tok-num">1</span>, <span class="tok-num">2</span>) == <span class="tok-num">3</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_negative</span>():
+    <span class="tok-kw">assert</span> add(-<span class="tok-num">1</span>, -<span class="tok-num">2</span>) == -<span class="tok-num">3</span></code></pre>
+        </div>
+
+        <p>
+          Ít boilerplate, dễ đọc, và quan trọng: <code>pytest</code> "rewrite" câu <code>assert</code>
+          để in ra <em>biểu thức chi tiết</em> khi fail (giá trị 2 vế, kiểu, diff), thay vì chỉ
+          <code>AssertionError</code>.
+        </p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Cài đặt</div>
+          <p>
+            <code>pip install pytest pytest-cov pytest-mock</code>. Chạy test:
+            <code>pytest</code> (tự tìm file <code>test_*.py</code> hoặc <code>*_test.py</code>).
+          </p>
+        </div>
+
+        <h2 id="test-basic">2. Test function cơ bản</h2>
+
+        <p>Quy ước "thu thập" của <code>pytest</code> (test discovery):</p>
+
+        <ul>
+          <li>File: tên bắt đầu bằng <code>test_</code> hoặc kết thúc bằng <code>_test.py</code>.</li>
+          <li>Function: tên bắt đầu bằng <code>test_</code>.</li>
+          <li>Class (tuỳ chọn): tên bắt đầu bằng <code>Test</code>, không có <code>__init__</code>.</li>
+        </ul>
+
+        <p>Cấu trúc folder điển hình:</p>
+
+        <div class="code-wrap">
+<pre><code>my-project/
+├─ src/
+│  └─ mypkg/
+│     ├─ __init__.py
+│     └─ calc.py
+├─ tests/
+│  ├─ test_calc.py
+│  └─ test_string.py
+├─ pyproject.toml
+└─ README.md</code></pre>
+        </div>
+
+        <p>File test ví dụ:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tests/test_calc.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> mypkg.calc <span class="tok-kw">import</span> add, divide
+<span class="tok-kw">import</span> pytest
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_add_basic</span>():
+    <span class="tok-kw">assert</span> add(<span class="tok-num">2</span>, <span class="tok-num">3</span>) == <span class="tok-num">5</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_divide_zero_raises</span>():
+    <span class="tok-kw">with</span> pytest.raises(ZeroDivisionError):
+        divide(<span class="tok-num">10</span>, <span class="tok-num">0</span>)
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_divide_close</span>():
+    <span class="tok-kw">assert</span> divide(<span class="tok-num">1</span>, <span class="tok-num">3</span>) == pytest.approx(<span class="tok-num">0.333</span>, rel=<span class="tok-num">1e-2</span>)</code></pre>
+        </div>
+
+        <p>Chạy:</p>
+
+        <div class="code-wrap">
+<pre><code>$ pytest                       <span class="tok-com"># chạy tất cả test</span>
+$ pytest tests/test_calc.py    <span class="tok-com"># chỉ 1 file</span>
+$ pytest tests/test_calc.py::test_add_basic   <span class="tok-com"># chỉ 1 test</span>
+$ pytest -v                    <span class="tok-com"># verbose</span>
+$ pytest -k "divide"           <span class="tok-com"># lọc theo tên (substring)</span>
+$ pytest -x                    <span class="tok-com"># dừng ngay khi test đầu tiên fail</span>
+$ pytest --lf                  <span class="tok-com"># chỉ chạy lại các test fail lần trước</span></code></pre>
+        </div>
+
+        <h2 id="fixture">3. Fixture — setup/teardown thanh lịch</h2>
+
+        <p>
+          <em>Fixture</em> là function được <code>pytest</code> "tiêm" vào test khi test khai báo
+          tham số cùng tên. Đây là cách <code>pytest</code> thay <code>setUp/tearDown</code> của
+          <code>unittest</code> bằng cơ chế <strong>dependency injection</strong> nhẹ.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>fixture cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> pytest
+<span class="tok-kw">from</span> mypkg.db <span class="tok-kw">import</span> connect
+
+<span class="tok-dec">@pytest.fixture</span>
+<span class="tok-kw">def</span> <span class="tok-fn">db</span>():
+    conn = connect(<span class="tok-str">":memory:"</span>)     <span class="tok-com"># setup</span>
+    <span class="tok-kw">yield</span> conn                      <span class="tok-com"># trao cho test</span>
+    conn.close()                    <span class="tok-com"># teardown (sau yield)</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_insert</span>(db):              <span class="tok-com"># pytest tự inject fixture `db`</span>
+    db.execute(<span class="tok-str">"INSERT INTO users VALUES (1, 'alice')"</span>)
+    row = db.execute(<span class="tok-str">"SELECT * FROM users"</span>).fetchone()
+    <span class="tok-kw">assert</span> row == (<span class="tok-num">1</span>, <span class="tok-str">"alice"</span>)</code></pre>
+        </div>
+
+        <p>Mô hình <code>yield</code>:</p>
+
+        <ul>
+          <li>Code <em>trước</em> <code>yield</code> = phần <strong>setup</strong>.</li>
+          <li>Giá trị sau <code>yield</code> = thứ "trao" cho test (tương đương return).</li>
+          <li>Code <em>sau</em> <code>yield</code> = phần <strong>teardown</strong>, luôn chạy kể cả test fail (do <code>pytest</code> bọc bằng <code>try/finally</code>).</li>
+        </ul>
+
+        <p>Một fixture có thể phụ thuộc fixture khác — dependency injection bắc cầu:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@pytest.fixture</span>
+<span class="tok-kw">def</span> <span class="tok-fn">user</span>(db):                  <span class="tok-com"># user phụ thuộc db</span>
+    db.execute(<span class="tok-str">"INSERT INTO users VALUES (1, 'alice')"</span>)
+    <span class="tok-kw">yield</span> {<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_user_can_login</span>(user):
+    <span class="tok-kw">assert</span> user[<span class="tok-str">"name"</span>] == <span class="tok-str">"alice"</span></code></pre>
+        </div>
+
+        <h2 id="fixture-scope">4. Fixture scope — phạm vi sống của fixture</h2>
+
+        <p>
+          Mặc định mỗi test có một <em>instance</em> fixture riêng. Đôi khi setup tốn kém (vd: dựng
+          Docker container) — ta muốn dùng chung. Tham số <code>scope</code> giải quyết:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th><code>scope</code></th><th>Lifetime</th><th>Khi dùng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>"function"</code></td><td>Mỗi test 1 instance</td><td><strong>Mặc định.</strong> An toàn, không state leak.</td></tr>
+              <tr><td><code>"class"</code></td><td>Sống suốt một <code>TestClass</code></td><td>Test gom vào class chia sẻ resource.</td></tr>
+              <tr><td><code>"module"</code></td><td>1 file <code>.py</code></td><td>Resource đắt mà tất cả test trong file dùng (vd: file fixture data).</td></tr>
+              <tr><td><code>"package"</code></td><td>1 thư mục test</td><td>Hiếm dùng.</td></tr>
+              <tr><td><code>"session"</code></td><td>Toàn bộ <code>pytest</code> run</td><td>Docker, server thật, model ML lớn.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@pytest.fixture</span>(scope=<span class="tok-str">"session"</span>)
+<span class="tok-kw">def</span> <span class="tok-fn">docker_postgres</span>():
+    container = start_postgres_container()
+    <span class="tok-kw">yield</span> container
+    container.stop()</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — state leak với scope rộng</div>
+          <p>
+            Scope càng rộng, test càng dễ phụ thuộc thứ tự chạy. Ví dụ <code>db</code> scope
+            <code>"session"</code> mà <code>test_a</code> insert row, <code>test_b</code> mong db rỗng
+            — fail. Quy tắc: <strong>chia sẻ resource mắc tiền, không chia sẻ trạng thái</strong>.
+            Nếu cần chia sẻ connection mà reset state: dùng transaction rollback hoặc
+            <code>TRUNCATE</code> ở fixture function-scope con.
+          </p>
+        </div>
+
+        <h2 id="parametrize">5. <code>@pytest.mark.parametrize</code> — nhiều input, 1 function</h2>
+
+        <p>
+          Thay vì copy-paste 10 test với input khác nhau, dùng <code>parametrize</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>parametrize cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> pytest
+<span class="tok-kw">from</span> mypkg.calc <span class="tok-kw">import</span> add
+
+<span class="tok-dec">@pytest.mark.parametrize</span>(
+    <span class="tok-str">"a, b, expected"</span>,
+    [
+        (<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>),
+        (<span class="tok-num">4</span>, <span class="tok-num">5</span>, <span class="tok-num">9</span>),
+        (-<span class="tok-num">1</span>, <span class="tok-num">1</span>, <span class="tok-num">0</span>),
+        (<span class="tok-num">0</span>, <span class="tok-num">0</span>, <span class="tok-num">0</span>),
+        (<span class="tok-num">100</span>, <span class="tok-num">200</span>, <span class="tok-num">300</span>),
+    ],
+)
+<span class="tok-kw">def</span> <span class="tok-fn">test_add</span>(a, b, expected):
+    <span class="tok-kw">assert</span> add(a, b) == expected</code></pre>
+        </div>
+
+        <p>Khi chạy:</p>
+
+        <div class="code-wrap">
+<pre><code>$ pytest -v
+tests/test_calc.py::test_add[1-2-3] PASSED
+tests/test_calc.py::test_add[4-5-9] PASSED
+tests/test_calc.py::test_add[-1-1-0] PASSED
+tests/test_calc.py::test_add[0-0-0] PASSED
+tests/test_calc.py::test_add[100-200-300] PASSED</code></pre>
+        </div>
+
+        <p>
+          5 test riêng biệt, tên có "id" tự sinh từ tham số. Có thể đặt <code>id</code> rõ ràng cho
+          dễ đọc:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@pytest.mark.parametrize</span>(
+    <span class="tok-str">"s, expected"</span>,
+    [
+        pytest.param(<span class="tok-str">"abba"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"even-palindrome"</span>),
+        pytest.param(<span class="tok-str">"abcba"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"odd-palindrome"</span>),
+        pytest.param(<span class="tok-str">"hello"</span>, <span class="tok-kw">False</span>, id=<span class="tok-str">"not-palindrome"</span>),
+        pytest.param(<span class="tok-str">""</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"empty-edge"</span>),
+    ],
+)
+<span class="tok-kw">def</span> <span class="tok-fn">test_is_palindrome</span>(s, expected):
+    <span class="tok-kw">assert</span> is_palindrome(s) == expected</code></pre>
+        </div>
+
+        <p>Có thể stack nhiều <code>parametrize</code> → tích Đề-các:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@pytest.mark.parametrize</span>(<span class="tok-str">"x"</span>, [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])
+<span class="tok-dec">@pytest.mark.parametrize</span>(<span class="tok-str">"y"</span>, [<span class="tok-num">10</span>, <span class="tok-num">20</span>])
+<span class="tok-kw">def</span> <span class="tok-fn">test_combo</span>(x, y):       <span class="tok-com"># 3 × 2 = 6 test case</span>
+    <span class="tok-kw">assert</span> x + y &gt; <span class="tok-num">0</span></code></pre>
+        </div>
+
+        <h2 id="marker">6. Marker — gắn nhãn và lọc test</h2>
+
+        <p>
+          Marker là "tag" bạn gán cho test để phân loại. Marker phổ biến:
+          <code>@pytest.mark.skip</code>, <code>@pytest.mark.xfail</code>,
+          <code>@pytest.mark.parametrize</code>. Bạn còn tự định nghĩa được:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@pytest.mark.slow</span>
+<span class="tok-kw">def</span> <span class="tok-fn">test_train_full_model</span>():
+    <span class="tok-com"># mất 5 phút</span>
+    ...
+
+<span class="tok-dec">@pytest.mark.integration</span>
+<span class="tok-kw">def</span> <span class="tok-fn">test_real_api_call</span>():
+    <span class="tok-com"># cần network thật</span>
+    ...</code></pre>
+        </div>
+
+        <p>Khai báo marker trong <code>pyproject.toml</code> để tránh warning:</p>
+
+        <div class="code-wrap">
+<pre><code>[tool.pytest.ini_options]
+markers = [
+    <span class="tok-str">"slow: chậm hơn 1 giây, skip ở dev mặc định"</span>,
+    <span class="tok-str">"integration: chạm vào hệ thống ngoài (db, network)"</span>,
+]</code></pre>
+        </div>
+
+        <p>Chạy chọn lọc:</p>
+
+        <div class="code-wrap">
+<pre><code>$ pytest -m slow                    <span class="tok-com"># chỉ test có marker slow</span>
+$ pytest -m <span class="tok-str">"not slow"</span>             <span class="tok-com"># bỏ qua slow</span>
+$ pytest -m <span class="tok-str">"integration and not slow"</span></code></pre>
+        </div>
+
+        <p>Skip/xfail có điều kiện:</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">import</span> sys
+
+<span class="tok-dec">@pytest.mark.skipif</span>(sys.platform == <span class="tok-str">"win32"</span>, reason=<span class="tok-str">"chỉ chạy trên Unix"</span>)
+<span class="tok-kw">def</span> <span class="tok-fn">test_unix_only</span>():
+    ...
+
+<span class="tok-dec">@pytest.mark.xfail</span>(reason=<span class="tok-str">"bug #1234 đang sửa"</span>)
+<span class="tok-kw">def</span> <span class="tok-fn">test_known_failure</span>():
+    <span class="tok-kw">assert</span> broken_function() == <span class="tok-num">42</span></code></pre>
+        </div>
+
+        <h2 id="conftest">7. <code>conftest.py</code> — fixture dùng chung</h2>
+
+        <p>
+          Nếu một fixture được nhiều file test dùng, đừng import qua lại — đặt vào
+          <code>conftest.py</code>. <code>pytest</code> <strong>tự động</strong> nạp fixture trong
+          <code>conftest.py</code> cho mọi test cùng thư mục (và thư mục con):
+        </p>
+
+        <div class="code-wrap">
+<pre><code>tests/
+├─ conftest.py          <span class="tok-com"># fixture chung toàn project</span>
+├─ test_calc.py
+├─ unit/
+│  ├─ conftest.py       <span class="tok-com"># fixture chỉ unit/</span>
+│  └─ test_pure.py
+└─ integration/
+   └─ test_api.py</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tests/conftest.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> pytest
+<span class="tok-kw">from</span> mypkg.db <span class="tok-kw">import</span> connect
+
+<span class="tok-dec">@pytest.fixture</span>
+<span class="tok-kw">def</span> <span class="tok-fn">db</span>():
+    conn = connect(<span class="tok-str">":memory:"</span>)
+    conn.execute(<span class="tok-str">"CREATE TABLE users (id INT, name TEXT)"</span>)
+    <span class="tok-kw">yield</span> conn
+    conn.close()
+
+<span class="tok-dec">@pytest.fixture</span>
+<span class="tok-kw">def</span> <span class="tok-fn">sample_data</span>():
+    <span class="tok-kw">return</span> {<span class="tok-str">"users"</span>: [{<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}]}</code></pre>
+        </div>
+
+        <p>
+          Test trong <code>test_calc.py</code> chỉ cần khai báo tham số <code>db</code> hoặc
+          <code>sample_data</code> — <strong>không cần import</strong>:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">test_insert_user</span>(db, sample_data):
+    user = sample_data[<span class="tok-str">"users"</span>][<span class="tok-num">0</span>]
+    db.execute(<span class="tok-str">"INSERT INTO users VALUES (?, ?)"</span>, (user[<span class="tok-str">"id"</span>], user[<span class="tok-str">"name"</span>]))
+    <span class="tok-kw">assert</span> db.execute(<span class="tok-str">"SELECT COUNT(*) FROM users"</span>).fetchone()[<span class="tok-num">0</span>] == <span class="tok-num">1</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Quy tắc đặt <code>conftest.py</code></div>
+          <p>
+            Fixture đặt ở mức "nhỏ nhất mà nhiều file cần dùng". Đặt quá cao (root <code>tests/</code>)
+            khi chỉ 2 file cần → cồng kềnh. Đặt quá thấp → duplicate. Phổ biến: 1
+            <code>conftest.py</code> ở <code>tests/</code> cho fixture chung (db, config), thêm
+            <code>conftest.py</code> trong sub-folder nếu cần.
+          </p>
+        </div>
+
+        <h2 id="mock">8. <code>unittest.mock</code> — thay phần phụ thuộc bên ngoài</h2>
+
+        <p>
+          Test pure logic dễ. Khó là test code <em>gọi network</em>, <em>ghi file</em>, <em>truy vấn
+          database thật</em>. Giải pháp: <strong>mock</strong> — thay object thật bằng object giả mà
+          ta kiểm soát hành vi.
+        </p>
+
+        <p>Module <code>unittest.mock</code> (stdlib) cung cấp <code>Mock</code>, <code>MagicMock</code>, <code>patch</code>:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>basic Mock</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> unittest.mock <span class="tok-kw">import</span> MagicMock
+
+m = MagicMock()
+m.greet.return_value = <span class="tok-str">"hello"</span>
+
+print(m.greet(<span class="tok-str">"world"</span>))          <span class="tok-com"># "hello"</span>
+
+m.greet.assert_called_with(<span class="tok-str">"world"</span>)
+m.greet.assert_called_once()</code></pre>
+        </div>
+
+        <p>
+          Quan trọng nhất: <code>patch</code> — thay tạm thời một object trong module bằng mock,
+          phục hồi sau test (dùng context manager hoặc decorator):
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>patch decorator</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># mypkg/user_service.py</span>
+<span class="tok-kw">import</span> requests
+
+<span class="tok-kw">def</span> <span class="tok-fn">fetch_user</span>(user_id: <span class="tok-cls">int</span>) -&gt; <span class="tok-cls">dict</span>:
+    r = requests.get(<span class="tok-str">f"https://api.example.com/users/</span><span class="tok-op">{</span>user_id<span class="tok-op">}</span><span class="tok-str">"</span>)
+    r.raise_for_status()
+    <span class="tok-kw">return</span> r.json()</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>tests/test_user_service.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> unittest.mock <span class="tok-kw">import</span> patch, MagicMock
+<span class="tok-kw">from</span> mypkg.user_service <span class="tok-kw">import</span> fetch_user
+
+<span class="tok-dec">@patch</span>(<span class="tok-str">"mypkg.user_service.requests.get"</span>)
+<span class="tok-kw">def</span> <span class="tok-fn">test_fetch_user</span>(mock_get):
+    fake_response = MagicMock()
+    fake_response.json.return_value = {<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}
+    fake_response.raise_for_status.return_value = <span class="tok-kw">None</span>
+    mock_get.return_value = fake_response
+
+    result = fetch_user(<span class="tok-num">1</span>)
+
+    <span class="tok-kw">assert</span> result == {<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}
+    mock_get.assert_called_once_with(<span class="tok-str">"https://api.example.com/users/1"</span>)</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — patch ở "nơi sử dụng", không phải nơi định nghĩa</div>
+          <p>
+            Cú pháp đúng: <code>@patch("mypkg.user_service.requests.get")</code> — patch
+            <code>requests.get</code> tại module <code>user_service</code>, vì <code>user_service.py</code>
+            đã <code>import requests</code> và đang dùng tham chiếu cục bộ của nó. Patch
+            <code>"requests.get"</code> chung sẽ không thay tham chiếu mà <code>user_service</code>
+            đang giữ → mock không hoạt động.
+          </p>
+        </div>
+
+        <p>Nhiều decorator <code>@patch</code> stack → <strong>thứ tự tham số ngược</strong> (bottom-up):</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-dec">@patch</span>(<span class="tok-str">"mypkg.svc.send_email"</span>)
+<span class="tok-dec">@patch</span>(<span class="tok-str">"mypkg.svc.log_event"</span>)
+<span class="tok-dec">@patch</span>(<span class="tok-str">"mypkg.svc.db_save"</span>)
+<span class="tok-kw">def</span> <span class="tok-fn">test_signup</span>(mock_db, mock_log, mock_email):
+    <span class="tok-com">#                ↑          ↑           ↑</span>
+    <span class="tok-com">#         decorator gần nhất    xa nhất</span>
+    ...</code></pre>
+        </div>
+
+        <h2 id="pytest-mock">9. <code>pytest-mock</code> — wrap đẹp hơn</h2>
+
+        <p>
+          Plugin <code>pytest-mock</code> cung cấp fixture <code>mocker</code> bao quanh
+          <code>unittest.mock</code> — không cần stack decorator, không cần nhớ phục hồi:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>với pytest-mock</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">test_fetch_user</span>(mocker):
+    fake_response = mocker.MagicMock()
+    fake_response.json.return_value = {<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}
+    mock_get = mocker.patch(<span class="tok-str">"mypkg.user_service.requests.get"</span>, return_value=fake_response)
+
+    result = fetch_user(<span class="tok-num">1</span>)
+
+    <span class="tok-kw">assert</span> result[<span class="tok-str">"name"</span>] == <span class="tok-str">"alice"</span>
+    mock_get.assert_called_once()</code></pre>
+        </div>
+
+        <p>Lợi ích:</p>
+
+        <ul>
+          <li>Mock tự revert sau test, không cần context manager.</li>
+          <li>Khai báo cùng dòng — gọn.</li>
+          <li>Có <code>mocker.spy()</code> — quan sát mà <em>vẫn</em> chạy hàm thật.</li>
+        </ul>
+
+        <h2 id="coverage">10. Coverage — đo độ phủ test</h2>
+
+        <p>
+          <code>coverage.py</code> đo dòng nào / nhánh nào của code được test execute. Tích hợp với
+          <code>pytest</code> qua plugin <code>pytest-cov</code>:
+        </p>
+
+        <div class="code-wrap">
+<pre><code>$ pip install pytest-cov
+$ pytest --cov=src
+$ pytest --cov=src --cov-report=term-missing  <span class="tok-com"># in dòng nào không cover</span>
+$ pytest --cov=src --cov-report=html          <span class="tok-com"># report HTML đẹp</span></code></pre>
+        </div>
+
+        <p>Output ví dụ:</p>
+
+        <div class="code-wrap">
+<pre><code>Name                  Stmts   Miss  Cover   Missing
+---------------------------------------------------
+src/mypkg/calc.py        12      0   100%
+src/mypkg/db.py          25      3    88%   42-44
+src/mypkg/auth.py        40     12    70%   55-58, 67-72
+---------------------------------------------------
+TOTAL                    77     15    81%</code></pre>
+        </div>
+
+        <p>Bật <strong>branch coverage</strong> (đo cả nhánh <code>if/else</code>, không chỉ dòng):</p>
+
+        <div class="code-wrap">
+<pre><code>$ pytest --cov=src --cov-branch</code></pre>
+        </div>
+
+        <p>Cấu hình coverage trong <code>pyproject.toml</code>:</p>
+
+        <div class="code-wrap">
+<pre><code>[tool.coverage.run]
+source = [<span class="tok-str">"src"</span>]
+branch = <span class="tok-kw">true</span>
+omit = [<span class="tok-str">"*/tests/*"</span>, <span class="tok-str">"*/__init__.py"</span>]
+
+[tool.coverage.report]
+exclude_lines = [
+    <span class="tok-str">"pragma: no cover"</span>,
+    <span class="tok-str">"raise NotImplementedError"</span>,
+    <span class="tok-str">"if __name__ == .__main__.:"</span>,
+]
+fail_under = <span class="tok-num">80</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Coverage % không phải sự thật</div>
+          <p>
+            Coverage chỉ đo "dòng được chạy", không đo "assertion đúng". Bạn có thể viết:
+          </p>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">test_useless</span>():
+    add(<span class="tok-num">1</span>, <span class="tok-num">2</span>)   <span class="tok-com"># gọi hàm, không assert gì</span></code></pre>
+          <p>
+            → coverage 100% nhưng test vô dụng (không có <code>assert</code>). Coverage là điều
+            kiện <strong>cần</strong>, không <strong>đủ</strong>. Target hợp lý: <code>≥80%</code> cho
+            library cốt lõi, <code>≥60%</code> cho application logic, kèm <em>property-based testing</em>
+            (<code>hypothesis</code>) và <em>code review</em> kỹ.
+          </p>
+        </div>
+
+        <h2 id="pyproject">11. <code>pyproject.toml</code> — file config trung tâm</h2>
+
+        <p>
+          Trước 2021, project Python rải config khắp nơi: <code>setup.py</code> (build),
+          <code>setup.cfg</code> (metadata), <code>MANIFEST.in</code> (include data),
+          <code>requirements.txt</code> (deps), <code>pytest.ini</code>, <code>mypy.ini</code>,
+          <code>tox.ini</code>… <strong>PEP 621</strong> thống nhất tất cả vào
+          <code>pyproject.toml</code>.
+        </p>
+
+        <p>File <code>pyproject.toml</code> đầy đủ cho 1 project hiện đại:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pyproject.toml — đầy đủ</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># ---------- Build system ----------</span>
+[build-system]
+requires = [<span class="tok-str">"hatchling"</span>]
+build-backend = <span class="tok-str">"hatchling.build"</span>
+
+<span class="tok-com"># ---------- Project metadata (PEP 621) ----------</span>
+[project]
+name = <span class="tok-str">"my-utils"</span>
+version = <span class="tok-str">"0.1.0"</span>
+description = <span class="tok-str">"Bộ tiện ích Python ví dụ"</span>
+readme = <span class="tok-str">"README.md"</span>
+requires-python = <span class="tok-str">"&gt;=3.11"</span>
+license = { text = <span class="tok-str">"MIT"</span> }
+authors = [
+    { name = <span class="tok-str">"Việt Anh"</span>, email = <span class="tok-str">"vietanh@example.com"</span> },
+]
+keywords = [<span class="tok-str">"util"</span>, <span class="tok-str">"helper"</span>]
+classifiers = [
+    <span class="tok-str">"Programming Language :: Python :: 3"</span>,
+    <span class="tok-str">"License :: OSI Approved :: MIT License"</span>,
+    <span class="tok-str">"Operating System :: OS Independent"</span>,
+]
+
+dependencies = [
+    <span class="tok-str">"requests&gt;=2.31"</span>,
+    <span class="tok-str">"pydantic&gt;=2"</span>,
+]
+
+[project.optional-dependencies]
+dev = [
+    <span class="tok-str">"pytest&gt;=8"</span>,
+    <span class="tok-str">"pytest-cov&gt;=4"</span>,
+    <span class="tok-str">"pytest-mock&gt;=3"</span>,
+    <span class="tok-str">"ruff&gt;=0.5"</span>,
+    <span class="tok-str">"mypy&gt;=1.10"</span>,
+    <span class="tok-str">"pre-commit&gt;=3"</span>,
+]
+
+[project.urls]
+Homepage = <span class="tok-str">"https://github.com/me/my-utils"</span>
+Repository = <span class="tok-str">"https://github.com/me/my-utils"</span>
+Issues = <span class="tok-str">"https://github.com/me/my-utils/issues"</span>
+
+<span class="tok-com"># Tạo CLI entry point: gõ `my-utils` trong terminal → gọi main.py:main</span>
+[project.scripts]
+my-utils = <span class="tok-str">"my_utils.cli:main"</span>
+
+<span class="tok-com"># ---------- pytest ----------</span>
+[tool.pytest.ini_options]
+testpaths = [<span class="tok-str">"tests"</span>]
+addopts = <span class="tok-str">"-ra -q --strict-markers"</span>
+markers = [
+    <span class="tok-str">"slow: chạy chậm, skip ở dev"</span>,
+    <span class="tok-str">"integration: cần dịch vụ ngoài"</span>,
+]
+
+<span class="tok-com"># ---------- coverage ----------</span>
+[tool.coverage.run]
+source = [<span class="tok-str">"src"</span>]
+branch = <span class="tok-kw">true</span>
+
+[tool.coverage.report]
+fail_under = <span class="tok-num">80</span>
+show_missing = <span class="tok-kw">true</span>
+
+<span class="tok-com"># ---------- mypy ----------</span>
+[tool.mypy]
+python_version = <span class="tok-str">"3.11"</span>
+strict = <span class="tok-kw">true</span>
+warn_unused_ignores = <span class="tok-kw">true</span>
+disallow_any_generics = <span class="tok-kw">true</span>
+no_implicit_optional = <span class="tok-kw">true</span>
+files = [<span class="tok-str">"src"</span>]
+
+[[tool.mypy.overrides]]
+module = [<span class="tok-str">"tests.*"</span>]
+disallow_untyped_defs = <span class="tok-kw">false</span>     <span class="tok-com"># test cho phép viết loose hơn</span>
+
+<span class="tok-com"># ---------- ruff (lint + format) ----------</span>
+[tool.ruff]
+line-length = <span class="tok-num">100</span>
+target-version = <span class="tok-str">"py311"</span>
+src = [<span class="tok-str">"src"</span>, <span class="tok-str">"tests"</span>]
+
+[tool.ruff.lint]
+select = [
+    <span class="tok-str">"E"</span>,   <span class="tok-com"># pycodestyle errors</span>
+    <span class="tok-str">"W"</span>,   <span class="tok-com"># pycodestyle warnings</span>
+    <span class="tok-str">"F"</span>,   <span class="tok-com"># pyflakes</span>
+    <span class="tok-str">"I"</span>,   <span class="tok-com"># isort</span>
+    <span class="tok-str">"B"</span>,   <span class="tok-com"># bugbear</span>
+    <span class="tok-str">"UP"</span>,  <span class="tok-com"># pyupgrade</span>
+    <span class="tok-str">"N"</span>,   <span class="tok-com"># pep8-naming</span>
+]
+ignore = [<span class="tok-str">"E501"</span>]   <span class="tok-com"># để format quản line-length</span>
+
+[tool.ruff.format]
+quote-style = <span class="tok-str">"double"</span>
+indent-style = <span class="tok-str">"space"</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Hatchling vs Setuptools</div>
+          <p>
+            <code>build-backend</code> là engine build package. Lựa chọn 2026:
+          </p>
+          <ul>
+            <li><strong>hatchling</strong> — modern, nhanh, mặc định của Hatch. Khuyến nghị cho dự án mới.</li>
+            <li><strong>setuptools</strong> — legacy nhưng vẫn rộng rãi. Vẫn được hỗ trợ.</li>
+            <li><strong>poetry-core</strong> — đi cùng Poetry. OK nếu bạn đã dùng Poetry.</li>
+            <li><strong>pdm-backend</strong> — đi cùng PDM.</li>
+          </ul>
+        </div>
+
+        <h2 id="build">12. Build wheel — đóng gói phân phối</h2>
+
+        <p>Python có 2 định dạng phân phối:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Định dạng</th><th>Đuôi</th><th>Nội dung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>sdist</strong> (source distribution)</td><td><code>.tar.gz</code></td><td>Source code thô — pip phải build lại.</td></tr>
+              <tr><td><strong>wheel</strong> (binary distribution)</td><td><code>.whl</code></td><td>Đã build sẵn — pip chỉ giải nén → cài nhanh.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Công cụ chính thức: <code>build</code> (frontend agnostic):</p>
+
+        <div class="code-wrap">
+<pre><code>$ pip install build
+$ python -m build
+<span class="tok-com"># sinh ra: dist/my_utils-0.1.0-py3-none-any.whl</span>
+<span class="tok-com">#          dist/my_utils-0.1.0.tar.gz</span></code></pre>
+        </div>
+
+        <p>Quy ước tên wheel: <code>{name}-{version}-{python}-{abi}-{platform}.whl</code>.</p>
+
+        <ul>
+          <li><code>my_utils-0.1.0-py3-none-any.whl</code> — pure Python, chạy mọi platform (lý tưởng).</li>
+          <li><code>numpy-1.26.0-cp311-cp311-manylinux_2_17_x86_64.whl</code> — có C extension, riêng CPython 3.11 Linux x86_64.</li>
+        </ul>
+
+        <p>Cài wheel local để test:</p>
+
+        <div class="code-wrap">
+<pre><code>$ pip install ./dist/my_utils-0.1.0-py3-none-any.whl
+<span class="tok-com"># hoặc</span>
+$ pip install dist/*.whl
+
+<span class="tok-com"># Verify</span>
+$ python -c <span class="tok-str">"import my_utils; print(my_utils.__version__)"</span>
+0.1.0</code></pre>
+        </div>
+
+        <h2 id="pypi">13. Publish lên PyPI</h2>
+
+        <p>
+          PyPI (Python Package Index) là kho package công cộng. Để publish, bạn cần (1) tài khoản
+          PyPI, (2) <strong>API token</strong>, (3) công cụ upload — <code>twine</code>:
+        </p>
+
+        <div class="code-wrap">
+<pre><code>$ pip install twine
+
+<span class="tok-com"># Test trước trên TestPyPI (sandbox)</span>
+$ twine upload --repository testpypi dist/*
+
+<span class="tok-com"># Production</span>
+$ twine upload dist/*
+<span class="tok-com"># Sẽ hỏi username (__token__) và password (pypi-xxxxx API token)</span></code></pre>
+        </div>
+
+        <p>Cấu hình token trong <code>~/.pypirc</code> để không nhập tay mỗi lần:</p>
+
+        <div class="code-wrap">
+<pre><code>[pypi]
+username = __token__
+password = pypi-AgEIcHlwaS5vcmcCJDxxxxxx...
+
+[testpypi]
+repository = https://test.pypi.org/legacy/
+username = __token__
+password = pypi-AgENdGVzdC5weXBpLm9yZ...</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Tên package là unique và không xoá được</div>
+          <p>
+            Một khi upload version <code>0.1.0</code> lên PyPI, bạn <strong>không thể overwrite</strong>
+            — phải bump <code>0.1.1</code>. PyPI có thể "yank" (ẩn) version chứ không xoá. Vì vậy
+            <em>test kỹ trên TestPyPI</em> trước. Và chọn tên package độc đáo: tên bị "chiếm" thì
+            không lấy lại được.
+          </p>
+        </div>
+
+        <p>Workflow CI/CD tự động publish khi tag git (GitHub Actions):</p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-com"># .github/workflows/publish.yml</span>
+name: Publish to PyPI
+on:
+  push:
+    tags: [<span class="tok-str">"v*"</span>]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: <span class="tok-str">"3.11"</span> }
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}</code></pre>
+        </div>
+
+        <h2 id="ruff">14. <code>ruff</code> — lint + format hiện đại</h2>
+
+        <p>
+          Trước 2023, project Python "đúng chuẩn" cần 3 tool:
+        </p>
+
+        <ul>
+          <li><code>flake8</code> — lint (style + bug warnings).</li>
+          <li><code>black</code> — format (opinionated).</li>
+          <li><code>isort</code> — sắp xếp import.</li>
+        </ul>
+
+        <p>
+          <strong>Ruff</strong> (viết bằng Rust) thay <em>cả ba</em>, nhanh hơn ~30 lần. Một command,
+          một dòng config:
+        </p>
+
+        <div class="code-wrap">
+<pre><code>$ pip install ruff
+
+$ ruff check .             <span class="tok-com"># lint</span>
+$ ruff check --fix .       <span class="tok-com"># lint + auto-fix lỗi sửa được</span>
+$ ruff format .            <span class="tok-com"># format (tương đương black)</span>
+$ ruff check --fix &amp;&amp; ruff format .    <span class="tok-com"># combo thường gặp</span></code></pre>
+        </div>
+
+        <p>Hơn 700 rule có sẵn, nhóm theo prefix:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Prefix</th><th>Rule set</th><th>Nguồn gốc</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>E, W</code></td><td>Style errors/warnings</td><td>pycodestyle (PEP 8)</td></tr>
+              <tr><td><code>F</code></td><td>Logic errors (unused import, undefined name)</td><td>pyflakes</td></tr>
+              <tr><td><code>I</code></td><td>Import sorting</td><td>isort</td></tr>
+              <tr><td><code>B</code></td><td>Bug-likely patterns</td><td>flake8-bugbear</td></tr>
+              <tr><td><code>UP</code></td><td>Suggest syntax modern hơn</td><td>pyupgrade</td></tr>
+              <tr><td><code>N</code></td><td>Naming convention</td><td>pep8-naming</td></tr>
+              <tr><td><code>SIM</code></td><td>Simplification gợi ý</td><td>flake8-simplify</td></tr>
+              <tr><td><code>D</code></td><td>Docstring style</td><td>pydocstyle</td></tr>
+              <tr><td><code>PL</code></td><td>Logic phức tạp</td><td>Pylint subset</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Cấu hình trong <code>pyproject.toml</code> đã ở trên (§11). Output mẫu:</p>
+
+        <div class="code-wrap">
+<pre><code>$ ruff check src
+src/mypkg/auth.py:12:5: F841 Local variable `tmp` is assigned to but never used
+src/mypkg/db.py:8:1: I001 Import block is un-sorted or un-formatted
+src/mypkg/calc.py:24:5: B007 Loop control variable `i` not used within loop body
+Found 3 errors. [* 1 fixable with `--fix` option]</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Migrate từ black + isort sang ruff</div>
+          <p>
+            <code>ruff format</code> output gần giống <code>black</code> (cùng triết lý
+            "opinionated, không tranh cãi"). Khi migrate: xoá <code>black</code> và <code>isort</code>
+            khỏi <code>dev</code> deps, thêm <code>ruff</code>, chạy <code>ruff format .</code> 1 lần.
+            Diff lần đầu có thể vài chục dòng — review xong commit, xong.
+          </p>
+        </div>
+
+        <h2 id="pre-commit">15. Pre-commit hook — chặn code bẩn từ máy lập trình</h2>
+
+        <p>
+          Linter/test chỉ hữu ích nếu được <em>chạy</em>. Cách hiệu quả nhất: chạy tự động trước
+          mỗi <code>git commit</code>. Framework <code>pre-commit</code> (Python tool) quản lý
+          chuyện này:
+        </p>
+
+        <div class="code-wrap">
+<pre><code>$ pip install pre-commit</code></pre>
+        </div>
+
+        <p>Khai báo hook trong <code>.pre-commit-config.yaml</code> ở root project:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>.pre-commit-config.yaml</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic, types-requests]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest -x -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]      <span class="tok-com"># test chỉ chạy lúc push, commit nhanh hơn</span></code></pre>
+        </div>
+
+        <p>Cài hook vào git:</p>
+
+        <div class="code-wrap">
+<pre><code>$ pre-commit install                  <span class="tok-com"># cho commit</span>
+$ pre-commit install --hook-type pre-push   <span class="tok-com"># thêm pre-push</span></code></pre>
+        </div>
+
+        <p>Từ giờ, mỗi <code>git commit</code>:</p>
+
+        <ol>
+          <li>Hook chạy <code>ruff</code>, <code>mypy</code>, …</li>
+          <li>Nếu <strong>pass</strong> tất cả → commit bình thường.</li>
+          <li>Nếu <strong>fail</strong> → commit bị <em>reject</em>, kèm log lỗi.</li>
+          <li>Nhiều hook auto-fix (vd <code>ruff --fix</code>, <code>trailing-whitespace</code>) — bạn chỉ cần <code>git add</code> lại và commit.</li>
+        </ol>
+
+        <p>Chạy thủ công tất cả hook trên toàn repo (CI hoặc lần đầu setup):</p>
+
+        <div class="code-wrap">
+<pre><code>$ pre-commit run --all-files</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Defense in depth</div>
+          <p>
+            Đừng dựa <em>chỉ</em> pre-commit. Layer phòng thủ:
+          </p>
+          <ol>
+            <li><strong>Editor</strong> (VS Code, PyCharm) hiển thị lỗi ruff/mypy real-time.</li>
+            <li><strong>pre-commit hook</strong> chặn ở máy dev.</li>
+            <li><strong>CI</strong> (GitHub Actions / GitLab CI) chạy lại trên server — phòng người dev disable hook local.</li>
+            <li><strong>Branch protection</strong> không cho merge khi CI fail.</li>
+          </ol>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Bài 1 — pytest parametrize cho <code>is_palindrome</code></h4>
+            <div class="exercise-body">
+              <p>
+                Sử dụng hàm <code>is_palindrome(s: str) -&gt; bool</code> từ Chương 2 (kiểm tra
+                chuỗi đối xứng, bỏ qua hoa thường và khoảng trắng). Viết test pytest:
+              </p>
+              <ul>
+                <li>Tạo <code>tests/test_palindrome.py</code>.</li>
+                <li>Dùng <code>@pytest.mark.parametrize</code> với <strong>10 test case</strong>: bao phủ chuỗi rỗng, 1 ký tự, even/odd palindrome, có hoa thường, có khoảng trắng, không phải palindrome.</li>
+                <li>Đặt <code>id</code> rõ ràng cho từng case.</li>
+                <li>Chạy <code>pytest -v</code>, đảm bảo 10 test PASSED.</li>
+                <li>Thử đổi 1 case sang giá trị sai → confirm pytest in ra diff rõ ràng.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý cấu trúc</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">import</span> pytest
+<span class="tok-kw">from</span> mypkg.string_utils <span class="tok-kw">import</span> is_palindrome
+
+<span class="tok-dec">@pytest.mark.parametrize</span>(
+    <span class="tok-str">"s, expected"</span>,
+    [
+        pytest.param(<span class="tok-str">""</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"empty"</span>),
+        pytest.param(<span class="tok-str">"a"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"single-char"</span>),
+        pytest.param(<span class="tok-str">"abba"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"even-palindrome"</span>),
+        pytest.param(<span class="tok-str">"abcba"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"odd-palindrome"</span>),
+        pytest.param(<span class="tok-str">"AbBa"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"case-insensitive"</span>),
+        pytest.param(<span class="tok-str">"race car"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"with-space"</span>),
+        pytest.param(<span class="tok-str">"A man a plan a canal Panama"</span>, <span class="tok-kw">True</span>, id=<span class="tok-str">"famous-palindrome"</span>),
+        pytest.param(<span class="tok-str">"hello"</span>, <span class="tok-kw">False</span>, id=<span class="tok-str">"not-palindrome"</span>),
+        pytest.param(<span class="tok-str">"ab"</span>, <span class="tok-kw">False</span>, id=<span class="tok-str">"two-different"</span>),
+        pytest.param(<span class="tok-str">"abc"</span>, <span class="tok-kw">False</span>, id=<span class="tok-str">"three-different"</span>),
+    ],
+)
+<span class="tok-kw">def</span> <span class="tok-fn">test_is_palindrome</span>(s, expected):
+    <span class="tok-kw">assert</span> is_palindrome(s) == expected</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 2 — Mock <code>requests.get</code></h4>
+            <div class="exercise-body">
+              <p>
+                Viết hàm <code>fetch_user_data(user_id: int) -&gt; dict</code> trong
+                <code>src/mypkg/user_service.py</code>, gọi
+                <code>requests.get("https://api.example.com/users/{id}")</code> và trả về JSON.
+              </p>
+              <ul>
+                <li>Viết test <strong>không gọi network thật</strong> — dùng <code>@patch</code> hoặc <code>mocker.patch</code>.</li>
+                <li>Test case 1: API trả <code>200</code> + JSON hợp lệ → hàm trả dict đúng.</li>
+                <li>Test case 2: API trả <code>404</code> → hàm raise <code>requests.HTTPError</code>.</li>
+                <li>Test case 3: Verify <code>requests.get</code> được gọi đúng URL.</li>
+                <li>Chạy <code>pytest -v</code>: cả 3 case PASSED, không có cảnh báo network.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Skeleton</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">from</span> unittest.mock <span class="tok-kw">import</span> MagicMock
+<span class="tok-kw">import</span> pytest, requests
+<span class="tok-kw">from</span> mypkg.user_service <span class="tok-kw">import</span> fetch_user_data
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_fetch_success</span>(mocker):
+    fake = mocker.MagicMock()
+    fake.json.return_value = {<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}
+    fake.raise_for_status.return_value = <span class="tok-kw">None</span>
+    mock_get = mocker.patch(<span class="tok-str">"mypkg.user_service.requests.get"</span>, return_value=fake)
+
+    result = fetch_user_data(<span class="tok-num">1</span>)
+    <span class="tok-kw">assert</span> result == {<span class="tok-str">"id"</span>: <span class="tok-num">1</span>, <span class="tok-str">"name"</span>: <span class="tok-str">"alice"</span>}
+    mock_get.assert_called_once_with(<span class="tok-str">"https://api.example.com/users/1"</span>)
+
+<span class="tok-kw">def</span> <span class="tok-fn">test_fetch_404</span>(mocker):
+    fake = mocker.MagicMock()
+    fake.raise_for_status.side_effect = requests.HTTPError(<span class="tok-str">"404"</span>)
+    mocker.patch(<span class="tok-str">"mypkg.user_service.requests.get"</span>, return_value=fake)
+
+    <span class="tok-kw">with</span> pytest.raises(requests.HTTPError):
+        fetch_user_data(<span class="tok-num">999</span>)</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 3 — Setup project với pyproject.toml + ruff + mypy + pytest</h4>
+            <div class="exercise-body">
+              <p>
+                Tạo project mini <code>my-mini</code> với cấu trúc <code>src/my_mini/__init__.py</code>
+                + <code>tests/</code>. Trong <code>__init__.py</code> viết 2-3 function đơn giản
+                (add, divide, …) có type hint.
+              </p>
+              <ul>
+                <li>Viết <code>pyproject.toml</code> đầy đủ: <code>[project]</code>, <code>[project.optional-dependencies] dev</code>, <code>[tool.pytest.ini_options]</code>, <code>[tool.mypy] strict=true</code>, <code>[tool.ruff]</code> với <code>select = ["E", "F", "I", "B", "UP"]</code>.</li>
+                <li>Cài: <code>pip install -e ".[dev]"</code>.</li>
+                <li>Chạy <strong>cả 3</strong>: <code>ruff check src</code>, <code>mypy src</code>, <code>pytest</code>. Tất cả phải pass (green).</li>
+                <li>Cố ý phá: thêm import không dùng → <code>ruff</code> báo <code>F401</code>. Thêm function không type → <code>mypy</code> báo. Sửa lại cho pass.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Mẫu cấu trúc thư mục</summary>
+                <div class="hint-content">
+<pre><code>my-mini/
+├─ src/
+│  └─ my_mini/
+│     ├─ __init__.py
+│     └─ math_utils.py
+├─ tests/
+│  └─ test_math_utils.py
+└─ pyproject.toml</code></pre>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Build wheel và cài local</h4>
+            <div class="exercise-body">
+              <p>
+                Dùng project <code>my-mini</code> từ Bài 3 (hoặc tạo mới <code>my-utils</code>).
+                Mục tiêu: build wheel và cài vào virtualenv khác để verify package "ship được".
+              </p>
+              <ul>
+                <li>Cài tool build: <code>pip install build</code>.</li>
+                <li>Chạy <code>python -m build</code>. Quan sát <code>dist/</code> có 2 file: <code>.whl</code> và <code>.tar.gz</code>.</li>
+                <li>Tạo virtualenv mới: <code>python -m venv /tmp/test-env</code> &amp;&amp; <code>source /tmp/test-env/bin/activate</code>.</li>
+                <li>Cài từ wheel: <code>pip install ./dist/my_utils-0.1.0-py3-none-any.whl</code>.</li>
+                <li>Verify: mở <code>python</code>, <code>import my_utils</code>, gọi function. Nếu thành công → package hợp lệ.</li>
+                <li><strong>Bonus</strong>: Khai báo <code>[project.scripts] my-utils = "my_utils.cli:main"</code>, viết hàm <code>main()</code> in chào hỏi. Sau khi cài wheel, gõ <code>my-utils</code> trong terminal → chạy được.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — pre-commit hook chặn code bẩn</h4>
+            <div class="exercise-body">
+              <p>
+                Trong project Bài 3, tạo <code>.pre-commit-config.yaml</code> với 3 hook:
+                <code>ruff</code>, <code>ruff-format</code>, <code>mypy</code>.
+              </p>
+              <ul>
+                <li>Cài: <code>pip install pre-commit</code>, <code>pre-commit install</code>.</li>
+                <li><strong>Test commit thành công</strong>: code sạch → <code>git commit -m "feat: clean"</code> pass.</li>
+                <li><strong>Test commit bị reject</strong>: cố ý thêm 1 import không dùng <code>import os</code>, sửa biến không type → <code>git commit</code> bị reject với log lỗi ruff/mypy.</li>
+                <li>Sửa lỗi (hoặc dùng <code>--fix</code>), <code>git add</code> lại, commit lại → pass.</li>
+                <li><strong>Bonus</strong>: thêm hook <code>pytest</code> ở stage <code>pre-push</code>. Test với commit có function broken → push bị chặn.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý debug</summary>
+                <div class="hint-content">
+                  <p>
+                    Nếu hook không chạy: kiểm tra <code>.git/hooks/pre-commit</code> có tồn tại (do
+                    <code>pre-commit install</code> tạo). Chạy thủ công:
+                    <code>pre-commit run --all-files</code> để xem hook làm gì.
+                  </p>
+                  <p>
+                    Bypass tạm thời (dùng khi cần thiết): <code>git commit --no-verify</code> —
+                    nhưng tránh lạm dụng.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Giữa <code>pytest</code> và <code>unittest</code>, cái nào built-in Python stdlib?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>unittest</code> nằm trong stdlib — không cần cài thêm. <code>pytest</code> là
+                package 3rd-party, phải <code>pip install pytest</code>. Tuy vậy, phần lớn project
+                Python 2026 vẫn chọn <code>pytest</code> vì cú pháp gọn, fixture mạnh, hệ sinh thái
+                plugin (cov, mock, asyncio, …) phong phú.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Scope mặc định của <code>@pytest.fixture</code> là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>"function"</code>. Mỗi test có một instance fixture riêng — setup và teardown
+                chạy lại từ đầu. An toàn nhất, không bị state leak. Mở rộng lên <code>"module"</code>
+                hay <code>"session"</code> chỉ khi setup tốn kém (Docker, file lớn, model ML) và bạn
+                chắc fixture không "đọng" trạng thái xuyên test.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>@pytest.mark.parametrize</code> có thể thay thế nhiều test function viết tay không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Có.</strong> Một function với <code>parametrize</code> trở thành N test riêng
+                biệt (theo số tuple input). Pytest tự sinh tên (<code>test_add[1-2-3]</code>) hoặc
+                bạn đặt <code>id</code> rõ. Mỗi case có report riêng — fail 1 case không làm fail
+                các case khác. Đây là cách <strong>DRY</strong> hiệu quả nhất khi bạn cần test cùng
+                logic với nhiều input.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Khi stack nhiều <code>@patch</code> decorator, thứ tự tham số function thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Bottom-up</strong>: decorator gần function nhất tương ứng tham số đầu tiên.
+                Ví dụ:
+              </p>
+<pre><code><span class="tok-dec">@patch</span>(<span class="tok-str">"x"</span>)    <span class="tok-com"># mock_x → tham số cuối</span>
+<span class="tok-dec">@patch</span>(<span class="tok-str">"y"</span>)    <span class="tok-com"># mock_y → tham số giữa</span>
+<span class="tok-dec">@patch</span>(<span class="tok-str">"z"</span>)    <span class="tok-com"># mock_z → tham số đầu (gần function nhất)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">test_foo</span>(mock_z, mock_y, mock_x): ...</code></pre>
+              <p>
+                Lý do: decorator được áp dụng từ dưới lên (Python decorator semantics), nên decorator
+                gần function nhất "wrap" trong cùng → đi đầu trong arg list. Nhớ mẹo:
+                <em>"closest decorator = first arg"</em>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Coverage 100% có nghĩa code không có bug?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không.</strong> Coverage đo <em>dòng/nhánh được execute</em>, không đo
+                <em>assertion đúng</em>. Test có thể gọi hàm mà không kiểm tra kết quả, hoặc kiểm tra
+                quá lỏng. 100% coverage + 0 assertion = vô dụng.
+              </p>
+              <p>
+                Coverage là <strong>điều kiện cần</strong> (dòng không cover chắc chắn có thể buggy),
+                không phải <strong>điều kiện đủ</strong>. Cần kết hợp: assertion ý nghĩa,
+                edge case, property-based test (<code>hypothesis</code>), và mutation testing
+                (<code>mutmut</code>) để đo chất lượng test thật sự.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p><code>pyproject.toml</code> thay thế những file cấu hình nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Theo PEP 517, 518, 621, <code>pyproject.toml</code> hợp nhất:
+              </p>
+              <ul>
+                <li><code>setup.py</code> — build script (giờ chỉ cần khai báo <code>[build-system]</code>).</li>
+                <li><code>setup.cfg</code> — metadata (chuyển vào <code>[project]</code>).</li>
+                <li><code>MANIFEST.in</code> — một phần (declare data files qua build backend).</li>
+                <li><code>requirements.txt</code> — list dependency (chuyển vào <code>dependencies</code>).</li>
+                <li><code>pytest.ini</code>, <code>tox.ini</code>, <code>mypy.ini</code>, <code>.flake8</code> — config tool (chuyển vào <code>[tool.X]</code>).</li>
+              </ul>
+              <p>
+                Một file duy nhất, format TOML rõ ràng. Đây là chuẩn 2026 cho mọi project Python mới.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p><code>ruff format</code> và <code>black</code> khác nhau ra sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Cả hai theo triết lý "opinionated formatter" — ít cấu hình, output gần như giống nhau.
+                Khác biệt chính:
+              </p>
+              <ul>
+                <li><strong>Tốc độ</strong>: ruff viết bằng <em>Rust</em>, nhanh hơn black ~30 lần. Trên codebase lớn cảm thấy rõ.</li>
+                <li><strong>Tích hợp</strong>: ruff cùng tool lint + format → 1 binary, 1 config. Black tách riêng (cần thêm <code>flake8</code> hoặc <code>isort</code>).</li>
+                <li><strong>Output</strong>: cố ý tương thích black 99%. Diff khi migrate thường ≤ 1% dòng.</li>
+              </ul>
+              <p>
+                Khuyến nghị 2026: dùng <code>ruff</code> cho dự án mới. Project cũ đã dùng black —
+                migrate sang ruff khi rảnh, gain hiệu năng đáng kể trên CI.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Pre-commit hook chạy vào thời điểm nào? Nếu hook fail, điều gì xảy ra?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Theo cấu hình mặc định, hook chạy <strong>trước</strong> khi git tạo commit (giai
+                đoạn <code>pre-commit</code> của git). Có thể cấu hình thêm <code>pre-push</code>,
+                <code>commit-msg</code>, …
+              </p>
+              <p>
+                Nếu hook <strong>fail</strong> (return code ≠ 0), git <em>hủy</em> commit. Bạn thấy
+                log lỗi, sửa, <code>git add</code> lại, thử commit lại. Một số hook auto-fix (ruff
+                <code>--fix</code>, format) — file đã được sửa nhưng <em>chưa stage</em>, bạn cần
+                <code>git add</code> rồi commit lần 2.
+              </p>
+              <p>
+                Bypass khẩn cấp: <code>git commit --no-verify</code> — bỏ qua hook. Tránh lạm dụng,
+                vì CI vẫn sẽ chạy lại các kiểm tra này.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 10 — chương cuối của Python sub-pillar — bạn đã master:</p>
+
+        <ul>
+          <li><strong>pytest</strong> — function test, fixture (yield, scope), parametrize, marker, conftest.</li>
+          <li><strong>Mock</strong> — <code>unittest.mock</code> và <code>pytest-mock</code>, patch ở "nơi sử dụng", stack decorator.</li>
+          <li><strong>Coverage</strong> — đo độ phủ line/branch, biết giới hạn của metric % coverage.</li>
+          <li><strong>pyproject.toml</strong> — file config trung tâm cho metadata, deps, pytest, mypy, ruff, coverage.</li>
+          <li><strong>Build &amp; publish</strong> — <code>python -m build</code> tạo wheel + sdist, <code>twine</code> upload PyPI.</li>
+          <li><strong>Ruff</strong> — lint + format hiện đại, Rust-speed, thay flake8 + black + isort.</li>
+          <li><strong>Pre-commit</strong> — hook chặn code bẩn từ máy dev, layer phòng thủ đầu.</li>
+          <li><strong>Defense in depth</strong> — editor → pre-commit → CI → branch protection.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 1 (Setup)</strong> — virtualenv mà bạn dùng để cách ly môi trường giờ kết hợp với <code>pyproject.toml</code> để khoá deps dev/prod.</li>
+          <li><strong>Chương 2-4 (cơ bản, data structure, function)</strong> — code bạn viết giờ có test bảo vệ, refactor không sợ.</li>
+          <li><strong>Chương 5 (OOP)</strong> — repository pattern, dependency injection thấy rõ giá trị khi bạn cần mock trong test.</li>
+          <li><strong>Chương 6 (error handling)</strong> — <code>pytest.raises</code> verify exception đúng loại + message.</li>
+          <li><strong>Chương 7 (decorator)</strong> — bạn hiểu thực sự <code>@pytest.fixture</code>, <code>@pytest.mark.parametrize</code>, <code>@patch</code> hoạt động ra sao.</li>
+          <li><strong>Chương 8 (async)</strong> — test async cần <code>pytest-asyncio</code>, mock <code>AsyncMock</code>.</li>
+          <li><strong>Chương 9 (typing)</strong> — mypy strict pair với pytest = "double safety net".</li>
+          <li><strong>Pillar DevOps</strong> — CI/CD pipeline GitHub Actions/GitLab CI chạy chính các lệnh chương này: <code>ruff check</code>, <code>mypy</code>, <code>pytest --cov</code>, <code>python -m build</code>, <code>twine upload</code>.</li>
+          <li><strong>Pillar System Design</strong> — code quality + test coverage là tiền đề bắt buộc cho hệ thống production chịu tải.</li>
+        </ul>
+
+        <div class="callout callout-goal" style="margin-top: 32px; border-left-color: var(--accent);">
+          <div class="callout-label">🎉 Chúc mừng — bạn đã hoàn thành Python sub-pillar VÀ toàn bộ Pillar 9!</div>
+          <p>
+            <strong>10 chương Python</strong> — từ setup môi trường, biến, data structure, function,
+            OOP, error handling, decorator, async, typing, đến testing &amp; packaging production.
+            Tổng cộng <strong>~9000 dòng kiến thức Python</strong>.
+          </p>
+          <p>
+            Cộng với <strong>12 chương JavaScript/TypeScript</strong> + <strong>23 chương Dart</strong>
+            đã hoàn thành trước đó, bạn đã đi qua <strong>45 chương trong Pillar 9 — Programming Languages</strong>,
+            ~30.000 dòng nội dung. Đây là kho kiến thức ngôn ngữ lập trình đủ rộng để:
+          </p>
+          <ul>
+            <li>Đọc hiểu mọi codebase Python modern: Django, FastAPI, Flask, Pandas, PyTorch, …</li>
+            <li>Phỏng vấn vị trí Backend Python, Data Engineer, ML Engineer, DevOps tự tin.</li>
+            <li>Đóng góp pull request vào dự án open-source Python lớn.</li>
+            <li>Build và publish package của chính bạn lên PyPI để cộng đồng dùng.</li>
+            <li>Đặt nền móng vững cho học framework cụ thể mà không bị tắc ở "syntax Python lạ".</li>
+          </ul>
+          <p style="margin-top: 16px;">
+            <strong>Bước tiếp theo đề xuất:</strong>
+          </p>
+          <ol>
+            <li>
+              <strong>Đào sâu framework Python</strong>:
+              <a href="https://docs.djangoproject.com/" style="color: var(--accent); font-weight: 600;">Django</a> cho web full-stack monolith,
+              <a href="https://fastapi.tiangolo.com/" style="color: var(--accent); font-weight: 600;">FastAPI</a> cho API hiện đại async,
+              <a href="https://pandas.pydata.org/" style="color: var(--accent); font-weight: 600;">Pandas</a> + <strong>NumPy</strong> + <strong>scikit-learn</strong> cho data science,
+              hoặc <strong>PyTorch</strong> cho ML/AI.
+            </li>
+            <li>
+              <strong>Chuyển sang Pillar khác</strong> nếu bạn đã có Pillar 9 vững — sub-pillar
+              tiếp theo trong roadmap IT Basic của bạn. Ngôn ngữ chỉ là công cụ; kiến trúc hệ thống,
+              database, networking, OS, DSA, OOP, system design, CI/CD mới là <em>insight</em>
+              định hình kỹ sư senior.
+            </li>
+            <li>
+              <strong>Project thực chiến</strong>: dùng những gì đã học để build 1 sản phẩm
+              end-to-end. Ví dụ: API CRUD bằng FastAPI + PostgreSQL + Docker, deploy lên cloud
+              với CI/CD GitHub Actions. Đây mới là cách kiến thức "đi vào tay".
+            </li>
+          </ol>
+          <p style="margin-top: 16px;">
+            Ngôn ngữ học xong rồi. Giờ là lúc <em>xây thứ thật</em>. Chúc bạn code vui!
+          </p>
+        </div>
+
+        <nav class="chapter-nav">
+          <a href="chuong9.html" class="prev">
+            <div class="dir">← Chương 9</div>
+            <div class="label">Typing &amp; Type Checking</div>
+          </a>
+          <a href="../index.html" class="next">
+            <div class="dir">✓ Hoàn thành</div>
+            <div class="label">Quay lại Python TOC</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#pytest-why">1. pytest vì sao thay unittest</a></li>
+          <li><a href="#test-basic">2. Test function cơ bản</a></li>
+          <li><a href="#fixture">3. Fixture setup/teardown</a></li>
+          <li><a href="#fixture-scope">4. Fixture scope</a></li>
+          <li><a href="#parametrize">5. parametrize</a></li>
+          <li><a href="#marker">6. Marker</a></li>
+          <li><a href="#conftest">7. conftest.py</a></li>
+          <li><a href="#mock">8. unittest.mock</a></li>
+          <li><a href="#pytest-mock">9. pytest-mock</a></li>
+          <li><a href="#coverage">10. Coverage</a></li>
+          <li><a href="#pyproject">11. pyproject.toml đầy đủ</a></li>
+          <li><a href="#build">12. Build wheel</a></li>
+          <li><a href="#pypi">13. Publish PyPI</a></li>
+          <li><a href="#ruff">14. ruff lint + format</a></li>
+          <li><a href="#pre-commit">15. Pre-commit hook</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 10 — Testing, Packaging &amp; Tooling · Python sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong9.html">← Chương 9</a> · <a href="../index.html">Python TOC ✓ Hoàn thành</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

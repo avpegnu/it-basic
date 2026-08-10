@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — Behavioral Patterns Part 2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="../index.html">OOP & Design Patterns</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">Lộ trình</a></li>
+        <li><a href="../docs.html">Giáo trình</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="chapter-hero">
+    <div class="container">
+      <div class="label">Chương 07 · Behavioral — Part 2</div>
+      <h1>Behavioral Patterns — Phần 2 (5 mẫu)</h1>
+      <p class="subtitle">State · Strategy · Template Method · Visitor · Interpreter. Hoàn tất 23 GoF — và phân biệt rõ Strategy vs State, Template vs Strategy.</p>
+    </div>
+  </section>
+
+  <div class="container chapter-layout">
+    <aside class="toc">
+      <h4>Mục lục chương</h4>
+      <ul>
+        <li><a href="#intro">1. Tổng quan Part 2</a></li>
+        <li><a href="#state">2. State</a></li>
+        <li><a href="#strategy">3. Strategy</a></li>
+        <li><a href="#state-vs-strategy">4. State vs Strategy</a></li>
+        <li><a href="#template">5. Template Method</a></li>
+        <li><a href="#visitor">6. Visitor</a></li>
+        <li><a href="#interpreter">7. Interpreter</a></li>
+        <li><a href="#summary23">8. Bảng 23 GoF</a></li>
+        <li><a href="#exercises">9. Bài tập</a></li>
+        <li><a href="#quiz">10. Quiz</a></li>
+      </ul>
+    </aside>
+
+    <main class="chapter-body">
+
+      <section id="intro">
+        <h2>1. Tổng quan</h2>
+        <p>5 pattern còn lại — phổ biến nhất là Strategy và Template Method. State thường được nhầm với Strategy. Visitor và Interpreter dùng ít hơn nhưng cực mạnh trong domain phù hợp (compiler, AST, DSL).</p>
+
+        <table>
+          <thead><tr><th>Pattern</th><th>Một câu</th></tr></thead>
+          <tbody>
+            <tr><td>State</td><td>Object đổi hành vi khi state đổi — như đổi class</td></tr>
+            <tr><td>Strategy</td><td>Tách thuật toán thành object thay thế được</td></tr>
+            <tr><td>Template Method</td><td>Định nghĩa skeleton, để subclass điền chi tiết</td></tr>
+            <tr><td>Visitor</td><td>Tách operation khỏi cấu trúc object</td></tr>
+            <tr><td>Interpreter</td><td>Định nghĩa grammar + interpreter cho ngôn ngữ nhỏ</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- State -->
+      <section id="state">
+        <h2>2. State</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №19 — BEHAVIORAL</div>
+          <h3>State</h3>
+          <p class="intent">Cho phép object thay đổi hành vi khi state nội bộ thay đổi. Như đổi class runtime.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Object có nhiều state với hành vi khác nhau, mọi method có if/switch theo state.</span>
+            <span class="key">Lợi ích</span>
+            <span>Mỗi state là 1 class — code rõ, không if/switch khắp nơi.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Tạo thêm class. Cho FSM nhỏ có thể overkill.</span>
+          </div>
+        </div>
+
+        <h3>2.1. Vấn đề: switch hell</h3>
+
+<pre><code class="language-typescript">// ❌ Mọi method có switch
+class Order {
+  private status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled' = 'pending';
+
+  pay() {
+    if (this.status === 'pending') this.status = 'paid';
+    else throw new Error('Cannot pay in status ' + this.status);
+  }
+
+  ship() {
+    if (this.status === 'paid') this.status = 'shipped';
+    else throw new Error('Cannot ship in status ' + this.status);
+  }
+
+  deliver() {
+    if (this.status === 'shipped') this.status = 'delivered';
+    else throw new Error('Cannot deliver in status ' + this.status);
+  }
+
+  cancel() {
+    if (this.status === 'shipped' || this.status === 'delivered')
+      throw new Error('Cannot cancel');
+    this.status = 'cancelled';
+  }
+}</code></pre>
+
+        <h3>2.2. State pattern</h3>
+
+<pre><code class="language-typescript">// State interface
+interface OrderState {
+  pay(order: Order): void;
+  ship(order: Order): void;
+  deliver(order: Order): void;
+  cancel(order: Order): void;
+}
+
+class Order {
+  state: OrderState = new PendingState();
+
+  setState(s: OrderState) { this.state = s; }
+  pay()     { this.state.pay(this); }
+  ship()    { this.state.ship(this); }
+  deliver() { this.state.deliver(this); }
+  cancel()  { this.state.cancel(this); }
+}
+
+class PendingState implements OrderState {
+  pay(order: Order)     { order.setState(new PaidState()); console.log('Paid'); }
+  ship(order: Order)    { throw new Error('Cannot ship unpaid'); }
+  deliver(order: Order) { throw new Error('Cannot deliver unpaid'); }
+  cancel(order: Order)  { order.setState(new CancelledState()); }
+}
+
+class PaidState implements OrderState {
+  pay(order: Order)     { throw new Error('Already paid'); }
+  ship(order: Order)    { order.setState(new ShippedState()); console.log('Shipped'); }
+  deliver(order: Order) { throw new Error('Cannot deliver before ship'); }
+  cancel(order: Order)  { order.setState(new CancelledState()); /* refund */ }
+}
+
+class ShippedState implements OrderState {
+  pay(order: Order)     { throw new Error('Already paid'); }
+  ship(order: Order)    { throw new Error('Already shipped'); }
+  deliver(order: Order) { order.setState(new DeliveredState()); console.log('Delivered'); }
+  cancel(order: Order)  { throw new Error('Cannot cancel shipped'); }
+}
+
+class DeliveredState implements OrderState {
+  pay(order: Order)     { throw new Error('Already done'); }
+  ship(order: Order)    { throw new Error('Already done'); }
+  deliver(order: Order) { throw new Error('Already delivered'); }
+  cancel(order: Order)  { throw new Error('Cannot cancel delivered'); }
+}
+
+class CancelledState implements OrderState {
+  pay(order: Order)     { throw new Error('Cancelled'); }
+  ship(order: Order)    { throw new Error('Cancelled'); }
+  deliver(order: Order) { throw new Error('Cancelled'); }
+  cancel(order: Order)  { /* no-op */ }
+}</code></pre>
+
+        <p>Mỗi state là class riêng, tự biết chuyển sang state nào. Không có switch khắp nơi.</p>
+
+        <h3>2.3. Use cases</h3>
+        <ul>
+          <li>Order/booking workflow.</li>
+          <li>TCP connection: LISTEN → ESTABLISHED → CLOSED.</li>
+          <li>Game character: Idle → Walking → Running → Jumping.</li>
+          <li>Document workflow: Draft → Review → Published → Archived.</li>
+          <li>Player media: Playing → Paused → Stopped.</li>
+        </ul>
+
+        <h3>2.4. Alternative: state machine library</h3>
+        <p>Cho FSM phức tạp, dùng <strong>XState</strong> (TS), <strong>Stateless</strong> (C#) — declarative, có visualization, side-effect quản lý tốt hơn.</p>
+
+<pre><code class="language-typescript">// XState style:
+const orderMachine = createMachine({
+  id: 'order',
+  initial: 'pending',
+  states: {
+    pending:   { on: { PAY: 'paid', CANCEL: 'cancelled' } },
+    paid:      { on: { SHIP: 'shipped', CANCEL: 'cancelled' } },
+    shipped:   { on: { DELIVER: 'delivered' } },
+    delivered: { type: 'final' },
+    cancelled: { type: 'final' },
+  },
+});</code></pre>
+      </section>
+
+      <!-- Strategy -->
+      <section id="strategy">
+        <h2>3. Strategy</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №20 — BEHAVIORAL</div>
+          <h3>Strategy</h3>
+          <p class="intent">Định nghĩa family of algorithm, đóng gói mỗi cái thành object, làm chúng thay thế lẫn nhau.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có nhiều thuật toán cho cùng 1 việc (sort, compress, validate, pricing). Client muốn switch runtime.</span>
+            <span class="key">Lợi ích</span>
+            <span>Tách thuật toán khỏi context — Open/Closed. Easy thêm strategy mới.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Client phải biết các strategy để chọn đúng.</span>
+          </div>
+        </div>
+
+        <h3>3.1. Implementation</h3>
+
+<pre><code class="language-typescript">// Strategy interface
+interface PricingStrategy {
+  calculate(order: Order): Money;
+}
+
+// Concrete strategies
+class StandardPricing implements PricingStrategy {
+  calculate(o: Order) { return o.subtotal(); }
+}
+
+class VipDiscountPricing implements PricingStrategy {
+  calculate(o: Order) {
+    return o.customer.isVip() ? o.subtotal().multiply(0.85) : o.subtotal();
+  }
+}
+
+class HolidayPromoPricing implements PricingStrategy {
+  calculate(o: Order) {
+    const isHoliday = new Date().getMonth() === 11;
+    return isHoliday ? o.subtotal().subtract(Money.of(10)) : o.subtotal();
+  }
+}
+
+class ClearanceSalePricing implements PricingStrategy {
+  calculate(o: Order) { return o.subtotal().multiply(0.5); }
+}
+
+// Context
+class Checkout {
+  constructor(private pricing: PricingStrategy) {}
+
+  setPricing(p: PricingStrategy) { this.pricing = p; }   // có thể đổi runtime
+
+  finalize(order: Order): Money {
+    return this.pricing.calculate(order);
+  }
+}
+
+// Sử dụng:
+const checkout = new Checkout(new StandardPricing());
+console.log(checkout.finalize(order));
+
+// Black Friday → đổi strategy
+checkout.setPricing(new ClearanceSalePricing());
+console.log(checkout.finalize(order));</code></pre>
+
+        <h3>3.2. Function as Strategy (idiomatic JS/TS)</h3>
+        <p>Strategy thường chỉ là 1 function. Class chỉ cần khi strategy có state hoặc method nhiều.</p>
+
+<pre><code class="language-typescript">type PricingFn = (order: Order) =&gt; Money;
+
+const standardPricing: PricingFn = o =&gt; o.subtotal();
+const vipPricing:      PricingFn = o =&gt; o.customer.isVip() ? o.subtotal().multiply(0.85) : o.subtotal();
+const clearancePricing: PricingFn = o =&gt; o.subtotal().multiply(0.5);
+
+class Checkout {
+  constructor(private pricing: PricingFn) {}
+  finalize(o: Order) { return this.pricing(o); }
+}</code></pre>
+
+        <h3>3.3. Use cases mạnh</h3>
+        <ul>
+          <li><strong>Sort</strong>: <code>Array.sort(compareFn)</code> — compareFn là Strategy.</li>
+          <li><strong>Auth</strong>: BasicAuth, OAuth, JWT — same interface.</li>
+          <li><strong>Compression</strong>: gzip, brotli, deflate.</li>
+          <li><strong>Payment</strong>: Stripe, PayPal, VNPay.</li>
+          <li><strong>Validation</strong>: rule chain.</li>
+          <li><strong>Routing</strong>: shortest path, bus, walking.</li>
+        </ul>
+      </section>
+
+      <!-- State vs Strategy -->
+      <section id="state-vs-strategy">
+        <h2>4. State vs Strategy — phân biệt</h2>
+        <p>2 pattern có cấu trúc <strong>giống hệt</strong> (Context có field reference đến interface, swap được). Khác ở <strong>intent</strong>:</p>
+
+        <div class="compare">
+          <div>
+            <h4>State</h4>
+            <ul>
+              <li>State biểu diễn <em>tình trạng</em> của object.</li>
+              <li>Object tự đổi state internally (state này transition sang state khác).</li>
+              <li>Client thường KHÔNG chọn state — workflow tự dẫn.</li>
+              <li>State biết về context, có thể đổi context.state.</li>
+              <li>Số state <em>hữu hạn và cố định</em>.</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Strategy</h4>
+            <ul>
+              <li>Strategy là <em>thuật toán</em> để giải 1 việc.</li>
+              <li>Client chọn strategy, set vào context.</li>
+              <li>Strategy không biết các strategy khác.</li>
+              <li>Có thể có vô hạn strategy mới — dễ extension.</li>
+              <li>Strategy không tự đổi (context không tự switch).</li>
+            </ul>
+          </div>
+        </div>
+
+        <p>Câu hỏi tự kiểm tra: <em>"Object có tự đổi 'class' của mình không?"</em></p>
+        <ul>
+          <li>Có (Order pending → paid → shipped) → State.</li>
+          <li>Không (PricingEngine có 1 strategy do client set) → Strategy.</li>
+        </ul>
+      </section>
+
+      <!-- Template Method -->
+      <section id="template">
+        <h2>5. Template Method</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №21 — BEHAVIORAL</div>
+          <h3>Template Method</h3>
+          <p class="intent">Định nghĩa skeleton thuật toán trong method của parent, để subclass override một số bước cụ thể mà không thay đổi cấu trúc tổng.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có thuật toán với nhiều bước, đa số bước giống nhau, vài bước khác nhau theo biến thể.</span>
+            <span class="key">Lợi ích</span>
+            <span>Reuse thuật toán chính. Subclass tập trung vào điểm khác biệt.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Dùng inheritance — dependency chặt parent-child.</span>
+          </div>
+        </div>
+
+        <h3>5.1. Implementation</h3>
+
+<pre><code class="language-typescript">abstract class DataExporter {
+  // Template method — final, không cho override
+  export(data: any[]): string {
+    this.validate(data);
+    const opened = this.openDocument();
+    const written = this.writeRows(opened, data);
+    return this.closeDocument(written);
+  }
+
+  protected validate(data: any[]) {
+    if (!Array.isArray(data)) throw new Error('invalid');
+  }
+
+  // Steps abstract — subclass implement
+  protected abstract openDocument(): string;
+  protected abstract writeRows(doc: string, data: any[]): string;
+  protected abstract closeDocument(doc: string): string;
+}
+
+class CsvExporter extends DataExporter {
+  protected openDocument() { return ''; }
+  protected writeRows(doc: string, data: any[]) {
+    return data.map(r =&gt; Object.values(r).join(',')).join('\n');
+  }
+  protected closeDocument(doc: string) { return doc; }
+}
+
+class JsonExporter extends DataExporter {
+  protected openDocument() { return '['; }
+  protected writeRows(doc: string, data: any[]) {
+    return doc + data.map(r =&gt; JSON.stringify(r)).join(',');
+  }
+  protected closeDocument(doc: string) { return doc + ']'; }
+}
+
+class XmlExporter extends DataExporter {
+  protected openDocument() { return '&lt;?xml version="1.0"?&gt;\n&lt;data&gt;\n'; }
+  protected writeRows(doc: string, data: any[]) {
+    return doc + data.map(r =&gt;
+      '  &lt;row&gt;' + Object.entries(r).map(([k, v]) =&gt; `&lt;${k}&gt;${v}&lt;/${k}&gt;`).join('') + '&lt;/row&gt;'
+    ).join('\n');
+  }
+  protected closeDocument(doc: string) { return doc + '\n&lt;/data&gt;'; }
+}</code></pre>
+
+        <h3>5.2. Hook methods</h3>
+        <p>Bước có default implementation rỗng, subclass có thể override nếu cần:</p>
+
+<pre><code class="language-typescript">abstract class DataExporter {
+  export(data: any[]): string {
+    this.beforeExport(data);   // hook
+    /* ... */
+    this.afterExport();        // hook
+    return result;
+  }
+
+  // Hooks với default rỗng
+  protected beforeExport(data: any[]) {}
+  protected afterExport() {}
+}
+
+class CsvWithLogging extends CsvExporter {
+  protected beforeExport(data: any[]) { console.log(`Exporting ${data.length} rows`); }
+}</code></pre>
+
+        <h3>5.3. Template Method vs Strategy</h3>
+        <table>
+          <thead><tr><th></th><th>Template Method</th><th>Strategy</th></tr></thead>
+          <tbody>
+            <tr><td>Variation</td><td>Inheritance — subclass override step</td><td>Composition — swap object</td></tr>
+            <tr><td>Coupling</td><td>Compile-time (static)</td><td>Runtime (dynamic)</td></tr>
+            <tr><td>Reuse code chung</td><td>Trong parent class</td><td>Phải duplicate hoặc abstract khác</td></tr>
+            <tr><td>Khi nào dùng</td><td>Skeleton cố định, vài step khác nhau</td><td>Toàn bộ thuật toán khác, swap được</td></tr>
+          </tbody>
+        </table>
+
+        <p>Quy tắc: nếu chỉ <em>1-2 bước</em> khác nhau giữa biến thể → Template Method. Nếu <em>cả thuật toán</em> khác → Strategy.</p>
+
+        <h3>5.4. Use cases</h3>
+        <ul>
+          <li>Framework hook: React class component <code>componentDidMount</code>, <code>render</code>.</li>
+          <li>Spring <code>JdbcTemplate</code>: define connection/transaction skeleton, callback override SQL.</li>
+          <li>Build pipeline: skeleton (validate → compile → test → deploy), step override theo project type.</li>
+          <li>Game AI: skeleton tick (sense → think → act), child class override think logic.</li>
+        </ul>
+      </section>
+
+      <!-- Visitor -->
+      <section id="visitor">
+        <h2>6. Visitor</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №22 — BEHAVIORAL</div>
+          <h3>Visitor</h3>
+          <p class="intent">Tách operation khỏi cấu trúc object. Cho phép định nghĩa operation mới trên hierarchy mà không sửa class trong hierarchy.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có hierarchy ổn định (AST, file system) cần thêm nhiều operation (print, optimize, lint, eval).</span>
+            <span class="key">Lợi ích</span>
+            <span>Thêm operation mới = thêm Visitor, không sửa hierarchy.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Thêm node type mới phải sửa mọi Visitor. Phức tạp với double dispatch.</span>
+          </div>
+        </div>
+
+        <h3>6.1. Vấn đề: thêm operation</h3>
+        <p>Ngôn ngữ tính số đơn giản với AST: Number, Add, Multiply. Operation cần làm: evaluate, print, optimize.</p>
+
+<pre><code class="language-typescript">// ❌ Mỗi operation phải sửa mọi class:
+abstract class Expr {
+  abstract evaluate(): number;
+  abstract print(): string;
+  abstract optimize(): Expr;
+  // Thêm operation mới (lint?) → sửa mọi class
+}</code></pre>
+
+        <h3>6.2. Visitor pattern</h3>
+
+<pre><code class="language-typescript">// Visitor interface
+interface ExprVisitor&lt;R&gt; {
+  visitNumber(e: NumberExpr): R;
+  visitAdd(e: AddExpr): R;
+  visitMul(e: MulExpr): R;
+}
+
+// Element interface
+abstract class Expr {
+  abstract accept&lt;R&gt;(visitor: ExprVisitor&lt;R&gt;): R;
+}
+
+// Concrete elements
+class NumberExpr extends Expr {
+  constructor(public value: number) { super(); }
+  accept&lt;R&gt;(v: ExprVisitor&lt;R&gt;) { return v.visitNumber(this); }
+}
+
+class AddExpr extends Expr {
+  constructor(public left: Expr, public right: Expr) { super(); }
+  accept&lt;R&gt;(v: ExprVisitor&lt;R&gt;) { return v.visitAdd(this); }
+}
+
+class MulExpr extends Expr {
+  constructor(public left: Expr, public right: Expr) { super(); }
+  accept&lt;R&gt;(v: ExprVisitor&lt;R&gt;) { return v.visitMul(this); }
+}
+
+// Operations as visitors
+class EvalVisitor implements ExprVisitor&lt;number&gt; {
+  visitNumber(e: NumberExpr) { return e.value; }
+  visitAdd(e: AddExpr)       { return e.left.accept(this) + e.right.accept(this); }
+  visitMul(e: MulExpr)       { return e.left.accept(this) * e.right.accept(this); }
+}
+
+class PrintVisitor implements ExprVisitor&lt;string&gt; {
+  visitNumber(e: NumberExpr) { return String(e.value); }
+  visitAdd(e: AddExpr)       { return `(${e.left.accept(this)} + ${e.right.accept(this)})`; }
+  visitMul(e: MulExpr)       { return `(${e.left.accept(this)} * ${e.right.accept(this)})`; }
+}
+
+// Sử dụng: (2 + 3) * 4
+const expr = new MulExpr(new AddExpr(new NumberExpr(2), new NumberExpr(3)), new NumberExpr(4));
+console.log(expr.accept(new EvalVisitor()));   // 20
+console.log(expr.accept(new PrintVisitor()));  // ((2 + 3) * 4)
+
+// Thêm operation mới — chỉ thêm Visitor:
+class OptimizeVisitor implements ExprVisitor&lt;Expr&gt; {
+  visitNumber(e: NumberExpr) { return e; }
+  visitAdd(e: AddExpr) {
+    const l = e.left.accept(this), r = e.right.accept(this);
+    if (l instanceof NumberExpr &amp;&amp; r instanceof NumberExpr) return new NumberExpr(l.value + r.value);
+    return new AddExpr(l, r);
+  }
+  visitMul(e: MulExpr) { /* ... */ return e; }
+}</code></pre>
+
+        <h3>6.3. Double dispatch</h3>
+        <p>Visitor giải quyết "double dispatch" — chọn method dựa trên 2 type (visitor + element). Single dispatch chỉ chọn theo 1 type (the method's class). <code>element.accept(visitor)</code> dispatch theo element type, rồi <code>visitor.visitX</code> dispatch theo visitor type.</p>
+
+        <h3>6.4. Use cases</h3>
+        <ul>
+          <li>Compiler/AST: linter, formatter, optimizer, code gen — mỗi cái 1 visitor.</li>
+          <li>File system: backup, virus scan, permission check.</li>
+          <li>UI tree: render, layout, hit-test.</li>
+          <li>Document: spell-check, word-count, export.</li>
+        </ul>
+
+        <p>TypeScript compiler, Babel, ESLint, Prettier — đều dùng Visitor (hoặc biến thể).</p>
+
+        <h3>6.5. Khi KHÔNG dùng</h3>
+        <ul>
+          <li>Hierarchy thay đổi nhiều (thêm node type) — Visitor không OCP với chiều này.</li>
+          <li>Operation đơn giản, ít — method trên class đủ.</li>
+        </ul>
+      </section>
+
+      <!-- Interpreter -->
+      <section id="interpreter">
+        <h2>7. Interpreter</h2>
+        <div class="pattern-card">
+          <div class="pattern-no">PATTERN №23 — BEHAVIORAL</div>
+          <h3>Interpreter</h3>
+          <p class="intent">Định nghĩa biểu diễn cho grammar của ngôn ngữ + interpreter dùng biểu diễn để diễn dịch câu.</p>
+          <div class="pattern-meta">
+            <span class="key">Vấn đề</span>
+            <span>Có DSL (domain-specific language) đơn giản cần parse + execute.</span>
+            <span class="key">Lợi ích</span>
+            <span>Grammar trở thành class hierarchy — dễ extend.</span>
+            <span class="key">Đánh đổi</span>
+            <span>Class explosion với grammar phức tạp. Slow vs parser tool.</span>
+          </div>
+        </div>
+
+        <h3>7.1. Implementation: simple boolean DSL</h3>
+        <p>Hỗ trợ <code>true</code>, <code>false</code>, <code>and</code>, <code>or</code>, <code>not</code>, variable.</p>
+
+<pre><code class="language-typescript">interface Expr {
+  evaluate(ctx: Record&lt;string, boolean&gt;): boolean;
+}
+
+class TrueLit implements Expr {
+  evaluate() { return true; }
+}
+
+class FalseLit implements Expr {
+  evaluate() { return false; }
+}
+
+class Variable implements Expr {
+  constructor(public name: string) {}
+  evaluate(ctx: Record&lt;string, boolean&gt;) { return ctx[this.name] ?? false; }
+}
+
+class And implements Expr {
+  constructor(public left: Expr, public right: Expr) {}
+  evaluate(ctx: any) { return this.left.evaluate(ctx) &amp;&amp; this.right.evaluate(ctx); }
+}
+
+class Or implements Expr {
+  constructor(public left: Expr, public right: Expr) {}
+  evaluate(ctx: any) { return this.left.evaluate(ctx) || this.right.evaluate(ctx); }
+}
+
+class Not implements Expr {
+  constructor(public expr: Expr) {}
+  evaluate(ctx: any) { return !this.expr.evaluate(ctx); }
+}
+
+// "isAdmin AND (isLoggedIn OR isVip)"
+const expr = new And(
+  new Variable('isAdmin'),
+  new Or(new Variable('isLoggedIn'), new Variable('isVip')),
+);
+
+console.log(expr.evaluate({ isAdmin: true, isLoggedIn: false, isVip: true }));   // true
+console.log(expr.evaluate({ isAdmin: false, isLoggedIn: true,  isVip: true }));  // false</code></pre>
+
+        <h3>7.2. Use cases</h3>
+        <ul>
+          <li>Rule engine: feature flag DSL, permission rule.</li>
+          <li>Query DSL: MongoDB query, JQ.</li>
+          <li>Math expression evaluator.</li>
+          <li>Template engine.</li>
+        </ul>
+
+        <h3>7.3. Khi KHÔNG dùng</h3>
+        <p>Grammar phức tạp → dùng parser generator (ANTLR, PEG.js) — Interpreter pattern không scale.</p>
+      </section>
+
+      <section id="summary23">
+        <h2>8. Bảng tổng hợp 23 GoF</h2>
+
+        <h3>8.1. Creational (5)</h3>
+        <table>
+          <thead><tr><th>#</th><th>Tên</th><th>Khi dùng (nhanh)</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Factory Method</td><td>Subclass quyết định class instantiate</td></tr>
+            <tr><td>2</td><td>Abstract Factory</td><td>Family object cùng style/platform</td></tr>
+            <tr><td>3</td><td>Builder</td><td>Object phức tạp với nhiều tham số</td></tr>
+            <tr><td>4</td><td>Prototype</td><td>Clone template thay vì tạo từ đầu</td></tr>
+            <tr><td>5</td><td>Singleton</td><td>1 instance toàn app (cẩn thận lạm dụng)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>8.2. Structural (7)</h3>
+        <table>
+          <tbody>
+            <tr><td>6</td><td>Adapter</td><td>Tương thích interface khác</td></tr>
+            <tr><td>7</td><td>Bridge</td><td>Tách abstraction × implementation</td></tr>
+            <tr><td>8</td><td>Composite</td><td>Cây leaf + composite cùng interface</td></tr>
+            <tr><td>9</td><td>Decorator</td><td>Thêm chức năng động</td></tr>
+            <tr><td>10</td><td>Facade</td><td>Đơn giản hóa subsystem</td></tr>
+            <tr><td>11</td><td>Flyweight</td><td>Chia sẻ object — giảm memory</td></tr>
+            <tr><td>12</td><td>Proxy</td><td>Kiểm soát truy cập (lazy/cache/auth)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>8.3. Behavioral (11)</h3>
+        <table>
+          <tbody>
+            <tr><td>13</td><td>Chain of Responsibility</td><td>Chuỗi handler (middleware)</td></tr>
+            <tr><td>14</td><td>Command</td><td>Action như object (undo/queue)</td></tr>
+            <tr><td>15</td><td>Iterator</td><td>Duyệt collection thống nhất</td></tr>
+            <tr><td>16</td><td>Mediator</td><td>N-N qua trung gian</td></tr>
+            <tr><td>17</td><td>Memento</td><td>Snapshot state</td></tr>
+            <tr><td>18</td><td>Observer</td><td>Pub/Sub 1-N</td></tr>
+            <tr><td>19</td><td>State</td><td>Object đổi hành vi theo state</td></tr>
+            <tr><td>20</td><td>Strategy</td><td>Family thuật toán thay thế</td></tr>
+            <tr><td>21</td><td>Template Method</td><td>Skeleton + step override</td></tr>
+            <tr><td>22</td><td>Visitor</td><td>Tách operation khỏi hierarchy</td></tr>
+            <tr><td>23</td><td>Interpreter</td><td>Grammar cho DSL nhỏ</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <span class="callout-title">Frequency thực tế (theo project hiện đại)</span>
+          <strong>Cực phổ biến</strong>: Strategy, Observer, Iterator, Decorator, Facade, Adapter, Factory.
+          <strong>Trung bình</strong>: Builder, Composite, Singleton, Command, State, Template Method, Proxy, Chain of Responsibility.
+          <strong>Hiếm</strong>: Visitor (dùng khi compile/AST), Interpreter (DSL), Flyweight (game/specific perf), Mediator, Memento, Bridge, Prototype, Abstract Factory.
+        </div>
+      </section>
+
+      <section id="exercises">
+        <h2>9. Bài tập</h2>
+
+        <ol>
+          <li>State: implement TCP connection state machine với 4 state: CLOSED → LISTEN → ESTABLISHED → CLOSED. Method: open(), accept(), send(), close().</li>
+          <li>Strategy: implement compression engine với 3 strategy: Gzip, Brotli, NoCompression. Context có method <code>compress(data)</code>.</li>
+          <li>Phân biệt: code dưới dùng pattern nào — State hay Strategy?
+<pre><code class="language-typescript">class Player {
+  private playback: PlaybackBehavior;
+  setPlayback(p: PlaybackBehavior) { this.playback = p; }
+  play() { this.playback.play(); }
+}</code></pre>
+            Sửa nó thành State pattern (object tự transition).
+          </li>
+          <li>Template Method: implement <code>HotDrink</code> với template "boil water → brew → pour → addCondiments". Subclass Tea, Coffee override brew và addCondiments.</li>
+          <li>Visitor: AST cho ngôn ngữ tính số (Number, Add, Mul). Implement Eval và Print visitor như mục 6.2. Thêm Optimize visitor (folding constants).</li>
+          <li>Interpreter: parse + evaluate biểu thức boolean như "isAdmin AND (isLoggedIn OR isVip)" từ string. (Tip: dùng split đơn giản, không cần parser thật.)</li>
+          <li>Liệt kê 3 pattern bạn nghĩ gặp nhiều nhất trong code hằng ngày, kèm ví dụ.</li>
+        </ol>
+      </section>
+
+      <section id="quiz">
+        <h2>10. Quiz</h2>
+        <div class="quiz">
+          <h3>Quiz cuối Chương 7</h3>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">State vs Strategy khác nhau chính ở:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cấu trúc class</li>
+              <li class="quiz-option">Số lượng method</li>
+              <li class="quiz-option">Intent: State biểu diễn workflow internal (object tự transition); Strategy là thuật toán thay thế (client chọn)</li>
+              <li class="quiz-option">Performance</li>
+            </ul>
+            <div class="quiz-explain">Cấu trúc giống nhau (Context có ref đến interface, swap được). Khác ở intent + cách dùng. State: tự transition (paid → shipped → delivered). Strategy: client set, không tự đổi (PricingEngine với GivenStrategy).</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Strategy trong JS/TS có thể đơn giản hóa thành:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Function — không cần class nếu strategy không có state</li>
+              <li class="quiz-option">Singleton</li>
+              <li class="quiz-option">Generic class</li>
+              <li class="quiz-option">Decorator</li>
+            </ul>
+            <div class="quiz-explain"><code>Array.sort(compareFn)</code> dùng Strategy as function. <code>.filter</code>, <code>.map</code> nhận function strategy. Class Strategy chỉ cần khi có state hoặc nhiều method liên quan.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">Template Method dùng:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Composition</li>
+              <li class="quiz-option">Singleton</li>
+              <li class="quiz-option">Decorator</li>
+              <li class="quiz-option">Inheritance — parent định skeleton, subclass override step cụ thể</li>
+            </ul>
+            <div class="quiz-explain">Template Method là pattern "inheritance-based". Skeleton (template method) là final/non-virtual, các bước (primitive) là abstract/virtual. Strategy thay thế bằng composition; Template Method dùng inheritance.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <p class="q-text">Visitor giải quyết vấn đề:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Cần thêm node type vào hierarchy</li>
+              <li class="quiz-option">Cần thêm operation mới vào hierarchy mà không sửa class trong hierarchy</li>
+              <li class="quiz-option">Object quá nhiều RAM</li>
+              <li class="quiz-option">Class abstract</li>
+            </ul>
+            <div class="quiz-explain">Visitor OCP theo chiều operation: thêm operation mới = thêm Visitor class, không sửa hierarchy. Trade-off: thêm node TYPE phải sửa mọi Visitor. Hierarchy ổn định, operation thay đổi nhiều → Visitor.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">"Double dispatch" trong Visitor nghĩa là:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Gọi 2 method liên tiếp</li>
+              <li class="quiz-option">Chạy trên 2 thread</li>
+              <li class="quiz-option">Method được chọn dựa trên 2 type (element type + visitor type) qua chuỗi <code>element.accept(visitor)</code> rồi <code>visitor.visitX</code></li>
+              <li class="quiz-option">Tăng gấp đôi performance</li>
+            </ul>
+            <div class="quiz-explain">OOP thông thường single dispatch (chọn method theo type của receiver). Visitor đạt double dispatch: bước 1 dispatch theo element type (accept), bước 2 dispatch theo visitor type (visitX). Cho phép operation linh hoạt với hierarchy.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="0">
+            <p class="q-text">Interpreter pattern phù hợp khi:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Có DSL nhỏ với grammar đơn giản (rule engine, query DSL)</li>
+              <li class="quiz-option">Cần tốc độ cao</li>
+              <li class="quiz-option">Có grammar phức tạp 100+ rule</li>
+              <li class="quiz-option">Mọi lúc</li>
+            </ul>
+            <div class="quiz-explain">Interpreter tốt cho DSL nhỏ: feature flag rule, permission, formula đơn giản. Grammar phức tạp → dùng parser generator (ANTLR, PEG.js) — Interpreter không scale với expression hơn ~10 rule.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="3">
+            <p class="q-text">XState hoặc state machine library thay thế cho:</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Strategy</li>
+              <li class="quiz-option">Visitor</li>
+              <li class="quiz-option">Observer</li>
+              <li class="quiz-option">State pattern (cho FSM phức tạp với side-effect, parallel state, history)</li>
+            </ul>
+            <div class="quiz-explain">XState (TS), Stately, Stateless (C#) là alternative declarative cho State pattern. Có state visualization, side-effect (action/service), nested state. Cho FSM ≥ 5 state phức tạp dùng XState; FSM nhỏ dùng State pattern manual.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="2">
+            <p class="q-text">Pattern phổ biến NHẤT trong code hàng ngày (web dev modern):</p>
+            <ul class="quiz-options">
+              <li class="quiz-option">Visitor, Memento</li>
+              <li class="quiz-option">Interpreter, Mediator</li>
+              <li class="quiz-option">Strategy, Observer, Iterator, Decorator, Facade, Adapter</li>
+              <li class="quiz-option">Bridge, Prototype, Flyweight</li>
+            </ul>
+            <div class="quiz-explain">Mọi event handler = Observer. Sort/filter/map = Strategy. for...of, async iteration = Iterator. HOC, middleware = Decorator. Service layer = Facade. Tích hợp lib = Adapter. Bạn dùng những pattern này hằng ngày.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <p style="margin-top:3rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-muted);">
+        Hoàn thành Chương 7 — toàn bộ <strong>23 GoF patterns</strong>. Tiếp theo: <a href="chuong8.html"><strong>Chương 8 — Anti-patterns + Refactoring + DDD-lite →</strong></a>
+      </p>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>OOP & Design Patterns · Chương 7 · <a href="../index.html">← Lộ trình</a></p>
+    </div>
+  </footer>
+
+  <script src="../js/copy.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>

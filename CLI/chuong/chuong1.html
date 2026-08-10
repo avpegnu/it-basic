@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 1: Filesystem &amp; Navigation — CLI Mastery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="logo">cli-mastery</div>
+      <ul>
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#roadmap">Lộ trình</a></li>
+        <li><a href="chuong1.html" class="active">Chương 1</a></li>
+        <li><a href="chuong2.html">Chương 2 →</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Chương 01 — Filesystem &amp; Navigation</h1>
+        <p>
+          Tuần đầu tiên, bạn sẽ làm chủ <strong>cách terminal nhìn vào hệ thống file</strong>: đường dẫn,
+          di chuyển, liệt kê, đọc help. Đây là nền tảng cho mọi tuần sau.
+        </p>
+      </div>
+    </div>
+
+    <section>
+      <h2>1. Terminal &amp; Shell — phân biệt nhanh</h2>
+      <p>
+        <strong>Terminal</strong> là cửa sổ (Terminal.app, iTerm2, VSCode integrated terminal...) — nó chỉ
+        hiển thị text và nhận phím gõ.
+      </p>
+      <p>
+        <strong>Shell</strong> là chương trình chạy <em>bên trong</em> terminal, nhận lệnh và thực thi.
+        macOS hiện đại dùng <code>zsh</code> mặc định. Bạn có thể kiểm tra:
+      </p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">echo</span> $SHELL
+<span class="output">/bin/zsh</span></code></pre>
+
+      <div class="callout info">
+        <div class="callout-title">📘 Mỗi lệnh có cấu trúc:</div>
+        <code>command [options] [arguments]</code><br />
+        Ví dụ <code>ls -la /Users</code> → <code>ls</code> là command, <code>-la</code> là options (flags), <code>/Users</code> là argument.
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Đường dẫn — Tuyệt đối vs Tương đối</h2>
+
+      <h3>Đường dẫn tuyệt đối (Absolute path)</h3>
+      <p>Bắt đầu bằng <code>/</code> — mô tả vị trí từ <strong>gốc</strong> hệ thống. Luôn đúng dù bạn đang ở đâu.</p>
+      <pre><code>/Users/you/Developer/IT Basic/CLI</code></pre>
+
+      <h3>Đường dẫn tương đối (Relative path)</h3>
+      <p>Tính từ <strong>thư mục hiện tại</strong>. Không bắt đầu bằng <code>/</code>.</p>
+      <pre><code>Developer/IT Basic/CLI    <span class="comment"># từ /Users/you</span>
+./CLI                     <span class="comment"># . = thư mục hiện tại</span>
+../JS                     <span class="comment"># .. = thư mục cha</span>
+~/Documents               <span class="comment"># ~ = home (/Users/you)</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Quy ước ký hiệu</div>
+        <ul>
+          <li><code>/</code> — root (gốc của filesystem)</li>
+          <li><code>~</code> — home directory của user hiện tại</li>
+          <li><code>.</code> — thư mục hiện tại</li>
+          <li><code>..</code> — thư mục cha (lùi 1 cấp)</li>
+          <li><code>-</code> — thư mục vừa rời (dùng với <code>cd -</code>)</li>
+        </ul>
+      </div>
+
+      <h3>Khi tên thư mục có khoảng trắng</h3>
+      <p>
+        Shell tách lệnh thành các phần bằng <strong>khoảng trắng</strong>. Vì vậy <code>cd IT Basic</code>
+        sẽ bị hiểu là: chạy <code>cd</code> với 2 đối số <code>IT</code> và <code>Basic</code> → báo lỗi
+        <em>"no such file or directory"</em>. Có 3 cách xử lý:
+      </p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cd</span> <span class="output">"IT Basic"</span>     <span class="comment"># cách 1: dấu ngoặc kép (phổ biến nhất)</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> <span class="output">'IT Basic'</span>     <span class="comment"># cách 2: dấu ngoặc đơn</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> IT\ Basic       <span class="comment"># cách 3: backslash escape — \ trước mỗi space</span></code></pre>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Khác biệt giữa " " và ' '</div>
+        Dấu nháy đơn <code>'...'</code> giữ <em>nguyên si</em> mọi ký tự bên trong. Dấu nháy kép <code>"..."</code> vẫn cho phép <strong>biến shell</strong> giãn nở:
+        <pre style="margin-top:8px"><code><span class="prompt">$ </span><span class="cmd">echo</span> "Home: $HOME"
+<span class="output">Home: /Users/you</span>
+
+<span class="prompt">$ </span><span class="cmd">echo</span> 'Home: $HOME'
+<span class="output">Home: $HOME</span>     <span class="comment"># không giãn nở</span></code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Mẹo: Tab auto-complete</div>
+        Đừng gõ tay tên thư mục có space. Gõ vài chữ đầu rồi nhấn <code>Tab</code> — shell sẽ tự thêm dấu <code>\</code> escape cho bạn:
+        <code>cd IT</code> → Tab → <code>cd IT\ Basic/</code>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Bộ 5 lệnh navigation cốt lõi</h2>
+
+      <h3>3.1 <code>pwd</code> — Print Working Directory</h3>
+      <p>In ra đường dẫn tuyệt đối của thư mục bạn đang đứng.</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">pwd</span>
+<span class="output">/Users/you/Developer/IT Basic/CLI</span></code></pre>
+
+      <h3>3.2 <code>ls</code> — List directory contents</h3>
+      <p>Liệt kê file/folder. Các flag thường dùng:</p>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Ý nghĩa</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>-l</code></td><td>Long format (quyền, owner, size, ngày)</td></tr>
+          <tr><td><code>-a</code></td><td>Hiện cả file ẩn (bắt đầu bằng <code>.</code>)</td></tr>
+          <tr><td><code>-h</code></td><td>Human-readable size (KB, MB...)</td></tr>
+          <tr><td><code>-t</code></td><td>Sắp xếp theo thời gian sửa</td></tr>
+          <tr><td><code>-r</code></td><td>Đảo ngược thứ tự</td></tr>
+          <tr><td><code>-S</code></td><td>Sắp xếp theo size</td></tr>
+        </tbody>
+      </table>
+      <p>Có thể kết hợp các flag:</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">ls</span> <span class="flag">-lah</span>     <span class="comment"># long + all + human-readable</span>
+<span class="prompt">$ </span><span class="cmd">ls</span> <span class="flag">-lt</span>      <span class="comment"># long, mới nhất lên đầu</span>
+<span class="prompt">$ </span><span class="cmd">ls</span> ~/Documents <span class="comment"># list 1 thư mục cụ thể</span></code></pre>
+
+      <h3>3.3 <code>cd</code> — Change Directory</h3>
+      <pre><code><span class="prompt">$ </span><span class="cmd">cd</span> /Users/you/Developer   <span class="comment"># tuyệt đối</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> Developer              <span class="comment"># tương đối</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> ..                     <span class="comment"># lùi 1 cấp</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> ../..                  <span class="comment"># lùi 2 cấp</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> ~                      <span class="comment"># về home</span>
+<span class="prompt">$ </span><span class="cmd">cd</span>                        <span class="comment"># cũng về home</span>
+<span class="prompt">$ </span><span class="cmd">cd</span> -                      <span class="comment"># quay lại thư mục vừa rời</span></code></pre>
+
+      <h3>3.4 <code>clear</code> — Xóa màn hình</h3>
+      <p>Cho terminal sạch sẽ. Phím tắt: <code>Ctrl + L</code> (giữ nguyên scroll history) hoặc <code>Cmd + K</code> trên macOS Terminal (xóa hẳn).</p>
+
+      <h3>3.5 <code>man</code> — Manual</h3>
+      <p>Đọc tài liệu chi tiết của 1 lệnh. Cực kỳ quan trọng.</p>
+      <pre><code><span class="prompt">$ </span><span class="cmd">man</span> ls
+<span class="comment"># Phím:
+#   Space / f  — trang sau
+#   b          — trang trước
+#   /keyword   — tìm trong man
+#   n / N      — kết quả tiếp / trước
+#   q          — thoát</span></code></pre>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 Mẹo</div>
+        <code>cmd --help</code> hoặc <code>cmd -h</code> thường nhanh hơn <code>man</code> khi bạn chỉ muốn xem lướt các option.
+      </div>
+    </section>
+
+    <section>
+      <h2>4. Phím tắt terminal — phải nhớ</h2>
+      <table>
+        <thead>
+          <tr><th>Phím</th><th>Hành động</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Tab</code></td><td>Auto-complete tên file/lệnh — <strong>dùng liên tục!</strong></td></tr>
+          <tr><td><code>↑ / ↓</code></td><td>Lịch sử lệnh đã gõ</td></tr>
+          <tr><td><code>Ctrl + C</code></td><td>Hủy lệnh đang chạy</td></tr>
+          <tr><td><code>Ctrl + D</code></td><td>EOF / thoát shell</td></tr>
+          <tr><td><code>Ctrl + L</code></td><td>Clear màn hình</td></tr>
+          <tr><td><code>Ctrl + A</code></td><td>Về đầu dòng</td></tr>
+          <tr><td><code>Ctrl + E</code></td><td>Về cuối dòng</td></tr>
+          <tr><td><code>Ctrl + U</code></td><td>Xóa từ con trỏ về đầu dòng</td></tr>
+          <tr><td><code>Ctrl + K</code></td><td>Xóa từ con trỏ đến cuối dòng</td></tr>
+          <tr><td><code>Ctrl + W</code></td><td>Xóa 1 từ về phía trước</td></tr>
+          <tr><td><code>Ctrl + R</code></td><td>Tìm lệnh trong lịch sử (rất mạnh!)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <div class="callout-title">⚠️ Cảnh báo</div>
+        Đừng nhầm <code>Ctrl + Z</code> (suspend/dừng tạm) với <code>Ctrl + C</code> (hủy hẳn).
+        Lệnh bị suspend vẫn còn sống — gõ <code>fg</code> để gọi lại hoặc <code>kill %1</code> để giết.
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Thử ngay trong terminal giả lập</h2>
+      <p>Gõ thử các lệnh đã học. Bắt đầu bằng <code>pwd</code>, <code>ls</code>, rồi <code>cd Developer</code>...</p>
+
+      <div class="terminal-sim">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">you@mac — chuong1 practice</span>
+        </div>
+        <div class="terminal-body"></div>
+        <div class="terminal-input-line">
+          <span class="prompt">you@mac ~ $</span>
+          <input type="text" class="terminal-input" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>6. Bài tập tuần 1</h2>
+      <p>Mở Terminal thật trên máy, làm tuần tự:</p>
+      <ol>
+        <li>Gõ <code>pwd</code> — chép kết quả ra một file note.</li>
+        <li>Đi tới home bằng <code>cd ~</code>, sau đó <code>ls -la</code>. Bạn thấy bao nhiêu file ẩn (bắt đầu bằng <code>.</code>)?</li>
+        <li>Đi tới <code>~/Developer/IT Basic/CLI</code>. Liệt kê dạng long, sắp xếp theo thời gian sửa, mới nhất lên đầu.</li>
+        <li>Lùi 2 cấp về <code>~/Developer</code> bằng 1 lệnh duy nhất.</li>
+        <li>Dùng <code>cd -</code> quay lại nơi vừa rời.</li>
+        <li>Mở <code>man ls</code>, tìm flag <code>-S</code> (gõ <code>/-S</code>), đọc xong nhấn <code>q</code>. Flag đó làm gì?</li>
+        <li>Gõ <code>ls</code> rồi nhấn <code>Tab</code> 2 lần — terminal gợi ý gì?</li>
+        <li>Gõ <code>Ctrl + R</code>, gõ <code>cd</code> — bạn thấy lịch sử các lần <code>cd</code> trước. Nhấn <code>Esc</code> hoặc <code>Ctrl + G</code> để thoát.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>7. Quiz — Kiểm tra kiến thức</h2>
+      <div class="quiz">
+        <div class="quiz-score"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Tổng kết</h2>
+      <p>Sau tuần 1, bạn cần phản xạ tự động:</p>
+      <ul>
+        <li>✅ Phân biệt path tuyệt đối / tương đối, hiểu <code>~</code>, <code>.</code>, <code>..</code></li>
+        <li>✅ Dùng thành thạo <code>pwd</code>, <code>ls -lah</code>, <code>cd</code> với mọi biến thể</li>
+        <li>✅ Đọc <code>man</code>, biết tìm flag bằng <code>/</code></li>
+        <li>✅ Nhớ ít nhất 6 phím tắt: Tab, ↑↓, Ctrl+C/L/A/E/R</li>
+      </ul>
+      <p class="text-dim">Tuần 2 chúng ta sẽ học cách <em>tạo, copy, di chuyển, xóa</em> file và quản lý quyền truy cập.</p>
+    </section>
+
+    <div class="lesson-nav">
+      <a href="../index.html">
+        <span class="label">Quay lại</span>
+        ← Trang chủ
+      </a>
+      <a href="chuong2.html">
+        <span class="label">Tiếp theo</span>
+        Chương 02: File ops →
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    Built for learning · CLI Mastery · Chương 01
+  </footer>
+
+  <script>
+    window.QUIZ_DATA = [
+      {
+        q: "Lệnh nào in ra thư mục hiện tại?",
+        options: ["pwd", "cwd", "ls .", "where"],
+        correct: 0,
+        explain: "pwd = Print Working Directory."
+      },
+      {
+        q: "~ trong shell tham chiếu tới đâu?",
+        options: [
+          "Thư mục root /",
+          "Home directory của user hiện tại",
+          "Thư mục cha của thư mục hiện tại",
+          "Thư mục /tmp"
+        ],
+        correct: 1,
+        explain: "~ là shortcut cho home, ví dụ /Users/you trên macOS."
+      },
+      {
+        q: "Lệnh nào hiển thị file ẩn ở dạng long format, kèm size dễ đọc?",
+        options: ["ls -h", "ls -la", "ls -lah", "ls --hidden"],
+        correct: 2,
+        explain: "Kết hợp -l (long), -a (all kể cả ẩn), -h (human-readable)."
+      },
+      {
+        q: "Đang ở /Users/you/Developer, gõ cd .. thì sẽ tới đâu?",
+        options: ["/Users/you", "/Users", "/", "/Users/you/Developer/.."],
+        correct: 0,
+        explain: ".. = thư mục cha, nên lùi 1 cấp."
+      },
+      {
+        q: "Phím tắt nào tìm kiếm trong lịch sử lệnh đã gõ?",
+        options: ["Ctrl + F", "Ctrl + R", "Ctrl + H", "Tab + Tab"],
+        correct: 1,
+        explain: "Ctrl + R = reverse-i-search, một trong những phím tắt mạnh nhất."
+      },
+      {
+        q: "cd - làm gì?",
+        options: [
+          "Báo lỗi",
+          "Về thư mục root /",
+          "Quay lại thư mục vừa rời trước đó",
+          "Về home directory"
+        ],
+        correct: 2,
+        explain: "cd - nhảy ngược lại thư mục trước. Rất tiện khi switch qua-lại 2 chỗ."
+      }
+    ];
+  </script>
+  <script src="../js/copy.js"></script>
+  <script src="../js/terminal.js"></script>
+  <script src="../js/quiz.js"></script>
+</body>
+</html>
