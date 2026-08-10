@@ -1,0 +1,48 @@
+name: Deploy to VPS
+
+# Mỗi lần push lên main -> tự động đồng bộ site lên VPS.
+# workflow_dispatch cho phép bấm chạy tay từ tab Actions trên GitHub.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Nếu push liên tiếp, huỷ lần deploy cũ đang chạy, chỉ giữ lần mới nhất.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Rsync to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Ghim host key của VPS -> chống tấn công man-in-the-middle
+          ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT || 22 }}" \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.gitignore' \
+            --exclude '.DS_Store' \
+            --exclude '._*' \
+            --exclude '.sixth' \
+            --exclude 'deploy' \
+            --exclude 'tools' \
+            --exclude 'node_modules' \
+            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/it-basic/"
+
+      - name: Done
+        run: echo "✅ Đã deploy lên https://${{ secrets.SITE_DOMAIN }}"
