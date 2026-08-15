@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2 — Biến, kiểu dữ liệu &amp; toán tử · Java Sub-pillar</title>
+  <meta name="description" content="8 kiểu nguyên thủy, kiểu tham chiếu, stack vs heap, wrapper và autoboxing, bẫy Integer cache, String pool và tính bất biến, StringBuilder, text block, BigDecimal, ép kiểu, var, final, bảng toán tử đầy đủ." />
+  <meta name="theme-color" content="#e76f00" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bitter:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-java">Jv</span>
+        Java · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Java</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Java</a><span class="sep">/</span>
+        <span>Chương 2</span>
+      </div>
+      <div class="chapter-num">Chương 02 · Biến &amp; kiểu dữ liệu</div>
+      <h1 style="font-size: 2.6rem; margin: 0 0 12px; color: var(--ink);">
+        Biến, kiểu dữ liệu và toán tử
+      </h1>
+      <p class="lead">
+        Java chia thế giới làm hai nửa dứt khoát: <strong>kiểu nguyên thủy</strong> (giá trị nằm thẳng trong biến)
+        và <strong>kiểu tham chiếu</strong> (biến chỉ giữ địa chỉ tới object trên heap). Ranh giới này giải thích
+        gần như mọi hành vi khó hiểu của Java — vì sao <code>==</code> lúc đúng lúc sai, vì sao
+        <code>Integer</code> có bộ nhớ đệm, vì sao <code>String</code> bất biến, vì sao nối chuỗi trong vòng lặp lại
+        chậm. Hiểu chương này là hiểu nền móng của mọi chương sau.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1600 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Thuộc lòng <strong>8 kiểu nguyên thủy</strong>: kích thước, phạm vi, giá trị mặc định.</li>
+            <li>Phân biệt rạch ròi <strong>nguyên thủy</strong> và <strong>tham chiếu</strong>; hiểu stack và heap.</li>
+            <li>Nắm <strong>tràn số</strong>, <strong>chia số nguyên</strong>, và sai số <strong>IEEE 754</strong> — ba nguồn bug kinh điển.</li>
+            <li>Dùng <code>BigDecimal</code> khi tính tiền, và biết vì sao <code>double</code> không được phép.</li>
+            <li>Hiểu <strong>wrapper class</strong>, <strong>autoboxing</strong>, và bẫy <code>==</code> với bộ nhớ đệm <code>Integer</code>.</li>
+            <li>Hiểu <strong>String bất biến</strong>, <strong>String pool</strong>, và khi nào phải dùng <code>StringBuilder</code>.</li>
+            <li>Dùng <strong>text block</strong> (Java 15+) cho chuỗi nhiều dòng.</li>
+            <li>Nắm <strong>ép kiểu</strong> mở rộng (tự động) và thu hẹp (bắt buộc khai báo).</li>
+            <li>Dùng <code>var</code> (Java 10+) đúng chỗ, và <code>final</code> cho hằng số.</li>
+            <li>Tra được <strong>bảng toán tử đầy đủ</strong> và thứ tự ưu tiên.</li>
+          </ul>
+        </div>
+
+        <h2 id="khai-bao">1. Khai báo biến — kiểu đứng trước tên</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>KhaiBao.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Cú pháp: KIỂU tên = giá_trị;</span>
+<span class="tok-kw">int</span> tuoi = <span class="tok-num">22</span>;
+<span class="tok-cls">String</span> ten = <span class="tok-str">"Việt Anh"</span>;
+<span class="tok-kw">double</span> diem = <span class="tok-num">8.75</span>;
+<span class="tok-kw">boolean</span> dangHoc = <span class="tok-kw">true</span>;
+
+<span class="tok-com">// Khai báo trước, gán sau</span>
+<span class="tok-kw">int</span> soLuong;
+soLuong = <span class="tok-num">10</span>;
+
+<span class="tok-com">// Nhiều biến cùng kiểu trên một dòng — hợp lệ nhưng nên tránh</span>
+<span class="tok-kw">int</span> a = <span class="tok-num">1</span>, b = <span class="tok-num">2</span>, c = <span class="tok-num">3</span>;
+
+<span class="tok-com">// ❌ Không thể đổi kiểu — Java là ngôn ngữ định kiểu TĨNH và MẠNH</span>
+tuoi = <span class="tok-str">"hai mươi hai"</span>;
+<span class="tok-com">// error: incompatible types: String cannot be converted to int</span>
+
+<span class="tok-com">// ❌ Không thể dùng biến cục bộ chưa gán</span>
+<span class="tok-kw">int</span> x;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(x);
+<span class="tok-com">// error: variable x might not have been initialized</span></code></pre>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔁 Đối chiếu với Python &amp; JavaScript</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Java</th><th>Python</th><th>JavaScript</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Khai báo</td><td><code>int x = 5;</code></td><td><code>x = 5</code></td><td><code>let x = 5;</code></td></tr>
+                <tr><td>Kiểm tra kiểu</td><td>Lúc <strong>biên dịch</strong></td><td>Lúc chạy</td><td>Lúc chạy</td></tr>
+                <tr><td>Đổi kiểu biến</td><td>❌ Không được</td><td>✅ Được</td><td>✅ Được</td></tr>
+                <tr><td>Dùng biến chưa gán</td><td>❌ Lỗi biên dịch</td><td>❌ <code>NameError</code> lúc chạy</td><td>⚠️ <code>undefined</code> — không báo gì!</td></tr>
+                <tr><td>Kết thúc câu lệnh</td><td>Dấu <code>;</code> <strong>bắt buộc</strong></td><td>Xuống dòng</td><td><code>;</code> tuỳ chọn</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Sự khắt khe của Java trả giá bằng số ký tự phải gõ, nhưng đổi lại rất nhiều lỗi bị bắt
+            <em>trước khi</em> chương trình chạy. Một dự án Java 100.000 dòng gần như không bao giờ gặp lỗi kiểu
+            <code>TypeError</code> lúc chạy — thứ mà dự án Python cùng cỡ gặp hằng ngày.
+          </p>
+        </div>
+
+        <h3 id="quy-uoc-ten">1.1. Quy ước đặt tên</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Loại</th><th>Quy ước</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Biến, tham số, phương thức</td><td><code>camelCase</code></td><td><code>soLuong</code>, <code>tinhTongTien()</code></td></tr>
+              <tr><td>Class, interface, enum, record</td><td><code>PascalCase</code></td><td><code>SinhVien</code>, <code>DonHang</code></td></tr>
+              <tr><td>Hằng số (<code>static final</code>)</td><td><code>UPPER_SNAKE_CASE</code></td><td><code>MAX_SIZE</code>, <code>THUE_SUAT</code></td></tr>
+              <tr><td>Package</td><td>toàn <code>chữ.thường</code></td><td><code>com.vidu.quanly</code></td></tr>
+              <tr><td>Biến boolean</td><td>Bắt đầu bằng <code>is</code>/<code>has</code>/<code>can</code></td><td><code>isActive</code>, <code>hasPermission</code></td></tr>
+              <tr><td>Biến đếm trong vòng lặp</td><td><code>i</code>, <code>j</code>, <code>k</code></td><td>Ngoại lệ được chấp nhận cho tên một chữ</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="nguyen-thuy">2. Tám kiểu nguyên thủy</h2>
+
+        <p>
+          Java có đúng <strong>8</strong> kiểu nguyên thủy — con số này cố định, không thêm bớt được. Chúng
+          <em>không phải object</em>: giá trị nằm trực tiếp trong biến, không có phương thức, không thể là
+          <code>null</code>.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Kiểu</th><th>Kích thước</th><th>Phạm vi</th><th>Mặc định</th><th>Wrapper</th><th>Dùng khi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>byte</code></td><td>8 bit</td><td>−128 … 127</td><td><code>0</code></td><td><code>Byte</code></td><td>Xử lý dữ liệu nhị phân, mảng byte</td></tr>
+              <tr><td><code>short</code></td><td>16 bit</td><td>−32.768 … 32.767</td><td><code>0</code></td><td><code>Short</code></td><td>Hiếm dùng</td></tr>
+              <tr><td><code>int</code> ⭐</td><td>32 bit</td><td>≈ −2,1 tỷ … 2,1 tỷ</td><td><code>0</code></td><td><code>Integer</code></td><td><strong>Mặc định cho số nguyên</strong></td></tr>
+              <tr><td><code>long</code></td><td>64 bit</td><td>≈ ±9,2 × 10¹⁸</td><td><code>0L</code></td><td><code>Long</code></td><td>Timestamp, ID, tiền (đơn vị nhỏ nhất)</td></tr>
+              <tr><td><code>float</code></td><td>32 bit</td><td>≈ ±3,4 × 10³⁸ (7 chữ số)</td><td><code>0.0f</code></td><td><code>Float</code></td><td>Hiếm dùng — độ chính xác thấp</td></tr>
+              <tr><td><code>double</code> ⭐</td><td>64 bit</td><td>≈ ±1,8 × 10³⁰⁸ (15-16 chữ số)</td><td><code>0.0d</code></td><td><code>Double</code></td><td><strong>Mặc định cho số thực</strong></td></tr>
+              <tr><td><code>char</code></td><td>16 bit</td><td>0 … 65.535 (một đơn vị mã UTF-16)</td><td><code>' '</code></td><td><code>Character</code></td><td>Một ký tự</td></tr>
+              <tr><td><code>boolean</code></td><td>không xác định*</td><td><code>true</code> / <code>false</code></td><td><code>false</code></td><td><code>Boolean</code></td><td>Điều kiện logic</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p style="font-size: 0.92rem; color: var(--text-muted);">
+          * Đặc tả JVM không quy định kích thước <code>boolean</code>; trên thực tế nó thường chiếm cả một byte
+          (hoặc một int) trong bộ nhớ vì lý do căn chỉnh.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>NguyenThuy.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Hậu tố BẮT BUỘC cho long và float</span>
+<span class="tok-kw">long</span> danSo = <span class="tok-num">8_000_000_000L</span>;   <span class="tok-com">// L bắt buộc — vượt phạm vi int</span>
+<span class="tok-kw">float</span> pi = <span class="tok-num">3.14f</span>;               <span class="tok-com">// f bắt buộc — mặc định số thực là double</span>
+<span class="tok-kw">double</span> e = <span class="tok-num">2.718</span>;              <span class="tok-com">// d tuỳ chọn</span>
+
+<span class="tok-com">// Dấu gạch dưới làm số dễ đọc (Java 7+) — trình biên dịch bỏ qua</span>
+<span class="tok-kw">int</span> mot_trieu = <span class="tok-num">1_000_000</span>;
+<span class="tok-kw">long</span> theTinDung = <span class="tok-num">1234_5678_9012_3456L</span>;
+
+<span class="tok-com">// Các hệ cơ số</span>
+<span class="tok-kw">int</span> thapPhan  = <span class="tok-num">255</span>;
+<span class="tok-kw">int</span> nhiPhan   = <span class="tok-num">0b1111_1111</span>;   <span class="tok-com">// 255 (Java 7+)</span>
+<span class="tok-kw">int</span> batPhan   = <span class="tok-num">0377</span>;          <span class="tok-com">// 255 — ⚠️ số 0 đứng đầu = hệ 8!</span>
+<span class="tok-kw">int</span> thapLucPhan = <span class="tok-num">0xFF</span>;        <span class="tok-com">// 255</span>
+
+<span class="tok-com">// Tra giới hạn — không cần học thuộc con số</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.MAX_VALUE);   <span class="tok-com">// 2147483647</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.MIN_VALUE);   <span class="tok-com">// -2147483648</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Long</span>.MAX_VALUE);      <span class="tok-com">// 9223372036854775807</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Double</span>.MAX_VALUE);    <span class="tok-com">// 1.7976931348623157E308</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Số 0 đứng đầu nghĩa là hệ bát phân</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>BatPhan.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">int</span> gio = <span class="tok-num">08</span>;    <span class="tok-com">// ❌ error: integer number too large</span>
+                  <span class="tok-com">//    vì 0 đầu = hệ 8, mà hệ 8 không có chữ số 8!</span>
+<span class="tok-kw">int</span> phut = <span class="tok-num">030</span>;  <span class="tok-com">// ⚠️ biên dịch OK nhưng giá trị là 24, không phải 30</span></code></pre>
+          </div>
+          <p>
+            Bẫy này hay xuất hiện khi định dạng thời gian hoặc mã số có số 0 ở đầu. Nếu cần giữ số 0 đầu để hiển
+            thị, hãy dùng <code>String</code> và <code>String.format("%02d", n)</code>.
+          </p>
+        </div>
+
+        <h3 id="tran-so">2.1. Tràn số — Java <em>không</em> báo lỗi</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>TranSo.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">int</span> max = <span class="tok-cls">Integer</span>.MAX_VALUE;      <span class="tok-com">// 2147483647</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(max + <span class="tok-num">1</span>);        <span class="tok-com">// -2147483648  ⚠️ quay vòng, KHÔNG báo lỗi</span>
+
+<span class="tok-com">// Bug kinh điển: nhân hai int lớn rồi mới gán vào long</span>
+<span class="tok-kw">long</span> mili = <span class="tok-num">1000</span> * <span class="tok-num">60</span> * <span class="tok-num">60</span> * <span class="tok-num">24</span> * <span class="tok-num">365</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(mili);            <span class="tok-com">// 1471228928  ❌ SAI!</span>
+<span class="tok-com">// Phép nhân thực hiện ở kiểu int rồi TRÀN, sau đó mới ép sang long</span>
+
+<span class="tok-com">// ✅ Sửa: ép một toán hạng sang long NGAY TỪ ĐẦU</span>
+<span class="tok-kw">long</span> dung = <span class="tok-num">1000L</span> * <span class="tok-num">60</span> * <span class="tok-num">60</span> * <span class="tok-num">24</span> * <span class="tok-num">365</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(dung);            <span class="tok-com">// 31536000000  ✅</span>
+
+<span class="tok-com">// ✅ Muốn được BÁO LỖI khi tràn: dùng Math.*Exact (Java 8+)</span>
+<span class="tok-kw">try</span> {
+    <span class="tok-kw">int</span> r = <span class="tok-cls">Math</span>.<span class="tok-fn">addExact</span>(max, <span class="tok-num">1</span>);
+} <span class="tok-kw">catch</span> (<span class="tok-cls">ArithmeticException</span> e) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(e.<span class="tok-fn">getMessage</span>());  <span class="tok-com">// integer overflow</span>
+}
+<span class="tok-com">// Còn có: subtractExact, multiplyExact, negateExact, toIntExact</span></code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Vì sao Java không báo lỗi khi tràn số</h4>
+          <p>
+            Vì kiểm tra tràn ở <em>mọi</em> phép tính sẽ làm chậm chương trình đáng kể, và Java được thiết kế để
+            phép toán số nguyên ánh xạ trực tiếp xuống lệnh CPU. Cách quay vòng (wrap-around) tuân theo chuẩn bù hai
+            và có hành vi <em>xác định</em> — không phải "hành vi không xác định" như C.
+          </p>
+          <p style="margin-top: 8px;">
+            Bài học thực tế: khi làm việc với thời gian, tiền, kích thước tệp, hoặc bất cứ thứ gì có thể vượt
+            2,1 tỷ, hãy dùng <code>long</code> <strong>ngay từ toán hạng đầu tiên</strong>, không phải chỉ ở biến
+            đích. Nơi cần an toàn tuyệt đối thì dùng <code>Math.multiplyExact</code> để lỗi lộ ra ngay thay vì âm
+            thầm cho kết quả sai.
+          </p>
+        </div>
+
+        <h3 id="chia-so-nguyen">2.2. Chia số nguyên cắt phần thập phân</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Chia.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">7</span> / <span class="tok-num">2</span>);        <span class="tok-com">// 3    ⚠️ không phải 3.5</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">7</span> % <span class="tok-num">2</span>);        <span class="tok-com">// 1</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">7.0</span> / <span class="tok-num">2</span>);      <span class="tok-com">// 3.5  — một toán hạng là double là đủ</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>((<span class="tok-kw">double</span>) <span class="tok-num">7</span> / <span class="tok-num">2</span>); <span class="tok-com">// 3.5  — ép kiểu trước khi chia</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>((<span class="tok-kw">double</span>) (<span class="tok-num">7</span> / <span class="tok-num">2</span>)); <span class="tok-com">// 3.0  ❌ ép SAU khi đã cắt — quá muộn</span>
+
+<span class="tok-com">// Chia số âm: CẮT VỀ 0, không phải làm tròn xuống</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(-<span class="tok-num">7</span> / <span class="tok-num">2</span>);       <span class="tok-com">// -3   (Python cho -4!)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(-<span class="tok-num">7</span> % <span class="tok-num">2</span>);       <span class="tok-com">// -1   (Python cho 1!)</span>
+
+<span class="tok-com">// Muốn hành vi làm tròn xuống như Python:</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Math</span>.<span class="tok-fn">floorDiv</span>(-<span class="tok-num">7</span>, <span class="tok-num">2</span>));  <span class="tok-com">// -4</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Math</span>.<span class="tok-fn">floorMod</span>(-<span class="tok-num">7</span>, <span class="tok-num">2</span>));  <span class="tok-com">//  1</span>
+
+<span class="tok-com">// Chia cho 0: hai hành vi HOÀN TOÀN khác nhau</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">1</span> / <span class="tok-num">0</span>);        <span class="tok-com">// ArithmeticException: / by zero</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">1.0</span> / <span class="tok-num">0</span>);      <span class="tok-com">// Infinity  — không ném lỗi!</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">0.0</span> / <span class="tok-num">0</span>);      <span class="tok-com">// NaN</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ <code>NaN</code> không bằng chính nó</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>NaN.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">double</span> nan = <span class="tok-num">0.0</span> / <span class="tok-num">0.0</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(nan == nan);           <span class="tok-com">// false  ⚠️</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Double</span>.<span class="tok-fn">isNaN</span>(nan));   <span class="tok-com">// true   ✅ cách kiểm tra đúng</span></code></pre>
+          </div>
+          <p>
+            Đây là quy định của chuẩn IEEE 754, áp dụng cho mọi ngôn ngữ. Không bao giờ dùng <code>==</code> để
+            kiểm tra <code>NaN</code>. Tương tự, kiểm tra vô cực bằng <code>Double.isInfinite(x)</code>.
+          </p>
+        </div>
+
+        <h3 id="ieee754">2.3. <code>double</code> không chính xác — và tiền thì không được sai</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>SaiSo.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">0.1</span> + <span class="tok-num">0.2</span>);            <span class="tok-com">// 0.30000000000000004</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">0.1</span> + <span class="tok-num">0.2</span> == <span class="tok-num">0.3</span>);      <span class="tok-com">// false  ⚠️</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">1.03</span> - <span class="tok-num">0.42</span>);           <span class="tok-com">// 0.6100000000000001</span>
+
+<span class="tok-com">// Vì sao? 0.1 trong hệ nhị phân là số vô hạn tuần hoàn,</span>
+<span class="tok-com">// giống như 1/3 = 0.333... trong hệ thập phân. 64 bit không đủ chứa.</span>
+
+<span class="tok-com">// So sánh double đúng cách: dùng ngưỡng sai số</span>
+<span class="tok-kw">double</span> a = <span class="tok-num">0.1</span> + <span class="tok-num">0.2</span>, b = <span class="tok-num">0.3</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Math</span>.<span class="tok-fn">abs</span>(a - b) &lt; <span class="tok-num">1e-9</span>);  <span class="tok-com">// true ✅</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Tien.java — hai cách đúng để xử lý tiền</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> java.math.BigDecimal;
+<span class="tok-kw">import</span> java.math.RoundingMode;
+
+<span class="tok-com">// ❌ TUYỆT ĐỐI KHÔNG dùng double cho tiền</span>
+<span class="tok-kw">double</span> gia1 = <span class="tok-num">0.1</span>, gia2 = <span class="tok-num">0.2</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(gia1 + gia2);         <span class="tok-com">// 0.30000000000000004 đ ???</span>
+
+<span class="tok-com">// ✅ CÁCH 1: BigDecimal — chính xác tuyệt đối, dùng cho tài chính</span>
+<span class="tok-cls">BigDecimal</span> x = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"0.1"</span>);   <span class="tok-com">// ⚠️ PHẢI truyền String!</span>
+<span class="tok-cls">BigDecimal</span> y = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"0.2"</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(x.<span class="tok-fn">add</span>(y));            <span class="tok-com">// 0.3  ✅ chính xác</span>
+
+<span class="tok-com">// ⚠️ Truyền double vào constructor là sai — nó nhận cả sai số</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-num">0.1</span>));
+<span class="tok-com">// 0.1000000000000000055511151231257827021181583404541015625</span>
+
+<span class="tok-com">// BigDecimal dùng METHOD, không dùng toán tử</span>
+<span class="tok-cls">BigDecimal</span> gia = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"1500000"</span>);
+<span class="tok-cls">BigDecimal</span> sl  = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"3"</span>);
+<span class="tok-cls">BigDecimal</span> vat = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"0.08"</span>);
+
+<span class="tok-cls">BigDecimal</span> tong = gia.<span class="tok-fn">multiply</span>(sl);
+<span class="tok-cls">BigDecimal</span> thue = tong.<span class="tok-fn">multiply</span>(vat).<span class="tok-fn">setScale</span>(<span class="tok-num">0</span>, <span class="tok-cls">RoundingMode</span>.HALF_UP);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(tong.<span class="tok-fn">add</span>(thue));    <span class="tok-com">// 4860000</span>
+
+<span class="tok-com">// ⚠️ So sánh BigDecimal: dùng compareTo, KHÔNG dùng equals</span>
+<span class="tok-cls">BigDecimal</span> m = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"1.0"</span>);
+<span class="tok-cls">BigDecimal</span> n = <span class="tok-kw">new</span> <span class="tok-cls">BigDecimal</span>(<span class="tok-str">"1.00"</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m.<span class="tok-fn">equals</span>(n));         <span class="tok-com">// false — khác số chữ số thập phân!</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m.<span class="tok-fn">compareTo</span>(n) == <span class="tok-num">0</span>); <span class="tok-com">// true  ✅</span>
+
+<span class="tok-com">// ✅ CÁCH 2: long tính bằng đơn vị nhỏ nhất (đồng, xu)</span>
+<span class="tok-kw">long</span> giaDong = <span class="tok-num">1_500_000L</span>;      <span class="tok-com">// nhanh hơn BigDecimal nhiều lần</span>
+<span class="tok-kw">long</span> tongDong = giaDong * <span class="tok-num">3</span>;      <span class="tok-com">// hợp với VND vì không có đơn vị nhỏ hơn đồng</span></code></pre>
+        </div>
+
+        <div class="java-rule">
+          <strong>Quy tắc không có ngoại lệ:</strong> tiền tệ không bao giờ lưu bằng <code>float</code> hay
+          <code>double</code>. Dùng <code>BigDecimal</code> (khi cần chia, tính lãi, nhiều loại tiền) hoặc
+          <code>long</code> theo đơn vị nhỏ nhất (khi chỉ cộng trừ nhân). Với VND, <code>long</code> thường là lựa
+          chọn tốt vì không có đơn vị nhỏ hơn đồng.
+        </div>
+
+        <h2 id="nguyen-thuy-vs-tham-chieu">3. Nguyên thủy vs tham chiếu — stack và heap</h2>
+
+        <p>
+          Đây là khái niệm quan trọng nhất chương. Mọi biến trong Java thuộc đúng một trong hai loại, và cách chúng
+          lưu trữ hoàn toàn khác nhau.
+        </p>
+
+        <div class="jvm-flow">
+          <div class="stages" style="grid-template-columns: 1fr 1fr;">
+            <div class="stage">
+              <div class="stage-title">Stack — nhanh, tự dọn</div>
+              <div class="stage-content" style="text-align:left; line-height:1.9">
+                <code>int tuoi</code> → <code>22</code><br/>
+                <code>double d</code> → <code>8.75</code><br/>
+                <code>boolean b</code> → <code>true</code><br/>
+                <span style="color:var(--text-muted)">giá trị nằm THẲNG trong biến</span>
+              </div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">Heap — lớn, do GC dọn</div>
+              <div class="stage-content" style="text-align:left; line-height:1.9">
+                <code>String s</code> → <code>0x7f3a</code> ─┐<br/>
+                <code>int[] a</code> → <code>0x7f8c</code> ─┼→ object<br/>
+                <code>SinhVien sv</code> → <code>null</code> │&nbsp;&nbsp; trên heap<br/>
+                <span style="color:var(--text-muted)">biến chỉ giữ ĐỊA CHỈ</span>
+              </div>
+            </div>
+          </div>
+          <div class="caption">
+            Biến nguyên thủy chứa <strong>giá trị</strong>. Biến tham chiếu chứa <strong>địa chỉ</strong> của object
+            nằm trên heap — hoặc <code>null</code> nếu chưa trỏ vào đâu.
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>Kiểu nguyên thủy</th><th>Kiểu tham chiếu</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ví dụ</td><td><code>int</code>, <code>double</code>, <code>boolean</code>, <code>char</code>…</td><td><code>String</code>, mảng, mọi class, <code>Integer</code>, enum</td></tr>
+              <tr><td>Biến chứa gì</td><td>Chính giá trị</td><td>Địa chỉ tới object</td></tr>
+              <tr><td>Nằm ở đâu</td><td>Stack (nếu là biến cục bộ)</td><td>Object nằm trên heap</td></tr>
+              <tr><td>Nhận <code>null</code></td><td>❌ Không</td><td>✅ Có</td></tr>
+              <tr><td>Có phương thức</td><td>❌ Không</td><td>✅ Có</td></tr>
+              <tr><td>Giá trị mặc định (trường)</td><td><code>0</code>, <code>false</code>, <code>' '</code></td><td><code>null</code></td></tr>
+              <tr><td>So sánh bằng <code>==</code></td><td>So <strong>giá trị</strong> ✅</td><td>So <strong>địa chỉ</strong> ⚠️</td></tr>
+              <tr><td>So sánh đúng cách</td><td><code>==</code></td><td><code>.equals()</code></td></tr>
+              <tr><td>Bộ nhớ</td><td>Cố định, nhỏ</td><td>Object + con trỏ (thêm chi phí)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ThamChieu.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// --- Nguyên thủy: sao chép GIÁ TRỊ ---</span>
+<span class="tok-kw">int</span> a = <span class="tok-num">10</span>;
+<span class="tok-kw">int</span> b = a;      <span class="tok-com">// b nhận bản sao của 10</span>
+b = <span class="tok-num">99</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a);   <span class="tok-com">// 10  — a không đổi</span>
+
+<span class="tok-com">// --- Tham chiếu: sao chép ĐỊA CHỈ ---</span>
+<span class="tok-kw">int</span>[] x = {<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>};
+<span class="tok-kw">int</span>[] y = x;   <span class="tok-com">// y trỏ vào CÙNG mảng, không tạo mảng mới</span>
+y[<span class="tok-num">0</span>] = <span class="tok-num">99</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(x[<span class="tok-num">0</span>]);  <span class="tok-com">// 99  ⚠️ x cũng thấy thay đổi!</span>
+
+<span class="tok-com">// Muốn bản sao thật:</span>
+<span class="tok-kw">int</span>[] z = x.<span class="tok-fn">clone</span>();
+z[<span class="tok-num">0</span>] = <span class="tok-num">1</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(x[<span class="tok-num">0</span>]);  <span class="tok-com">// 99 — x không bị ảnh hưởng ✅</span></code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Java <em>luôn</em> truyền tham số theo giá trị — kể cả object</h4>
+          <p>
+            Câu này gây tranh cãi nhiều nhất trong giới Java, nhưng nó chính xác. Thứ được sao chép khi gọi phương
+            thức luôn là <em>nội dung của biến</em>. Với kiểu nguyên thủy, nội dung đó là giá trị. Với kiểu tham
+            chiếu, nội dung đó là <strong>địa chỉ</strong> — nên phương thức nhận được một bản sao của địa chỉ, trỏ
+            vào cùng một object.
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>TruyenThamSo.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">static void</span> <span class="tok-fn">suaNoiDung</span>(<span class="tok-kw">int</span>[] mang) {
+    mang[<span class="tok-num">0</span>] = <span class="tok-num">99</span>;          <span class="tok-com">// ✅ sửa object mà địa chỉ trỏ tới → NGOÀI THẤY</span>
+}
+
+<span class="tok-kw">static void</span> <span class="tok-fn">ganLai</span>(<span class="tok-kw">int</span>[] mang) {
+    mang = <span class="tok-kw">new</span> <span class="tok-kw">int</span>[]{<span class="tok-num">9</span>, <span class="tok-num">9</span>, <span class="tok-num">9</span>};  <span class="tok-com">// ❌ chỉ đổi BẢN SAO địa chỉ → ngoài KHÔNG thấy</span>
+}
+
+<span class="tok-kw">int</span>[] m = {<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>};
+<span class="tok-fn">suaNoiDung</span>(m);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m[<span class="tok-num">0</span>]);   <span class="tok-com">// 99</span>
+<span class="tok-fn">ganLai</span>(m);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m[<span class="tok-num">0</span>]);   <span class="tok-com">// 99 — vẫn thế, KHÔNG thành 9</span></code></pre>
+          </div>
+          <p>
+            Nếu Java truyền theo tham chiếu thật (như <code>&amp;</code> của C++), phương thức <code>ganLai</code>
+            sẽ đổi được biến <code>m</code> ở ngoài. Nó không đổi được — bằng chứng cho thấy cái được truyền là
+            <em>bản sao của địa chỉ</em>. Câu nói chính xác nhất là: <strong>"truyền theo giá trị, trong đó giá trị
+            của biến tham chiếu chính là địa chỉ"</strong>.
+          </p>
+        </div>
+
+        <h2 id="wrapper">4. Wrapper class và autoboxing</h2>
+
+        <p>
+          Kiểu nguyên thủy không phải object, nên chúng không dùng được ở những nơi Java yêu cầu object — ví dụ
+          <code>List&lt;int&gt;</code> là bất hợp lệ. Mỗi kiểu nguyên thủy vì thế có một <strong>wrapper
+          class</strong> tương ứng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Wrapper.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> java.util.List;
+<span class="tok-kw">import</span> java.util.ArrayList;
+
+<span class="tok-com">// ❌ Không hợp lệ — generic chỉ nhận kiểu tham chiếu</span>
+<span class="tok-com">// List&lt;int&gt; ds = new ArrayList&lt;&gt;();</span>
+
+<span class="tok-com">// ✅ Dùng wrapper</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">Integer</span>&gt; ds = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;();
+
+<span class="tok-com">// AUTOBOXING — int tự chuyển thành Integer</span>
+ds.<span class="tok-fn">add</span>(<span class="tok-num">42</span>);                 <span class="tok-com">// thực chất: ds.add(Integer.valueOf(42))</span>
+
+<span class="tok-com">// UNBOXING — Integer tự chuyển về int</span>
+<span class="tok-kw">int</span> x = ds.<span class="tok-fn">get</span>(<span class="tok-num">0</span>);          <span class="tok-com">// thực chất: ds.get(0).intValue()</span>
+
+<span class="tok-com">// Wrapper còn mang theo nhiều tiện ích tĩnh</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.<span class="tok-fn">parseInt</span>(<span class="tok-str">"123"</span>));      <span class="tok-com">// 123 (int)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.<span class="tok-fn">valueOf</span>(<span class="tok-str">"123"</span>));      <span class="tok-com">// 123 (Integer)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.<span class="tok-fn">toBinaryString</span>(<span class="tok-num">10</span>));  <span class="tok-com">// 1010</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.<span class="tok-fn">max</span>(<span class="tok-num">3</span>, <span class="tok-num">7</span>));         <span class="tok-com">// 7</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Double</span>.<span class="tok-fn">parseDouble</span>(<span class="tok-str">"3.14"</span>));    <span class="tok-com">// 3.14</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Character</span>.<span class="tok-fn">isDigit</span>(<span class="tok-str">'7'</span>));      <span class="tok-com">// true</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Boolean</span>.<span class="tok-fn">parseBoolean</span>(<span class="tok-str">"true"</span>));  <span class="tok-com">// true</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Bẫy lớn nhất: <code>==</code> với <code>Integer</code></div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>IntegerCache.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">Integer</span> a = <span class="tok-num">127</span>, b = <span class="tok-num">127</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == b);        <span class="tok-com">// true   😀</span>
+
+<span class="tok-cls">Integer</span> c = <span class="tok-num">128</span>, d = <span class="tok-num">128</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(c == d);        <span class="tok-com">// false  😱 CÙNG GIÁ TRỊ mà khác nhau?!</span>
+
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(c.<span class="tok-fn">equals</span>(d));   <span class="tok-com">// true   ✅ luôn dùng equals</span></code></pre>
+          </div>
+          <p>
+            <strong>Nguyên nhân:</strong> <code>Integer.valueOf()</code> giữ sẵn một bộ nhớ đệm các object cho giá
+            trị từ <strong>−128 đến 127</strong> (theo yêu cầu của đặc tả ngôn ngữ, vì khoảng này được dùng cực kỳ
+            nhiều). Trong khoảng đó, hai lần autoboxing cùng giá trị trả về <em>cùng một object</em> → <code>==</code>
+            đúng. Ngoài khoảng đó, mỗi lần tạo một object mới → <code>==</code> so hai địa chỉ khác nhau → sai.
+          </p>
+          <p style="margin-top: 10px;">
+            <strong>Bài học:</strong> với <em>mọi</em> kiểu tham chiếu — kể cả wrapper — luôn dùng
+            <code>.equals()</code>. Dùng <code>==</code> chỉ khi bạn thực sự muốn hỏi "có phải cùng một object
+            không".
+          </p>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Hai bẫy khác của autoboxing</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>AutoboxBay.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ① NullPointerException khi unboxing null</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; diem = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+<span class="tok-kw">int</span> d = diem.<span class="tok-fn">get</span>(<span class="tok-str">"khong-ton-tai"</span>);
+<span class="tok-com">// NullPointerException — get() trả null, unboxing null thì nổ</span>
+<span class="tok-com">// ✅ Sửa: dùng Integer d = ... rồi kiểm tra, hoặc getOrDefault("x", 0)</span>
+
+<span class="tok-com">// ② Hiệu năng: autoboxing trong vòng lặp nóng</span>
+<span class="tok-cls">Long</span> tong = <span class="tok-num">0L</span>;                       <span class="tok-com">// ❌ Long (wrapper) thay vì long</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">long</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">10_000_000L</span>; i++) {
+    tong += i;    <span class="tok-com">// mỗi vòng: unbox → cộng → box → tạo 1 object MỚI trên heap</span>
+}
+<span class="tok-com">// Chậm hơn phiên bản dùng `long tong` khoảng 5-10 lần và tạo 10 triệu rác</span></code></pre>
+          </div>
+        </div>
+
+        <div class="java-rule">
+          <strong>Quy tắc chọn:</strong> dùng <strong>nguyên thủy</strong> làm mặc định (nhanh hơn, không có
+          <code>null</code>, không tạo rác). Chỉ dùng <strong>wrapper</strong> khi bắt buộc: trong generic
+          (<code>List&lt;Integer&gt;</code>), khi cần biểu diễn "chưa có giá trị" bằng <code>null</code>, hoặc khi
+          cần gọi phương thức tiện ích tĩnh.
+        </div>
+
+        <h2 id="string">5. <code>String</code> — bất biến và có pool riêng</h2>
+
+        <p>
+          <code>String</code> không phải kiểu nguyên thủy — nó là một class. Nhưng Java ưu ái nó đặc biệt: có cú
+          pháp chữ viết sẵn (<code>"..."</code>), có toán tử <code>+</code> riêng, và có một vùng bộ nhớ riêng gọi
+          là <strong>String pool</strong>.
+        </p>
+
+        <h3 id="bat-bien">5.1. Bất biến — mọi thao tác đều tạo chuỗi mới</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>BatBien.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">String</span> s = <span class="tok-str">"Xin chào"</span>;
+s.<span class="tok-fn">toUpperCase</span>();                    <span class="tok-com">// ⚠️ trả về chuỗi MỚI, s không đổi</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(s);              <span class="tok-com">// "Xin chào"</span>
+
+s = s.<span class="tok-fn">toUpperCase</span>();                <span class="tok-com">// ✅ phải gán lại</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(s);              <span class="tok-com">// "XIN CHÀO"</span>
+
+<span class="tok-com">// Mọi method của String đều trả về chuỗi mới:</span>
+<span class="tok-cls">String</span> t = <span class="tok-str">"  Java  "</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(t.<span class="tok-fn">trim</span>());              <span class="tok-com">// "Java"</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(t.<span class="tok-fn">strip</span>());             <span class="tok-com">// "Java" (Java 11+, hiểu Unicode)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(t.<span class="tok-fn">replace</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"@"</span>));   <span class="tok-com">// "  J@v@  "</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(t.<span class="tok-fn">isBlank</span>());           <span class="tok-com">// false (Java 11+)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"ab"</span>.<span class="tok-fn">repeat</span>(<span class="tok-num">3</span>));        <span class="tok-com">// "ababab" (Java 11+)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">String</span>.<span class="tok-fn">join</span>(<span class="tok-str">", "</span>, <span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>, <span class="tok-str">"c"</span>));  <span class="tok-com">// "a, b, c"</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"a,b,c"</span>.<span class="tok-fn">split</span>(<span class="tok-str">","</span>).length);         <span class="tok-com">// 3</span></code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Vì sao <code>String</code> được thiết kế bất biến</h4>
+          <ul>
+            <li><strong>An toàn luồng miễn phí</strong> — nhiều luồng đọc chung một <code>String</code> mà không cần khoá.</li>
+            <li><strong>Cho phép pool</strong> — nếu chuỗi sửa được, việc dùng chung object sẽ cực kỳ nguy hiểm.</li>
+            <li><strong>Mã băm được cache</strong> — <code>hashCode()</code> tính một lần rồi lưu lại, khiến <code>String</code> trở thành khoá lý tưởng cho <code>HashMap</code>.</li>
+            <li><strong>Bảo mật</strong> — đường dẫn tệp, URL, tham số kết nối truyền vào thư viện không thể bị sửa ngầm sau khi đã kiểm tra.</li>
+          </ul>
+        </div>
+
+        <h3 id="string-pool">5.2. String pool — vì sao <code>==</code> lúc đúng lúc sai</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>StringPool.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">String</span> a = <span class="tok-str">"Java"</span>;              <span class="tok-com">// vào String pool</span>
+<span class="tok-cls">String</span> b = <span class="tok-str">"Java"</span>;              <span class="tok-com">// tái dùng object trong pool</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == b);       <span class="tok-com">// true   — cùng object</span>
+
+<span class="tok-cls">String</span> c = <span class="tok-kw">new</span> <span class="tok-cls">String</span>(<span class="tok-str">"Java"</span>);  <span class="tok-com">// ép tạo object MỚI ngoài pool</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == c);       <span class="tok-com">// false  — khác object</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a.<span class="tok-fn">equals</span>(c));  <span class="tok-com">// true   ✅ so nội dung</span>
+
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == c.<span class="tok-fn">intern</span>()); <span class="tok-com">// true — intern() đưa vào/lấy từ pool</span>
+
+<span class="tok-com">// Ghép hằng số: trình biên dịch tính sẵn → vào pool</span>
+<span class="tok-cls">String</span> d = <span class="tok-str">"Ja"</span> + <span class="tok-str">"va"</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == d);       <span class="tok-com">// true — javac gộp thành "Java" lúc biên dịch</span>
+
+<span class="tok-com">// Ghép với BIẾN: tính lúc chạy → object mới, không vào pool</span>
+<span class="tok-cls">String</span> phan = <span class="tok-str">"Ja"</span>;
+<span class="tok-cls">String</span> e = phan + <span class="tok-str">"va"</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == e);       <span class="tok-com">// false  ⚠️</span>
+
+<span class="tok-com">// Trừ khi biến là final — lúc đó javac coi nó là hằng</span>
+<span class="tok-kw">final</span> <span class="tok-cls">String</span> phanF = <span class="tok-str">"Ja"</span>;
+<span class="tok-cls">String</span> f = phanF + <span class="tok-str">"va"</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == f);       <span class="tok-com">// true</span></code></pre>
+        </div>
+
+        <div class="java-rule">
+          <strong>Không bao giờ so sánh chuỗi bằng <code>==</code>.</strong> Luôn dùng <code>.equals()</code>, hoặc
+          <code>.equalsIgnoreCase()</code> khi không phân biệt hoa thường. Muốn an toàn với <code>null</code>, dùng
+          <code>Objects.equals(a, b)</code> hoặc đặt hằng số ở vế trái: <code>"Java".equals(x)</code>.
+        </div>
+
+        <h3 id="stringbuilder">5.3. <code>StringBuilder</code> — khi nào bắt buộc dùng</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>NoiChuoi.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ CHẬM — mỗi vòng lặp tạo một String mới, copy toàn bộ nội dung cũ</span>
+<span class="tok-cls">String</span> s = <span class="tok-str">""</span>;
+<span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">100_000</span>; i++) {
+    s += i;       <span class="tok-com">// độ phức tạp O(n²) — với n=100k mất vài giây</span>
+}
+
+<span class="tok-com">// ✅ NHANH — một bộ đệm ký tự, chỉ nới rộng khi đầy</span>
+<span class="tok-cls">StringBuilder</span> sb = <span class="tok-kw">new</span> <span class="tok-cls">StringBuilder</span>();
+<span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">100_000</span>; i++) {
+    sb.<span class="tok-fn">append</span>(i);   <span class="tok-com">// O(n) tổng cộng — mất vài mili giây</span>
+}
+<span class="tok-cls">String</span> ketQua = sb.<span class="tok-fn">toString</span>();
+
+<span class="tok-com">// StringBuilder cho phép nối chuỗi phương thức</span>
+<span class="tok-cls">String</span> bao = <span class="tok-kw">new</span> <span class="tok-cls">StringBuilder</span>()
+        .<span class="tok-fn">append</span>(<span class="tok-str">"Tên: "</span>).<span class="tok-fn">append</span>(<span class="tok-str">"An"</span>)
+        .<span class="tok-fn">append</span>(<span class="tok-str">" | Tuổi: "</span>).<span class="tok-fn">append</span>(<span class="tok-num">22</span>)
+        .<span class="tok-fn">reverse</span>()                 <span class="tok-com">// còn có insert, delete, replace, setCharAt</span>
+        .<span class="tok-fn">toString</span>();</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Khi nào <code>+</code> vẫn ổn</div>
+          <p>
+            Trình biên dịch tự chuyển <code>a + b + c</code> (trên một biểu thức, ngoài vòng lặp) thành lời gọi hiệu
+            quả — từ Java 9 là <code>invokedynamic</code> với <code>StringConcatFactory</code>. Nên
+            <code>String s = "Tên: " + ten + ", tuổi: " + tuoi;</code> hoàn toàn ổn và dễ đọc hơn.
+          </p>
+          <p style="margin-top: 8px;">
+            Vấn đề chỉ xuất hiện khi nối <strong>trong vòng lặp</strong>, vì lúc đó mỗi vòng là một biểu thức riêng
+            → mỗi vòng một bộ đệm mới → chi phí O(n²). Bạn đã tự nhìn thấy điều này ở bài tập bytecode chương 1.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Class</th><th>Sửa được?</th><th>An toàn luồng?</th><th>Dùng khi</th></tr></thead>
+              <tbody>
+                <tr><td><code>String</code></td><td>❌</td><td>✅</td><td>Mặc định</td></tr>
+                <tr><td><code>StringBuilder</code></td><td>✅</td><td>❌</td><td><strong>Nối nhiều lần</strong> — nhanh nhất</td></tr>
+                <tr><td><code>StringBuffer</code></td><td>✅</td><td>✅ (đồng bộ)</td><td>Gần như không bao giờ — di sản Java 1.0</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 id="text-block">5.4. Text block — chuỗi nhiều dòng (Java 15+)</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>TextBlock.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ Cách cũ — khó đọc, dễ sai</span>
+<span class="tok-cls">String</span> jsonCu = <span class="tok-str">"{\n"</span> +
+        <span class="tok-str">"  \"ten\": \"Việt Anh\",\n"</span> +
+        <span class="tok-str">"  \"tuoi\": 22\n"</span> +
+        <span class="tok-str">"}"</span>;
+
+<span class="tok-com">// ✅ Text block — ba dấu nháy kép, Java 15+</span>
+<span class="tok-cls">String</span> json = <span class="tok-str">"""
+        {
+          "ten": "Việt Anh",
+          "tuoi": 22
+        }"""</span>;
+
+<span class="tok-com">// Không cần escape dấu nháy kép. Thụt lề chung tự bị cắt bỏ:</span>
+<span class="tok-com">// Java lấy dòng thụt ÍT NHẤT làm mốc và cắt phần thừa của mọi dòng.</span>
+
+<span class="tok-cls">String</span> sql = <span class="tok-str">"""
+        SELECT id, ho_ten, diem
+        FROM   sinh_vien
+        WHERE  lop = ? AND diem &gt;= ?
+        ORDER  BY diem DESC
+        """</span>;
+
+<span class="tok-com">// Dấu \ ở cuối dòng: nối dòng, không xuống dòng</span>
+<span class="tok-cls">String</span> motDong = <span class="tok-str">"""
+        Đây là một câu \
+        rất dài viết trên nhiều dòng."""</span>;
+<span class="tok-com">// → "Đây là một câu rất dài viết trên nhiều dòng."</span>
+
+<span class="tok-com">// Kết hợp formatted() để chèn giá trị</span>
+<span class="tok-cls">String</span> thu = <span class="tok-str">"""
+        Kính gửi %s,
+        Đơn hàng #%d của bạn đã được xác nhận.
+        """</span>.<span class="tok-fn">formatted</span>(<span class="tok-str">"anh Việt"</span>, <span class="tok-num">1042</span>);</code></pre>
+        </div>
+
+        <h2 id="ep-kieu">6. Ép kiểu — mở rộng và thu hẹp</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>EpKieu.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// MỞ RỘNG (widening) — tự động, không mất dữ liệu</span>
+<span class="tok-com">// byte → short → int → long → float → double</span>
+<span class="tok-kw">int</span> i = <span class="tok-num">100</span>;
+<span class="tok-kw">long</span> l = i;        <span class="tok-com">// tự động</span>
+<span class="tok-kw">double</span> d = l;      <span class="tok-com">// tự động</span>
+
+<span class="tok-com">// THU HẸP (narrowing) — PHẢI khai báo, CÓ THỂ mất dữ liệu</span>
+<span class="tok-kw">double</span> pi = <span class="tok-num">3.99</span>;
+<span class="tok-kw">int</span> nguyen = (<span class="tok-kw">int</span>) pi;         <span class="tok-com">// 3  — CẮT phần thập phân, không làm tròn</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Math</span>.<span class="tok-fn">round</span>(pi)); <span class="tok-com">// 4  — muốn làm tròn thì dùng Math.round</span>
+
+<span class="tok-kw">int</span> lon = <span class="tok-num">300</span>;
+<span class="tok-kw">byte</span> nho = (<span class="tok-kw">byte</span>) lon;         <span class="tok-com">// 44 ⚠️ mất dữ liệu âm thầm (300 % 256 = 44)</span>
+
+<span class="tok-com">// ⚠️ Bẫy: mất chính xác khi long → float/double dù là "mở rộng"</span>
+<span class="tok-kw">long</span> lonNhat = <span class="tok-cls">Long</span>.MAX_VALUE;    <span class="tok-com">// 9223372036854775807</span>
+<span class="tok-kw">float</span> f = lonNhat;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>((<span class="tok-kw">long</span>) f);      <span class="tok-com">// 9223372036854775807 → nhưng float chỉ có 7 chữ số!</span>
+
+<span class="tok-com">// Nâng kiểu tự động trong biểu thức</span>
+<span class="tok-kw">byte</span> b1 = <span class="tok-num">10</span>, b2 = <span class="tok-num">20</span>;
+<span class="tok-com">// byte tong = b1 + b2;    // ❌ error: b1 + b2 cho ra int!</span>
+<span class="tok-kw">byte</span> tong = (<span class="tok-kw">byte</span>) (b1 + b2);   <span class="tok-com">// ✅ phải ép lại</span>
+<span class="tok-com">// Quy tắc: mọi phép toán số học nâng byte/short/char lên int trước khi tính</span>
+
+<span class="tok-com">// char ↔ int</span>
+<span class="tok-kw">char</span> ch = <span class="tok-str">'A'</span>;
+<span class="tok-kw">int</span> ma = ch;                      <span class="tok-com">// 65</span>
+<span class="tok-kw">char</span> ke = (<span class="tok-kw">char</span>) (ch + <span class="tok-num">1</span>);       <span class="tok-com">// 'B'</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">'A'</span> + <span class="tok-num">1</span>);        <span class="tok-com">// 66  ⚠️ in ra SỐ, không phải 'B'</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"A"</span> + <span class="tok-num">1</span>);        <span class="tok-com">// "A1" — String + số thì nối chuỗi</span>
+
+<span class="tok-com">// Chuyển đổi qua String</span>
+<span class="tok-cls">String</span> s = <span class="tok-cls">String</span>.<span class="tok-fn">valueOf</span>(<span class="tok-num">42</span>);      <span class="tok-com">// "42" — an toàn cả với null</span>
+<span class="tok-kw">int</span> n = <span class="tok-cls">Integer</span>.<span class="tok-fn">parseInt</span>(<span class="tok-str">"42"</span>);     <span class="tok-com">// 42  — ném NumberFormatException nếu sai</span></code></pre>
+        </div>
+
+        <h2 id="var-final">7. <code>var</code> và <code>final</code></h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>VarFinal.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// --- var (Java 10+): trình biên dịch tự suy ra kiểu ---</span>
+<span class="tok-kw">var</span> ten = <span class="tok-str">"Việt Anh"</span>;                 <span class="tok-com">// String</span>
+<span class="tok-kw">var</span> tuoi = <span class="tok-num">22</span>;                          <span class="tok-com">// int</span>
+<span class="tok-kw">var</span> ds = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;<span class="tok-cls">String</span>&gt;();      <span class="tok-com">// ArrayList&lt;String&gt;</span>
+<span class="tok-kw">var</span> map = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">Integer</span>&gt;&gt;();  <span class="tok-com">// ⭐ tiết kiệm thật sự</span>
+
+<span class="tok-com">// ⚠️ var KHÔNG phải kiểu động — kiểu vẫn cố định lúc biên dịch</span>
+<span class="tok-kw">var</span> x = <span class="tok-num">10</span>;
+<span class="tok-com">// x = "chuỗi";   // ❌ error: incompatible types</span>
+
+<span class="tok-com">// var KHÔNG dùng được ở:</span>
+<span class="tok-com">// var a;                        ❌ không có giá trị khởi tạo → không suy ra được</span>
+<span class="tok-com">// var b = null;                 ❌ null không có kiểu</span>
+<span class="tok-com">// class C { var f = 1; }        ❌ chỉ dùng cho biến CỤC BỘ</span>
+<span class="tok-com">// void m(var p) { }             ❌ không dùng cho tham số method</span>
+
+<span class="tok-com">// --- final: gán đúng MỘT lần ---</span>
+<span class="tok-kw">final</span> <span class="tok-kw">int</span> MAX = <span class="tok-num">100</span>;
+<span class="tok-com">// MAX = 200;   // ❌ error: cannot assign a value to final variable</span>
+
+<span class="tok-com">// ⚠️ final chỉ khoá THAM CHIẾU, không khoá NỘI DUNG object</span>
+<span class="tok-kw">final</span> <span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; danhSach = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;();
+danhSach.<span class="tok-fn">add</span>(<span class="tok-str">"a"</span>);           <span class="tok-com">// ✅ được — sửa nội dung</span>
+<span class="tok-com">// danhSach = new ArrayList&lt;&gt;();  // ❌ không được — gán tham chiếu khác</span>
+
+<span class="tok-com">// Hằng số thật sự ở cấp class</span>
+<span class="tok-kw">public static final double</span> THUE_SUAT = <span class="tok-num">0.08</span>;
+<span class="tok-kw">public static final</span> <span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; MAU = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"đỏ"</span>, <span class="tok-str">"xanh"</span>);
+<span class="tok-com">// List.of() tạo list BẤT BIẾN — add() sẽ ném UnsupportedOperationException</span>
+
+<span class="tok-com">// Kết hợp: final var</span>
+<span class="tok-kw">final var</span> ketQua = <span class="tok-fn">tinhToan</span>();</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Dùng <code>var</code> khi nào</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>VarKhiNao.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ✅ NÊN — kiểu đã hiển hiện ở vế phải, viết lại là thừa</span>
+<span class="tok-kw">var</span> ds = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;<span class="tok-cls">SinhVien</span>&gt;();
+<span class="tok-kw">var</span> nhom = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">DonHang</span>&gt;&gt;();
+<span class="tok-kw">for</span> (<span class="tok-kw">var</span> sv : danhSachSinhVien) { ... }
+
+<span class="tok-com">// ❌ KHÔNG NÊN — người đọc không biết kiểu gì</span>
+<span class="tok-kw">var</span> kq = <span class="tok-fn">xuLy</span>();          <span class="tok-com">// xuLy() trả về cái gì?</span>
+<span class="tok-kw">var</span> n = <span class="tok-fn">laySo</span>();          <span class="tok-com">// int? long? double? BigDecimal?</span>
+<span class="tok-kw">var</span> t = <span class="tok-num">1</span>;                <span class="tok-com">// gõ "int" chẳng dài hơn "var"</span></code></pre>
+          </div>
+          <p>
+            Nguyên tắc: <code>var</code> để <em>giảm nhiễu</em>, không phải để <em>giấu thông tin</em>. Nếu người đọc
+            không suy ra được kiểu chỉ bằng cách nhìn dòng đó, hãy viết kiểu ra.
+          </p>
+        </div>
+
+        <h2 id="toan-tu">8. Bảng toán tử đầy đủ</h2>
+
+        <h3 id="toan-tu-so-hoc">8.1. Số học và gán</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Toán tử</th><th>Tên</th><th>Ví dụ</th><th>Ghi chú</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>+</code></td><td>Cộng / nối chuỗi</td><td><code>7 + 2</code> → <code>9</code></td><td>Có một toán hạng là <code>String</code> thì nối chuỗi</td></tr>
+              <tr><td><code>-</code> <code>*</code></td><td>Trừ, nhân</td><td><code>7 * 2</code> → <code>14</code></td><td></td></tr>
+              <tr><td><code>/</code></td><td>Chia</td><td><code>7 / 2</code> → <code>3</code></td><td>Hai <code>int</code> → chia nguyên</td></tr>
+              <tr><td><code>%</code></td><td>Chia lấy dư</td><td><code>-7 % 2</code> → <code>-1</code></td><td>Dấu theo <em>số bị chia</em> (khác Python)</td></tr>
+              <tr><td><code>++</code> <code>--</code></td><td>Tăng / giảm 1</td><td><code>i++</code>, <code>++i</code></td><td>Tiền tố trả giá trị <em>sau</em>, hậu tố trả giá trị <em>trước</em></td></tr>
+              <tr><td><code>+=</code> <code>-=</code> <code>*=</code> <code>/=</code> <code>%=</code></td><td>Gán ghép</td><td><code>x += 5</code></td><td><strong>Tự ép kiểu ngầm</strong> — xem bẫy bên dưới</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>TangGiam.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">int</span> i = <span class="tok-num">5</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(i++);   <span class="tok-com">// 5  — in giá trị CŨ rồi mới tăng</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(i);     <span class="tok-com">// 6</span>
+
+<span class="tok-kw">int</span> j = <span class="tok-num">5</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(++j);   <span class="tok-com">// 6  — tăng TRƯỚC rồi in</span>
+
+<span class="tok-com">// ⚠️ Bẫy: gán ghép tự ép kiểu ngầm — không báo lỗi mất dữ liệu</span>
+<span class="tok-kw">byte</span> b = <span class="tok-num">10</span>;
+<span class="tok-com">// b = b + 5;      // ❌ error: int không gán vào byte được</span>
+b += <span class="tok-num">5</span>;             <span class="tok-com">// ✅ chạy được — vì thực chất là b = (byte)(b + 5)</span>
+
+<span class="tok-kw">int</span> n = <span class="tok-num">10</span>;
+n += <span class="tok-num">0.5</span>;           <span class="tok-com">// chạy được! thực chất n = (int)(n + 0.5) = 10</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(n);     <span class="tok-com">// 10 — mất dữ liệu âm thầm ⚠️</span></code></pre>
+        </div>
+
+        <h3 id="toan-tu-so-sanh">8.2. So sánh và logic</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Toán tử</th><th>Ý nghĩa</th><th>Lưu ý quan trọng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>==</code> <code>!=</code></td><td>Bằng / khác</td><td>Nguyên thủy: so giá trị. <strong>Tham chiếu: so địa chỉ</strong> → dùng <code>equals()</code></td></tr>
+              <tr><td><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code></td><td>So sánh thứ tự</td><td>Chỉ dùng cho kiểu số và <code>char</code></td></tr>
+              <tr><td><code>&amp;&amp;</code></td><td>VÀ (đoản mạch)</td><td>Vế phải <strong>không chạy</strong> nếu vế trái <code>false</code></td></tr>
+              <tr><td><code>||</code></td><td>HOẶC (đoản mạch)</td><td>Vế phải không chạy nếu vế trái <code>true</code></td></tr>
+              <tr><td><code>&amp;</code> <code>|</code></td><td>VÀ / HOẶC (không đoản mạch)</td><td><strong>Luôn</strong> chạy cả hai vế — hiếm khi muốn thế</td></tr>
+              <tr><td><code>!</code></td><td>Phủ định</td><td>Chỉ áp cho <code>boolean</code></td></tr>
+              <tr><td><code>? :</code></td><td>Ba ngôi</td><td><code>dieuKien ? a : b</code> — biểu thức, có giá trị trả về</td></tr>
+              <tr><td><code>instanceof</code></td><td>Kiểm tra kiểu</td><td>Có pattern matching từ Java 16 — xem chương 5</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Logic.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ⭐ Đoản mạch — kỹ thuật phòng NullPointerException quan trọng nhất</span>
+<span class="tok-cls">String</span> s = <span class="tok-kw">null</span>;
+<span class="tok-kw">if</span> (s != <span class="tok-kw">null</span> &amp;&amp; s.<span class="tok-fn">length</span>() &gt; <span class="tok-num">0</span>) {   <span class="tok-com">// ✅ an toàn: vế phải không chạy</span>
+    ...
+}
+<span class="tok-kw">if</span> (s != <span class="tok-kw">null</span> &amp; s.<span class="tok-fn">length</span>() &gt; <span class="tok-num">0</span>) {    <span class="tok-com">// ❌ NullPointerException — & chạy cả hai vế</span>
+    ...
+}
+
+<span class="tok-com">// ⚠️ Khác Python/JS: điều kiện PHẢI là boolean</span>
+<span class="tok-kw">int</span> n = <span class="tok-num">0</span>;
+<span class="tok-com">// if (n) { }        // ❌ error: int cannot be converted to boolean</span>
+<span class="tok-kw">if</span> (n != <span class="tok-num">0</span>) { }         <span class="tok-com">// ✅ phải so sánh tường minh</span>
+<span class="tok-com">// Java KHÔNG có khái niệm truthy/falsy — đây là điểm cộng về rõ ràng</span>
+
+<span class="tok-com">// Toán tử ba ngôi</span>
+<span class="tok-kw">int</span> tuoi = <span class="tok-num">20</span>;
+<span class="tok-cls">String</span> loai = tuoi &gt;= <span class="tok-num">18</span> ? <span class="tok-str">"người lớn"</span> : <span class="tok-str">"trẻ em"</span>;
+
+<span class="tok-com">// Lồng nhau được nhưng khó đọc — cân nhắc switch (chương 3)</span>
+<span class="tok-cls">String</span> xepLoai = diem &gt;= <span class="tok-num">9</span> ? <span class="tok-str">"Giỏi"</span>
+                 : diem &gt;= <span class="tok-num">7</span> ? <span class="tok-str">"Khá"</span>
+                 : diem &gt;= <span class="tok-num">5</span> ? <span class="tok-str">"Trung bình"</span> : <span class="tok-str">"Yếu"</span>;</code></pre>
+        </div>
+
+        <h3 id="toan-tu-bit">8.3. Toán tử bit</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Toán tử</th><th>Tên</th><th>Ví dụ</th><th>Kết quả</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>&amp;</code></td><td>AND bit</td><td><code>12 &amp; 10</code></td><td><code>8</code> (<code>1100 &amp; 1010 = 1000</code>)</td></tr>
+              <tr><td><code>|</code></td><td>OR bit</td><td><code>12 | 10</code></td><td><code>14</code></td></tr>
+              <tr><td><code>^</code></td><td>XOR bit</td><td><code>12 ^ 10</code></td><td><code>6</code></td></tr>
+              <tr><td><code>~</code></td><td>NOT bit</td><td><code>~12</code></td><td><code>-13</code> (<code>~x == -x-1</code>)</td></tr>
+              <tr><td><code>&lt;&lt;</code></td><td>Dịch trái</td><td><code>3 &lt;&lt; 2</code></td><td><code>12</code> (nhân <code>2ⁿ</code>)</td></tr>
+              <tr><td><code>&gt;&gt;</code></td><td>Dịch phải có dấu</td><td><code>-8 &gt;&gt; 1</code></td><td><code>-4</code> (giữ bit dấu)</td></tr>
+              <tr><td><code>&gt;&gt;&gt;</code></td><td>Dịch phải không dấu</td><td><code>-8 &gt;&gt;&gt; 1</code></td><td><code>2147483644</code> (điền 0)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="java-note">
+          <h4><code>&gt;&gt;&gt;</code> — toán tử chỉ Java có</h4>
+          <p>
+            Java không có kiểu số nguyên không dấu (khác C/C++/Rust), nên nó bù lại bằng toán tử dịch phải không dấu
+            <code>&gt;&gt;&gt;</code> — luôn điền số 0 vào bên trái thay vì nhân bản bit dấu. Nó xuất hiện ở những
+            chỗ bạn không ngờ: <code>HashMap</code> dùng <code>h ^ (h &gt;&gt;&gt; 16)</code> để trộn mã băm, và
+            thuật toán tìm kiếm nhị phân trong thư viện chuẩn dùng <code>(low + high) &gt;&gt;&gt; 1</code> để tránh
+            tràn số khi cộng hai chỉ số lớn. Chương 8 sẽ quay lại điểm đầu tiên.
+          </p>
+        </div>
+
+        <h3 id="uu-tien">8.4. Thứ tự ưu tiên</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Mức</th><th>Toán tử</th></tr></thead>
+            <tbody>
+              <tr><td>1 (cao nhất)</td><td><code>()</code> <code>[]</code> <code>.</code> <code>++</code> <code>--</code> (hậu tố)</td></tr>
+              <tr><td>2</td><td><code>++</code> <code>--</code> (tiền tố), <code>+x</code> <code>-x</code>, <code>!</code>, <code>~</code>, <code>(kiểu)</code>, <code>new</code></td></tr>
+              <tr><td>3</td><td><code>*</code> <code>/</code> <code>%</code></td></tr>
+              <tr><td>4</td><td><code>+</code> <code>-</code></td></tr>
+              <tr><td>5</td><td><code>&lt;&lt;</code> <code>&gt;&gt;</code> <code>&gt;&gt;&gt;</code></td></tr>
+              <tr><td>6</td><td><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code> <code>instanceof</code></td></tr>
+              <tr><td>7</td><td><code>==</code> <code>!=</code></td></tr>
+              <tr><td>8-10</td><td><code>&amp;</code> → <code>^</code> → <code>|</code></td></tr>
+              <tr><td>11</td><td><code>&amp;&amp;</code></td></tr>
+              <tr><td>12</td><td><code>||</code></td></tr>
+              <tr><td>13</td><td><code>? :</code></td></tr>
+              <tr><td>14 (thấp nhất)</td><td><code>=</code> <code>+=</code> <code>-=</code> …</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Đừng học thuộc — dùng ngoặc</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>Ngoac.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// Bẫy kinh điển: & và | ưu tiên THẤP hơn ==</span>
+<span class="tok-kw">if</span> (x &amp; <span class="tok-num">1</span> == <span class="tok-num">0</span>) { }      <span class="tok-com">// ❌ hiểu thành x & (1 == 0) → lỗi kiểu</span>
+<span class="tok-kw">if</span> ((x &amp; <span class="tok-num">1</span>) == <span class="tok-num">0</span>) { }    <span class="tok-com">// ✅ ý bạn muốn: kiểm tra số chẵn</span>
+
+<span class="tok-com">// Đúng nhưng khó đọc</span>
+<span class="tok-kw">if</span> (a &amp;&amp; b || c &amp;&amp; !d) { }
+<span class="tok-com">// ✅ Cùng ý nghĩa, đọc một lần là hiểu</span>
+<span class="tok-kw">if</span> ((a &amp;&amp; b) || (c &amp;&amp; !d)) { }</code></pre>
+          </div>
+        </div>
+
+        <h2 id="cheat-sheet">9. Cheat sheet chương 2</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Cách làm</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Số nguyên mặc định</td><td><code>int</code>; vượt 2,1 tỷ thì <code>long</code> (nhớ hậu tố <code>L</code>)</td></tr>
+              <tr><td>Số thực mặc định</td><td><code>double</code></td></tr>
+              <tr><td>Tiền tệ</td><td><code>BigDecimal</code> (constructor nhận <strong>String</strong>) hoặc <code>long</code> theo đơn vị nhỏ nhất</td></tr>
+              <tr><td>So sánh chuỗi</td><td><code>a.equals(b)</code> — <strong>không bao giờ</strong> <code>==</code></td></tr>
+              <tr><td>So sánh wrapper</td><td><code>a.equals(b)</code> — nhớ bẫy cache −128…127</td></tr>
+              <tr><td>So sánh <code>BigDecimal</code></td><td><code>a.compareTo(b) == 0</code>, không phải <code>equals</code></td></tr>
+              <tr><td>So sánh <code>double</code></td><td><code>Math.abs(a - b) &lt; 1e-9</code></td></tr>
+              <tr><td>Kiểm tra <code>NaN</code></td><td><code>Double.isNaN(x)</code></td></tr>
+              <tr><td>Nối chuỗi trong vòng lặp</td><td><code>StringBuilder.append()</code></td></tr>
+              <tr><td>Chuỗi nhiều dòng</td><td>Text block <code>"""…"""</code> (Java 15+)</td></tr>
+              <tr><td>Tránh tràn khi nhân</td><td>Ép <code>long</code> từ toán hạng đầu: <code>1000L * 60 * 60</code></td></tr>
+              <tr><td>Muốn lỗi khi tràn</td><td><code>Math.multiplyExact()</code>, <code>Math.addExact()</code></td></tr>
+              <tr><td>Chia lấy số thực</td><td><code>(double) a / b</code> — ép <em>trước</em> khi chia</td></tr>
+              <tr><td>Chuỗi → số</td><td><code>Integer.parseInt(s)</code>, <code>Double.parseDouble(s)</code></td></tr>
+              <tr><td>Số → chuỗi</td><td><code>String.valueOf(n)</code></td></tr>
+              <tr><td>Hằng số</td><td><code>public static final</code> + <code>UPPER_SNAKE_CASE</code></td></tr>
+              <tr><td>Tránh NPE khi kiểm tra</td><td><code>x != null &amp;&amp; x.method()</code> (đoản mạch)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Giải thích năm kết quả bất ngờ</h4>
+            <div class="exercise-body">
+              <p>Chạy đoạn sau trong JShell. Với <em>mỗi</em> dòng: dự đoán kết quả trước, chạy, rồi viết một câu giải thích cơ chế.</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>BatNgo.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">0.1</span> + <span class="tok-num">0.2</span> == <span class="tok-num">0.3</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">Integer</span>.MAX_VALUE + <span class="tok-num">1</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">1000</span> * <span class="tok-num">60</span> * <span class="tok-num">60</span> * <span class="tok-num">24</span> * <span class="tok-num">365</span>);
+<span class="tok-cls">Integer</span> a = <span class="tok-num">1000</span>, b = <span class="tok-num">1000</span>; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(a == b);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">'a'</span> + <span class="tok-str">'b'</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"a"</span> + <span class="tok-str">'b'</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-num">1</span> + <span class="tok-num">2</span> + <span class="tok-str">"3"</span> + <span class="tok-num">4</span> + <span class="tok-num">5</span>);
+<span class="tok-kw">byte</span> x = <span class="tok-num">10</span>; x += <span class="tok-num">300</span>; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(x);</code></pre>
+              </div>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Dòng 7 kiểm tra hiểu biết về <em>tính kết hợp trái sang phải</em>: <code>1 + 2</code> tính trước
+                    (ra <code>3</code>, kiểu <code>int</code>), gặp <code>"3"</code> thì chuyển sang nối chuỗi và
+                    mọi thứ sau đó đều là chuỗi.<br/>
+                    Dòng 8 kiểm tra ép kiểu ngầm của <code>+=</code>: <code>10 + 300 = 310</code>, ép về
+                    <code>byte</code> thì <code>310 - 256 = 54</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Máy tính tiền không sai một xu</h4>
+            <div class="exercise-body">
+              <p>Viết class <code>HoaDon</code> tính hoá đơn với yêu cầu <strong>tuyệt đối chính xác</strong>:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Yêu cầu</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// Ba mặt hàng, mỗi mặt hàng có: tên, đơn giá, số lượng</span>
+<span class="tok-com">// - Tính tổng trước thuế</span>
+<span class="tok-com">// - Giảm giá 12.5% nếu tổng &gt; 5.000.000đ</span>
+<span class="tok-com">// - Thuế VAT 8% trên số sau giảm giá</span>
+<span class="tok-com">// - Làm tròn tới hàng đồng, luật HALF_UP</span>
+<span class="tok-com">// - In bảng thẳng hàng, tiền có dấu phân cách hàng nghìn</span></code></pre>
+              </div>
+              <p>
+                Làm <strong>hai phiên bản</strong>: một bằng <code>double</code>, một bằng <code>BigDecimal</code>.
+                So sánh kết quả tới từng đồng và ghi lại sai lệch. Với dữ liệu nào thì <code>double</code> cho kết
+                quả sai?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>BigDecimal</code> dùng phương thức chứ không phải toán tử: <code>add</code>,
+                    <code>subtract</code>, <code>multiply</code>, <code>divide</code>. Riêng <code>divide</code>
+                    <strong>bắt buộc</strong> truyền <code>RoundingMode</code>, nếu không sẽ ném
+                    <code>ArithmeticException: Non-terminating decimal expansion</code> khi kết quả là số vô hạn
+                    tuần hoàn (ví dụ 1/3).<br/>
+                    Định dạng: <code>String.format("%,.0fđ", …)</code> hoặc
+                    <code>NumberFormat.getCurrencyInstance(new Locale("vi","VN"))</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Đo hiệu năng nối chuỗi</h4>
+            <div class="exercise-body">
+              <p>Viết chương trình đo thời gian nối <code>n</code> chuỗi bằng ba cách, với <code>n</code> = 1.000, 10.000, 100.000:</p>
+              <ul>
+                <li><code>String s += i;</code> trong vòng lặp</li>
+                <li><code>StringBuilder.append(i)</code></li>
+                <li><code>StringBuilder</code> với dung lượng đặt trước: <code>new StringBuilder(n * 6)</code></li>
+              </ul>
+              <p>
+                Lập bảng kết quả. Thời gian tăng theo tỷ lệ nào khi <code>n</code> tăng 10 lần với từng cách? Điều
+                đó khớp với độ phức tạp lý thuyết nào?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Đo bằng <code>System.nanoTime()</code>. Chạy mỗi phép đo vài lần và bỏ lần đầu — JIT cần thời
+                    gian "làm nóng" (warm-up), nên lần chạy đầu luôn chậm bất thường.<br/>
+                    Bạn sẽ thấy cách 1 tăng ~100 lần khi <code>n</code> tăng 10 lần (<span class="bigo bad">O(n²)</span>),
+                    còn cách 2-3 chỉ tăng ~10 lần (<span class="bigo mid">O(n)</span>). Cách 3 nhanh hơn cách 2
+                    một chút vì tránh được việc cấp phát lại mảng khi bộ đệm đầy.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Điều tra bộ nhớ đệm <code>Integer</code></h4>
+            <div class="exercise-body">
+              <p>Viết chương trình tìm <strong>chính xác</strong> khoảng giá trị mà <code>Integer</code> được cache:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Khung</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = -<span class="tok-num">200</span>; i &lt;= <span class="tok-num">200</span>; i++) {
+    <span class="tok-cls">Integer</span> a = i, b = i;
+    <span class="tok-kw">if</span> (a != b) {
+        <span class="tok-com">// in ra i đầu tiên KHÔNG được cache</span>
+    }
+}</code></pre>
+              </div>
+              <p>Sau đó trả lời:</p>
+              <ul>
+                <li>Khoảng cache chính xác là bao nhiêu? Có đối xứng không?</li>
+                <li>Thử với <code>Long</code>, <code>Short</code>, <code>Byte</code>, <code>Character</code>, <code>Boolean</code> — khoảng cache có giống nhau không?</li>
+                <li>Chạy lại với tuỳ chọn JVM <code>-XX:AutoBoxCacheMax=1000</code>. Kết quả đổi thế nào? Giới hạn <em>trên</em> có đổi không? Giới hạn <em>dưới</em> thì sao?</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Đặc tả ngôn ngữ Java <em>bắt buộc</em> cache từ −128 đến 127 cho <code>Integer</code>,
+                    <code>Short</code>, <code>Byte</code>, <code>Long</code>; <code>Character</code> từ 0 đến 127;
+                    <code>Boolean</code> thì luôn dùng hai object <code>TRUE</code>/<code>FALSE</code> cố định.
+                    Giới hạn <em>trên</em> chỉnh được bằng <code>-XX:AutoBoxCacheMax</code>, giới hạn dưới thì
+                    không.<br/>
+                    Đọc mã nguồn: <code>⌘B</code> vào <code>Integer.valueOf</code> trong IntelliJ để thấy class
+                    <code>IntegerCache</code> thật.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bộ chuyển đổi đơn vị an toàn</h4>
+            <div class="exercise-body">
+              <p>Viết class <code>ChuyenDoi</code> với các phương thức <code>static</code>:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>API</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">static long</span> <span class="tok-fn">ngaySangMili</span>(<span class="tok-kw">int</span> soNgay);           <span class="tok-com">// không được tràn!</span>
+<span class="tok-kw">static</span> <span class="tok-cls">String</span> <span class="tok-fn">byteSangDocDuoc</span>(<span class="tok-kw">long</span> byteS);     <span class="tok-com">// 1536 → "1,5 KB"</span>
+<span class="tok-kw">static double</span> <span class="tok-fn">doCSangF</span>(<span class="tok-kw">double</span> c);             <span class="tok-com">// F = C × 9/5 + 32</span>
+<span class="tok-kw">static</span> <span class="tok-cls">String</span> <span class="tok-fn">giaySangHhMmSs</span>(<span class="tok-kw">long</span> giay);      <span class="tok-com">// 3725 → "01:02:05"</span>
+<span class="tok-kw">static int</span> <span class="tok-fn">chuoiSangInt</span>(<span class="tok-cls">String</span> s, <span class="tok-kw">int</span> macDinh);  <span class="tok-com">// sai thì trả mặc định</span></code></pre>
+              </div>
+              <p>Yêu cầu bắt buộc:</p>
+              <ul>
+                <li><code>ngaySangMili(30000)</code> phải đúng, không tràn.</li>
+                <li><code>doCSangF</code> — thử với <code>c = 100</code>: nếu viết <code>c * 9 / 5</code> có sai không? Còn <code>c * (9 / 5)</code>?</li>
+                <li><code>chuoiSangInt(null, 0)</code> và <code>chuoiSangInt("abc", -1)</code> không được ném lỗi.</li>
+                <li>Viết <code>main</code> in bảng kiểm chứng cho mọi trường hợp biên.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>c * (9 / 5)</code> luôn sai vì <code>9 / 5</code> là chia số nguyên → <code>1</code>.
+                    Viết <code>c * 9 / 5</code> hoặc <code>c * 9.0 / 5</code>.<br/>
+                    <code>ngaySangMili</code>: <code>soNgay * 24L * 60 * 60 * 1000</code> — chữ <code>L</code> phải
+                    xuất hiện <em>sớm</em>, trước khi giá trị vượt phạm vi <code>int</code>.<br/>
+                    <code>giaySangHhMmSs</code>: <code>String.format("%02d:%02d:%02d", h, m, s)</code>.<br/>
+                    <code>chuoiSangInt</code>: bọc <code>Integer.parseInt</code> trong <code>try/catch</code> bắt
+                    <code>NumberFormatException</code> (và nhớ <code>null</code> cũng ném đúng ngoại lệ đó).
+                    Chương 6 sẽ nói kỹ về xử lý ngoại lệ.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Kiểu nguyên thủy và kiểu tham chiếu khác nhau ra sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Nguyên thủy</strong> (8 kiểu: <code>byte</code>, <code>short</code>, <code>int</code>,
+                <code>long</code>, <code>float</code>, <code>double</code>, <code>char</code>,
+                <code>boolean</code>): biến chứa <em>chính giá trị</em>, nằm trên stack nếu là biến cục bộ. Không
+                phải object → không có phương thức, không nhận <code>null</code>. Mặc định là <code>0</code> /
+                <code>false</code>. <code>==</code> so <strong>giá trị</strong>.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Tham chiếu</strong> (mọi thứ còn lại: <code>String</code>, mảng, class, wrapper, enum): biến
+                chứa <em>địa chỉ</em> tới object nằm trên heap. Có phương thức, nhận <code>null</code>, mặc định là
+                <code>null</code>. <code>==</code> so <strong>địa chỉ</strong> → phải dùng <code>.equals()</code>
+                để so nội dung.
+              </p>
+              <p style="margin-top: 8px;">
+                Ranh giới này là gốc rễ của phần lớn hành vi khó hiểu trong Java: bẫy <code>Integer</code> cache,
+                String pool, và câu hỏi "Java truyền tham số theo giá trị hay tham chiếu".
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p><code>Integer a = 127, b = 127; a == b</code> cho <code>true</code>, nhưng với <code>128</code> lại cho <code>false</code>. Vì sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì <strong>bộ nhớ đệm Integer</strong>. Khi autoboxing, Java gọi <code>Integer.valueOf(int)</code>.
+                Phương thức này giữ sẵn một mảng object cho các giá trị từ <strong>−128 đến 127</strong> và trả về
+                object đã có sẵn nếu giá trị nằm trong khoảng đó — nên <code>a</code> và <code>b</code> trỏ vào
+                <em>cùng một object</em>, <code>==</code> đúng.
+              </p>
+              <p style="margin-top: 8px;">
+                Ngoài khoảng đó, mỗi lần gọi tạo một object mới trên heap → hai địa chỉ khác nhau → <code>==</code>
+                sai, dù giá trị bằng nhau.
+              </p>
+              <p style="margin-top: 8px;">
+                Đây không phải chi tiết cài đặt ngẫu nhiên — nó được <em>quy định trong đặc tả ngôn ngữ Java</em>
+                (JLS §5.1.7), vì khoảng số nhỏ này được dùng cực kỳ nhiều nên việc tái sử dụng object tiết kiệm đáng
+                kể bộ nhớ.<br/>
+                <strong>Bài học:</strong> với mọi kiểu tham chiếu, kể cả wrapper, luôn dùng <code>.equals()</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Vì sao không được dùng <code>double</code> cho tiền tệ? Dùng gì thay thế?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì <code>double</code> theo chuẩn IEEE 754 lưu số ở <strong>hệ nhị phân</strong>, mà nhiều phân số
+                thập phân đơn giản lại là số vô hạn tuần hoàn trong hệ nhị phân — giống như 1/3 không biểu diễn hữu
+                hạn được trong hệ thập phân. Kết quả: <code>0.1 + 0.2</code> cho
+                <code>0.30000000000000004</code>. Với hàng triệu giao dịch, sai số tích luỹ thành tiền thật, và
+                nghiệp vụ kế toán không chấp nhận điều đó.
+              </p>
+              <p style="margin-top: 8px;"><strong>Hai giải pháp:</strong></p>
+              <ul>
+                <li><strong><code>BigDecimal</code></strong> — chính xác tuyệt đối, kiểm soát được cách làm tròn. Lưu ý ba điều: constructor phải nhận <code>String</code> (truyền <code>double</code> là mang cả sai số vào); dùng phương thức <code>add</code>/<code>multiply</code> chứ không phải toán tử; so sánh bằng <code>compareTo() == 0</code> chứ không phải <code>equals()</code> (vì <code>1.0</code> và <code>1.00</code> khác scale).</li>
+                <li><strong><code>long</code> theo đơn vị nhỏ nhất</strong> — lưu số xu thay vì số đô, số đồng thay vì nghìn đồng. Nhanh hơn <code>BigDecimal</code> rất nhiều, phù hợp khi chỉ cộng trừ nhân. Với VND đây thường là lựa chọn tốt vì không có đơn vị nhỏ hơn đồng.</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p><code>String</code> bất biến nghĩa là gì? Điều đó mang lại lợi ích gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Bất biến (immutable) nghĩa là <strong>nội dung của một object <code>String</code> không bao giờ thay
+                đổi sau khi tạo</strong>. Mọi phương thức như <code>toUpperCase()</code>, <code>trim()</code>,
+                <code>replace()</code> đều <em>trả về chuỗi mới</em>, không sửa chuỗi gốc — nên bạn phải gán lại kết
+                quả, nếu không nó bị bỏ đi.
+              </p>
+              <p style="margin-top: 8px;"><strong>Bốn lợi ích:</strong></p>
+              <ul>
+                <li><strong>An toàn luồng miễn phí</strong> — nhiều luồng đọc chung không cần đồng bộ hoá.</li>
+                <li><strong>Cho phép String pool</strong> — dùng chung object chỉ an toàn khi không ai sửa được nó.</li>
+                <li><strong>Mã băm cache được</strong> — tính một lần rồi lưu, khiến <code>String</code> là khoá lý tưởng cho <code>HashMap</code>.</li>
+                <li><strong>Bảo mật</strong> — đường dẫn tệp, URL, chuỗi kết nối đã kiểm tra không thể bị sửa ngầm bởi mã khác.</li>
+              </ul>
+              <p>
+                Cái giá phải trả: nối chuỗi trong vòng lặp tạo rất nhiều object trung gian → dùng
+                <code>StringBuilder</code> ở đó.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Java truyền tham số theo giá trị hay theo tham chiếu?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Luôn luôn theo giá trị</strong> — không có ngoại lệ. Thứ gây nhầm lẫn là: với kiểu tham
+                chiếu, <em>giá trị của biến chính là địa chỉ</em>. Nên phương thức nhận được một <strong>bản sao của
+                địa chỉ</strong>, trỏ vào cùng một object.
+              </p>
+              <p style="margin-top: 8px;">Hệ quả có thể kiểm chứng được:</p>
+              <ul>
+                <li><strong>Sửa nội dung object thì bên ngoài thấy</strong> — vì cả hai địa chỉ trỏ chung một object.</li>
+                <li><strong>Gán biến tham số sang object khác thì bên ngoài KHÔNG thấy</strong> — vì chỉ bản sao địa chỉ bị đổi.</li>
+              </ul>
+              <p>
+                Chính điểm thứ hai là bằng chứng: nếu Java truyền theo tham chiếu thật (như <code>int&amp;</code>
+                của C++), gán lại tham số sẽ đổi được biến ở ngoài. Nó không đổi được.<br/>
+                Cách nói chính xác nhất: <em>"truyền theo giá trị, trong đó giá trị của biến tham chiếu là địa
+                chỉ"</em>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p><code>7 / 2</code> cho <code>3</code>. Làm sao để có <code>3.5</code>? Còn <code>-7 / 2</code> thì sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Khi <strong>cả hai</strong> toán hạng là số nguyên, Java thực hiện <em>chia nguyên</em> và cắt bỏ
+                phần thập phân. Chỉ cần <strong>một</strong> toán hạng là số thực thì kết quả là số thực:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Chia.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-num">7</span> / <span class="tok-num">2</span>                 <span class="tok-com">// 3</span>
+<span class="tok-num">7.0</span> / <span class="tok-num">2</span>               <span class="tok-com">// 3.5</span>
+(<span class="tok-kw">double</span>) <span class="tok-num">7</span> / <span class="tok-num">2</span>      <span class="tok-com">// 3.5  ✅ ép TRƯỚC khi chia</span>
+(<span class="tok-kw">double</span>) (<span class="tok-num">7</span> / <span class="tok-num">2</span>)    <span class="tok-com">// 3.0  ❌ ép SAU khi đã cắt — quá muộn</span></code></pre>
+              </div>
+              <p>
+                Với số âm, Java <strong>cắt về 0</strong>: <code>-7 / 2</code> = <code>-3</code> (không phải
+                <code>-4</code>), và <code>-7 % 2</code> = <code>-1</code> — dấu của phần dư theo <em>số bị
+                chia</em>. Điều này <strong>khác Python</strong>, nơi <code>-7 // 2</code> = <code>-4</code> và
+                <code>-7 % 2</code> = <code>1</code> (làm tròn xuống, dấu theo số chia).<br/>
+                Muốn hành vi kiểu Python: <code>Math.floorDiv(-7, 2)</code> và <code>Math.floorMod(-7, 2)</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Khi nào <strong>bắt buộc</strong> dùng <code>StringBuilder</code> thay <code>+</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Khi nối chuỗi <strong>trong vòng lặp</strong>. Vì <code>String</code> bất biến, mỗi lần
+                <code>s += x</code> phải tạo một <code>String</code> mới và <em>chép lại toàn bộ nội dung cũ</em>.
+                Với n lần lặp, tổng chi phí là <span class="bigo bad">O(n²)</span> — nối 100.000 chuỗi mất vài giây
+                thay vì vài mili giây.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Ngoài vòng lặp thì <code>+</code> hoàn toàn ổn.</strong> Trình biên dịch tự tối ưu một biểu
+                thức như <code>"Tên: " + ten + ", tuổi: " + tuoi</code> thành một lời gọi hiệu quả (từ Java 9 dùng
+                <code>invokedynamic</code> với <code>StringConcatFactory</code>). Viết
+                <code>StringBuilder</code> ở đây chỉ làm code khó đọc mà không nhanh hơn.
+              </p>
+              <p style="margin-top: 8px;">
+                Tối ưu thêm: nếu biết trước kích thước gần đúng, truyền dung lượng ban đầu —
+                <code>new StringBuilder(1024)</code> — để tránh việc cấp phát lại mảng khi bộ đệm đầy.<br/>
+                <code>StringBuffer</code> là bản đồng bộ hoá của <code>StringBuilder</code>, chậm hơn và gần như
+                không bao giờ cần trong code hiện đại.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p><code>var</code> có biến Java thành ngôn ngữ định kiểu động không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Không.</strong> <code>var</code> chỉ là <em>suy luận kiểu</em> (type inference): trình biên
+                dịch nhìn vế phải, xác định kiểu, rồi <strong>ghi kiểu đó vào bytecode</strong>. Sau bước biên dịch,
+                <code>var x = 10</code> và <code>int x = 10</code> tạo ra bytecode <em>hoàn toàn giống nhau</em> —
+                bạn kiểm chứng được bằng <code>javap -c</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                Kiểu vẫn cố định và vẫn được kiểm tra lúc biên dịch:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Var.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">var</span> x = <span class="tok-num">10</span>;      <span class="tok-com">// x là int, mãi mãi</span>
+x = <span class="tok-str">"chuỗi"</span>;      <span class="tok-com">// ❌ error: incompatible types</span></code></pre>
+              </div>
+              <p>
+                Giới hạn: chỉ dùng cho <strong>biến cục bộ có khởi tạo</strong> — không dùng cho trường của class,
+                tham số phương thức, kiểu trả về, hay <code>var x;</code> / <code>var x = null;</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                Khuyến nghị dùng: khi kiểu đã hiển hiện ở vế phải
+                (<code>var ds = new HashMap&lt;String, List&lt;DonHang&gt;&gt;()</code>). Tránh khi nó che mất thông tin
+                (<code>var kq = xuLy()</code> — người đọc không biết kiểu gì).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 2, bạn đã nắm:</p>
+        <ul>
+          <li><strong>8 kiểu nguyên thủy</strong> với kích thước, phạm vi, giá trị mặc định; <code>int</code> và <code>double</code> là mặc định thực dụng.</li>
+          <li><strong>Tràn số</strong> không báo lỗi — ép <code>long</code> từ toán hạng đầu, hoặc dùng <code>Math.*Exact</code>.</li>
+          <li><strong>Chia số nguyên</strong> cắt phần thập phân; số âm cắt về 0 (khác Python).</li>
+          <li><strong>IEEE 754</strong> gây sai số — tiền tệ dùng <code>BigDecimal</code> hoặc <code>long</code>.</li>
+          <li><strong>Nguyên thủy vs tham chiếu</strong>: stack/heap, <code>==</code> vs <code>equals()</code>, truyền tham số theo giá trị.</li>
+          <li><strong>Wrapper &amp; autoboxing</strong>: bẫy cache −128…127, NPE khi unboxing <code>null</code>, chi phí trong vòng lặp nóng.</li>
+          <li><strong><code>String</code></strong>: bất biến, String pool, <code>StringBuilder</code> cho vòng lặp, text block cho nhiều dòng.</li>
+          <li><strong>Ép kiểu</strong>: mở rộng tự động, thu hẹp phải khai báo; <code>+=</code> ép ngầm âm thầm.</li>
+          <li><strong><code>var</code></strong> là suy luận kiểu lúc biên dịch, không phải kiểu động; <strong><code>final</code></strong> khoá tham chiếu chứ không khoá nội dung.</li>
+          <li><strong>Bảng toán tử</strong> đầy đủ, đoản mạch <code>&amp;&amp;</code>/<code>||</code>, và <code>&gt;&gt;&gt;</code> đặc trưng Java.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 3 (Điều khiển luồng &amp; mảng)</strong> — mảng là kiểu tham chiếu; <code>switch</code> trên <code>String</code> tận dụng <code>equals</code>/<code>hashCode</code>.</li>
+          <li><strong>Chương 4 (OOP cơ bản)</strong> — trường của class lấy giá trị mặc định (<code>0</code>/<code>null</code>), khác biến cục bộ; <code>static final</code> cho hằng số.</li>
+          <li><strong>Chương 5 (OOP nâng cao)</strong> — <code>equals()</code>/<code>hashCode()</code> tự viết; <code>record</code> sinh sẵn cả hai.</li>
+          <li><strong>Chương 7-8 (Collections &amp; Map)</strong> — <code>List&lt;Integer&gt;</code> phải dùng wrapper; <code>String</code> là khoá lý tưởng nhờ hash được cache.</li>
+          <li><strong>Chương 9 (Generics)</strong> — vì sao <code>List&lt;int&gt;</code> không tồn tại: type erasure chỉ làm việc với kiểu tham chiếu.</li>
+          <li><strong>Chương 12 (Đa luồng)</strong> — bất biến khiến <code>String</code> an toàn luồng miễn phí; nguyên tử của phép toán trên <code>long</code>.</li>
+          <li><strong>Python Chương 2</strong> — đối chiếu: <code>int</code> của Python không tràn (độ chính xác vô hạn), không phân biệt nguyên thủy/tham chiếu, dùng <code>Decimal</code> thay <code>BigDecimal</code>.</li>
+          <li><strong>JavaScript Chương 2</strong> — JS chỉ có một kiểu số (<code>double</code>), nên gặp <em>đúng</em> vấn đề IEEE 754 nhưng không có lối thoát kiểu <code>BigDecimal</code> dựng sẵn.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong1.html" class="prev">
+            <div class="dir">← Chương 1</div>
+            <div class="label">Hello Java</div>
+          </a>
+          <a href="chuong3.html" class="next">
+            <div class="dir">Chương 3 →</div>
+            <div class="label">Điều khiển luồng &amp; mảng</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#khai-bao">1. Khai báo biến</a></li>
+          <li class="level-3"><a href="#quy-uoc-ten">1.1. Quy ước đặt tên</a></li>
+          <li><a href="#nguyen-thuy">2. Tám kiểu nguyên thủy</a></li>
+          <li class="level-3"><a href="#tran-so">2.1. Tràn số</a></li>
+          <li class="level-3"><a href="#chia-so-nguyen">2.2. Chia số nguyên</a></li>
+          <li class="level-3"><a href="#ieee754">2.3. IEEE 754 &amp; tiền tệ</a></li>
+          <li><a href="#nguyen-thuy-vs-tham-chieu">3. Nguyên thủy vs tham chiếu</a></li>
+          <li><a href="#wrapper">4. Wrapper &amp; autoboxing</a></li>
+          <li><a href="#string">5. <code>String</code></a></li>
+          <li class="level-3"><a href="#bat-bien">5.1. Bất biến</a></li>
+          <li class="level-3"><a href="#string-pool">5.2. String pool</a></li>
+          <li class="level-3"><a href="#stringbuilder">5.3. <code>StringBuilder</code></a></li>
+          <li class="level-3"><a href="#text-block">5.4. Text block</a></li>
+          <li><a href="#ep-kieu">6. Ép kiểu</a></li>
+          <li><a href="#var-final">7. <code>var</code> &amp; <code>final</code></a></li>
+          <li><a href="#toan-tu">8. Bảng toán tử</a></li>
+          <li class="level-3"><a href="#toan-tu-so-hoc">8.1. Số học &amp; gán</a></li>
+          <li class="level-3"><a href="#toan-tu-so-sanh">8.2. So sánh &amp; logic</a></li>
+          <li class="level-3"><a href="#toan-tu-bit">8.3. Toán tử bit</a></li>
+          <li class="level-3"><a href="#uu-tien">8.4. Thứ tự ưu tiên</a></li>
+          <li><a href="#cheat-sheet">9. Cheat sheet</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 2 — Biến, kiểu dữ liệu &amp; toán tử · Java sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong1.html">← Chương 1</a> · <a href="../index.html">Java TOC</a> · <a href="chuong3.html">Chương 3 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

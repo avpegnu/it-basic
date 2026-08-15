@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 8 — Map Framework &amp; hợp đồng equals/hashCode · Java Sub-pillar</title>
+  <meta name="description" content="Interface Map, HashMap hoạt động bên trong (bucket, hàm băm, va chạm, treeify), hợp đồng equals/hashCode, LinkedHashMap, TreeMap, vì sao tránh Hashtable, API Java 8+ như computeIfAbsent và merge, quy tắc khoá bất biến." />
+  <meta name="theme-color" content="#e76f00" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bitter:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-java">Jv</span>
+        Java · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Java</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Java</a><span class="sep">/</span>
+        <span>Chương 8</span>
+      </div>
+      <div class="chapter-num">Chương 08 · Map Framework</div>
+      <h1 style="font-size: 2.6rem; margin: 0 0 12px; color: var(--ink);">
+        Map và hợp đồng <code>equals</code>/<code>hashCode</code>
+      </h1>
+      <p class="lead">
+        <code>HashMap</code> là cấu trúc dữ liệu được dùng nhiều nhất trong lập trình Java, và cũng là câu hỏi
+        phỏng vấn phổ biến nhất. Chương này không dừng ở "cách dùng" — chúng ta sẽ mở nắp ra xem
+        <strong>bên trong nó hoạt động thế nào</strong>: bảng bucket, hàm băm, xử lý va chạm, và cơ chế chuyển sang
+        cây từ Java 8. Hiểu phần đó là hiểu vì sao <code>equals</code> và <code>hashCode</code> phải đi cùng nhau —
+        và vì sao vi phạm hợp đồng đó khiến dữ liệu "biến mất" một cách bí ẩn.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1600 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-7</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Nắm interface <code>Map&lt;K,V&gt;</code> và toàn bộ API cần thiết.</li>
+            <li>Hiểu <strong>bên trong <code>HashMap</code></strong>: bảng bucket, hàm băm, va chạm, hệ số tải, rehash, treeify.</li>
+            <li>Nắm <strong>hợp đồng <code>equals</code>/<code>hashCode</code></strong> và hậu quả cụ thể khi vi phạm.</li>
+            <li>Chọn đúng giữa <code>HashMap</code>, <code>LinkedHashMap</code>, <code>TreeMap</code>; biết vì sao tránh <code>Hashtable</code>.</li>
+            <li>Duyệt <code>Map</code> đúng cách qua <code>entrySet()</code>.</li>
+            <li>Dùng thành thạo API Java 8+: <code>getOrDefault</code>, <code>computeIfAbsent</code>, <code>merge</code>, <code>putIfAbsent</code>, <code>forEach</code>.</li>
+            <li>Hiểu vì sao <strong>khoá phải bất biến</strong> — và điều gì xảy ra khi không.</li>
+            <li>Dùng <code>LinkedHashMap</code> để làm bộ nhớ đệm LRU chỉ với một dòng.</li>
+            <li>Nắm các truy vấn thứ tự của <code>TreeMap</code>.</li>
+            <li>Trả lời được các câu hỏi phỏng vấn kinh điển về <code>HashMap</code>.</li>
+          </ul>
+        </div>
+
+        <h2 id="map-la-gi">1. <code>Map</code> là gì</h2>
+
+        <p>
+          <code>Map&lt;K, V&gt;</code> lưu dữ liệu dưới dạng <strong>cặp khoá – giá trị</strong>. Mỗi khoá là
+          <em>duy nhất</em> và ánh xạ tới đúng một giá trị. Nó nằm trong <code>java.util</code> nhưng
+          <strong>không</strong> kế thừa <code>Collection</code> (lý do đã nêu ở chương 7).
+        </p>
+
+        <div class="hierarchy">
+<span class="root">Map</span>&lt;K,V&gt;
+ │
+ ├── <span class="impl">HashMap</span>              <span class="note">⭐ bảng băm — mặc định, nhanh nhất</span>
+ │    └── <span class="impl">LinkedHashMap</span>    <span class="note">+ liên kết đôi → giữ thứ tự</span>
+ │
+ ├── <span class="iface">SortedMap</span> → <span class="iface">NavigableMap</span>
+ │    └── <span class="impl">TreeMap</span>          <span class="note">cây đỏ đen — luôn sắp theo khoá</span>
+ │
+ ├── <span class="impl">Hashtable</span>            <span class="note">⚠️ Java 1.0, đồng bộ — đừng dùng</span>
+ │    └── <span class="impl">Properties</span>       <span class="note">đọc/ghi tệp .properties</span>
+ │
+ ├── <span class="impl">EnumMap</span>              <span class="note">khoá là enum — cực nhanh, dùng mảng</span>
+ ├── <span class="impl">IdentityHashMap</span>      <span class="note">so khoá bằng == thay vì equals</span>
+ ├── <span class="impl">WeakHashMap</span>          <span class="note">khoá bị GC thu hồi được — dùng làm cache</span>
+ └── <span class="impl">ConcurrentHashMap</span>    <span class="note">an toàn luồng (Chương 12)</span>
+</div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>MapCoBan.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; diem = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+
+<span class="tok-com">// --- Thêm / cập nhật ---</span>
+diem.<span class="tok-fn">put</span>(<span class="tok-str">"An"</span>, <span class="tok-num">8</span>);            <span class="tok-com">// trả về null (khoá mới)</span>
+diem.<span class="tok-fn">put</span>(<span class="tok-str">"Bình"</span>, <span class="tok-num">9</span>);
+<span class="tok-cls">Integer</span> cu = diem.<span class="tok-fn">put</span>(<span class="tok-str">"An"</span>, <span class="tok-num">10</span>);  <span class="tok-com">// trả về 8 — GIÁ TRỊ CŨ, và ghi đè</span>
+diem.<span class="tok-fn">putIfAbsent</span>(<span class="tok-str">"An"</span>, <span class="tok-num">5</span>);      <span class="tok-com">// không làm gì vì "An" đã có</span>
+
+<span class="tok-com">// --- Đọc ---</span>
+diem.<span class="tok-fn">get</span>(<span class="tok-str">"An"</span>);                <span class="tok-com">// 10</span>
+diem.<span class="tok-fn">get</span>(<span class="tok-str">"Chi"</span>);               <span class="tok-com">// null ⚠️ — không ném lỗi</span>
+diem.<span class="tok-fn">getOrDefault</span>(<span class="tok-str">"Chi"</span>, <span class="tok-num">0</span>);  <span class="tok-com">// 0  ⭐ an toàn hơn nhiều</span>
+
+<span class="tok-com">// ⚠️ Bẫy NullPointerException khi unboxing</span>
+<span class="tok-com">// int d = diem.get("Chi");   // NPE — null không unbox thành int được</span>
+<span class="tok-kw">int</span> d = diem.<span class="tok-fn">getOrDefault</span>(<span class="tok-str">"Chi"</span>, <span class="tok-num">0</span>);   <span class="tok-com">// ✅</span>
+
+<span class="tok-com">// --- Kiểm tra / xoá ---</span>
+diem.<span class="tok-fn">containsKey</span>(<span class="tok-str">"An"</span>);         <span class="tok-com">// true  — O(1) ⚡</span>
+diem.<span class="tok-fn">containsValue</span>(<span class="tok-num">10</span>);        <span class="tok-com">// true  — O(n) ⚠️ phải duyệt hết</span>
+diem.<span class="tok-fn">remove</span>(<span class="tok-str">"An"</span>);             <span class="tok-com">// trả về 10</span>
+diem.<span class="tok-fn">remove</span>(<span class="tok-str">"Bình"</span>, <span class="tok-num">5</span>);       <span class="tok-com">// chỉ xoá nếu giá trị khớp — trả false</span>
+diem.<span class="tok-fn">size</span>();
+diem.<span class="tok-fn">isEmpty</span>();
+diem.<span class="tok-fn">clear</span>();
+
+<span class="tok-com">// --- Map bất biến (Java 9+) ---</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; batBien = <span class="tok-cls">Map</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-num">1</span>, <span class="tok-str">"b"</span>, <span class="tok-num">2</span>);   <span class="tok-com">// tối đa 10 cặp</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; nhieu = <span class="tok-cls">Map</span>.<span class="tok-fn">ofEntries</span>(
+    <span class="tok-cls">Map</span>.<span class="tok-fn">entry</span>(<span class="tok-str">"a"</span>, <span class="tok-num">1</span>), <span class="tok-cls">Map</span>.<span class="tok-fn">entry</span>(<span class="tok-str">"b"</span>, <span class="tok-num">2</span>)     <span class="tok-com">// không giới hạn</span>
+);</code></pre>
+        </div>
+
+        <h2 id="hashmap-ben-trong">2. <code>HashMap</code> hoạt động bên trong</h2>
+
+        <p>
+          Đây là phần quan trọng nhất chương — và là câu hỏi phỏng vấn Java được hỏi nhiều nhất.
+        </p>
+
+        <div class="jvm-flow">
+          <div class="stages" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+            <div class="stage">
+              <div class="stage-title">1. Khoá</div>
+              <div class="stage-content"><code>"An"</code></div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">2. hashCode()</div>
+              <div class="stage-content"><code>65759</code></div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">3. Trộn bit</div>
+              <div class="stage-content"><code>h ^ (h&gt;&gt;&gt;16)</code></div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">4. Chỉ số</div>
+              <div class="stage-content"><code>h &amp; (n−1)</code><br/>→ bucket 15</div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">5. So khoá</div>
+              <div class="stage-content"><code>equals()</code><br/>trong bucket</div>
+            </div>
+          </div>
+          <div class="caption">
+            <code>hashCode()</code> chọn <strong>ngăn</strong>, <code>equals()</code> tìm <strong>đúng phần
+            tử</strong> trong ngăn đó. Đây là lý do hai phương thức phải nhất quán với nhau.
+          </div>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Cấu trúc bên trong</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>HashMap
+│
+└── Node[] table          <span class="tok-com">// mảng "bucket", kích thước LUÔN là luỹ thừa của 2</span>
+     │
+     ├── [0]  → null
+     ├── [1]  → Node("An", 10) → null
+     ├── [2]  → null
+     ├── [3]  → Node("Bình", 9) → Node("Chi", 7) → null    <span class="tok-com">// VA CHẠM: liên kết</span>
+     ├── ...
+     └── [15] → Node("Dũng", 8) → null
+
+<span class="tok-com">// Mỗi Node lưu 4 thứ:</span>
+<span class="tok-kw">static class</span> <span class="tok-cls">Node</span>&lt;K,V&gt; <span class="tok-kw">implements</span> <span class="tok-cls">Map</span>.<span class="tok-cls">Entry</span>&lt;K,V&gt; {
+    <span class="tok-kw">final int</span> hash;    <span class="tok-com">// mã băm đã trộn — cache lại để không tính lại</span>
+    <span class="tok-kw">final</span> K key;
+    V value;
+    <span class="tok-cls">Node</span>&lt;K,V&gt; next;     <span class="tok-com">// node kế trong cùng bucket (chuỗi va chạm)</span>
+}</code></pre>
+        </div>
+
+        <h3 id="thuat-toan">2.1. Thuật toán <code>put</code> và <code>get</code></h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ThuatToan.java (giản lược từ mã nguồn JDK)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ---------- Bước trộn bit ----------</span>
+<span class="tok-kw">static final int</span> <span class="tok-fn">hash</span>(<span class="tok-cls">Object</span> key) {
+    <span class="tok-kw">int</span> h;
+    <span class="tok-kw">return</span> (key == <span class="tok-kw">null</span>) ? <span class="tok-num">0</span> : (h = key.<span class="tok-fn">hashCode</span>()) ^ (h &gt;&gt;&gt; <span class="tok-num">16</span>);
+}
+<span class="tok-com">// Vì sao XOR với 16 bit cao? Xem callout bên dưới.</span>
+
+<span class="tok-com">// ---------- put ----------</span>
+<span class="tok-kw">public</span> V <span class="tok-fn">put</span>(K key, V value) {
+    <span class="tok-kw">int</span> h = <span class="tok-fn">hash</span>(key);
+    <span class="tok-kw">int</span> i = h &amp; (table.length - <span class="tok-num">1</span>);       <span class="tok-com">// ① tìm bucket</span>
+
+    <span class="tok-kw">for</span> (<span class="tok-cls">Node</span>&lt;K,V&gt; e = table[i]; e != <span class="tok-kw">null</span>; e = e.next) {   <span class="tok-com">// ② duyệt chuỗi</span>
+        <span class="tok-kw">if</span> (e.hash == h &amp;&amp; (e.key == key || key.<span class="tok-fn">equals</span>(e.key))) {
+            V cu = e.value;
+            e.value = value;               <span class="tok-com">// ③ khoá đã có → ghi đè</span>
+            <span class="tok-kw">return</span> cu;
+        }
+    }
+    table[i] = <span class="tok-kw">new</span> <span class="tok-cls">Node</span>&lt;&gt;(h, key, value, table[i]);   <span class="tok-com">// ④ thêm vào đầu chuỗi</span>
+    <span class="tok-kw">if</span> (++soLuong &gt; nguong) <span class="tok-fn">resize</span>();               <span class="tok-com">// ⑤ đầy quá → nới rộng</span>
+    <span class="tok-kw">return</span> <span class="tok-kw">null</span>;
+}
+
+<span class="tok-com">// ---------- get ----------</span>
+<span class="tok-kw">public</span> V <span class="tok-fn">get</span>(<span class="tok-cls">Object</span> key) {
+    <span class="tok-kw">int</span> h = <span class="tok-fn">hash</span>(key);
+    <span class="tok-kw">for</span> (<span class="tok-cls">Node</span>&lt;K,V&gt; e = table[h &amp; (table.length-<span class="tok-num">1</span>)]; e != <span class="tok-kw">null</span>; e = e.next) {
+        <span class="tok-kw">if</span> (e.hash == h &amp;&amp; (e.key == key || key.<span class="tok-fn">equals</span>(e.key)))
+            <span class="tok-kw">return</span> e.value;
+    }
+    <span class="tok-kw">return</span> <span class="tok-kw">null</span>;
+}</code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Ba chi tiết thiết kế thông minh</h4>
+          <ul>
+            <li>
+              <strong><code>h &amp; (n-1)</code> thay vì <code>h % n</code></strong> — vì <code>n</code> luôn là
+              luỹ thừa của 2, phép AND bit cho kết quả giống hệt phép chia lấy dư nhưng nhanh hơn nhiều lần.
+              Đây là lý do kích thước bảng luôn là 16, 32, 64…
+            </li>
+            <li>
+              <strong><code>h ^ (h &gt;&gt;&gt; 16)</code></strong> — trộn 16 bit cao xuống 16 bit thấp. Vì
+              <code>h &amp; (n-1)</code> chỉ dùng vài bit <em>thấp</em> nhất, nếu hai mã băm khác nhau chỉ ở bit
+              cao thì chúng sẽ rơi vào cùng bucket. Bước trộn khuếch tán sự khác biệt xuống dưới.
+            </li>
+            <li>
+              <strong>So sánh <code>e.hash == h</code> trước</strong> — phép so hai số nguyên rẻ hơn nhiều so với
+              gọi <code>equals()</code>. Chỉ khi mã băm khớp mới tốn công gọi <code>equals</code>.
+            </li>
+          </ul>
+        </div>
+
+        <h3 id="va-cham">2.2. Va chạm và cơ chế treeify</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Va chạm</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Hai khoá khác nhau có thể cho cùng chỉ số bucket → VA CHẠM</span>
+
+<span class="tok-com">// Trước Java 8: luôn dùng danh sách liên kết</span>
+[<span class="tok-num">3</span>] → Node(k1) → Node(k2) → Node(k3) → ... → Node(k100)
+<span class="tok-com">// Trường hợp xấu nhất: mọi khoá cùng bucket → get() thành O(n)
+// → lỗ hổng "hash collision DoS": kẻ tấn công gửi các khoá cố ý trùng hash</span>
+
+<span class="tok-com">// Từ Java 8: chuỗi dài quá 8 phần tử VÀ bảng ≥ 64 → chuyển thành CÂY ĐỎ ĐEN</span>
+[<span class="tok-num">3</span>] → TreeNode
+         ╱      ╲
+    TreeNode   TreeNode      <span class="tok-com">// tra cứu O(log n) thay vì O(n)</span>
+      ╱  ╲       ╱  ╲
+
+<span class="tok-com">// Khi chuỗi rút xuống ≤ 6 phần tử (do xoá hoặc resize) → quay lại liên kết
+// Hai ngưỡng 8 và 6 khác nhau để tránh chuyển đổi qua lại liên tục (hysteresis)</span></code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Hằng số trong <code>HashMap</code></th><th>Giá trị</th><th>Ý nghĩa</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>DEFAULT_INITIAL_CAPACITY</code></td><td>16</td><td>Số bucket ban đầu</td></tr>
+              <tr><td><code>DEFAULT_LOAD_FACTOR</code></td><td>0.75</td><td>Đầy 75% thì nới rộng</td></tr>
+              <tr><td><code>TREEIFY_THRESHOLD</code></td><td>8</td><td>Chuỗi dài hơn 8 → chuyển sang cây</td></tr>
+              <tr><td><code>UNTREEIFY_THRESHOLD</code></td><td>6</td><td>Cây nhỏ hơn 6 → quay lại liên kết</td></tr>
+              <tr><td><code>MIN_TREEIFY_CAPACITY</code></td><td>64</td><td>Bảng nhỏ hơn 64 thì nới rộng thay vì treeify</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Resize.java — nới rộng bảng</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Khi soLuong &gt; capacity × loadFactor (mặc định 16 × 0.75 = 12):</span>
+<span class="tok-com">//   1. Tạo bảng mới GẤP ĐÔI (16 → 32)</span>
+<span class="tok-com">//   2. Phân bổ lại MỌI node vào bucket mới</span>
+<span class="tok-com">//   → Thao tác này TỐN KÉM: O(n)</span>
+
+<span class="tok-com">// ❌ Thêm 1 triệu phần tử vào map mặc định</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; m = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+<span class="tok-com">// → khoảng 17 lần resize, mỗi lần phân bổ lại toàn bộ</span>
+
+<span class="tok-com">// ✅ Biết trước số lượng thì đặt dung lượng ban đầu</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; m2 = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;(<span class="tok-num">1_400_000</span>);
+<span class="tok-com">// Công thức: soPhanTu / 0.75 + 1, làm tròn lên luỹ thừa của 2</span>
+
+<span class="tok-com">// ✅ Java 19+: có hàm tiện ích làm sẵn việc đó</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; m3 = <span class="tok-cls">HashMap</span>.<span class="tok-fn">newHashMap</span>(<span class="tok-num">1_000_000</span>);</code></pre>
+        </div>
+
+        <h2 id="equals-hashcode">3. Hợp đồng <code>equals</code>/<code>hashCode</code></h2>
+
+        <div class="java-rule">
+          <strong>Hợp đồng:</strong> nếu <code>a.equals(b)</code> thì <strong>bắt buộc</strong>
+          <code>a.hashCode() == b.hashCode()</code>.<br/>
+          Chiều ngược lại <em>không</em> bắt buộc — hai object khác nhau được phép trùng mã băm (gọi là va chạm), và
+          <code>HashMap</code> xử lý được điều đó.
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ViPham.java — hậu quả cụ thể</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ Chỉ override equals, QUÊN hashCode</span>
+<span class="tok-kw">class</span> <span class="tok-cls">SanPham</span> {
+    <span class="tok-cls">String</span> ma;
+    <span class="tok-fn">SanPham</span>(<span class="tok-cls">String</span> ma) { <span class="tok-kw">this</span>.ma = ma; }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public boolean</span> <span class="tok-fn">equals</span>(<span class="tok-cls">Object</span> o) {
+        <span class="tok-kw">return</span> o <span class="tok-kw">instanceof</span> <span class="tok-cls">SanPham</span> s &amp;&amp; ma.<span class="tok-fn">equals</span>(s.ma);
+    }
+    <span class="tok-com">// KHÔNG có hashCode() → dùng bản mặc định của Object (dựa trên địa chỉ)</span>
+}
+
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">SanPham</span>, <span class="tok-cls">Integer</span>&gt; kho = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+kho.<span class="tok-fn">put</span>(<span class="tok-kw">new</span> <span class="tok-cls">SanPham</span>(<span class="tok-str">"SP01"</span>), <span class="tok-num">100</span>);
+
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(kho.<span class="tok-fn">get</span>(<span class="tok-kw">new</span> <span class="tok-cls">SanPham</span>(<span class="tok-str">"SP01"</span>)));   <span class="tok-com">// null ⚠️⚠️</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(kho.<span class="tok-fn">containsKey</span>(<span class="tok-kw">new</span> <span class="tok-cls">SanPham</span>(<span class="tok-str">"SP01"</span>)));  <span class="tok-com">// false ⚠️</span>
+
+<span class="tok-com">// Vì sao? Hai object có mã băm KHÁC NHAU (địa chỉ khác nhau)
+// → rơi vào hai bucket khác nhau → equals() KHÔNG BAO GIỜ được gọi</span>
+
+
+<span class="tok-com">// ✅ Override CẢ HAI</span>
+<span class="tok-kw">class</span> <span class="tok-cls">SanPham</span> {
+    <span class="tok-kw">final</span> <span class="tok-cls">String</span> ma;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public boolean</span> <span class="tok-fn">equals</span>(<span class="tok-cls">Object</span> o) {
+        <span class="tok-kw">if</span> (<span class="tok-kw">this</span> == o) <span class="tok-kw">return true</span>;
+        <span class="tok-kw">return</span> o <span class="tok-kw">instanceof</span> <span class="tok-cls">SanPham</span> s &amp;&amp; <span class="tok-cls">Objects</span>.<span class="tok-fn">equals</span>(ma, s.ma);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public int</span> <span class="tok-fn">hashCode</span>() {
+        <span class="tok-kw">return</span> <span class="tok-cls">Objects</span>.<span class="tok-fn">hash</span>(ma);      <span class="tok-com">// ĐÚNG những trường như equals</span>
+    }
+}
+
+<span class="tok-com">// ✅✅ Tốt nhất: dùng record — sinh sẵn cả hai đúng chuẩn</span>
+<span class="tok-kw">record</span> <span class="tok-cls">SanPham</span>(<span class="tok-cls">String</span> ma) { }</code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Khoá phải BẤT BIẾN — nếu không, dữ liệu "biến mất"</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>KhoaThayDoi.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Khoa</span> {
+    <span class="tok-cls">String</span> ten;                    <span class="tok-com">// ⚠️ KHÔNG final — sửa được</span>
+    <span class="tok-fn">Khoa</span>(<span class="tok-cls">String</span> ten) { <span class="tok-kw">this</span>.ten = ten; }
+    <span class="tok-ann">@Override</span> <span class="tok-kw">public int</span> <span class="tok-fn">hashCode</span>() { <span class="tok-kw">return</span> ten.<span class="tok-fn">hashCode</span>(); }
+    <span class="tok-ann">@Override</span> <span class="tok-kw">public boolean</span> <span class="tok-fn">equals</span>(<span class="tok-cls">Object</span> o) {
+        <span class="tok-kw">return</span> o <span class="tok-kw">instanceof</span> <span class="tok-cls">Khoa</span> k &amp;&amp; ten.<span class="tok-fn">equals</span>(k.ten);
+    }
+}
+
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">Khoa</span>, <span class="tok-cls">String</span>&gt; m = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+<span class="tok-cls">Khoa</span> k = <span class="tok-kw">new</span> <span class="tok-cls">Khoa</span>(<span class="tok-str">"A"</span>);
+m.<span class="tok-fn">put</span>(k, <span class="tok-str">"giá trị"</span>);            <span class="tok-com">// lưu vào bucket ứng với hash("A")</span>
+
+k.ten = <span class="tok-str">"B"</span>;                     <span class="tok-com">// 💥 đổi trường tham gia tính hash</span>
+
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m.<span class="tok-fn">get</span>(k));       <span class="tok-com">// null ⚠️ tìm ở bucket hash("B") — không có gì</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m.<span class="tok-fn">size</span>());      <span class="tok-com">// 1     — nó VẪN Ở TRONG map!</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m.<span class="tok-fn">remove</span>(k));    <span class="tok-com">// null  — xoá cũng không được</span>
+<span class="tok-com">// → Entry bị "kẹt" vĩnh viễn: không tìm được, không xoá được, không giải phóng được.</span></code></pre>
+          </div>
+          <p>
+            <strong>Quy tắc:</strong> khoá của <code>Map</code> (và phần tử của <code>Set</code>) phải
+            <strong>bất biến</strong>, hoặc ít nhất các trường tham gia <code>hashCode</code> phải
+            <code>final</code>. Đây là lý do <code>String</code>, <code>Integer</code>, <code>record</code>,
+            <code>enum</code> là những lựa chọn khoá lý tưởng — và cũng là lý do <code>String</code> được thiết kế
+            bất biến ngay từ đầu (chương 2).
+          </p>
+        </div>
+
+        <h2 id="so-sanh">4. Bảng so sánh các cài đặt <code>Map</code></h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tiêu chí</th><th><code>HashMap</code></th><th><code>LinkedHashMap</code></th><th><code>TreeMap</code></th><th><code>Hashtable</code></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Thứ tự</strong></td>
+                <td>Không xác định</td>
+                <td>Thứ tự thêm vào<br/>(hoặc thứ tự truy cập)</td>
+                <td>Sắp theo khoá<br/>(tự nhiên hoặc Comparator)</td>
+                <td>Không xác định</td>
+              </tr>
+              <tr>
+                <td><strong>Khoá <code>null</code></strong></td>
+                <td>✅ Một cái</td>
+                <td>✅ Một cái</td>
+                <td>❌ NPE</td>
+                <td>❌ NPE</td>
+              </tr>
+              <tr>
+                <td><strong>Giá trị <code>null</code></strong></td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>❌ NPE</td>
+              </tr>
+              <tr>
+                <td><strong>An toàn đa luồng</strong></td>
+                <td>❌ Không</td>
+                <td>❌ Không</td>
+                <td>❌ Không</td>
+                <td>✅ Có (đồng bộ)</td>
+              </tr>
+              <tr>
+                <td><strong>Hiệu năng</strong></td>
+                <td><span class="bigo good">O(1)</span> — nhanh nhất</td>
+                <td><span class="bigo good">O(1)</span> — chậm hơn chút</td>
+                <td><span class="bigo good">O(log n)</span></td>
+                <td>Chậm (khoá toàn bộ)</td>
+              </tr>
+              <tr>
+                <td><strong>Cấu trúc bên dưới</strong></td>
+                <td>Bảng băm + liên kết/cây</td>
+                <td>Bảng băm + liên kết đôi</td>
+                <td>Cây đỏ đen</td>
+                <td>Bảng băm + liên kết</td>
+              </tr>
+              <tr>
+                <td><strong>Bộ nhớ</strong></td>
+                <td>Ít nhất</td>
+                <td>Nhiều hơn (~1,3×)</td>
+                <td>Trung bình</td>
+                <td>Ít</td>
+              </tr>
+              <tr>
+                <td><strong>Từ phiên bản</strong></td>
+                <td>Java 1.2</td>
+                <td>Java 1.4</td>
+                <td>Java 1.2</td>
+                <td>Java 1.0 ⚠️</td>
+              </tr>
+              <tr>
+                <td><strong>Dùng khi</strong></td>
+                <td><strong>Mặc định</strong></td>
+                <td>Cần thứ tự ổn định, cache LRU</td>
+                <td>Cần sắp xếp, truy vấn khoảng</td>
+                <td><strong>Không bao giờ</strong> — dùng <code>ConcurrentHashMap</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Vì sao <code>Hashtable</code> đã lỗi thời</div>
+          <ul>
+            <li><strong>Đồng bộ hoá thô</strong> — mọi phương thức đều <code>synchronized</code> trên <em>toàn bộ</em> object. Hai luồng đọc hai khoá khác nhau vẫn phải xếp hàng chờ nhau.</li>
+            <li><strong>Chậm khi một luồng</strong> — bạn trả giá cho đồng bộ hoá dù không cần.</li>
+            <li><strong>Không cho <code>null</code></strong> — cả khoá lẫn giá trị, gây bất tiện không cần thiết.</li>
+            <li><strong>API cũ</strong> — còn giữ <code>elements()</code>, <code>keys()</code> trả về <code>Enumeration</code> thay vì <code>Iterator</code>.</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            Cần an toàn đa luồng? Dùng <code><strong>ConcurrentHashMap</strong></code> — nó khoá theo từng đoạn
+            (segment) chứ không khoá toàn bộ, nên nhanh hơn <code>Hashtable</code> hàng chục lần khi có nhiều luồng.
+            Chương 12 sẽ nói kỹ.
+          </p>
+        </div>
+
+        <h2 id="duyet-map">5. Duyệt <code>Map</code></h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>DuyetMap.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; diem = <span class="tok-cls">Map</span>.<span class="tok-fn">of</span>(<span class="tok-str">"An"</span>, <span class="tok-num">8</span>, <span class="tok-str">"Bình"</span>, <span class="tok-num">9</span>, <span class="tok-str">"Chi"</span>, <span class="tok-num">7</span>);
+
+<span class="tok-com">// ⭐ CÁCH TỐT NHẤT: entrySet() — một lần duyệt lấy cả khoá lẫn giá trị</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">Map</span>.<span class="tok-cls">Entry</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; e : diem.<span class="tok-fn">entrySet</span>()) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(e.<span class="tok-fn">getKey</span>() + <span class="tok-str">" = "</span> + e.<span class="tok-fn">getValue</span>());
+}
+<span class="tok-kw">for</span> (<span class="tok-kw">var</span> e : diem.<span class="tok-fn">entrySet</span>()) { ... }        <span class="tok-com">// gọn hơn với var</span>
+
+<span class="tok-com">// ❌ TỆ: keySet() rồi get() — mỗi vòng lặp là MỘT lần tra cứu thừa</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> k : diem.<span class="tok-fn">keySet</span>()) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(k + <span class="tok-str">" = "</span> + diem.<span class="tok-fn">get</span>(k));   <span class="tok-com">// tra cứu lại — chậm gấp đôi</span>
+}
+
+<span class="tok-com">// ✅ Chỉ cần khoá / chỉ cần giá trị</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> k : diem.<span class="tok-fn">keySet</span>())   { ... }
+<span class="tok-kw">for</span> (<span class="tok-cls">Integer</span> v : diem.<span class="tok-fn">values</span>()) { ... }
+
+<span class="tok-com">// ⭐ forEach (Java 8+) — ngắn gọn nhất</span>
+diem.<span class="tok-fn">forEach</span>((k, v) -&gt; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(k + <span class="tok-str">" = "</span> + v));
+
+<span class="tok-com">// Duyệt theo thứ tự sắp xếp mà không đổi kiểu map</span>
+diem.<span class="tok-fn">entrySet</span>().<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">sorted</span>(<span class="tok-cls">Map</span>.<span class="tok-cls">Entry</span>.<span class="tok-fn">comparingByValue</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">reverseOrder</span>()))
+    .<span class="tok-fn">forEach</span>(e -&gt; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(e));
+
+<span class="tok-com">// ⚠️ Xoá khi đang duyệt — phải qua iterator hoặc removeIf</span>
+diem2.<span class="tok-fn">entrySet</span>().<span class="tok-fn">removeIf</span>(e -&gt; e.<span class="tok-fn">getValue</span>() &lt; <span class="tok-num">5</span>);   <span class="tok-com">// ✅</span>
+diem2.<span class="tok-fn">values</span>().<span class="tok-fn">removeIf</span>(v -&gt; v &lt; <span class="tok-num">5</span>);              <span class="tok-com">// ✅ tương đương</span></code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 <code>keySet</code>, <code>values</code>, <code>entrySet</code> là <em>khung nhìn</em></div>
+          <p>
+            Ba phương thức này <strong>không tạo bản sao</strong> — chúng trả về khung nhìn (view) gắn liền với map
+            gốc. Hệ quả: xoá phần tử trong <code>keySet()</code> là xoá luôn khỏi map; sửa map là thấy ngay trong
+            view. Điều này khiến chúng rất rẻ (không tốn bộ nhớ) nhưng cũng dễ gây bất ngờ nếu bạn tưởng đó là bản
+            sao. Muốn bản sao thật: <code>new HashSet&lt;&gt;(map.keySet())</code>.
+          </p>
+        </div>
+
+        <h2 id="api-java8">6. API hiện đại — Java 8+</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ApiHienDai.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; dem = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+
+<span class="tok-com">// ---------- getOrDefault: tránh null ----------</span>
+<span class="tok-kw">int</span> n = dem.<span class="tok-fn">getOrDefault</span>(<span class="tok-str">"x"</span>, <span class="tok-num">0</span>);
+
+<span class="tok-com">// ---------- ĐẾM TẦN SUẤT — ba cách ----------</span>
+<span class="tok-cls">String</span>[] tu = {<span class="tok-str">"java"</span>, <span class="tok-str">"python"</span>, <span class="tok-str">"java"</span>, <span class="tok-str">"go"</span>, <span class="tok-str">"java"</span>};
+
+<span class="tok-com">// ❌ Cách cũ, dài dòng</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> t : tu) {
+    <span class="tok-kw">if</span> (dem.<span class="tok-fn">containsKey</span>(t)) dem.<span class="tok-fn">put</span>(t, dem.<span class="tok-fn">get</span>(t) + <span class="tok-num">1</span>);
+    <span class="tok-kw">else</span>                     dem.<span class="tok-fn">put</span>(t, <span class="tok-num">1</span>);
+}
+
+<span class="tok-com">// ✅ getOrDefault</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> t : tu) dem.<span class="tok-fn">put</span>(t, dem.<span class="tok-fn">getOrDefault</span>(t, <span class="tok-num">0</span>) + <span class="tok-num">1</span>);
+
+<span class="tok-com">// ✅✅ merge — ngắn nhất và diễn đạt đúng ý nhất</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> t : tu) dem.<span class="tok-fn">merge</span>(t, <span class="tok-num">1</span>, <span class="tok-cls">Integer</span>::<span class="tok-fn">sum</span>);
+<span class="tok-com">// Ý nghĩa: chưa có khoá → đặt 1; đã có → áp dụng Integer::sum(cũ, 1)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(dem);   <span class="tok-com">// {java=3, python=1, go=1}</span>
+
+
+<span class="tok-com">// ---------- computeIfAbsent: nhóm phần tử ----------</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt;&gt; nhom = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+
+<span class="tok-com">// ❌ Cách cũ</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> t : tu) {
+    <span class="tok-cls">String</span> chuDau = t.<span class="tok-fn">substring</span>(<span class="tok-num">0</span>, <span class="tok-num">1</span>);
+    <span class="tok-kw">if</span> (!nhom.<span class="tok-fn">containsKey</span>(chuDau)) nhom.<span class="tok-fn">put</span>(chuDau, <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;());
+    nhom.<span class="tok-fn">get</span>(chuDau).<span class="tok-fn">add</span>(t);
+}
+
+<span class="tok-com">// ✅ computeIfAbsent — một dòng</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> t : tu) {
+    nhom.<span class="tok-fn">computeIfAbsent</span>(t.<span class="tok-fn">substring</span>(<span class="tok-num">0</span>, <span class="tok-num">1</span>), k -&gt; <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;()).<span class="tok-fn">add</span>(t);
+}
+<span class="tok-com">// {j=[java, java, java], p=[python], g=[go]}</span>
+
+
+<span class="tok-com">// ---------- Toàn bộ họ compute* ----------</span>
+dem.<span class="tok-fn">computeIfAbsent</span>(<span class="tok-str">"rust"</span>, k -&gt; <span class="tok-num">0</span>);           <span class="tok-com">// chỉ khi CHƯA có khoá</span>
+dem.<span class="tok-fn">computeIfPresent</span>(<span class="tok-str">"java"</span>, (k, v) -&gt; v * <span class="tok-num">2</span>);  <span class="tok-com">// chỉ khi ĐÃ có</span>
+dem.<span class="tok-fn">compute</span>(<span class="tok-str">"go"</span>, (k, v) -&gt; v == <span class="tok-kw">null</span> ? <span class="tok-num">1</span> : v + <span class="tok-num">1</span>);   <span class="tok-com">// cả hai trường hợp</span>
+<span class="tok-com">// ⚠️ Hàm trả về null → XOÁ khoá khỏi map</span>
+
+dem.<span class="tok-fn">putIfAbsent</span>(<span class="tok-str">"kotlin"</span>, <span class="tok-num">1</span>);                 <span class="tok-com">// khác computeIfAbsent: giá trị đã tính sẵn</span>
+dem.<span class="tok-fn">replaceAll</span>((k, v) -&gt; v * <span class="tok-num">10</span>);              <span class="tok-com">// đổi mọi giá trị</span>
+dem.<span class="tok-fn">replace</span>(<span class="tok-str">"java"</span>, <span class="tok-num">100</span>);                     <span class="tok-com">// chỉ đổi nếu khoá tồn tại</span>
+dem.<span class="tok-fn">remove</span>(<span class="tok-str">"go"</span>, <span class="tok-num">1</span>);                          <span class="tok-com">// chỉ xoá nếu giá trị khớp</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 <code>merge</code> vs <code>computeIfAbsent</code> — chọn cái nào</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nhu cầu</th><th>Dùng</th><th>Ví dụ</th></tr></thead>
+              <tbody>
+                <tr><td>Đếm / cộng dồn số</td><td><code>merge</code></td><td><code>m.merge(k, 1, Integer::sum)</code></td></tr>
+                <tr><td>Gộp chuỗi</td><td><code>merge</code></td><td><code>m.merge(k, s, (a,b) -&gt; a + ", " + b)</code></td></tr>
+                <tr><td>Nhóm vào collection</td><td><code>computeIfAbsent</code></td><td><code>m.computeIfAbsent(k, x -&gt; new ArrayList&lt;&gt;()).add(v)</code></td></tr>
+                <tr><td>Bộ nhớ đệm lười</td><td><code>computeIfAbsent</code></td><td><code>cache.computeIfAbsent(k, this::tinhToanNang)</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Điểm khác then chốt: <code>computeIfAbsent</code> <em>chỉ</em> chạy hàm khi khoá chưa có (nên rất hợp với
+            phép tính tốn kém), còn <code>merge</code> luôn cần một giá trị mặc định và một hàm gộp.
+          </p>
+        </div>
+
+        <h2 id="linkedhashmap">7. <code>LinkedHashMap</code> và bộ nhớ đệm LRU</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>LinkedHashMap.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Chế độ mặc định: giữ thứ tự THÊM VÀO</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; m = <span class="tok-kw">new</span> <span class="tok-cls">LinkedHashMap</span>&lt;&gt;();
+m.<span class="tok-fn">put</span>(<span class="tok-str">"c"</span>, <span class="tok-num">3</span>); m.<span class="tok-fn">put</span>(<span class="tok-str">"a"</span>, <span class="tok-num">1</span>); m.<span class="tok-fn">put</span>(<span class="tok-str">"b"</span>, <span class="tok-num">2</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(m);   <span class="tok-com">// {c=3, a=1, b=2} — đúng thứ tự thêm</span>
+
+<span class="tok-com">// ⭐ Chế độ THỨ TỰ TRUY CẬP — tham số thứ ba = true</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; lru = <span class="tok-kw">new</span> <span class="tok-cls">LinkedHashMap</span>&lt;&gt;(<span class="tok-num">16</span>, <span class="tok-num">0.75f</span>, <span class="tok-kw">true</span>);
+lru.<span class="tok-fn">put</span>(<span class="tok-str">"a"</span>, <span class="tok-num">1</span>); lru.<span class="tok-fn">put</span>(<span class="tok-str">"b"</span>, <span class="tok-num">2</span>); lru.<span class="tok-fn">put</span>(<span class="tok-str">"c"</span>, <span class="tok-num">3</span>);
+lru.<span class="tok-fn">get</span>(<span class="tok-str">"a"</span>);                          <span class="tok-com">// truy cập "a" → đưa nó xuống cuối</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(lru);              <span class="tok-com">// {b=2, c=3, a=1}</span>
+
+
+<span class="tok-com">// ⭐⭐ Bộ nhớ đệm LRU hoàn chỉnh — chỉ cần override MỘT method</span>
+<span class="tok-kw">class</span> <span class="tok-cls">LruCache</span>&lt;K, V&gt; <span class="tok-kw">extends</span> <span class="tok-cls">LinkedHashMap</span>&lt;K, V&gt; {
+    <span class="tok-kw">private final int</span> sucChua;
+
+    <span class="tok-fn">LruCache</span>(<span class="tok-kw">int</span> sucChua) {
+        <span class="tok-kw">super</span>(sucChua, <span class="tok-num">0.75f</span>, <span class="tok-kw">true</span>);   <span class="tok-com">// true = thứ tự truy cập</span>
+        <span class="tok-kw">this</span>.sucChua = sucChua;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">protected boolean</span> <span class="tok-fn">removeEldestEntry</span>(<span class="tok-cls">Map</span>.<span class="tok-cls">Entry</span>&lt;K, V&gt; cuNhat) {
+        <span class="tok-kw">return</span> <span class="tok-fn">size</span>() &gt; sucChua;      <span class="tok-com">// đầy thì tự loại phần tử ít dùng nhất</span>
+    }
+}
+
+<span class="tok-cls">LruCache</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">String</span>&gt; cache = <span class="tok-kw">new</span> <span class="tok-cls">LruCache</span>&lt;&gt;(<span class="tok-num">3</span>);
+cache.<span class="tok-fn">put</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"1"</span>); cache.<span class="tok-fn">put</span>(<span class="tok-str">"b"</span>, <span class="tok-str">"2"</span>); cache.<span class="tok-fn">put</span>(<span class="tok-str">"c"</span>, <span class="tok-str">"3"</span>);
+cache.<span class="tok-fn">get</span>(<span class="tok-str">"a"</span>);                  <span class="tok-com">// "a" thành mới nhất</span>
+cache.<span class="tok-fn">put</span>(<span class="tok-str">"d"</span>, <span class="tok-str">"4"</span>);            <span class="tok-com">// đầy → loại "b" (ít dùng nhất)</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(cache);      <span class="tok-com">// {c=3, a=1, d=4}</span></code></pre>
+        </div>
+
+        <h2 id="treemap">8. <code>TreeMap</code> — truy vấn theo thứ tự</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>TreeMap.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">TreeMap</span>&lt;<span class="tok-cls">Integer</span>, <span class="tok-cls">String</span>&gt; t = <span class="tok-kw">new</span> <span class="tok-cls">TreeMap</span>&lt;&gt;();
+t.<span class="tok-fn">put</span>(<span class="tok-num">30</span>, <span class="tok-str">"ba mươi"</span>);
+t.<span class="tok-fn">put</span>(<span class="tok-num">10</span>, <span class="tok-str">"mười"</span>);
+t.<span class="tok-fn">put</span>(<span class="tok-num">20</span>, <span class="tok-str">"hai mươi"</span>);
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(t);   <span class="tok-com">// {10=mười, 20=hai mươi, 30=ba mươi} — LUÔN sắp xếp</span>
+
+<span class="tok-com">// --- Truy vấn hai đầu ---</span>
+t.<span class="tok-fn">firstKey</span>();      <span class="tok-com">// 10</span>
+t.<span class="tok-fn">lastKey</span>();       <span class="tok-com">// 30</span>
+t.<span class="tok-fn">firstEntry</span>();    <span class="tok-com">// 10=mười</span>
+t.<span class="tok-fn">pollFirstEntry</span>(); <span class="tok-com">// lấy VÀ xoá</span>
+
+<span class="tok-com">// --- Truy vấn lân cận ---</span>
+t.<span class="tok-fn">floorKey</span>(<span class="tok-num">25</span>);     <span class="tok-com">// 20 — khoá lớn nhất ≤ 25</span>
+t.<span class="tok-fn">ceilingKey</span>(<span class="tok-num">25</span>);   <span class="tok-com">// 30 — khoá nhỏ nhất ≥ 25</span>
+t.<span class="tok-fn">lowerKey</span>(<span class="tok-num">20</span>);     <span class="tok-com">// 10 — nhỏ hơn hẳn</span>
+t.<span class="tok-fn">higherKey</span>(<span class="tok-num">20</span>);    <span class="tok-com">// 30 — lớn hơn hẳn</span>
+
+<span class="tok-com">// --- Khung nhìn khoảng ---</span>
+t.<span class="tok-fn">headMap</span>(<span class="tok-num">20</span>);              <span class="tok-com">// {10=mười}          — nhỏ hơn 20</span>
+t.<span class="tok-fn">tailMap</span>(<span class="tok-num">20</span>);              <span class="tok-com">// {20=..., 30=...}   — từ 20 trở lên</span>
+t.<span class="tok-fn">subMap</span>(<span class="tok-num">10</span>, <span class="tok-kw">true</span>, <span class="tok-num">20</span>, <span class="tok-kw">true</span>); <span class="tok-com">// [10, 20] — kiểm soát cả hai biên</span>
+t.<span class="tok-fn">descendingMap</span>();          <span class="tok-com">// đảo ngược thứ tự</span>
+
+<span class="tok-com">// --- Sắp theo tiêu chí riêng ---</span>
+<span class="tok-cls">TreeMap</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; khongPhanBiet =
+    <span class="tok-kw">new</span> <span class="tok-cls">TreeMap</span>&lt;&gt;(<span class="tok-cls">String</span>.CASE_INSENSITIVE_ORDER);
+
+<span class="tok-com">// --- Ứng dụng thật: tra bảng theo khoảng ---</span>
+<span class="tok-cls">TreeMap</span>&lt;<span class="tok-cls">Integer</span>, <span class="tok-cls">String</span>&gt; xepLoai = <span class="tok-kw">new</span> <span class="tok-cls">TreeMap</span>&lt;&gt;();
+xepLoai.<span class="tok-fn">put</span>(<span class="tok-num">0</span>,  <span class="tok-str">"Yếu"</span>);
+xepLoai.<span class="tok-fn">put</span>(<span class="tok-num">50</span>, <span class="tok-str">"Trung bình"</span>);
+xepLoai.<span class="tok-fn">put</span>(<span class="tok-num">70</span>, <span class="tok-str">"Khá"</span>);
+xepLoai.<span class="tok-fn">put</span>(<span class="tok-num">90</span>, <span class="tok-str">"Giỏi"</span>);
+
+<span class="tok-kw">int</span> diem = <span class="tok-num">75</span>;
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(xepLoai.<span class="tok-fn">floorEntry</span>(diem).<span class="tok-fn">getValue</span>());   <span class="tok-com">// "Khá"</span>
+<span class="tok-com">// ⭐ Tra bảng theo khoảng chỉ với MỘT lời gọi — HashMap không làm được</span></code></pre>
+        </div>
+
+        <h2 id="ung-dung">9. Các mẫu ứng dụng thực tế</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>UngDung.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ---------- ① Đếm tần suất ----------</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; tanSuat = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> t : danhSachTu) tanSuat.<span class="tok-fn">merge</span>(t, <span class="tok-num">1</span>, <span class="tok-cls">Integer</span>::<span class="tok-fn">sum</span>);
+
+<span class="tok-com">// Top 5 từ xuất hiện nhiều nhất</span>
+tanSuat.<span class="tok-fn">entrySet</span>().<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">sorted</span>(<span class="tok-cls">Map</span>.<span class="tok-cls">Entry</span>.&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt;<span class="tok-fn">comparingByValue</span>().<span class="tok-fn">reversed</span>())
+    .<span class="tok-fn">limit</span>(<span class="tok-num">5</span>)
+    .<span class="tok-fn">forEach</span>(e -&gt; <span class="tok-cls">System</span>.out.<span class="tok-fn">printf</span>(<span class="tok-str">"%-15s %d%n"</span>, e.<span class="tok-fn">getKey</span>(), e.<span class="tok-fn">getValue</span>()));
+
+
+<span class="tok-com">// ---------- ② Nhóm theo tiêu chí ----------</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt;&gt; theoLop = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+<span class="tok-kw">for</span> (<span class="tok-cls">SinhVien</span> sv : danhSach) {
+    theoLop.<span class="tok-fn">computeIfAbsent</span>(sv.<span class="tok-fn">lop</span>(), k -&gt; <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;()).<span class="tok-fn">add</span>(sv);
+}
+<span class="tok-com">// (Chương 10 sẽ làm việc này bằng Collectors.groupingBy — một dòng)</span>
+
+
+<span class="tok-com">// ---------- ③ Chỉ mục tra cứu nhanh ----------</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">SinhVien</span>&gt; chiMuc = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+<span class="tok-kw">for</span> (<span class="tok-cls">SinhVien</span> sv : danhSach) chiMuc.<span class="tok-fn">put</span>(sv.<span class="tok-fn">ma</span>(), sv);
+<span class="tok-cls">SinhVien</span> tim = chiMuc.<span class="tok-fn">get</span>(<span class="tok-str">"SV001"</span>);       <span class="tok-com">// O(1) thay vì duyệt O(n)</span>
+
+
+<span class="tok-com">// ---------- ④ Bộ nhớ đệm cho phép tính tốn kém ----------</span>
+<span class="tok-kw">private final</span> <span class="tok-cls">Map</span>&lt;<span class="tok-cls">Integer</span>, <span class="tok-cls">Long</span>&gt; cacheFib = <span class="tok-kw">new</span> <span class="tok-cls">HashMap</span>&lt;&gt;();
+
+<span class="tok-kw">long</span> <span class="tok-fn">fib</span>(<span class="tok-kw">int</span> n) {
+    <span class="tok-kw">if</span> (n &lt;= <span class="tok-num">1</span>) <span class="tok-kw">return</span> n;
+    <span class="tok-kw">return</span> cacheFib.<span class="tok-fn">computeIfAbsent</span>(n, k -&gt; <span class="tok-fn">fib</span>(k-<span class="tok-num">1</span>) + <span class="tok-fn">fib</span>(k-<span class="tok-num">2</span>));
+    <span class="tok-com">// ⚠️ CẢNH BÁO: đệ quy trong computeIfAbsent gây ConcurrentModificationException
+    //    từ Java 9. Xem callout bên dưới.</span>
+}
+
+
+<span class="tok-com">// ---------- ⑤ EnumMap: nhanh nhất khi khoá là enum ----------</span>
+<span class="tok-kw">enum</span> <span class="tok-cls">Thu</span> { HAI, BA, TU, NAM, SAU, BAY, CN }
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">Thu</span>, <span class="tok-cls">String</span>&gt; lich = <span class="tok-kw">new</span> <span class="tok-cls">EnumMap</span>&lt;&gt;(<span class="tok-cls">Thu</span>.<span class="tok-kw">class</span>);
+lich.<span class="tok-fn">put</span>(<span class="tok-cls">Thu</span>.HAI, <span class="tok-str">"Họp nhóm"</span>);
+<span class="tok-com">// Bên trong chỉ là một MẢNG đánh chỉ số theo ordinal() → nhanh hơn HashMap,
+// tốn ít bộ nhớ hơn, và luôn duyệt theo thứ tự khai báo enum.</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Không gọi đệ quy trong <code>computeIfAbsent</code></div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>DeQuyBay.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ❌ Từ Java 9: ném ConcurrentModificationException</span>
+cache.<span class="tok-fn">computeIfAbsent</span>(n, k -&gt; <span class="tok-fn">fib</span>(k-<span class="tok-num">1</span>) + <span class="tok-fn">fib</span>(k-<span class="tok-num">2</span>));
+<span class="tok-com">// Hàm bên trong lại sửa chính map đang được computeIfAbsent xử lý.
+// Java 8 im lặng làm hỏng cấu trúc bên trong; Java 9+ phát hiện và báo lỗi.</span>
+
+<span class="tok-com">// ✅ Tách rõ hai bước</span>
+<span class="tok-kw">long</span> <span class="tok-fn">fib</span>(<span class="tok-kw">int</span> n) {
+    <span class="tok-kw">if</span> (n &lt;= <span class="tok-num">1</span>) <span class="tok-kw">return</span> n;
+    <span class="tok-cls">Long</span> daCo = cache.<span class="tok-fn">get</span>(n);
+    <span class="tok-kw">if</span> (daCo != <span class="tok-kw">null</span>) <span class="tok-kw">return</span> daCo;
+    <span class="tok-kw">long</span> kq = <span class="tok-fn">fib</span>(n-<span class="tok-num">1</span>) + <span class="tok-fn">fib</span>(n-<span class="tok-num">2</span>);   <span class="tok-com">// tính XONG rồi mới đụng map</span>
+    cache.<span class="tok-fn">put</span>(n, kq);
+    <span class="tok-kw">return</span> kq;
+}</code></pre>
+          </div>
+          <p>
+            Quy tắc chung: hàm truyền vào <code>computeIfAbsent</code>, <code>merge</code>, <code>compute</code>
+            <strong>không được sửa chính map đó</strong> — dù trực tiếp hay gián tiếp.
+          </p>
+        </div>
+
+        <h2 id="phong-van">10. Góc phỏng vấn</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Câu hỏi</th><th>Trả lời ngắn gọn</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>HashMap</code> hoạt động thế nào?</td><td>Bảng bucket; <code>hashCode()</code> chọn bucket qua <code>h &amp; (n−1)</code>, <code>equals()</code> tìm entry trong bucket; va chạm xử lý bằng liên kết, chuỗi dài &gt;8 và bảng ≥64 thì chuyển thành cây đỏ đen</td></tr>
+              <tr><td>Vì sao dung lượng là luỹ thừa của 2?</td><td>Để dùng <code>h &amp; (n−1)</code> thay <code>h % n</code> — nhanh hơn nhiều</td></tr>
+              <tr><td>Vì sao trộn <code>h ^ (h&gt;&gt;&gt;16)</code>?</td><td>Chỉ số chỉ dùng bit thấp; trộn để bit cao cũng ảnh hưởng, giảm va chạm</td></tr>
+              <tr><td>Hệ số tải 0.75 nghĩa là gì?</td><td>Đầy 75% thì nới rộng gấp đôi và phân bổ lại — cân bằng giữa bộ nhớ và va chạm</td></tr>
+              <tr><td>Điều gì xảy ra khi hai khoá trùng hash?</td><td>Cùng bucket, nối thành chuỗi; <code>equals()</code> phân biệt chúng</td></tr>
+              <tr><td>Vì sao khoá nên bất biến?</td><td>Đổi trường tham gia hash khiến entry nằm sai bucket → không tìm, không xoá được</td></tr>
+              <tr><td><code>HashMap</code> vs <code>Hashtable</code>?</td><td>Không đồng bộ vs đồng bộ; cho <code>null</code> vs không; nhanh vs chậm — luôn chọn <code>HashMap</code></td></tr>
+              <tr><td><code>HashMap</code> vs <code>ConcurrentHashMap</code>?</td><td>Cái sau an toàn luồng nhờ khoá theo đoạn, không khoá toàn bộ như <code>Hashtable</code></td></tr>
+              <tr><td>Tại sao <code>HashMap</code> không an toàn đa luồng?</td><td>Resize đồng thời có thể làm hỏng cấu trúc; trước Java 8 còn gây vòng lặp vô hạn</td></tr>
+              <tr><td><code>equals</code> mà quên <code>hashCode</code> thì sao?</td><td><code>get()</code> trả <code>null</code>, <code>contains()</code> trả <code>false</code>, <code>Set</code> chứa phần tử trùng</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="cheat-sheet">11. Cheat sheet chương 8</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Cách viết</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Khai báo chuẩn</td><td><code>Map&lt;K,V&gt; m = new HashMap&lt;&gt;();</code></td></tr>
+              <tr><td>Đọc an toàn (tránh NPE)</td><td><code>m.getOrDefault(k, macDinh)</code></td></tr>
+              <tr><td>Đếm tần suất</td><td><code>m.merge(k, 1, Integer::sum)</code></td></tr>
+              <tr><td>Nhóm vào list</td><td><code>m.computeIfAbsent(k, x -&gt; new ArrayList&lt;&gt;()).add(v)</code></td></tr>
+              <tr><td>Cache lười</td><td><code>cache.computeIfAbsent(k, this::tinhToan)</code></td></tr>
+              <tr><td>Chỉ thêm nếu chưa có</td><td><code>m.putIfAbsent(k, v)</code></td></tr>
+              <tr><td>Duyệt</td><td><code>for (var e : m.entrySet())</code> hoặc <code>m.forEach((k,v) -&gt; …)</code></td></tr>
+              <tr><td>Xoá theo điều kiện</td><td><code>m.entrySet().removeIf(e -&gt; …)</code></td></tr>
+              <tr><td>Map bất biến</td><td><code>Map.of(k1,v1, k2,v2)</code> · nhiều hơn 10 cặp: <code>Map.ofEntries(…)</code></td></tr>
+              <tr><td>Cần thứ tự thêm vào</td><td><code>LinkedHashMap</code></td></tr>
+              <tr><td>Cần sắp theo khoá</td><td><code>TreeMap</code></td></tr>
+              <tr><td>Tra bảng theo khoảng</td><td><code>treeMap.floorEntry(x)</code></td></tr>
+              <tr><td>Cache LRU</td><td><code>LinkedHashMap(n, .75f, true)</code> + override <code>removeEldestEntry</code></td></tr>
+              <tr><td>Khoá là enum</td><td><code>EnumMap</code> — nhanh hơn và gọn hơn <code>HashMap</code></td></tr>
+              <tr><td>Đa luồng</td><td><code>ConcurrentHashMap</code> — <strong>không</strong> <code>Hashtable</code></td></tr>
+              <tr><td>Lớp làm khoá</td><td>Override <strong>cả</strong> <code>equals</code> và <code>hashCode</code>; tốt nhất dùng <code>record</code></td></tr>
+              <tr><td>Biết trước số lượng</td><td><code>new HashMap&lt;&gt;(n / 0.75f + 1)</code> hoặc <code>HashMap.newHashMap(n)</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Chứng minh hợp đồng <code>equals</code>/<code>hashCode</code></h4>
+            <div class="exercise-body">
+              <p>Tạo lớp <code>Diem</code> với hai trường <code>int x, y</code> và làm bốn thí nghiệm, ghi lại kết quả mỗi lần:</p>
+              <ol>
+                <li>Không override gì cả → đưa hai <code>Diem(1,2)</code> vào <code>HashMap</code> làm khoá. <code>size()</code> bằng bao nhiêu? <code>get()</code> trả gì?</li>
+                <li>Chỉ override <code>equals</code> → lặp lại.</li>
+                <li>Override cả hai → lặp lại.</li>
+                <li>Override <code>hashCode()</code> trả về <strong>hằng số</strong> (ví dụ luôn trả <code>1</code>) → <code>Map</code> còn chạy đúng không? Đo tốc độ với 100.000 khoá và so với bản bình thường.</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Thí nghiệm 4 là quan trọng nhất: <code>hashCode</code> hằng số vẫn <em>đúng</em> về mặt hợp đồng
+                    (bằng nhau thì hash bằng nhau), nhưng mọi khoá rơi vào <em>một</em> bucket, biến
+                    <code>HashMap</code> thành danh sách liên kết <span class="bigo mid">O(n)</span> — hoặc cây
+                    <span class="bigo good">O(log n)</span> từ Java 8 nhờ treeify. Bạn sẽ thấy chậm hơn hàng trăm
+                    lần. Bài học: hợp đồng là điều kiện <em>cần</em>, phân tán tốt là điều kiện <em>đủ</em>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Tự cài <code>MyHashMap</code></h4>
+            <div class="exercise-body">
+              <p>Cài đặt bảng băm từ đầu, chỉ dùng mảng:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>API</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">public class</span> <span class="tok-cls">MyHashMap</span>&lt;K, V&gt; {
+    <span class="tok-kw">private static class</span> <span class="tok-cls">Node</span>&lt;K,V&gt; { <span class="tok-kw">final int</span> hash; <span class="tok-kw">final</span> K key; V value; <span class="tok-cls">Node</span>&lt;K,V&gt; next; }
+    <span class="tok-kw">private</span> <span class="tok-cls">Node</span>&lt;K,V&gt;[] bang;
+    <span class="tok-kw">private int</span> soLuong;
+
+    <span class="tok-kw">public</span> V <span class="tok-fn">put</span>(K k, V v);
+    <span class="tok-kw">public</span> V <span class="tok-fn">get</span>(<span class="tok-cls">Object</span> k);
+    <span class="tok-kw">public</span> V <span class="tok-fn">remove</span>(<span class="tok-cls">Object</span> k);
+    <span class="tok-kw">public boolean</span> <span class="tok-fn">containsKey</span>(<span class="tok-cls">Object</span> k);
+    <span class="tok-kw">public int</span> <span class="tok-fn">size</span>();
+    <span class="tok-kw">public</span> <span class="tok-cls">Set</span>&lt;K&gt; <span class="tok-fn">keySet</span>();
+}</code></pre>
+              </div>
+              <ul>
+                <li>Dung lượng ban đầu 16, luôn là luỹ thừa của 2; dùng <code>h &amp; (n-1)</code>.</li>
+                <li>Trộn hash bằng <code>h ^ (h &gt;&gt;&gt; 16)</code>.</li>
+                <li>Xử lý va chạm bằng liên kết; hỗ trợ khoá <code>null</code> (hash = 0).</li>
+                <li>Tự nới rộng khi <code>soLuong &gt; bang.length * 0.75</code>.</li>
+                <li>Thêm phương thức <code>thongKe()</code> in ra: số bucket rỗng, độ dài chuỗi dài nhất, độ dài trung bình.</li>
+                <li>Thử với <code>hashCode</code> tốt và <code>hashCode</code> tệ (hằng số), so sánh thống kê.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Tạo mảng generic: <code>@SuppressWarnings("unchecked") Node&lt;K,V&gt;[] t = new Node[n];</code>
+                    — chương 9 giải thích vì sao phải làm vậy.<br/>
+                    Khi resize, bạn phải tính lại chỉ số cho mọi node. JDK có một tối ưu hay: vì dung lượng nhân
+                    đôi, node hoặc ở nguyên chỉ số cũ, hoặc chuyển sang <code>cũ + dungLượngCũ</code> — quyết định
+                    bằng một phép AND bit duy nhất. Thử tự tìm ra quy luật đó.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Phân tích tệp nhật ký</h4>
+            <div class="exercise-body">
+              <p>Cho tệp log mỗi dòng dạng <code>timestamp|level|module|message</code>, viết chương trình báo cáo:</p>
+              <ol>
+                <li>Số dòng theo từng cấp độ (<code>merge</code>).</li>
+                <li>Với mỗi module, danh sách các cấp độ đã xuất hiện (<code>computeIfAbsent</code> + <code>Set</code>).</li>
+                <li>Top 5 module có nhiều lỗi nhất, sắp giảm dần.</li>
+                <li>Số lỗi theo từng giờ, in <strong>theo thứ tự thời gian</strong> (<code>TreeMap</code>).</li>
+                <li>Module nào có lỗi trong <em>mọi</em> giờ của ngày?</li>
+                <li>Với mỗi cặp (module, cấp độ), thông điệp gần nhất (<code>Map&lt;Khoa, String&gt;</code> với <code>record Khoa</code>).</li>
+              </ol>
+              <p>Yêu cầu: chỉ dùng Collections, <strong>chưa</strong> dùng Stream (sẽ làm lại bằng Stream ở chương 10 để so sánh số dòng code).</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    (6) minh hoạ vì sao <code>record</code> là khoá lý tưởng: <code>record Khoa(String module,
+                    String level) { }</code> — sinh sẵn <code>equals</code>/<code>hashCode</code> đúng chuẩn và bất
+                    biến. Nếu tự viết class, bạn phải nhớ override cả hai và để trường <code>final</code>.<br/>
+                    (4) dùng <code>TreeMap&lt;Integer, Integer&gt;</code> với khoá là giờ — nó tự sắp xếp nên in ra
+                    đã đúng thứ tự, không cần sort.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Cache LRU có thống kê</h4>
+            <div class="exercise-body">
+              <p>Xây dựng <code>Cache&lt;K,V&gt;</code> dựa trên <code>LinkedHashMap</code> với:</p>
+              <ul>
+                <li>Sức chứa tối đa, tự loại phần tử ít dùng nhất.</li>
+                <li>Thống kê: số lần trúng (hit), số lần trượt (miss), tỉ lệ trúng, số lần bị loại.</li>
+                <li>Phương thức <code>V get(K k, Function&lt;K,V&gt; tinhToan)</code> — trượt thì tính rồi lưu.</li>
+                <li>Hết hạn theo thời gian: mỗi entry lưu thời điểm tạo, quá <code>ttlMillis</code> thì coi như trượt.</li>
+                <li>Phương thức <code>String baoCao()</code> in bảng thống kê đẹp.</li>
+              </ul>
+              <p>Test: mô phỏng 10.000 lượt truy cập theo phân phối lệch (20% khoá chiếm 80% lượt truy cập) và đo tỉ lệ trúng với các sức chứa khác nhau. Vẽ bảng sức chứa → tỉ lệ trúng.</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Để lưu thời điểm tạo, giá trị trong map nên là <code>record Entry&lt;V&gt;(V giaTri, long
+                    taoLuc)</code> thay vì <code>V</code> trần.<br/>
+                    Phân phối lệch: sinh chỉ số bằng <code>(int)(Math.pow(random.nextDouble(), 2) * soKhoa)</code>
+                    — bình phương làm giá trị dồn về đầu dải.<br/>
+                    Bạn sẽ thấy tỉ lệ trúng tăng nhanh khi sức chứa còn nhỏ rồi bão hoà — đúng như lý thuyết cache.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>So sánh hiệu năng bốn loại <code>Map</code></h4>
+            <div class="exercise-body">
+              <p>Benchmark <code>HashMap</code>, <code>LinkedHashMap</code>, <code>TreeMap</code>, <code>Hashtable</code> với n = 100.000 / 1.000.000:</p>
+              <ol>
+                <li><code>put</code> n cặp.</li>
+                <li><code>get</code> n lần (khoá tồn tại).</li>
+                <li><code>get</code> n lần (khoá <em>không</em> tồn tại).</li>
+                <li>Duyệt toàn bộ bằng <code>entrySet()</code>.</li>
+                <li>Ước lượng bộ nhớ chiếm dụng.</li>
+              </ol>
+              <p>Sau đó lặp lại phần <code>put</code> với hai cách khởi tạo: mặc định và có đặt dung lượng ban đầu. Chênh lệch bao nhiêu? Giải thích bằng số lần resize.</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Đo bộ nhớ thô: <code>Runtime.getRuntime()</code> với <code>totalMemory() - freeMemory()</code>,
+                    gọi <code>System.gc()</code> trước mỗi lần đo (không đảm bảo nhưng đủ để so sánh tương đối).<br/>
+                    Bạn sẽ thấy: <code>TreeMap</code> chậm hơn khoảng 2-3 lần nhưng cho thứ tự;
+                    <code>LinkedHashMap</code> chậm hơn <code>HashMap</code> khoảng 10-20% khi ghi nhưng
+                    <em>nhanh hơn</em> khi duyệt (đi theo liên kết thay vì quét cả bảng bucket);
+                    <code>Hashtable</code> chậm hơn <code>HashMap</code> ngay cả khi chỉ có một luồng.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p><code>HashMap</code> hoạt động bên trong thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Nó là một <strong>bảng băm</strong>: mảng <code>Node[] table</code> gọi là bucket. Khi <code>put(k, v)</code>:</p>
+              <ol>
+                <li>Tính <code>h = k.hashCode()</code>, rồi <strong>trộn bit</strong>: <code>h ^ (h &gt;&gt;&gt; 16)</code>.</li>
+                <li>Tìm chỉ số bucket: <code>i = h &amp; (table.length - 1)</code> — tương đương chia lấy dư nhưng nhanh hơn, và đây là lý do dung lượng luôn là luỹ thừa của 2.</li>
+                <li>Duyệt chuỗi node trong bucket đó: nếu tìm thấy khoá <code>equals</code> thì ghi đè giá trị; nếu không thì thêm node mới.</li>
+                <li>Nếu <code>soLuong &gt; capacity × 0.75</code> thì nới rộng gấp đôi và phân bổ lại toàn bộ.</li>
+              </ol>
+              <p style="margin-top: 8px;">
+                <strong>Va chạm</strong> (hai khoá cùng bucket) được xử lý bằng danh sách liên kết. Từ Java 8, nếu
+                chuỗi dài hơn 8 <em>và</em> bảng có ít nhất 64 bucket, nó chuyển thành <strong>cây đỏ đen</strong> —
+                đưa trường hợp xấu nhất từ <span class="bigo mid">O(n)</span> xuống
+                <span class="bigo good">O(log n)</span>, đồng thời chặn lỗ hổng tấn công va chạm băm.
+              </p>
+              <p style="margin-top: 8px;">
+                Điểm mấu chốt: <code>hashCode()</code> chọn <em>bucket</em>, <code>equals()</code> tìm <em>đúng
+                entry</em> trong bucket.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Override <code>equals</code> mà quên <code>hashCode</code> thì chuyện gì xảy ra?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>HashMap</code> và <code>HashSet</code> hoạt động <strong>sai hoàn toàn</strong> — nhưng
+                <em>im lặng</em>, không có lỗi nào được ném ra:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Hau qua</span><button class="copy-btn">Copy</button></div>
+<pre><code>map.<span class="tok-fn">put</span>(<span class="tok-kw">new</span> <span class="tok-cls">SanPham</span>(<span class="tok-str">"SP01"</span>), <span class="tok-num">100</span>);
+map.<span class="tok-fn">get</span>(<span class="tok-kw">new</span> <span class="tok-cls">SanPham</span>(<span class="tok-str">"SP01"</span>));       <span class="tok-com">// null  ⚠️</span>
+map.<span class="tok-fn">containsKey</span>(<span class="tok-kw">new</span> <span class="tok-cls">SanPham</span>(<span class="tok-str">"SP01"</span>)); <span class="tok-com">// false ⚠️</span>
+set.<span class="tok-fn">add</span>(a); set.<span class="tok-fn">add</span>(b);             <span class="tok-com">// size = 2 dù a.equals(b) ⚠️</span></code></pre>
+              </div>
+              <p>
+                <strong>Nguyên nhân:</strong> không override <code>hashCode</code> thì Java dùng bản mặc định của
+                <code>Object</code> — dựa trên địa chỉ bộ nhớ. Hai object có nội dung giống hệt nhưng địa chỉ khác
+                nhau cho hai mã băm khác nhau, rơi vào <em>hai bucket khác nhau</em>, nên <code>equals()</code>
+                <strong>không bao giờ được gọi</strong>.
+              </p>
+              <p style="margin-top: 8px;">
+                Sửa: <code>Objects.hash(cacTruong)</code> với <em>đúng</em> những trường dùng trong
+                <code>equals</code>. Hoặc đơn giản nhất — dùng <code>record</code>, nó sinh sẵn cả hai đúng chuẩn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Vì sao khoá của <code>Map</code> phải bất biến?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì vị trí lưu trữ của entry được quyết định bởi <code>hashCode()</code> <strong>tại thời điểm
+                <code>put</code></strong>. Nếu sau đó bạn đổi một trường tham gia tính hash, mã băm thay đổi nhưng
+                entry <em>vẫn nằm ở bucket cũ</em> — và <code>HashMap</code> không hề biết.
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Ket.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">Khoa</span> k = <span class="tok-kw">new</span> <span class="tok-cls">Khoa</span>(<span class="tok-str">"A"</span>);
+m.<span class="tok-fn">put</span>(k, <span class="tok-str">"giá trị"</span>);      <span class="tok-com">// lưu ở bucket của hash("A")</span>
+k.ten = <span class="tok-str">"B"</span>;               <span class="tok-com">// đổi trường tham gia hash</span>
+
+m.<span class="tok-fn">get</span>(k);      <span class="tok-com">// null  — tìm ở bucket hash("B"), không có gì</span>
+m.<span class="tok-fn">size</span>();     <span class="tok-com">// 1     — nó VẪN trong map</span>
+m.<span class="tok-fn">remove</span>(k);   <span class="tok-com">// null  — xoá cũng không được</span></code></pre>
+              </div>
+              <p>
+                Entry bị <strong>kẹt vĩnh viễn</strong>: không tìm được, không xoá được, không giải phóng bộ nhớ
+                được (rò rỉ). Duyệt <code>entrySet()</code> thì vẫn thấy nó — càng khó hiểu.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Quy tắc:</strong> khoá phải bất biến, hoặc ít nhất mọi trường tham gia <code>hashCode</code>
+                phải <code>final</code>. Đây là lý do <code>String</code>, <code>Integer</code>,
+                <code>record</code>, <code>enum</code> là khoá lý tưởng — và cũng là một lý do quan trọng khiến
+                <code>String</code> được thiết kế bất biến.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Vì sao dung lượng <code>HashMap</code> luôn là luỹ thừa của 2?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Để tính chỉ số bucket bằng phép <strong>AND bit</strong> thay vì phép chia lấy dư. Khi
+                <code>n</code> là luỹ thừa của 2, <code>h &amp; (n-1)</code> cho kết quả <em>giống hệt</em>
+                <code>h % n</code> (với <code>h</code> không âm) nhưng nhanh hơn nhiều lần trên CPU.
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>ViDu.java</span><button class="copy-btn">Copy</button></div>
+<pre><code>n = <span class="tok-num">16</span>  →  n-<span class="tok-num">1</span> = <span class="tok-num">15</span> = <span class="tok-num">0b1111</span>
+h = <span class="tok-num">73</span>  = <span class="tok-num">0b1001001</span>
+h &amp; <span class="tok-num">15</span> = <span class="tok-num">0b0001001</span> = <span class="tok-num">9</span>     <span class="tok-com">// = 73 % 16 ✅ nhưng nhanh hơn</span></code></pre>
+              </div>
+              <p style="margin-top: 8px;">
+                Điều này cũng giải thích vì sao cần bước trộn <code>h ^ (h &gt;&gt;&gt; 16)</code>: phép AND chỉ dùng
+                <em>vài bit thấp nhất</em> của mã băm. Nếu hai khoá chỉ khác nhau ở bit cao, chúng sẽ rơi vào cùng
+                bucket. Trộn bit cao xuống thấp làm mọi bit đều ảnh hưởng tới chỉ số, giảm va chạm đáng kể.
+              </p>
+              <p style="margin-top: 8px;">
+                Hệ quả nữa: khi resize (nhân đôi), mỗi node hoặc ở nguyên chỉ số cũ, hoặc chuyển sang
+                <code>cũ + dungLuongCu</code> — xác định chỉ bằng một phép AND, không cần tính lại toàn bộ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>HashMap</code> vs <code>LinkedHashMap</code> vs <code>TreeMap</code> — chọn cái nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ul>
+                <li>
+                  <strong><code>HashMap</code></strong> — <em>mặc định</em>. Nhanh nhất
+                  (<span class="bigo good">O(1)</span>), tốn ít bộ nhớ nhất. Không đảm bảo thứ tự nào, và thứ tự có
+                  thể đổi giữa các lần chạy hoặc phiên bản Java.
+                </li>
+                <li>
+                  <strong><code>LinkedHashMap</code></strong> — vẫn <span class="bigo good">O(1)</span>, thêm danh
+                  sách liên kết đôi để giữ <em>thứ tự thêm vào</em>. Chọn khi cần kết quả ổn định để hiển thị hoặc
+                  để test khỏi bị phập phù. Chế độ <code>accessOrder=true</code> biến nó thành nền tảng cho cache
+                  LRU chỉ với một method override.
+                </li>
+                <li>
+                  <strong><code>TreeMap</code></strong> — <span class="bigo good">O(log n)</span>, luôn sắp theo
+                  khoá. Chọn khi cần <em>thứ tự</em> hoặc — quan trọng hơn — các truy vấn mà hai loại kia không làm
+                  được: <code>floorKey</code>, <code>ceilingKey</code>, <code>subMap</code>,
+                  <code>firstEntry</code>. Không cho khoá <code>null</code>.
+                </li>
+              </ul>
+              <p style="margin-top: 8px;">
+                Trường hợp đặc biệt: khoá là <code>enum</code> → dùng <code><strong>EnumMap</strong></code>. Nó chỉ
+                là một mảng đánh chỉ số theo <code>ordinal()</code>, nên nhanh hơn và tốn ít bộ nhớ hơn cả ba.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Vì sao không nên dùng <code>Hashtable</code>? Thay bằng gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><code>Hashtable</code> có từ Java 1.0 và mắc bốn vấn đề:</p>
+              <ul>
+                <li><strong>Đồng bộ hoá thô</strong> — mọi phương thức <code>synchronized</code> trên <em>toàn bộ</em> object. Hai luồng đọc hai khoá hoàn toàn khác nhau vẫn phải xếp hàng chờ nhau.</li>
+                <li><strong>Chậm khi một luồng</strong> — bạn trả giá cho đồng bộ hoá mà không dùng tới.</li>
+                <li><strong>Không cho <code>null</code></strong> — cả khoá lẫn giá trị đều ném NPE.</li>
+                <li><strong>API cũ</strong> — <code>elements()</code>, <code>keys()</code> trả <code>Enumeration</code> thay vì <code>Iterator</code>.</li>
+              </ul>
+              <p style="margin-top: 8px;"><strong>Thay thế:</strong></p>
+              <ul>
+                <li>Một luồng → <code><strong>HashMap</strong></code>.</li>
+                <li>Đa luồng → <code><strong>ConcurrentHashMap</strong></code>. Nó khoá theo từng đoạn (và từ Java 8 là theo từng bucket với CAS), nên nhiều luồng ghi vào các khoá khác nhau chạy song song được — nhanh hơn <code>Hashtable</code> hàng chục lần khi tải cao.</li>
+              </ul>
+              <p>
+                Đừng dùng <code>Collections.synchronizedMap(new HashMap&lt;&gt;())</code> nữa — nó cũng khoá toàn
+                bộ như <code>Hashtable</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p><code>merge</code>, <code>computeIfAbsent</code>, <code>putIfAbsent</code> khác nhau ra sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <div class="code-wrap">
+                <div class="code-meta"><span>SoSanh.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// putIfAbsent — giá trị TÍNH SẴN, chỉ đặt nếu khoá chưa có</span>
+m.<span class="tok-fn">putIfAbsent</span>(k, <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;());
+<span class="tok-com">// ⚠️ ArrayList LUÔN được tạo, kể cả khi khoá đã tồn tại → lãng phí</span>
+
+<span class="tok-com">// computeIfAbsent — hàm CHỈ chạy khi khoá chưa có, và TRẢ VỀ giá trị</span>
+m.<span class="tok-fn">computeIfAbsent</span>(k, x -&gt; <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;()).<span class="tok-fn">add</span>(v);
+<span class="tok-com">// ✅ không tạo thừa, và nối chuỗi .add() được ngay</span>
+
+<span class="tok-com">// merge — có giá trị mặc định + hàm GỘP khi khoá đã có</span>
+m.<span class="tok-fn">merge</span>(k, <span class="tok-num">1</span>, <span class="tok-cls">Integer</span>::<span class="tok-fn">sum</span>);
+<span class="tok-com">// chưa có → đặt 1; đã có → đặt sum(cũ, 1)</span></code></pre>
+              </div>
+              <p style="margin-top: 8px;"><strong>Quy tắc chọn:</strong></p>
+              <ul>
+                <li><strong>Đếm / cộng dồn</strong> → <code>merge</code>.</li>
+                <li><strong>Nhóm vào collection</strong> hoặc <strong>cache lười</strong> (giá trị tốn công tạo) → <code>computeIfAbsent</code>.</li>
+                <li><strong>Giá trị đơn giản đã có sẵn</strong> → <code>putIfAbsent</code>.</li>
+              </ul>
+              <p>
+                Lưu ý chung: hàm truyền vào ba phương thức này <strong>không được sửa chính map đó</strong> — Java 9+
+                phát hiện và ném <code>ConcurrentModificationException</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Cách duyệt <code>Map</code> nào hiệu quả nhất? Vì sao?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><strong><code>entrySet()</code></strong> — một lần duyệt lấy được cả khoá lẫn giá trị.</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Duyet.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ✅ TỐT NHẤT</span>
+<span class="tok-kw">for</span> (<span class="tok-kw">var</span> e : m.<span class="tok-fn">entrySet</span>()) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(e.<span class="tok-fn">getKey</span>() + <span class="tok-str">" = "</span> + e.<span class="tok-fn">getValue</span>());
+}
+
+<span class="tok-com">// ❌ TỆ — mỗi vòng lặp thêm MỘT lần tra cứu băm thừa</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">String</span> k : m.<span class="tok-fn">keySet</span>()) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(k + <span class="tok-str">" = "</span> + m.<span class="tok-fn">get</span>(k));   <span class="tok-com">// chậm gấp đôi</span>
+}
+
+<span class="tok-com">// ✅ Cũng tốt, ngắn gọn hơn (Java 8+)</span>
+m.<span class="tok-fn">forEach</span>((k, v) -&gt; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(k + <span class="tok-str">" = "</span> + v));</code></pre>
+              </div>
+              <p style="margin-top: 8px;">
+                Cách <code>keySet()</code> + <code>get()</code> phải tính lại mã băm và duyệt lại bucket cho
+                <em>mỗi</em> khoá — làm gấp đôi công việc một cách vô ích. Chỉ dùng <code>keySet()</code> khi bạn
+                thực sự chỉ cần khoá, và <code>values()</code> khi chỉ cần giá trị.
+              </p>
+              <p style="margin-top: 8px;">
+                Lưu ý: cả ba đều là <em>khung nhìn</em> chứ không phải bản sao — xoá trong <code>keySet()</code> là
+                xoá luôn khỏi map. Muốn xoá theo điều kiện khi đang duyệt:
+                <code>m.entrySet().removeIf(e -&gt; …)</code>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 8, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Bên trong <code>HashMap</code></strong>: bảng bucket, <code>h &amp; (n-1)</code>, trộn bit, va chạm, hệ số tải 0.75, resize, treeify ở ngưỡng 8/64.</li>
+          <li><strong>Hợp đồng <code>equals</code>/<code>hashCode</code></strong> và hậu quả im lặng khi vi phạm.</li>
+          <li><strong>Khoá phải bất biến</strong> — nếu không, entry bị kẹt vĩnh viễn.</li>
+          <li><strong>Bốn cài đặt</strong>: <code>HashMap</code> mặc định, <code>LinkedHashMap</code> giữ thứ tự, <code>TreeMap</code> sắp xếp, <code>Hashtable</code> đã lỗi thời.</li>
+          <li><strong>Duyệt qua <code>entrySet()</code></strong> — không dùng <code>keySet()</code> + <code>get()</code>.</li>
+          <li><strong>API Java 8+</strong>: <code>getOrDefault</code>, <code>merge</code>, <code>computeIfAbsent</code>, <code>putIfAbsent</code>, <code>forEach</code>.</li>
+          <li><strong>Cache LRU</strong> bằng <code>LinkedHashMap</code> chế độ thứ tự truy cập.</li>
+          <li><strong>Truy vấn thứ tự</strong> của <code>TreeMap</code>: <code>floorEntry</code>, <code>subMap</code>, tra bảng theo khoảng.</li>
+          <li><strong><code>EnumMap</code></strong> khi khoá là enum — chỉ là mảng, nhanh nhất.</li>
+          <li><strong>Câu hỏi phỏng vấn</strong> kinh điển và câu trả lời gọn.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 4-5 (OOP)</strong> — <code>equals</code>/<code>hashCode</code>/<code>record</code> là điều kiện tiên quyết để dùng <code>Map</code> đúng.</li>
+          <li><strong>Chương 7 (Collections)</strong> — <code>HashSet</code> thực chất là <code>HashMap</code> với giá trị giả; mọi kiến thức chương này áp dụng nguyên vẹn.</li>
+          <li><strong>Chương 9 (Generics)</strong> — <code>Map&lt;K,V&gt;</code>, wildcard, và vì sao mảng generic phải dùng <code>@SuppressWarnings</code>.</li>
+          <li><strong>Chương 10 (Stream)</strong> — <code>Collectors.groupingBy</code>, <code>toMap</code>, <code>counting</code> thay thế phần lớn mẫu trong mục 9.</li>
+          <li><strong>Chương 12 (Đa luồng)</strong> — <code>ConcurrentHashMap</code> và cơ chế khoá theo bucket.</li>
+          <li><strong>Chương 13 (JDBC)</strong> — ánh xạ <code>ResultSet</code> thành <code>Map</code> hoặc danh sách entity.</li>
+          <li><strong>Trụ cột DSA</strong> — bảng băm, cây đỏ đen, phân tích khấu hao; đây là ví dụ cài đặt thực tế của cả ba.</li>
+          <li><strong>Python Chương 3</strong> — đối chiếu: <code>dict</code> giữ thứ tự thêm vào <em>theo đặc tả</em> từ Python 3.7 (khác <code>HashMap</code>), và dùng bảng băm nhỏ gọn hai tầng.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong7.html" class="prev">
+            <div class="dir">← Chương 7</div>
+            <div class="label">Collections Framework</div>
+          </a>
+          <a href="chuong9.html" class="next">
+            <div class="dir">Chương 9 →</div>
+            <div class="label">Generics</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#map-la-gi">1. <code>Map</code> là gì</a></li>
+          <li><a href="#hashmap-ben-trong">2. Bên trong <code>HashMap</code></a></li>
+          <li class="level-3"><a href="#thuat-toan">2.1. Thuật toán put/get</a></li>
+          <li class="level-3"><a href="#va-cham">2.2. Va chạm &amp; treeify</a></li>
+          <li><a href="#equals-hashcode">3. Hợp đồng equals/hashCode</a></li>
+          <li><a href="#so-sanh">4. Bảng so sánh</a></li>
+          <li><a href="#duyet-map">5. Duyệt <code>Map</code></a></li>
+          <li><a href="#api-java8">6. API Java 8+</a></li>
+          <li><a href="#linkedhashmap">7. <code>LinkedHashMap</code> &amp; LRU</a></li>
+          <li><a href="#treemap">8. <code>TreeMap</code></a></li>
+          <li><a href="#ung-dung">9. Mẫu ứng dụng</a></li>
+          <li><a href="#phong-van">10. Góc phỏng vấn</a></li>
+          <li><a href="#cheat-sheet">11. Cheat sheet</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 8 — Map Framework · Java sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong7.html">← Chương 7</a> · <a href="../index.html">Java TOC</a> · <a href="chuong9.html">Chương 9 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

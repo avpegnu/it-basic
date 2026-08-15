@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chương 5 — OOP in Python · Python Sub-pillar</title>
-  <meta name="description" content="Class, __init__, dunder methods, inheritance, MRO C3, @property, @dataclass, abc.ABC, typing.Protocol, duck typing — mô hình OOP đặc trưng của Python." />
+  <title>Chương 5 — Exceptions &amp; Error Handling · Python Sub-pillar</title>
+  <meta name="description" content="try/except/else/finally, cây phân cấp exception, raise ... from ..., custom exception, EAFP vs LBYL, đọc traceback, ExceptionGroup và except* (3.11+), logging lỗi đúng cách." />
   <meta name="theme-color" content="#306998" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,20 +42,20 @@
         <a href="../index.html">Python</a><span class="sep">/</span>
         <span>Chương 5</span>
       </div>
-      <div class="chapter-num">Chương 05 · OOP in Python</div>
+      <div class="chapter-num">Chương 05 · Exceptions &amp; Error Handling</div>
       <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
-        Lập trình hướng đối tượng trong Python
+        Xử lý ngoại lệ
       </h1>
       <p class="lead">
-        Python không "tin" hoàn toàn vào OOP cứng kiểu Java. <code>class</code> trong Python là một <strong>namespace
-        khả tạo instance</strong> — không có <code>new</code>, không có private thật sự, không có <code>interface</code>
-        tách rời. Thay vào đó, Python có <strong>dunder method</strong> (cho phép class hòa nhập syntax ngôn ngữ),
-        <strong>duck typing</strong> (hành vi quan trọng hơn lớp), <strong>MRO C3</strong> (multiple inheritance an
-        toàn), <code>@dataclass</code>, <code>@property</code>, <code>abc</code> và <code>Protocol</code>. Hiểu trọn
-        gói = code Python "Pythonic" thay vì "Java-in-Python".
+        Trong Python, ngoại lệ (<em>exception</em>) không phải là "sự cố hiếm gặp" — nó là một <strong>kênh điều khiển
+        luồng hạng nhất</strong>. Vòng lặp <code>for</code> kết thúc nhờ <code>StopIteration</code>; <code>dict[k]</code>
+        báo thiếu khóa bằng <code>KeyError</code>; <code>with</code> dọn dẹp tài nguyên nhờ biết được ngoại lệ đang bay
+        qua. Người mới thường coi <code>try/except</code> là "lưới an toàn dán thêm sau"; người thạo Python coi nó là
+        <strong>một phần thiết kế API</strong>. Chương này dạy bạn ném đúng lỗi, bắt đúng chỗ, giữ nguyên nguyên nhân
+        gốc, và đọc được traceback như đọc bản đồ.
       </p>
       <div class="chapter-meta">
-        <span class="item"><strong>Độ dài:</strong> ~1100 dòng</span>
+        <span class="item"><strong>Độ dài:</strong> ~1400 dòng</span>
         <span class="item"><strong>Bài tập:</strong> 5</span>
         <span class="item"><strong>Quiz:</strong> 8</span>
         <span class="item"><strong>Prerequisites:</strong> Chương 1-4</span>
@@ -69,839 +69,16 @@
         <div class="callout callout-goal">
           <div class="callout-label">🎯 Mục tiêu chương</div>
           <ul>
-            <li>Khai báo <code>class</code> và <code>__init__</code> — hiểu vai trò của <code>self</code>.</li>
-            <li>Phân biệt <strong>instance attribute</strong> và <strong>class attribute</strong>; tránh bẫy mutable class attribute.</li>
-            <li>Sử dụng đúng <code>@classmethod</code>, <code>@staticmethod</code>, instance method.</li>
-            <li>Master <strong>inheritance</strong> và <code>super()</code>; hiểu <strong>MRO C3 linearization</strong> với multiple inheritance.</li>
-            <li>Implement <strong>dunder method</strong>: <code>__repr__</code>, <code>__eq__</code>, <code>__hash__</code>, <code>__len__</code>, <code>__iter__</code>, <code>__getitem__</code>, <code>__call__</code>.</li>
-            <li>Dùng <code>@property</code> cho computed attribute và validation.</li>
-            <li>Dùng <code>@dataclass</code> để giảm boilerplate; biết khi nào <code>frozen=True</code>, <code>slots=True</code>.</li>
-            <li>Phân biệt <code>abc.ABC</code> (nominal subtype) và <code>typing.Protocol</code> (structural subtype).</li>
-            <li>Tư duy <strong>duck typing</strong> + <strong>EAFP</strong> thay vì <code>isinstance</code> check khắp nơi.</li>
+            <li>Hiểu <strong>cơ chế</strong> exception: stack unwinding, propagate, ai bắt thì dừng.</li>
+            <li>Dùng đủ bộ tứ <code>try</code> / <code>except</code> / <code>else</code> / <code>finally</code> — biết vai trò riêng của từng khối.</li>
+            <li>Đọc được <strong>cây phân cấp</strong> exception built-in; bắt đúng độ rộng, không bắt thừa.</li>
+            <li>Chủ động <code>raise</code>; giữ nguyên nhân gốc bằng <code>raise ... from ...</code> (exception chaining).</li>
+            <li>Thiết kế <strong>custom exception</strong> thành một cây lỗi riêng cho ứng dụng/thư viện.</li>
+            <li>Phân biệt <strong>EAFP</strong> và <strong>LBYL</strong>; biết khi nào chọn phong cách nào.</li>
+            <li><strong>Đọc traceback</strong> từ dưới lên, hiểu "During handling..." và "The above exception was the direct cause...".</li>
+            <li>Tránh 5 anti-pattern kinh điển: bare <code>except</code>, nuốt lỗi, bắt quá rộng, dùng exception thay <code>if</code>, log rồi <code>raise</code> lại nhiều lần.</li>
+            <li>Biết <code>ExceptionGroup</code> và <code>except*</code> (Python 3.11+), <code>assert</code>, <code>warnings</code>, và cách log lỗi chuẩn.</li>
           </ul>
-        </div>
-
-        <div class="zen-quote">
-          Special cases aren't special enough to break the rules.<br/>
-          Although practicality beats purity.
-        </div>
-
-        <h2 id="class-basics">1. <code>class</code> — cú pháp tạo class</h2>
-
-        <p>
-          Class trong Python được khai báo bằng từ khóa <code>class</code>, theo sau là tên class (convention
-          <strong>PascalCase</strong>) và dấu hai chấm. Body của class là một <em>namespace</em> — chứa attribute và
-          method. Một class rỗng nhất có thể chỉ cần một dòng với <code>pass</code>.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>class_basic.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    <span class="tok-kw">pass</span>
-
-<span class="tok-com"># Tạo instance — KHÔNG có new keyword</span>
-u = <span class="tok-fn">User</span>()
-<span class="tok-fn">print</span>(<span class="tok-fn">type</span>(u))   <span class="tok-com"># &lt;class '__main__.User'&gt;</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">isinstance</span>(u, <span class="tok-cls">User</span>))  <span class="tok-com"># True</span>
-
-<span class="tok-com"># Có thể gán attribute động vào instance (giống JS)</span>
-u.name = <span class="tok-str">"Anh"</span>
-<span class="tok-fn">print</span>(u.name)   <span class="tok-com"># 'Anh'</span></code></pre>
-        </div>
-
-        <div class="callout callout-compare">
-          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
-          <p>
-            <strong>JS</strong>: <code>class User {}</code>, tạo instance qua <code>new User()</code>. JS class là syntactic sugar trên prototype.
-            <strong>Dart</strong>: <code>class User {}</code>, tạo instance <code>User()</code> (Dart 2+ bỏ <code>new</code> bắt buộc); class là first-class type với compile-time check.
-            <strong>Python</strong>: <code>User()</code> — không có <code>new</code>. Class chính là callable; gọi class trả về instance. Class là một object thực sự (instance của <code>type</code>).
-          </p>
-        </div>
-
-        <p>
-          Vì class chỉ là namespace, có thể tham chiếu class như một giá trị bình thường: gán biến, truyền vào hàm,
-          trả về từ hàm. <em>"Everything is an object"</em> — đây là một câu thường được trích từ cộng đồng Python; kể
-          cả class cũng là object (instance của metaclass <code>type</code>).
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>class_is_object.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    <span class="tok-kw">pass</span>
-
-<span class="tok-fn">print</span>(<span class="tok-fn">type</span>(<span class="tok-cls">User</span>))         <span class="tok-com"># &lt;class 'type'&gt; — class là instance của type</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">isinstance</span>(<span class="tok-cls">User</span>, <span class="tok-cls">type</span>))  <span class="tok-com"># True</span>
-
-<span class="tok-com"># Truyền class như giá trị</span>
-factories = [<span class="tok-cls">User</span>, <span class="tok-cls">dict</span>, <span class="tok-cls">list</span>]
-instances = [f() <span class="tok-kw">for</span> f <span class="tok-kw">in</span> factories]
-<span class="tok-fn">print</span>(instances)        <span class="tok-com"># [&lt;User ...&gt;, {}, []]</span></code></pre>
-        </div>
-
-        <h2 id="init"><span id="dunder-init"></span>2. <code>__init__</code> — constructor và <code>self</code></h2>
-
-        <p>
-          <code>__init__</code> là <em>initializer</em> được Python gọi <strong>ngay sau khi</strong> tạo instance.
-          Tham số đầu tiên luôn là <code>self</code> — tham chiếu tới instance vừa tạo. <code>self</code> không phải
-          từ khóa; nó chỉ là <em>convention</em>, nhưng tuyệt đối đừng đổi tên (vi phạm PEP 8 và làm code khó đọc).
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>init.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name: <span class="tok-type">str</span>, age: <span class="tok-type">int</span>):
-        <span class="tok-kw">self</span>.name = name
-        <span class="tok-kw">self</span>.age = age
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">str</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">f"Xin chào, tôi là </span>{<span class="tok-kw">self</span>.name}<span class="tok-str">"</span>
-
-u = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">22</span>)
-<span class="tok-fn">print</span>(u.<span class="tok-fn">greet</span>())   <span class="tok-com"># 'Xin chào, tôi là Anh'</span></code></pre>
-        </div>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Mental model — <code>self</code> tự pass</div>
-          <p>
-            Khi viết <code>u.greet()</code>, Python ngầm dịch thành <code>User.greet(u)</code> — instance được pass
-            như tham số đầu tiên. Đây gọi là <em>bound method</em>. Vì vậy hàm trong class luôn cần <code>self</code>
-            ở vị trí đầu. Nếu quên: <code>TypeError: greet() takes 0 positional arguments but 1 was given</code>.
-          </p>
-        </div>
-
-        <p>
-          <code>__init__</code> <strong>không phải</strong> là người tạo ra object. Việc tạo instance thực ra do
-          <code>__new__</code> đảm nhiệm (rất hiếm khi cần ghi đè). <code>__init__</code> chỉ khởi tạo state lên
-          object đã có. Đó là lý do <code>__init__</code> không có <code>return</code> (thực ra return được nhưng phải
-          là <code>None</code>).
-        </p>
-
-        <div class="py-feature">
-          <h4>Type hints trong <code>__init__</code></h4>
-          <p>
-            Từ Python 3.5+, có thể annotate kiểu cho tham số và return. <code>__init__</code> trả <code>None</code>
-            nên thường bỏ annotation return. Type hints không bị runtime enforce — chỉ tooling (mypy, IDE) kiểm tra.
-            Sẽ học sâu ở <strong>Chương 9</strong>.
-          </p>
-        </div>
-
-        <h2 id="instance-vs-class-attr">3. Instance attribute vs class attribute</h2>
-
-        <p>
-          Có hai chỗ để gán attribute:
-        </p>
-        <ul>
-          <li><strong>Instance attribute</strong>: <code>self.x = ...</code> trong method (thường ở <code>__init__</code>). Mỗi instance có bản sao riêng.</li>
-          <li><strong>Class attribute</strong>: khai báo trực tiếp trong body class, ngoài method. <em>Một bản chia sẻ</em> giữa mọi instance.</li>
-        </ul>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>attr_kinds.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    species = <span class="tok-str">"human"</span>      <span class="tok-com"># class attribute — share</span>
-    count = <span class="tok-num">0</span>             <span class="tok-com"># class attribute</span>
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name):
-        <span class="tok-kw">self</span>.name = name    <span class="tok-com"># instance attribute — riêng từng instance</span>
-        <span class="tok-cls">User</span>.count += <span class="tok-num">1</span>     <span class="tok-com"># cập nhật class attr qua tên class</span>
-
-a = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>)
-b = <span class="tok-fn">User</span>(<span class="tok-str">"Bình"</span>)
-<span class="tok-fn">print</span>(a.species, b.species)   <span class="tok-com"># human human — chia sẻ</span>
-<span class="tok-fn">print</span>(<span class="tok-cls">User</span>.count)              <span class="tok-com"># 2</span>
-<span class="tok-fn">print</span>(a.name, b.name)         <span class="tok-com"># Anh Bình — riêng</span></code></pre>
-        </div>
-
-        <div class="callout callout-warning">
-          <div class="callout-label">⚠️ Bẫy mutable class attribute</div>
-          <p>
-            <strong>Đừng bao giờ</strong> dùng <code>list</code>, <code>dict</code>, <code>set</code> làm class
-            attribute mặc định cho dữ liệu instance. Vì class attribute chia sẻ — mọi instance sẽ <em>mutate cùng một
-            list</em>!
-          </p>
-          <div class="code-wrap">
-            <div class="code-meta"><span>mutable-trap.py</span><button class="copy-btn">Copy</button></div>
-<pre><code><span class="tok-com"># SAI</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Cart</span>:
-    items = []                  <span class="tok-com"># class attr — chia sẻ!</span>
-
-    <span class="tok-kw">def</span> <span class="tok-fn">add</span>(<span class="tok-kw">self</span>, x):
-        <span class="tok-kw">self</span>.items.<span class="tok-fn">append</span>(x)   <span class="tok-com"># mutate list chung</span>
-
-c1, c2 = <span class="tok-fn">Cart</span>(), <span class="tok-fn">Cart</span>()
-c1.<span class="tok-fn">add</span>(<span class="tok-str">"A"</span>)
-<span class="tok-fn">print</span>(c2.items)             <span class="tok-com"># ['A'] — Cart() khác cũng thấy!</span>
-
-<span class="tok-com"># ĐÚNG</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Cart</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">self</span>.items = []        <span class="tok-com"># instance attr — list riêng</span></code></pre>
-          </div>
-        </div>
-
-        <p>
-          Khi đọc <code>a.x</code>, Python tra cứu theo thứ tự: instance dict → class dict → MRO của các lớp cha. Vì
-          vậy class attribute hoạt động như <em>fallback</em> nếu instance không có. Một khi gán <code>a.x = ...</code>,
-          giá trị mới được tạo trong instance dict và <em>che lấp</em> class attribute (không ảnh hưởng class).
-        </p>
-
-        <h2 id="method-types">4. Ba loại method — instance / class / static</h2>
-
-        <p>
-          Python phân biệt 3 loại method qua decorator. Sự khác biệt nằm ở <strong>tham số đầu tiên tự pass</strong>:
-        </p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Loại</th>
-                <th>Decorator</th>
-                <th>Tham số tự pass</th>
-                <th>Truy cập gì</th>
-                <th>Khi nào dùng</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Instance method</strong></td>
-                <td>(không cần)</td>
-                <td><code>self</code> (instance)</td>
-                <td>Instance + class attr</td>
-                <td>Hành vi của 1 instance</td>
-              </tr>
-              <tr>
-                <td><strong>Class method</strong></td>
-                <td><code>@classmethod</code></td>
-                <td><code>cls</code> (class)</td>
-                <td>Class attr; tạo instance thay thế</td>
-                <td>Alternative constructor, factory</td>
-              </tr>
-              <tr>
-                <td><strong>Static method</strong></td>
-                <td><code>@staticmethod</code></td>
-                <td>(không có)</td>
-                <td>Không tự pass; chỉ là namespace</td>
-                <td>Utility liên quan logic của class</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>method_kinds.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> __future__ <span class="tok-kw">import</span> annotations
-<span class="tok-kw">from</span> datetime <span class="tok-kw">import</span> date
-
-<span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name: <span class="tok-type">str</span>, birth_year: <span class="tok-type">int</span>):
-        <span class="tok-kw">self</span>.name = name
-        <span class="tok-kw">self</span>.birth_year = birth_year
-
-    <span class="tok-com"># Instance method — dùng self</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">age</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">int</span>:
-        <span class="tok-kw">return</span> date.<span class="tok-fn">today</span>().year - <span class="tok-kw">self</span>.birth_year
-
-    <span class="tok-com"># Class method — alternative constructor</span>
-    <span class="tok-dec">@classmethod</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">from_dict</span>(<span class="tok-kw">cls</span>, data: <span class="tok-type">dict</span>) -&gt; <span class="tok-cls">User</span>:
-        <span class="tok-kw">return</span> <span class="tok-kw">cls</span>(name=data[<span class="tok-str">"name"</span>], birth_year=data[<span class="tok-str">"birth_year"</span>])
-
-    <span class="tok-com"># Static method — utility</span>
-    <span class="tok-dec">@staticmethod</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">is_adult_age</span>(age: <span class="tok-type">int</span>) -&gt; <span class="tok-type">bool</span>:
-        <span class="tok-kw">return</span> age &gt;= <span class="tok-num">18</span>
-
-u = <span class="tok-cls">User</span>.<span class="tok-fn">from_dict</span>({<span class="tok-str">"name"</span>: <span class="tok-str">"Anh"</span>, <span class="tok-str">"birth_year"</span>: <span class="tok-num">2003</span>})
-<span class="tok-fn">print</span>(u.<span class="tok-fn">age</span>())                  <span class="tok-com"># 23</span>
-<span class="tok-fn">print</span>(<span class="tok-cls">User</span>.<span class="tok-fn">is_adult_age</span>(<span class="tok-num">17</span>))      <span class="tok-com"># False</span></code></pre>
-        </div>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 <code>@classmethod</code> ưu việt với inheritance</div>
-          <p>
-            <code>cls</code> trong <code>@classmethod</code> là class <strong>thực tế</strong> được gọi — không phải
-            class khai báo. Khi <code>Admin</code> kế thừa <code>User</code> và gọi <code>Admin.from_dict(...)</code>,
-            <code>cls</code> chính là <code>Admin</code>, nên kết quả là một instance <code>Admin</code>. Nếu hard-code
-            <code>User(...)</code> bên trong, subclass sẽ không được tận dụng.
-          </p>
-        </div>
-
-        <h2 id="inheritance">5. Inheritance — <code>class Admin(User)</code></h2>
-
-        <p>
-          Để kế thừa, đặt class cha trong dấu ngoặc: <code>class Admin(User):</code>. Subclass tự động thừa hưởng mọi
-          method và attribute của parent. Override = định nghĩa lại method cùng tên trong subclass. Để gọi
-          implementation của cha (ví dụ trong <code>__init__</code> của subclass), dùng <code>super()</code>.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>inheritance.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name):
-        <span class="tok-kw">self</span>.name = name
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-str">f"Hi, </span>{<span class="tok-kw">self</span>.name}<span class="tok-str">"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">Admin</span>(<span class="tok-cls">User</span>):
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, level):
-        <span class="tok-fn">super</span>().<span class="tok-fn">__init__</span>(name)   <span class="tok-com"># chain init lên cha</span>
-        <span class="tok-kw">self</span>.level = level
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):                 <span class="tok-com"># override</span>
-        base = <span class="tok-fn">super</span>().<span class="tok-fn">greet</span>()        <span class="tok-com"># gọi version của cha</span>
-        <span class="tok-kw">return</span> <span class="tok-str">f"</span>{base}<span class="tok-str"> [admin lv </span>{<span class="tok-kw">self</span>.level}<span class="tok-str">]"</span>
-
-a = <span class="tok-fn">Admin</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">2</span>)
-<span class="tok-fn">print</span>(a.<span class="tok-fn">greet</span>())   <span class="tok-com"># 'Hi, Anh [admin lv 2]'</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">isinstance</span>(a, <span class="tok-cls">User</span>))  <span class="tok-com"># True</span></code></pre>
-        </div>
-
-        <p>
-          Không cần truyền <code>self</code> hay class hiện tại vào <code>super()</code> — Python tự suy ra từ context.
-          Trong Python 2, phải viết <code>super(Admin, self).__init__(name)</code>, nhưng Python 3 đã đơn giản hóa.
-        </p>
-
-        <div class="callout callout-compare">
-          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
-          <p>
-            <strong>JS</strong>: <code>class Admin extends User { constructor(name, level) { super(name); this.level = level; } }</code>. Bắt buộc gọi <code>super()</code> trước khi đụng <code>this</code>.
-            <strong>Dart</strong>: <code>class Admin extends User { Admin(super.name, this.level); }</code> — Dart 2.17+ có super-parameter shorthand rất gọn.
-            <strong>Python</strong>: <code>super().__init__(...)</code> không bắt buộc; quên thì instance không có attribute mà parent gán. Tự do hơn nhưng cũng dễ sai hơn.
-          </p>
-        </div>
-
-        <h2 id="multiple-inheritance">6. Multiple inheritance và MRO C3</h2>
-
-        <p>
-          Python cho phép kế thừa nhiều class: <code>class C(A, B):</code>. Khi tra cứu method, Python đi theo
-          <strong>MRO</strong> (Method Resolution Order) — thứ tự duyệt class. Thuật toán dùng là <strong>C3
-          linearization</strong>, đảm bảo: (a) class con trước class cha; (b) thứ tự khai báo bên trái sang phải;
-          (c) tính nhất quán (monotonic).
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>mro_basic.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">A</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">who</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"A"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">B</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">who</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"B"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">C</span>(<span class="tok-cls">A</span>, <span class="tok-cls">B</span>):
-    <span class="tok-kw">pass</span>
-
-<span class="tok-fn">print</span>(<span class="tok-cls">C</span>().<span class="tok-fn">who</span>())          <span class="tok-com"># 'A' — A đứng trước B trong khai báo</span>
-<span class="tok-fn">print</span>([k.__name__ <span class="tok-kw">for</span> k <span class="tok-kw">in</span> <span class="tok-cls">C</span>.__mro__])
-<span class="tok-com"># ['C', 'A', 'B', 'object']</span></code></pre>
-        </div>
-
-        <p>
-          MRO trở nên thú vị (và đôi khi bối rối) với <strong>diamond inheritance</strong> — hai class cha chia sẻ một
-          ông nội. C3 đảm bảo class ông nội chỉ xuất hiện một lần ở cuối.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>diamond.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Animal</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">describe</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"animal"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">Swimmer</span>(<span class="tok-cls">Animal</span>):
-    <span class="tok-kw">def</span> <span class="tok-fn">describe</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"swimmer-"</span> + <span class="tok-fn">super</span>().<span class="tok-fn">describe</span>()
-
-<span class="tok-kw">class</span> <span class="tok-cls">Flyer</span>(<span class="tok-cls">Animal</span>):
-    <span class="tok-kw">def</span> <span class="tok-fn">describe</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"flyer-"</span> + <span class="tok-fn">super</span>().<span class="tok-fn">describe</span>()
-
-<span class="tok-kw">class</span> <span class="tok-cls">Duck</span>(<span class="tok-cls">Swimmer</span>, <span class="tok-cls">Flyer</span>):
-    <span class="tok-kw">pass</span>
-
-<span class="tok-fn">print</span>(<span class="tok-cls">Duck</span>.__mro__)
-<span class="tok-com"># (Duck, Swimmer, Flyer, Animal, object)</span>
-<span class="tok-fn">print</span>(<span class="tok-cls">Duck</span>().<span class="tok-fn">describe</span>())
-<span class="tok-com"># 'swimmer-flyer-animal' — super() đi đúng theo MRO</span></code></pre>
-        </div>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Mental model — <code>super()</code> không phải "cha trực tiếp"</div>
-          <p>
-            Điểm khác biệt then chốt: <code>super()</code> đi tới <strong>class kế tiếp trong MRO</strong>, không phải
-            "parent của class hiện tại". Trong ví dụ <code>Duck</code>, <code>super()</code> bên trong
-            <code>Swimmer.describe</code> trỏ sang <code>Flyer</code> — vì MRO sắp xếp <code>Flyer</code> ngay sau
-            <code>Swimmer</code>. Đây là điều kỳ diệu của C3: chain <code>super()</code> xếp hàng đẹp với diamond.
-          </p>
-        </div>
-
-        <p>
-          Nếu C3 không tìm được thứ tự nhất quán, Python từ chối khai báo class và ném
-          <code>TypeError: Cannot create a consistent method resolution order</code>. Trường hợp đó thường do thứ tự
-          base class mâu thuẫn — cần đổi lại thứ tự khai báo.
-        </p>
-
-        <h2 id="dunder">7. Dunder method — "double underscore" magic</h2>
-
-        <p>
-          Dunder method (đọc là "dander", viết tắt "double underscore") là các method tên kiểu <code>__xxx__</code>
-          mà Python tự gọi khi gặp syntax tương ứng. Override dunder = cho phép class của bạn hòa nhập với syntax ngôn
-          ngữ: <code>+</code>, <code>==</code>, <code>len()</code>, <code>for ... in</code>, <code>print()</code>...
-        </p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Dunder</th>
-                <th>Trigger</th>
-                <th>Mục đích</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td><code>__init__</code></td><td>Sau khi tạo instance</td><td>Khởi tạo state</td></tr>
-              <tr><td><code>__repr__</code></td><td><code>repr(obj)</code>, REPL echo</td><td>Debug-friendly, eval-able nếu có thể</td></tr>
-              <tr><td><code>__str__</code></td><td><code>str(obj)</code>, <code>print(obj)</code>, f-string</td><td>User-facing display</td></tr>
-              <tr><td><code>__eq__</code></td><td><code>a == b</code></td><td>So sánh giá trị (mặc định: so sánh id)</td></tr>
-              <tr><td><code>__hash__</code></td><td><code>hash(obj)</code>, key của <code>dict</code>/<code>set</code></td><td>Cùng đi với <code>__eq__</code></td></tr>
-              <tr><td><code>__lt__</code>, <code>__le__</code>, <code>__gt__</code>, <code>__ge__</code></td><td><code>&lt; &lt;= &gt; &gt;=</code></td><td>So sánh thứ tự (xem <code>functools.total_ordering</code>)</td></tr>
-              <tr><td><code>__len__</code></td><td><code>len(obj)</code></td><td>Số phần tử; cũng xác định truthiness nếu không có <code>__bool__</code></td></tr>
-              <tr><td><code>__bool__</code></td><td><code>bool(obj)</code>, <code>if obj:</code></td><td>Truthiness</td></tr>
-              <tr><td><code>__iter__</code></td><td><code>for x in obj</code></td><td>Trả iterator (xem Chương 6)</td></tr>
-              <tr><td><code>__next__</code></td><td><code>next(it)</code></td><td>Iterator protocol</td></tr>
-              <tr><td><code>__contains__</code></td><td><code>x in obj</code></td><td>Membership test</td></tr>
-              <tr><td><code>__getitem__</code></td><td><code>obj[key]</code></td><td>Indexing/slicing</td></tr>
-              <tr><td><code>__setitem__</code></td><td><code>obj[key] = value</code></td><td>Gán index</td></tr>
-              <tr><td><code>__delitem__</code></td><td><code>del obj[key]</code></td><td>Xóa index</td></tr>
-              <tr><td><code>__call__</code></td><td><code>obj(...)</code></td><td>Cho phép instance "gọi như hàm"</td></tr>
-              <tr><td><code>__add__</code>, <code>__sub__</code>, <code>__mul__</code>...</td><td><code>a + b</code>, <code>a - b</code>...</td><td>Toán tử số học</td></tr>
-              <tr><td><code>__enter__</code>, <code>__exit__</code></td><td><code>with obj as x:</code></td><td>Context manager (Chương 7)</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3 id="repr-str">7.1. <code>__repr__</code> vs <code>__str__</code></h3>
-
-        <p>
-          Convention quan trọng: <code>__repr__</code> dành cho <em>developer</em> — nên hiển thị chi tiết, tốt nhất
-          là một biểu thức Python hợp lệ có thể <code>eval()</code> lại thành object tương đương. <code>__str__</code>
-          dành cho <em>người dùng cuối</em> — gọn, đẹp. Nếu chỉ định nghĩa <code>__repr__</code>, Python tự lấy nó làm
-          <code>__str__</code>.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>repr_str.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Point</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, x, y):
-        <span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y = x, y
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__repr__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-str">f"Point(x=</span>{<span class="tok-kw">self</span>.x}<span class="tok-str">, y=</span>{<span class="tok-kw">self</span>.y}<span class="tok-str">)"</span>
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__str__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-str">f"(</span>{<span class="tok-kw">self</span>.x}<span class="tok-str">, </span>{<span class="tok-kw">self</span>.y}<span class="tok-str">)"</span>
-
-p = <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>)
-<span class="tok-fn">print</span>(<span class="tok-fn">repr</span>(p))   <span class="tok-com"># Point(x=1, y=2)</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">str</span>(p))    <span class="tok-com"># (1, 2)</span>
-<span class="tok-fn">print</span>(p)         <span class="tok-com"># (1, 2) — print gọi __str__</span></code></pre>
-        </div>
-
-        <h3 id="eq-hash">7.2. <code>__eq__</code> và <code>__hash__</code> — luôn đi cùng nhau</h3>
-
-        <p>
-          Mặc định, hai instance khác nhau <strong>không bằng nhau</strong> dù state giống hệt — Python so sánh
-          bằng id (địa chỉ object). Để so sánh theo giá trị, override <code>__eq__</code>. Nhưng có một quy tắc bắt
-          buộc:
-        </p>
-
-        <div class="callout callout-warning">
-          <div class="callout-label">⚠️ Quy tắc <code>__eq__</code> ⇒ <code>__hash__</code></div>
-          <p>
-            Nếu override <code>__eq__</code> nhưng không định nghĩa <code>__hash__</code>, Python <strong>tự đặt
-            <code>__hash__ = None</code></strong> — instance trở thành <em>unhashable</em>, không bỏ vào <code>set</code>
-            hay làm key <code>dict</code> được. Quy tắc bất di bất dịch của hash: <code>a == b ⇒ hash(a) == hash(b)</code>.
-            Ngược lại không bắt buộc (collision được phép).
-          </p>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>eq_hash.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Point</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, x, y):
-        <span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y = x, y
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__eq__</span>(<span class="tok-kw">self</span>, other):
-        <span class="tok-kw">if not</span> <span class="tok-fn">isinstance</span>(other, <span class="tok-cls">Point</span>):
-            <span class="tok-kw">return</span> <span class="tok-kw">NotImplemented</span>
-        <span class="tok-kw">return</span> (<span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y) == (other.x, other.y)
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__hash__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-fn">hash</span>((<span class="tok-kw">self</span>.x, <span class="tok-kw">self</span>.y))   <span class="tok-com"># tuple đã hashable</span>
-
-a, b = <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>), <span class="tok-fn">Point</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>)
-<span class="tok-fn">print</span>(a == b)         <span class="tok-com"># True</span>
-<span class="tok-fn">print</span>({a, b})         <span class="tok-com"># {Point(x=1, y=2)} — set giữ 1 phần tử</span></code></pre>
-        </div>
-
-        <p>
-          Trả về <code>NotImplemented</code> (không phải <code>NotImplementedError</code>!) trong <code>__eq__</code>
-          khi không biết cách so sánh với kiểu khác — Python sẽ thử <code>other.__eq__(self)</code>, rất quan trọng để
-          hỗ trợ subclass và so sánh hai chiều.
-        </p>
-
-        <h3 id="iter-contains">7.3. <code>__iter__</code>, <code>__contains__</code>, <code>__getitem__</code></h3>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>iterable.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Deck</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">self</span>.cards = [<span class="tok-str">"A♠"</span>, <span class="tok-str">"K♠"</span>, <span class="tok-str">"Q♠"</span>, <span class="tok-str">"J♠"</span>]
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__len__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-fn">len</span>(<span class="tok-kw">self</span>.cards)
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__getitem__</span>(<span class="tok-kw">self</span>, i):
-        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.cards[i]
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__contains__</span>(<span class="tok-kw">self</span>, card):
-        <span class="tok-kw">return</span> card <span class="tok-kw">in</span> <span class="tok-kw">self</span>.cards
-
-d = <span class="tok-fn">Deck</span>()
-<span class="tok-fn">print</span>(<span class="tok-fn">len</span>(d))            <span class="tok-com"># 4</span>
-<span class="tok-fn">print</span>(d[<span class="tok-num">0</span>])             <span class="tok-com"># 'A♠'</span>
-<span class="tok-fn">print</span>(<span class="tok-str">"A♠"</span> <span class="tok-kw">in</span> d)        <span class="tok-com"># True</span>
-<span class="tok-kw">for</span> c <span class="tok-kw">in</span> d:                <span class="tok-com"># for-loop tự dùng __getitem__ nếu không có __iter__</span>
-    <span class="tok-fn">print</span>(c)</code></pre>
-        </div>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Iterable shortcut</div>
-          <p>
-            Nếu có <code>__getitem__</code> chấp nhận số nguyên 0, 1, 2... Python tự coi object là iterable (legacy
-            protocol). Tuy nhiên, cách "Pythonic" hiện đại là implement <code>__iter__</code> — sâu hơn ở
-            <strong>Chương 6 (Iterators &amp; Generators)</strong>.
-          </p>
-        </div>
-
-        <h3 id="call">7.4. <code>__call__</code> — instance như là hàm</h3>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>callable.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Multiplier</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, factor):
-        <span class="tok-kw">self</span>.factor = factor
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__call__</span>(<span class="tok-kw">self</span>, x):
-        <span class="tok-kw">return</span> x * <span class="tok-kw">self</span>.factor
-
-double = <span class="tok-fn">Multiplier</span>(<span class="tok-num">2</span>)
-<span class="tok-fn">print</span>(<span class="tok-fn">double</span>(<span class="tok-num">5</span>))       <span class="tok-com"># 10 — instance gọi như hàm</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">callable</span>(double)) <span class="tok-com"># True</span></code></pre>
-        </div>
-
-        <p>
-          <code>__call__</code> rất hữu ích cho <em>stateful callable</em> — như decorator có config, hàm tính có
-          cache, partial function. Đó cũng là lý do <code>functools.partial</code> trả về một object có
-          <code>__call__</code>.
-        </p>
-
-        <h2 id="property">8. <code>@property</code> — method behave như attribute</h2>
-
-        <p>
-          <code>@property</code> cho phép truy cập một method <em>không cần</em> dấu ngoặc <code>()</code> — y hệt
-          attribute. Dùng cho <strong>computed value</strong> (giá trị tính từ field khác) và <strong>validation</strong>
-          (kiểm tra khi gán).
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>property.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Circle</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, radius):
-        <span class="tok-kw">self</span>.radius = radius   <span class="tok-com"># dùng setter nếu có</span>
-
-    <span class="tok-dec">@property</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">radius</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-kw">self</span>._radius
-
-    <span class="tok-dec">@radius.setter</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">radius</span>(<span class="tok-kw">self</span>, value):
-        <span class="tok-kw">if</span> value &lt; <span class="tok-num">0</span>:
-            <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"radius phải &gt;= 0"</span>)
-        <span class="tok-kw">self</span>._radius = value
-
-    <span class="tok-dec">@property</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">from</span> math <span class="tok-kw">import</span> pi
-        <span class="tok-kw">return</span> pi * <span class="tok-kw">self</span>._radius ** <span class="tok-num">2</span>
-
-c = <span class="tok-fn">Circle</span>(<span class="tok-num">3</span>)
-<span class="tok-fn">print</span>(c.radius)   <span class="tok-com"># 3 — không có ()</span>
-<span class="tok-fn">print</span>(c.area)     <span class="tok-com"># 28.274... — computed</span>
-c.radius = <span class="tok-num">5</span>      <span class="tok-com"># setter chạy validation</span>
-<span class="tok-com"># c.radius = -1  → ValueError</span></code></pre>
-        </div>
-
-        <p>
-          Nếu chỉ có <code>@property</code> không có setter — attribute trở thành <strong>read-only</strong>. Có thể
-          thêm <code>@xxx.deleter</code> để custom <code>del obj.xxx</code>.
-        </p>
-
-        <div class="callout callout-compare">
-          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
-          <p>
-            <strong>JS</strong>: <code>get area() {}</code> / <code>set radius(value) {}</code> trong class.
-            <strong>Dart</strong>: <code>double get area =&gt; pi * _radius * _radius;</code> — getter cú pháp riêng, gọn.
-            <strong>Python</strong>: dùng decorator <code>@property</code> + <code>@xxx.setter</code>. Hơi dài dòng nhưng nhất quán với hệ thống decorator chung của ngôn ngữ.
-          </p>
-        </div>
-
-        <h2 id="dataclass">9. <code>@dataclass</code> — giảm boilerplate</h2>
-
-        <p>
-          Mỗi khi viết class để giữ dữ liệu, ta phải gõ lại <code>__init__</code>, <code>__repr__</code>,
-          <code>__eq__</code> giống nhau. Python 3.7 đưa ra <code>@dataclass</code> — decorator generate những method
-          này tự động dựa trên type annotation của class.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>dataclass.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
-
-<span class="tok-dec">@dataclass</span>
-<span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    name: <span class="tok-type">str</span>
-    age: <span class="tok-type">int</span>
-    email: <span class="tok-type">str</span> = <span class="tok-str">""</span>         <span class="tok-com"># default value</span>
-
-u1 = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">22</span>)
-u2 = <span class="tok-fn">User</span>(<span class="tok-str">"Anh"</span>, <span class="tok-num">22</span>)
-<span class="tok-fn">print</span>(u1)               <span class="tok-com"># User(name='Anh', age=22, email='')</span>
-<span class="tok-fn">print</span>(u1 == u2)         <span class="tok-com"># True — __eq__ auto theo field</span></code></pre>
-        </div>
-
-        <p>
-          Mặc định <code>@dataclass</code> tạo: <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>.
-          Các tham số đáng nhớ:
-        </p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Tham số</th><th>Mặc định</th><th>Hiệu ứng</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>init=True</code></td><td>True</td><td>Generate <code>__init__</code></td></tr>
-              <tr><td><code>repr=True</code></td><td>True</td><td>Generate <code>__repr__</code></td></tr>
-              <tr><td><code>eq=True</code></td><td>True</td><td>Generate <code>__eq__</code></td></tr>
-              <tr><td><code>order=True</code></td><td>False</td><td>Generate <code>__lt__</code>...<code>__ge__</code></td></tr>
-              <tr><td><code>frozen=True</code></td><td>False</td><td>Instance bất biến + auto <code>__hash__</code></td></tr>
-              <tr><td><code>slots=True</code></td><td>False (3.10+)</td><td>Generate <code>__slots__</code>, tiết kiệm RAM, cấm attr mới</td></tr>
-              <tr><td><code>kw_only=True</code></td><td>False (3.10+)</td><td>Mọi tham số là keyword-only</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>dataclass_frozen.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
-
-<span class="tok-dec">@dataclass</span>(frozen=<span class="tok-kw">True</span>, slots=<span class="tok-kw">True</span>)
-<span class="tok-kw">class</span> <span class="tok-cls">Point</span>:
-    x: <span class="tok-type">float</span>
-    y: <span class="tok-type">float</span>
-
-p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span class="tok-num">2.0</span>)
-<span class="tok-fn">print</span>({p})              <span class="tok-com"># {Point(x=1.0, y=2.0)} — hashable vì frozen</span>
-<span class="tok-com"># p.x = 9  →  FrozenInstanceError</span>
-<span class="tok-com"># p.z = 0  →  AttributeError (slots không cho thêm attr)</span></code></pre>
-        </div>
-
-        <div class="callout callout-warning">
-          <div class="callout-label">⚠️ Default mutable trong dataclass</div>
-          <p>
-            Không được viết <code>items: list = []</code> vì sẽ chia sẻ list giữa các instance (giống bẫy mutable
-            class attribute). Dùng <code>field(default_factory=list)</code>:
-          </p>
-          <div class="code-wrap">
-            <div class="code-meta"><span>default_factory.py</span><button class="copy-btn">Copy</button></div>
-<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass, field
-
-<span class="tok-dec">@dataclass</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Cart</span>:
-    items: <span class="tok-type">list</span>[<span class="tok-type">str</span>] = field(default_factory=<span class="tok-cls">list</span>)
-    discount: <span class="tok-type">float</span> = <span class="tok-num">0.0</span></code></pre>
-          </div>
-        </div>
-
-        <h2 id="abc">10. Abstract Base Class — <code>abc</code></h2>
-
-        <p>
-          Khi muốn ép subclass phải implement một method nhất định, dùng <code>abc.ABC</code> + decorator
-          <code>@abstractmethod</code>. Class có <code>@abstractmethod</code> không thể tạo instance trực tiếp.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>abc_basic.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> abc <span class="tok-kw">import</span> ABC, abstractmethod
-
-<span class="tok-kw">class</span> <span class="tok-cls">Shape</span>(<span class="tok-cls">ABC</span>):
-    <span class="tok-dec">@abstractmethod</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">float</span>:
-        ...
-
-<span class="tok-kw">class</span> <span class="tok-cls">Square</span>(<span class="tok-cls">Shape</span>):
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, side):
-        <span class="tok-kw">self</span>.side = side
-    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.side ** <span class="tok-num">2</span>
-
-<span class="tok-com"># Shape()  →  TypeError: Can't instantiate abstract class Shape</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">Square</span>(<span class="tok-num">3</span>).<span class="tok-fn">area</span>())   <span class="tok-com"># 9</span></code></pre>
-        </div>
-
-        <p>
-          ABC tương đương <em>interface</em> ở các ngôn ngữ khác — nhưng vẫn được implement bằng class, nên có thể
-          chứa method có sẵn (concrete method) lẫn <code>@abstractmethod</code>. Đó là lý do thường được gọi là
-          "abstract base class" thay vì "interface": vừa làm khung vừa cung cấp logic chung.
-        </p>
-
-        <h2 id="protocol">11. <code>typing.Protocol</code> — structural typing</h2>
-
-        <p>
-          PEP 544 (Python 3.8+) đưa ra <code>typing.Protocol</code> — cho phép khai báo "type theo cấu trúc": "bất kỳ
-          class nào có method X, Y với signature đúng đều coi là <code>SupportsX</code>". Không cần <code>inherit</code>
-          — đây là <strong>structural typing</strong>, giống <code>interface</code> trong TypeScript / Go.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>protocol.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Protocol
-
-<span class="tok-kw">class</span> <span class="tok-cls">SupportsArea</span>(<span class="tok-cls">Protocol</span>):
-    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">float</span>: ...
-
-<span class="tok-kw">class</span> <span class="tok-cls">Box</span>:                       <span class="tok-com"># không inherit SupportsArea</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, w, h):
-        <span class="tok-kw">self</span>.w, <span class="tok-kw">self</span>.h = w, h
-    <span class="tok-kw">def</span> <span class="tok-fn">area</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">float</span>:
-        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.w * <span class="tok-kw">self</span>.h
-
-<span class="tok-kw">def</span> <span class="tok-fn">describe</span>(s: <span class="tok-cls">SupportsArea</span>) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">return</span> <span class="tok-str">f"area = </span>{s.<span class="tok-fn">area</span>()}<span class="tok-str">"</span>
-
-<span class="tok-fn">print</span>(<span class="tok-fn">describe</span>(<span class="tok-fn">Box</span>(<span class="tok-num">2</span>, <span class="tok-num">3</span>)))   <span class="tok-com"># 'area = 6' — mypy chấp nhận</span></code></pre>
-        </div>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Mental model — ABC vs Protocol</div>
-          <p>
-            <strong>ABC (nominal)</strong>: "Bạn phải khai báo bạn là Shape" — phải <code>class Box(Shape)</code>.
-            Quan hệ tường minh, kiểm tra được lúc runtime qua <code>isinstance</code>.<br/>
-            <strong>Protocol (structural)</strong>: "Nếu trông giống Shape, làm việc giống Shape, thì bạn là Shape" —
-            không cần khai báo. Chỉ là contract về cấu trúc, chủ yếu phục vụ tooling (mypy). Thường gọn hơn cho API
-            "duck-typed".
-          </p>
-          <p>Chương 9 (Typing) sẽ đào sâu Protocol + Generic + <code>runtime_checkable</code>.</p>
-        </div>
-
-        <h2 id="duck-typing">12. Duck typing — "Nếu kêu quack quack thì là vịt"</h2>
-
-        <p>
-          Câu thành ngữ nguyên gốc: <em>"If it walks like a duck and it quacks like a duck, then it must be a duck."</em>
-          Áp dụng vào Python: ta thường <strong>không quan tâm</strong> đối tượng là class gì, chỉ quan tâm nó có
-          method/attribute cần thiết hay không. Đó là <strong>duck typing</strong>.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>duck_typing.py</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">play_sound</span>(animal):
-    <span class="tok-com"># Không quan tâm animal là class gì, chỉ cần có .speak()</span>
-    <span class="tok-kw">return</span> animal.<span class="tok-fn">speak</span>()
-
-<span class="tok-kw">class</span> <span class="tok-cls">Duck</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">speak</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"quack"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">Robot</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">speak</span>(<span class="tok-kw">self</span>): <span class="tok-kw">return</span> <span class="tok-str">"beep"</span>
-
-<span class="tok-fn">print</span>(<span class="tok-fn">play_sound</span>(<span class="tok-fn">Duck</span>()))    <span class="tok-com"># 'quack'</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">play_sound</span>(<span class="tok-fn">Robot</span>()))   <span class="tok-com"># 'beep' — Robot không phải Duck nhưng OK</span></code></pre>
-        </div>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 EAFP &gt; LBYL</div>
-          <p>
-            Cộng đồng Python đề cao <strong>EAFP</strong> ("Easier to Ask Forgiveness than Permission") — cứ làm, sai
-            thì bắt exception. Đối lập với <strong>LBYL</strong> ("Look Before You Leap") — kiểm tra trước rồi mới làm.
-          </p>
-          <div class="code-wrap">
-            <div class="code-meta"><span>eafp_vs_lbyl.py</span><button class="copy-btn">Copy</button></div>
-<pre><code><span class="tok-com"># LBYL — không "Pythonic"</span>
-<span class="tok-kw">if</span> <span class="tok-fn">hasattr</span>(obj, <span class="tok-str">"speak"</span>) <span class="tok-kw">and</span> <span class="tok-fn">callable</span>(obj.speak):
-    obj.<span class="tok-fn">speak</span>()
-
-<span class="tok-com"># EAFP — Pythonic</span>
-<span class="tok-kw">try</span>:
-    obj.<span class="tok-fn">speak</span>()
-<span class="tok-kw">except</span> <span class="tok-cls">AttributeError</span>:
-    <span class="tok-fn">handle_no_speak</span>()</code></pre>
-          </div>
-          <p>
-            Khi nào dùng <code>isinstance</code>? Khi <em>thật sự</em> cần ép contract (vd API public, kiểm tra để
-            hỗ trợ kiểu mới một cách dạng "double dispatch"). Còn lại — tin vào duck typing.
-          </p>
         </div>
 
         <div class="zen-quote">
@@ -909,32 +86,1032 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
           Unless explicitly silenced.
         </div>
 
+        <p>
+          Hai dòng trên là nguyên tắc số 10 và 11 của Zen of Python, và chúng chính là tinh thần của cả chương này.
+          "Lỗi không bao giờ được đi qua trong im lặng" — nghĩa là <code>except: pass</code> theo thói quen là phản
+          Pythonic. "Trừ khi được làm im lặng một cách tường minh" — nghĩa là <em>vẫn có lúc</em> bạn cố tình bỏ qua
+          một loại lỗi, nhưng phải nói rõ loại nào và vì sao.
+        </p>
+
+        <h2 id="co-che">1. Exception là gì — cơ chế bên dưới</h2>
+
+        <p>
+          Khi Python gặp tình huống không thể tiếp tục theo cách bình thường, nó <strong>tạo một object exception</strong>
+          rồi "ném" object đó lên. Từ điểm ném, Python bắt đầu <em>gỡ ngăn xếp</em> (<strong>stack unwinding</strong>):
+          thoát khỏi hàm hiện tại, quay về hàm gọi nó, rồi hàm gọi nữa… cho tới khi tìm được một khối
+          <code>except</code> phù hợp. Nếu đi hết ngăn xếp mà không ai bắt, interpreter in traceback và kết thúc chương
+          trình với exit code khác 0.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>unwinding.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">level3</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">"  level3: bắt đầu"</span>)
+    <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"hỏng ở đáy"</span>)
+    <span class="tok-fn">print</span>(<span class="tok-str">"  level3: dòng này KHÔNG BAO GIỜ chạy"</span>)
+
+<span class="tok-kw">def</span> <span class="tok-fn">level2</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">" level2: gọi level3"</span>)
+    <span class="tok-fn">level3</span>()
+    <span class="tok-fn">print</span>(<span class="tok-str">" level2: dòng này cũng bị bỏ qua"</span>)
+
+<span class="tok-kw">def</span> <span class="tok-fn">level1</span>():
+    <span class="tok-kw">try</span>:
+        <span class="tok-fn">level2</span>()
+    <span class="tok-kw">except</span> <span class="tok-cls">ValueError</span> <span class="tok-kw">as</span> e:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"level1: bắt được -&gt; </span>{e}<span class="tok-str">"</span>)
+
+<span class="tok-fn">level1</span>()
+<span class="tok-com"># level2: gọi level3</span>
+<span class="tok-com">#   level3: bắt đầu</span>
+<span class="tok-com"># level1: bắt được -&gt; hỏng ở đáy</span></code></pre>
+        </div>
+
+        <p>
+          Hãy để ý hai dòng <code>print</code> sau chỗ ném — chúng không chạy. Exception <strong>cắt ngang</strong> luồng
+          thực thi ngay tại điểm ném, không có chuyện "chạy nốt rồi mới báo lỗi". Đây là khác biệt căn bản với việc
+          trả về mã lỗi (error code) kiểu C: mã lỗi có thể bị bỏ qua, exception thì không.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model — quả bóng bay lên</div>
+          <p>
+            Hình dung ngăn xếp gọi hàm là một cầu thang, <code>main</code> ở tầng trệt, hàm sâu nhất ở tầng cao nhất.
+            <code>raise</code> thả một quả bóng từ tầng cao. Bóng rơi xuống từng tầng; ở mỗi tầng, nếu có một
+            <code>except</code> "cỡ vừa tay" thì tầng đó bắt lấy và trò chơi dừng. Nếu không tầng nào bắt, bóng rơi
+            xuống đất — interpreter in traceback: <em>danh sách các tầng mà quả bóng đã đi qua</em>, ghi từ tầng trệt
+            lên tầng cao nhất.
+          </p>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔁 Đối chiếu với JS &amp; Dart</div>
+          <p>
+            <strong>JS</strong>: <code>try { } catch (e) { } finally { }</code> — chỉ có một khối <code>catch</code>
+            duy nhất, phải tự <code>if (e instanceof TypeError)</code> bên trong để phân loại. Không có khối
+            <code>else</code>.<br/>
+            <strong>Dart</strong>: <code>try { } on FormatException catch (e) { } catch (e, st) { } finally { }</code>
+            — có <code>on Type</code> để lọc theo kiểu, gần với Python nhất; <code>st</code> là stack trace tách riêng.<br/>
+            <strong>Python</strong>: nhiều khối <code>except LoaiLoi</code> nối tiếp, cộng thêm khối <code>else</code>
+            mà cả JS lẫn Dart đều không có. Stack trace nằm sẵn trong <code>e.__traceback__</code>.
+          </p>
+        </div>
+
+        <h2 id="try-except">2. <code>try</code> / <code>except</code> — cú pháp nền</h2>
+
+        <p>
+          Cấu trúc tối thiểu gồm khối <code>try</code> (đoạn code có thể hỏng) và ít nhất một khối <code>except</code>
+          (cách xử lý khi hỏng). Python so khớp exception vừa ném với từng <code>except</code> <strong>theo thứ tự từ
+          trên xuống</strong>, và chỉ khối <em>đầu tiên</em> khớp được chạy.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>basic_try.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">chia</span>(a: <span class="tok-type">float</span>, b: <span class="tok-type">float</span>) -&gt; <span class="tok-type">float</span> | <span class="tok-kw">None</span>:
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">return</span> a / b
+    <span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"Không chia được cho 0"</span>)
+        <span class="tok-kw">return</span> <span class="tok-kw">None</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">chia</span>(<span class="tok-num">10</span>, <span class="tok-num">2</span>))   <span class="tok-com"># 5.0</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">chia</span>(<span class="tok-num">10</span>, <span class="tok-num">0</span>))   <span class="tok-com"># Không chia được cho 0 → None</span></code></pre>
+        </div>
+
+        <h3 id="as-e">2.1. <code>as e</code> — cầm lấy object exception</h3>
+
+        <p>
+          Mệnh đề <code>as e</code> gán object exception vào biến <code>e</code> để bạn đọc thông tin bên trong.
+          Object này không chỉ chứa thông điệp: nó có <code>args</code> (tuple tham số khi khởi tạo),
+          <code>__traceback__</code> (vết ngăn xếp), và với nhiều loại lỗi còn có field chuyên biệt
+          (<code>OSError.errno</code>, <code>OSError.filename</code>, <code>UnicodeDecodeError.start</code>…).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>as_e.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">try</span>:
+    <span class="tok-fn">open</span>(<span class="tok-str">"/khong/ton/tai.txt"</span>)
+<span class="tok-kw">except</span> <span class="tok-cls">OSError</span> <span class="tok-kw">as</span> e:
+    <span class="tok-fn">print</span>(<span class="tok-fn">type</span>(e).__name__)  <span class="tok-com"># FileNotFoundError</span>
+    <span class="tok-fn">print</span>(e.args)            <span class="tok-com"># (2, 'No such file or directory')</span>
+    <span class="tok-fn">print</span>(e.errno)           <span class="tok-com"># 2</span>
+    <span class="tok-fn">print</span>(e.filename)        <span class="tok-com"># /khong/ton/tai.txt</span>
+    <span class="tok-fn">print</span>(<span class="tok-fn">str</span>(e))           <span class="tok-com"># [Errno 2] No such file or directory: '/khong/ton/tai.txt'</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Bẫy — biến <code>e</code> bị xóa sau khối <code>except</code></div>
+          <p>
+            Python <strong>tự động <code>del e</code></strong> khi ra khỏi khối <code>except</code> (để tránh giữ
+            tham chiếu vòng qua traceback gây rò rỉ bộ nhớ). Vì vậy đoạn dưới ném <code>NameError</code>:
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>del_e.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">try</span>:
+    <span class="tok-num">1</span> / <span class="tok-num">0</span>
+<span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span> <span class="tok-kw">as</span> e:
+    <span class="tok-kw">pass</span>
+
+<span class="tok-fn">print</span>(e)   <span class="tok-com"># NameError: name 'e' is not defined</span>
+
+<span class="tok-com"># Muốn dùng ngoài khối → gán sang biến khác BÊN TRONG khối</span>
+loi = <span class="tok-kw">None</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-num">1</span> / <span class="tok-num">0</span>
+<span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span> <span class="tok-kw">as</span> e:
+    loi = e          <span class="tok-com"># ✅ giữ lại tham chiếu</span>
+<span class="tok-fn">print</span>(loi)  <span class="tok-com"># division by zero</span></code></pre>
+          </div>
+        </div>
+
+        <h3 id="nhieu-except">2.2. Nhiều khối <code>except</code> và bắt gộp bằng tuple</h3>
+
+        <p>
+          Có hai cách xử lý nhiều loại lỗi: viết nhiều khối <code>except</code> nối tiếp (khi mỗi loại cần xử lý
+          <em>khác nhau</em>), hoặc gộp vào một tuple (khi cách xử lý <em>giống nhau</em>).
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>nhieu_except.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">doc_tuoi</span>(du_lieu: <span class="tok-type">dict</span>) -&gt; <span class="tok-type">int</span>:
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">return</span> <span class="tok-type">int</span>(du_lieu[<span class="tok-str">"tuoi"</span>])
+    <span class="tok-kw">except</span> <span class="tok-cls">KeyError</span>:                 <span class="tok-com"># thiếu khóa → mặc định</span>
+        <span class="tok-kw">return</span> <span class="tok-num">0</span>
+    <span class="tok-kw">except</span> (<span class="tok-cls">ValueError</span>, <span class="tok-cls">TypeError</span>):  <span class="tok-com"># gộp: cùng cách xử lý</span>
+        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">f"tuoi không hợp lệ: </span>{du_lieu[<span class="tok-str">'tuoi'</span>]!r}<span class="tok-str">"</span>)
+
+<span class="tok-fn">print</span>(<span class="tok-fn">doc_tuoi</span>({<span class="tok-str">"tuoi"</span>: <span class="tok-str">"22"</span>}))   <span class="tok-com"># 22</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">doc_tuoi</span>({}))                <span class="tok-com"># 0</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">doc_tuoi</span>({<span class="tok-str">"tuoi"</span>: <span class="tok-str">"abc"</span>}))  <span class="tok-com"># ValueError: tuoi không hợp lệ: 'abc'</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Thứ tự quan trọng — con trước, cha sau</div>
+          <p>
+            Vì Python chọn khối <code>except</code> <em>đầu tiên khớp</em>, và một exception con luôn khớp với khối
+            bắt lớp cha, nên đặt lớp cha lên trước sẽ khiến khối con <strong>không bao giờ chạy</strong>:
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>thu_tu.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># ❌ SAI — FileNotFoundError là con của OSError</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">open</span>(<span class="tok-str">"x.txt"</span>)
+<span class="tok-kw">except</span> <span class="tok-cls">OSError</span>:
+    <span class="tok-fn">print</span>(<span class="tok-str">"lỗi hệ thống"</span>)          <span class="tok-com"># luôn chạy khối này</span>
+<span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span>:
+    <span class="tok-fn">print</span>(<span class="tok-str">"không thấy file"</span>)        <span class="tok-com"># CHẾT — không bao giờ tới</span>
+
+<span class="tok-com"># ✅ ĐÚNG — cụ thể trước, tổng quát sau</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">open</span>(<span class="tok-str">"x.txt"</span>)
+<span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span>:
+    <span class="tok-fn">print</span>(<span class="tok-str">"không thấy file"</span>)
+<span class="tok-kw">except</span> <span class="tok-cls">OSError</span>:
+    <span class="tok-fn">print</span>(<span class="tok-str">"lỗi hệ thống khác"</span>)</code></pre>
+          </div>
+          <p style="margin-top: 10px;">
+            <code>ruff</code> bắt lỗi này bằng rule <code>B014</code>/<code>E722</code> nhóm; nhưng đừng phụ thuộc
+            linter — hãy nhớ quy tắc <strong>"cụ thể trước, tổng quát sau"</strong> như một phản xạ.
+          </p>
+        </div>
+
+        <h2 id="cay-phan-cap">3. Cây phân cấp exception built-in</h2>
+
+        <p>
+          Mọi thứ ném được trong Python đều kế thừa từ <code>BaseException</code>. Nhánh quan trọng nhất với ứng dụng
+          là <code>Exception</code>. Ba lớp nằm <em>ngoài</em> <code>Exception</code> — <code>SystemExit</code>,
+          <code>KeyboardInterrupt</code>, <code>GeneratorExit</code> — được cố tình tách ra vì chúng không phải "lỗi
+          nghiệp vụ" mà là <strong>tín hiệu điều khiển</strong>: bạn gần như không bao giờ muốn bắt nhầm chúng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>cây phân cấp (rút gọn)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>BaseException
+ ├── SystemExit             <span class="tok-com"># sys.exit() — để chương trình thoát bình thường</span>
+ ├── KeyboardInterrupt      <span class="tok-com"># Ctrl+C — để người dùng dừng được</span>
+ ├── GeneratorExit          <span class="tok-com"># generator.close()</span>
+ └── Exception              <span class="tok-com"># ⭐ mọi lỗi "nghiệp vụ" nằm dưới đây</span>
+      ├── ArithmeticError
+      │    ├── ZeroDivisionError
+      │    ├── OverflowError
+      │    └── FloatingPointError
+      ├── LookupError
+      │    ├── IndexError          <span class="tok-com"># lst[99] khi lst chỉ có 3 phần tử</span>
+      │    └── KeyError            <span class="tok-com"># d["thieu"]</span>
+      ├── OSError                  <span class="tok-com"># alias: IOError, EnvironmentError</span>
+      │    ├── FileNotFoundError
+      │    ├── PermissionError
+      │    ├── FileExistsError
+      │    ├── IsADirectoryError
+      │    ├── NotADirectoryError
+      │    ├── TimeoutError
+      │    └── ConnectionError
+      │         ├── ConnectionRefusedError
+      │         ├── ConnectionResetError
+      │         └── BrokenPipeError
+      ├── ValueError               <span class="tok-com"># đúng kiểu, sai giá trị: int("abc")</span>
+      │    └── UnicodeError
+      │         ├── UnicodeDecodeError
+      │         └── UnicodeEncodeError
+      ├── TypeError                <span class="tok-com"># sai kiểu: len(5)</span>
+      ├── AttributeError           <span class="tok-com"># obj.khong_co</span>
+      ├── NameError                <span class="tok-com"># dùng biến chưa gán</span>
+      │    └── UnboundLocalError
+      ├── ImportError
+      │    └── ModuleNotFoundError
+      ├── RuntimeError
+      │    ├── RecursionError
+      │    └── NotImplementedError
+      ├── StopIteration            <span class="tok-com"># next() hết phần tử — for tự bắt</span>
+      ├── StopAsyncIteration
+      ├── AssertionError           <span class="tok-com"># assert thất bại</span>
+      └── Warning                  <span class="tok-com"># DeprecationWarning, UserWarning...</span></code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Exception</th><th>Nghĩa</th><th>Ví dụ gây ra</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>ValueError</code></td><td>Kiểu đúng nhưng giá trị không dùng được</td><td><code>int("abc")</code>, <code>math.sqrt(-1)</code></td></tr>
+              <tr><td><code>TypeError</code></td><td>Sai kiểu dữ liệu hoặc sai chữ ký hàm</td><td><code>"a" + 1</code>, <code>len(5)</code></td></tr>
+              <tr><td><code>KeyError</code></td><td>Khóa không tồn tại trong mapping</td><td><code>{"a": 1}["b"]</code></td></tr>
+              <tr><td><code>IndexError</code></td><td>Index vượt phạm vi sequence</td><td><code>[1, 2][9]</code></td></tr>
+              <tr><td><code>AttributeError</code></td><td>Object không có attribute đó</td><td><code>"abc".push("d")</code></td></tr>
+              <tr><td><code>FileNotFoundError</code></td><td>File/thư mục không tồn tại</td><td><code>open("thieu.txt")</code></td></tr>
+              <tr><td><code>PermissionError</code></td><td>Không đủ quyền truy cập</td><td><code>open("/etc/shadow")</code></td></tr>
+              <tr><td><code>ZeroDivisionError</code></td><td>Chia (hoặc modulo) cho 0</td><td><code>1 / 0</code>, <code>5 % 0</code></td></tr>
+              <tr><td><code>StopIteration</code></td><td>Iterator đã hết phần tử</td><td><code>next(iter([]))</code></td></tr>
+              <tr><td><code>RecursionError</code></td><td>Vượt giới hạn đệ quy (mặc định ~1000)</td><td>hàm tự gọi vô hạn</td></tr>
+              <tr><td><code>ModuleNotFoundError</code></td><td>Không tìm thấy module khi import</td><td><code>import khong_ton_tai</code></td></tr>
+              <tr><td><code>NotImplementedError</code></td><td>Method trừu tượng chưa được cài đặt</td><td>base class cố tình <code>raise</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mẹo chọn exception khi tự ném</div>
+          <p>
+            Câu hỏi tự đặt: <em>"Người gọi sai kiểu, hay sai giá trị?"</em> Sai kiểu (truyền <code>list</code> vào chỗ
+            cần <code>str</code>) → <code>TypeError</code>. Đúng kiểu nhưng giá trị vô nghĩa (tuổi âm, email không có
+            <code>@</code>) → <code>ValueError</code>. Trạng thái object không cho phép thao tác này (rút tiền khi tài
+            khoản đã đóng) → <code>RuntimeError</code> hoặc <strong>custom exception</strong> của bạn. Đừng ném
+            <code>Exception</code> trần — nó buộc người gọi phải bắt quá rộng.
+          </p>
+        </div>
+
+        <h2 id="else-finally">4. Bộ tứ đầy đủ — <code>try</code> / <code>except</code> / <code>else</code> / <code>finally</code></h2>
+
+        <p>
+          Python có <strong>bốn</strong> khối, nhiều hơn hầu hết ngôn ngữ. Rất nhiều người viết Python nhiều năm vẫn
+          không dùng <code>else</code> — trong khi nó chính là công cụ để giữ khối <code>try</code> <em>hẹp nhất có
+          thể</em>, điều kiện tiên quyết để không bắt nhầm lỗi.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Khối</th><th>Chạy khi nào</th><th>Dùng để làm gì</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>try</code></td><td>Luôn chạy đầu tiên</td><td>Chỉ đặt <strong>đúng thao tác có thể ném</strong> — càng ngắn càng tốt</td></tr>
+              <tr><td><code>except</code></td><td>Khi có exception khớp</td><td>Xử lý / chuyển đổi / ghi log lỗi</td></tr>
+              <tr><td><code>else</code></td><td>Khi <code>try</code> <strong>không</strong> ném gì</td><td>Phần "đường sáng" — code chỉ đúng khi thao tác rủi ro đã thành công</td></tr>
+              <tr><td><code>finally</code></td><td><strong>Luôn luôn</strong>, kể cả có <code>return</code>/<code>break</code></td><td>Dọn dẹp tài nguyên: đóng file, nhả lock, rollback</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>bo_tu.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> json
+
+<span class="tok-kw">def</span> <span class="tok-fn">doc_config</span>(duong_dan: <span class="tok-type">str</span>) -&gt; <span class="tok-type">dict</span>:
+    f = <span class="tok-kw">None</span>
+    <span class="tok-kw">try</span>:
+        f = <span class="tok-fn">open</span>(duong_dan, encoding=<span class="tok-str">"utf-8"</span>)   <span class="tok-com"># ⚠️ chỉ thao tác rủi ro</span>
+    <span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"Không thấy </span>{duong_dan}<span class="tok-str">, dùng config rỗng"</span>)
+        <span class="tok-kw">return</span> {}
+    <span class="tok-kw">else</span>:
+        <span class="tok-com"># chỉ tới đây khi open() THÀNH CÔNG</span>
+        <span class="tok-kw">return</span> json.<span class="tok-fn">load</span>(f)
+    <span class="tok-kw">finally</span>:
+        <span class="tok-com"># chạy dù thành công, dù lỗi, dù đã return ở trên</span>
+        <span class="tok-kw">if</span> f <span class="tok-kw">is not</span> <span class="tok-kw">None</span>:
+            f.<span class="tok-fn">close</span>()
+            <span class="tok-fn">print</span>(<span class="tok-str">"đã đóng file"</span>)</code></pre>
+        </div>
+
+        <div class="py-feature">
+          <h4>Vì sao <code>else</code> đáng dùng?</h4>
+          <p>
+            Nếu bỏ <code>else</code> và nhét <code>json.load(f)</code> vào trong <code>try</code>, thì một
+            <code>FileNotFoundError</code> tưởng tượng ném ra <em>từ bên trong</em> <code>json.load</code> (ví dụ
+            hook custom của bạn mở thêm file khác) cũng sẽ bị khối <code>except FileNotFoundError</code> nuốt mất và
+            trả về <code>{}</code> — sai hoàn toàn. <code>else</code> giữ cho <code>try</code> chỉ chứa
+            <strong>đúng một</strong> thao tác mà bạn thực sự muốn bảo vệ.
+          </p>
+        </div>
+
+        <h3 id="finally-return">4.1. <code>finally</code> và cái bẫy <code>return</code></h3>
+
+        <p>
+          <code>finally</code> chạy <em>kể cả</em> khi khối trước đó đã <code>return</code>. Nếu chính
+          <code>finally</code> cũng có <code>return</code>, giá trị của nó <strong>ghi đè</strong> giá trị trước — và
+          tệ hơn, nó <strong>nuốt luôn exception</strong> đang bay. Đây là một trong những bug khó tìm nhất Python.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>finally_bay.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">xau</span>():
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">return</span> <span class="tok-str">"từ try"</span>
+    <span class="tok-kw">finally</span>:
+        <span class="tok-kw">return</span> <span class="tok-str">"từ finally"</span>    <span class="tok-com"># ❌ ghi đè</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">xau</span>())    <span class="tok-com"># 'từ finally'</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">rat_xau</span>():
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"lỗi nghiêm trọng!"</span>)
+    <span class="tok-kw">finally</span>:
+        <span class="tok-kw">return</span> <span class="tok-str">"ổn cả"</span>       <span class="tok-com"># ❌❌ NUỐT exception, không ai biết có lỗi</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">rat_xau</span>())  <span class="tok-com"># 'ổn cả' — ValueError biến mất hoàn toàn</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Quy tắc cứng</div>
+          <p>
+            <strong>Không bao giờ</strong> đặt <code>return</code>, <code>break</code>, hay <code>continue</code>
+            trong khối <code>finally</code>. Chỉ đặt code dọn dẹp. Nếu cần chọn giá trị trả về theo kết quả, dùng
+            <code>else</code>. <code>ruff</code> có rule <code>B012</code> để chặn chuyện này.
+          </p>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Thực tế: <code>with</code> thay được phần lớn <code>finally</code></div>
+          <p>
+            Ví dụ <code>doc_config</code> ở trên viết bằng <code>with</code> gọn hơn nhiều — <code>with</code> tự gọi
+            <code>close()</code> dù có lỗi hay không. Bạn sẽ dùng <code>with</code> liên tục ở
+            <a href="chuong7.html">Chương 7 (File I/O)</a>, và học cách <em>tự viết</em> context manager ở
+            <a href="chuong10.html">Chương 10</a>. <code>finally</code> vẫn cần khi tài nguyên không có sẵn context
+            manager, hoặc khi cần dọn dẹp thứ không phải "tài nguyên" (khôi phục biến toàn cục, ghi metric…).
+          </p>
+        </div>
+
+        <h2 id="raise">5. <code>raise</code> — chủ động ném lỗi</h2>
+
+        <p>
+          Viết thư viện hay viết hàm nghiệp vụ, bạn sẽ ném lỗi nhiều hơn là bắt lỗi. Nguyên tắc:
+          <strong>ném sớm, ném rõ</strong> (fail fast). Một hàm nhận dữ liệu sai mà vẫn cố chạy tiếp sẽ đẩy lỗi đi
+          xa khỏi nguyên nhân, khiến việc debug về sau cực khổ.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>raise_co_ban.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">dat_tuoi</span>(tuoi: <span class="tok-type">int</span>) -&gt; <span class="tok-type">int</span>:
+    <span class="tok-kw">if not</span> <span class="tok-fn">isinstance</span>(tuoi, <span class="tok-type">int</span>):
+        <span class="tok-kw">raise</span> <span class="tok-cls">TypeError</span>(<span class="tok-str">f"tuoi phải là int, nhận </span>{<span class="tok-fn">type</span>(tuoi).__name__}<span class="tok-str">"</span>)
+    <span class="tok-kw">if not</span> <span class="tok-num">0</span> &lt;= tuoi &lt;= <span class="tok-num">150</span>:
+        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">f"tuoi phải trong [0, 150], nhận </span>{tuoi}<span class="tok-str">"</span>)
+    <span class="tok-kw">return</span> tuoi
+
+<span class="tok-fn">dat_tuoi</span>(<span class="tok-str">"22"</span>)   <span class="tok-com"># TypeError: tuoi phải là int, nhận str</span>
+<span class="tok-fn">dat_tuoi</span>(-<span class="tok-num">5</span>)     <span class="tok-com"># ValueError: tuoi phải trong [0, 150], nhận -5</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Thông điệp lỗi tốt gồm 3 phần</div>
+          <ul>
+            <li><strong>Cái gì sai</strong> — "tuoi phải trong [0, 150]"</li>
+            <li><strong>Nhận được gì</strong> — "nhận -5" (dùng <code>!r</code> trong f-string để thấy rõ chuỗi: <code>f"{x!r}"</code> cho <code>'abc'</code> thay vì <code>abc</code>)</li>
+            <li><strong>Sửa thế nào</strong> — khi không hiển nhiên: "dùng <code>--force</code> để ghi đè"</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            Thông điệp tệ: <code>raise ValueError("invalid input")</code>. Người đọc traceback lúc 2 giờ sáng sẽ
+            không biết input nào, sai chỗ nào.
+          </p>
+        </div>
+
+        <h3 id="re-raise">5.1. <code>raise</code> trần — ném lại nguyên vẹn</h3>
+
+        <p>
+          Trong khối <code>except</code>, viết <code>raise</code> <em>không kèm gì</em> sẽ ném lại chính exception
+          đang xử lý, <strong>giữ nguyên traceback gốc</strong>. Đây là cách chuẩn để "ghi log rồi để lỗi đi tiếp".
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>re_raise.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> logging
+
+<span class="tok-kw">def</span> <span class="tok-fn">xu_ly_don</span>(don_id: <span class="tok-type">int</span>) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-kw">try</span>:
+        <span class="tok-fn">luu_vao_db</span>(don_id)
+    <span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
+        logging.<span class="tok-fn">exception</span>(<span class="tok-str">f"Lưu đơn </span>{don_id}<span class="tok-str"> thất bại"</span>)
+        <span class="tok-kw">raise</span>          <span class="tok-com"># ✅ ném lại y nguyên, traceback gốc còn đủ</span>
+
+<span class="tok-com"># ❌ SAI — mất traceback gốc, chỉ thấy dòng raise này</span>
+<span class="tok-kw">def</span> <span class="tok-fn">xu_ly_don_sai</span>(don_id: <span class="tok-type">int</span>) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-kw">try</span>:
+        <span class="tok-fn">luu_vao_db</span>(don_id)
+    <span class="tok-kw">except</span> <span class="tok-cls">Exception</span> <span class="tok-kw">as</span> e:
+        <span class="tok-kw">raise</span> <span class="tok-cls">Exception</span>(<span class="tok-fn">str</span>(e))   <span class="tok-com"># mất kiểu, mất traceback, mất context</span></code></pre>
+        </div>
+
+        <h2 id="chaining">6. Exception chaining — <code>raise ... from ...</code></h2>
+
+        <p>
+          Khi bạn bắt một lỗi cấp thấp và muốn ném ra một lỗi cấp cao dễ hiểu hơn cho người dùng thư viện, hãy
+          <strong>nối chuỗi</strong> chúng bằng <code>from</code>. Python sẽ in cả hai trong traceback, giữ nguyên
+          manh mối gốc.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>chaining.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">ConfigError</span>(<span class="tok-cls">Exception</span>):
+    <span class="tok-str">"""Lỗi khi nạp file cấu hình."""</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">nap_config</span>(duong_dan: <span class="tok-type">str</span>) -&gt; <span class="tok-type">dict</span>:
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">with</span> <span class="tok-fn">open</span>(duong_dan, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+            <span class="tok-kw">return</span> json.<span class="tok-fn">load</span>(f)
+    <span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span> <span class="tok-kw">as</span> e:
+        <span class="tok-kw">raise</span> <span class="tok-cls">ConfigError</span>(<span class="tok-str">f"Thiếu file cấu hình: </span>{duong_dan}<span class="tok-str">"</span>) <span class="tok-kw">from</span> e
+    <span class="tok-kw">except</span> json.<span class="tok-cls">JSONDecodeError</span> <span class="tok-kw">as</span> e:
+        <span class="tok-kw">raise</span> <span class="tok-cls">ConfigError</span>(<span class="tok-str">f"Cấu hình </span>{duong_dan}<span class="tok-str"> sai cú pháp JSON"</span>) <span class="tok-kw">from</span> e</code></pre>
+        </div>
+
+        <p>Traceback in ra sẽ có hai tầng, nối bằng một câu giải thích:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>traceback đầu ra</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>Traceback (most recent call last):
+  File "app.py", line 8, in nap_config
+    with open(duong_dan, encoding="utf-8") as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'settings.json'
+
+<span class="tok-com">The above exception was the direct cause of the following exception:</span>
+
+Traceback (most recent call last):
+  File "app.py", line 20, in &lt;module&gt;
+    cfg = nap_config("settings.json")
+ConfigError: Thiếu file cấu hình: settings.json</code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Cách viết</th><th>Attribute được set</th><th>Câu nối trong traceback</th><th>Khi nào dùng</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>raise B from a</code></td>
+                <td><code>B.__cause__ = a</code></td>
+                <td>"…was the <strong>direct cause</strong> of…"</td>
+                <td>Bạn <em>chủ ý</em> chuyển đổi lỗi — trường hợp phổ biến nhất</td>
+              </tr>
+              <tr>
+                <td><code>raise B</code> (trong <code>except</code>)</td>
+                <td><code>B.__context__ = a</code> (tự động)</td>
+                <td>"During handling of the above exception, <strong>another exception occurred</strong>"</td>
+                <td>Ngoài ý muốn — thường là dấu hiệu handler của bạn cũng bị lỗi</td>
+              </tr>
+              <tr>
+                <td><code>raise B from None</code></td>
+                <td><code>__suppress_context__ = True</code></td>
+                <td>Không in lỗi gốc</td>
+                <td>Lỗi gốc là chi tiết nội bộ, gây nhiễu cho người dùng thư viện</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ "During handling…" thường là dấu hiệu bug</div>
+          <p>
+            Nếu traceback của bạn hiện câu <em>"During handling of the above exception, another exception occurred"</em>
+            mà bạn không cố ý, hãy đọc kỹ: nó có nghĩa là <strong>khối <code>except</code> của bạn cũng ném lỗi</strong>.
+            Ví dụ kinh điển: trong <code>except KeyError:</code> bạn viết <code>print(f"thiếu {du_lieu['key']}")</code>
+            — và lại gây <code>KeyError</code> lần nữa. Handler phải là đoạn code <em>an toàn nhất</em> trong hàm.
+          </p>
+        </div>
+
+        <h2 id="custom-exception">7. Custom exception — thiết kế cây lỗi cho ứng dụng</h2>
+
+        <p>
+          Với bất kỳ thư viện hoặc ứng dụng nào lớn hơn một script, hãy tạo <strong>một exception gốc riêng</strong>
+          rồi cho mọi lỗi của bạn kế thừa từ nó. Lợi ích: người dùng thư viện có thể viết
+          <code>except TenAppError:</code> để bắt <em>tất cả</em> lỗi của bạn mà không vô tình bắt lỗi của thư viện khác.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>errors.py — cây lỗi của một app thanh toán</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">ThanhToanError</span>(<span class="tok-cls">Exception</span>):
+    <span class="tok-str">"""Lớp gốc cho mọi lỗi của module thanh toán."""</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">TheKhongHopLe</span>(<span class="tok-cls">ThanhToanError</span>):
+    <span class="tok-str">"""Số thẻ sai định dạng hoặc đã hết hạn."""</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">KhongDuSoDu</span>(<span class="tok-cls">ThanhToanError</span>):
+    <span class="tok-str">"""Tài khoản không đủ tiền để thực hiện giao dịch."""</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, can: <span class="tok-type">int</span>, co: <span class="tok-type">int</span>):
+        <span class="tok-kw">self</span>.can = can
+        <span class="tok-kw">self</span>.co = co
+        <span class="tok-kw">self</span>.thieu = can - co
+        <span class="tok-fn">super</span>().<span class="tok-fn">__init__</span>(<span class="tok-str">f"Cần </span>{can:,}<span class="tok-str">đ nhưng chỉ có </span>{co:,}<span class="tok-str">đ (thiếu </span>{<span class="tok-kw">self</span>.thieu:,}<span class="tok-str">đ)"</span>)
+
+<span class="tok-kw">class</span> <span class="tok-cls">CongThanhToanLoi</span>(<span class="tok-cls">ThanhToanError</span>):
+    <span class="tok-str">"""Cổng thanh toán bên thứ ba không phản hồi hoặc trả lỗi."""</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>su_dung.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">rut_tien</span>(so_du: <span class="tok-type">int</span>, so_tien: <span class="tok-type">int</span>) -&gt; <span class="tok-type">int</span>:
+    <span class="tok-kw">if</span> so_tien &gt; so_du:
+        <span class="tok-kw">raise</span> <span class="tok-fn">KhongDuSoDu</span>(can=so_tien, co=so_du)
+    <span class="tok-kw">return</span> so_du - so_tien
+
+<span class="tok-com"># Người gọi có thể bắt ở nhiều mức chi tiết khác nhau</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">rut_tien</span>(<span class="tok-num">50_000</span>, <span class="tok-num">200_000</span>)
+<span class="tok-kw">except</span> <span class="tok-cls">KhongDuSoDu</span> <span class="tok-kw">as</span> e:
+    <span class="tok-fn">print</span>(<span class="tok-str">f"Nạp thêm </span>{e.thieu:,}<span class="tok-str">đ để tiếp tục"</span>)   <span class="tok-com"># Nạp thêm 150,000đ để tiếp tục</span>
+<span class="tok-kw">except</span> <span class="tok-cls">ThanhToanError</span>:
+    <span class="tok-fn">print</span>(<span class="tok-str">"Giao dịch thất bại, vui lòng thử lại"</span>)   <span class="tok-com"># lưới an toàn cho cả module</span></code></pre>
+        </div>
+
+        <div class="py-feature">
+          <h4>Đặt dữ liệu vào exception, đừng chỉ đặt chữ</h4>
+          <p>
+            <code>KhongDuSoDu</code> mang theo <code>can</code>, <code>co</code>, <code>thieu</code> dưới dạng
+            attribute — nhờ vậy handler có thể <em>hành động</em> (hiện nút "Nạp thêm 150.000đ") thay vì chỉ hiển thị
+            chuỗi. Nếu chỉ có message, handler buộc phải parse chuỗi — cách làm dễ vỡ nhất.
+          </p>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Quy ước đặt tên</div>
+          <p>
+            PEP 8 khuyến nghị tên exception <strong>kết thúc bằng <code>Error</code></strong> nếu đó là lỗi
+            (<code>ConfigError</code>, <code>ValidationError</code>). Nếu là tín hiệu điều khiển chứ không phải lỗi
+            (hiếm), có thể bỏ hậu tố — như chính <code>StopIteration</code> của Python. Trong ví dụ trên tôi dùng tên
+            tiếng Việt để dễ đọc, nhưng ở dự án thật hãy giữ tên class tiếng Anh cho nhất quán với hệ sinh thái.
+          </p>
+        </div>
+
+        <h2 id="eafp-lbyl">8. EAFP vs LBYL — hai trường phái</h2>
+
+        <p>
+          Đây là một trong những điểm khiến code Python trông khác code Java/Go rõ rệt.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>LBYL — <em>Look Before You Leap</em></th><th>EAFP — <em>Easier to Ask Forgiveness than Permission</em></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Tư tưởng</td><td>Kiểm tra điều kiện trước khi làm</td><td>Cứ làm, hỏng thì bắt</td></tr>
+              <tr><td>Cú pháp</td><td><code>if</code> / <code>hasattr</code> / <code>in</code></td><td><code>try</code> / <code>except</code></td></tr>
+              <tr><td>Ưu điểm</td><td>Rõ ràng khi điều kiện đơn giản</td><td>Không có khoảng trống race condition; ít lặp việc</td></tr>
+              <tr><td>Nhược điểm</td><td>Dính <strong>race condition</strong>; kiểm tra 2 lần (check + thao tác)</td><td>Khó đọc nếu khối <code>try</code> quá dài</td></tr>
+              <tr><td>Python thiên về</td><td>Ít hơn</td><td><strong>Mặc định</strong> — idiom chuẩn</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>eafp_vs_lbyl.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> os
+
+<span class="tok-com"># LBYL — có lỗ hổng race condition</span>
+<span class="tok-kw">if</span> os.path.<span class="tok-fn">exists</span>(<span class="tok-str">"data.csv"</span>):
+    <span class="tok-com"># ⚠️ giữa dòng trên và dòng dưới, tiến trình khác có thể xoá file!</span>
+    <span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"data.csv"</span>) <span class="tok-kw">as</span> f:
+        noi_dung = f.<span class="tok-fn">read</span>()
+<span class="tok-kw">else</span>:
+    noi_dung = <span class="tok-str">""</span>
+
+<span class="tok-com"># EAFP — không có khoảng trống, đúng cả khi có nhiều tiến trình</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"data.csv"</span>) <span class="tok-kw">as</span> f:
+        noi_dung = f.<span class="tok-fn">read</span>()
+<span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span>:
+    noi_dung = <span class="tok-str">""</span></code></pre>
+        </div>
+
+        <p>
+          Race condition trong ví dụ LBYL trên có tên riêng: <strong>TOCTOU</strong> (Time-Of-Check to Time-Of-Use).
+          Nó là nguồn của nhiều lỗ hổng bảo mật thật, không chỉ là lý thuyết. Với thao tác trên file, socket, hay bất
+          kỳ tài nguyên chia sẻ nào, EAFP là lựa chọn <em>đúng</em>, không chỉ là lựa chọn "Pythonic".
+        </p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Khi nào LBYL vẫn tốt hơn</div>
+          <ul>
+            <li>Điều kiện thuần tuý tính toán, không đụng tài nguyên ngoài: <code>if n &gt; 0:</code> rõ hơn <code>try: math.sqrt(n)</code>.</li>
+            <li>Có sẵn API "an toàn": <code>d.get(k, default)</code> đẹp hơn <code>try: d[k] except KeyError</code> cho trường hợp một khóa.</li>
+            <li>Exception xảy ra <em>thường xuyên</em> (không phải ngoại lệ): ném/bắt exception tốn hơn một phép <code>if</code> nhiều lần. Nếu 90% trường hợp là "thiếu khóa" thì <code>if</code> nhanh hơn.</li>
+          </ul>
+        </div>
+
+        <h2 id="traceback">9. Đọc traceback — kỹ năng bắt buộc</h2>
+
+        <p>
+          Traceback là bản đồ dẫn tới chỗ hỏng. Quy tắc số một: <strong>đọc từ dưới lên</strong>. Dòng cuối cùng là
+          loại lỗi và thông điệp; ngay phía trên là dòng code thực sự gây lỗi; càng lên cao là các hàm gọi xa hơn.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>traceback mẫu — đánh số để giải thích</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>Traceback (most recent call last):
+  File "/app/main.py", line 42, in &lt;module&gt;        <span class="tok-com"># ④ điểm khởi đầu</span>
+    bao_cao = tong_hop(don_hangs)
+              ^^^^^^^^^^^^^^^^^^^
+  File "/app/report.py", line 15, in tong_hop      <span class="tok-com"># ③</span>
+    return sum(tinh_gia(d) for d in don_hangs)
+               ^^^^^^^^^^^
+  File "/app/report.py", line 8, in tinh_gia       <span class="tok-com"># ② hàm gọi trực tiếp</span>
+    return don["so_luong"] * don["don_gia"]
+                             ~~~^^^^^^^^^^^
+KeyError: 'don_gia'                                <span class="tok-com"># ① ĐỌC DÒNG NÀY TRƯỚC</span></code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Thứ tự đọc</th><th>Nội dung</th><th>Câu hỏi cần trả lời</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>① Dòng cuối</td><td><code>KeyError: 'don_gia'</code></td><td>Lỗi <em>loại gì</em>? Về <em>cái gì</em>?</td></tr>
+              <tr><td>② Frame cuối</td><td><code>report.py:8, in tinh_gia</code></td><td>Dòng code nào <em>thực sự</em> nổ?</td></tr>
+              <tr><td>③④ Các frame trên</td><td>chuỗi hàm gọi</td><td>Dữ liệu xấu <em>đến từ đâu</em>?</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Từ Python 3.11, traceback có thêm <strong>chỉ dẫn <code>^^^</code> và <code>~~~</code></strong> chỉ đúng
+          biểu thức con gây lỗi. Trong ví dụ trên, <code>~~~^^^</code> cho biết lỗi ở <code>don["don_gia"]</code> chứ
+          không phải <code>don["so_luong"]</code> — trước 3.11 bạn phải tự đoán giữa hai phép truy cập trên cùng một dòng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>traceback_api.py — lấy traceback dưới dạng dữ liệu</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> traceback
+
+<span class="tok-kw">try</span>:
+    <span class="tok-num">1</span> / <span class="tok-num">0</span>
+<span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span> <span class="tok-kw">as</span> e:
+    <span class="tok-com"># In ra stderr như Python vẫn làm</span>
+    traceback.<span class="tok-fn">print_exc</span>()
+
+    <span class="tok-com"># Lấy về dưới dạng chuỗi — để gửi lên hệ thống giám sát</span>
+    chuoi = traceback.<span class="tok-fn">format_exc</span>()
+
+    <span class="tok-com"># Duyệt từng frame dưới dạng object</span>
+    <span class="tok-kw">for</span> frame <span class="tok-kw">in</span> traceback.<span class="tok-fn">extract_tb</span>(e.__traceback__):
+        <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{frame.filename}<span class="tok-str">:</span>{frame.lineno}<span class="tok-str"> trong </span>{frame.name}<span class="tok-str">()"</span>)</code></pre>
+        </div>
+
+        <h2 id="anti-pattern">10. Năm anti-pattern kinh điển</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>anti_pattern.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># ❌ 1. BARE EXCEPT — bắt cả Ctrl+C và sys.exit()</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">tinh_toan_lau</span>()
+<span class="tok-kw">except</span>:                       <span class="tok-com"># bắt cả BaseException!</span>
+    <span class="tok-fn">print</span>(<span class="tok-str">"có lỗi"</span>)            <span class="tok-com"># người dùng bấm Ctrl+C mà không thoát được</span>
+
+<span class="tok-com"># ✅ Sửa: nêu rõ loại, hoặc ít nhất dùng Exception</span>
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">tinh_toan_lau</span>()
+<span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:              <span class="tok-com"># KeyboardInterrupt/SystemExit đi qua bình thường</span>
+    logging.<span class="tok-fn">exception</span>(<span class="tok-str">"tính toán thất bại"</span>)
+    <span class="tok-kw">raise</span>
+
+
+<span class="tok-com"># ❌ 2. NUỐT LỖI — pass trong except</span>
+<span class="tok-kw">try</span>:
+    cfg = <span class="tok-fn">nap_config</span>()
+<span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
+    <span class="tok-kw">pass</span>                        <span class="tok-com"># cfg giờ không tồn tại → NameError ở dưới</span>
+
+<span class="tok-com"># ✅ Sửa: hoặc xử lý, hoặc để nó bay lên. Muốn im lặng thì nói rõ loại:</span>
+<span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> suppress
+<span class="tok-kw">with</span> <span class="tok-fn">suppress</span>(<span class="tok-cls">FileNotFoundError</span>):   <span class="tok-com"># "explicitly silenced"</span>
+    os.<span class="tok-fn">remove</span>(<span class="tok-str">"tam.tmp"</span>)
+
+
+<span class="tok-com"># ❌ 3. TRY QUÁ RỘNG — không biết dòng nào hỏng</span>
+<span class="tok-kw">try</span>:
+    du_lieu = <span class="tok-fn">tai_ve</span>(url)
+    ket_qua = <span class="tok-fn">phan_tich</span>(du_lieu)
+    <span class="tok-fn">luu</span>(ket_qua)
+    <span class="tok-fn">gui_email</span>(ket_qua)
+<span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
+    <span class="tok-fn">print</span>(<span class="tok-str">"thất bại"</span>)          <span class="tok-com"># thất bại ở bước nào? không ai biết</span>
+
+<span class="tok-com"># ✅ Sửa: bọc từng bước rủi ro, thông điệp riêng cho từng bước</span>
+
+
+<span class="tok-com"># ❌ 4. DÙNG EXCEPTION THAY IF (khi if hoàn toàn đủ)</span>
+<span class="tok-kw">try</span>:
+    x = so_am
+<span class="tok-kw">except</span>:
+    x = <span class="tok-num">0</span>
+
+<span class="tok-com"># ✅ Sửa: điều kiện thuần tính toán thì dùng if</span>
+x = so_am <span class="tok-kw">if</span> so_am &gt;= <span class="tok-num">0</span> <span class="tok-kw">else</span> <span class="tok-num">0</span>
+
+
+<span class="tok-com"># ❌ 5. LOG RỒI RAISE Ở MỌI TẦNG — traceback lặp 5 lần trong log</span>
+<span class="tok-kw">def</span> <span class="tok-fn">tang_giua</span>():
+    <span class="tok-kw">try</span>:
+        <span class="tok-fn">tang_duoi</span>()
+    <span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
+        logging.<span class="tok-fn">exception</span>(<span class="tok-str">"lỗi"</span>)   <span class="tok-com"># tầng nào cũng log → log ngập rác</span>
+        <span class="tok-kw">raise</span>
+
+<span class="tok-com"># ✅ Sửa: chỉ log ở BIÊN — nơi lỗi dừng lại (handler HTTP, main, worker loop).</span>
+<span class="tok-com">#         Các tầng giữa: hoặc im lặng để nó bay, hoặc chaining thêm ngữ cảnh.</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>except Exception</code> — hợp lệ nhưng chỉ ở đúng chỗ</div>
+          <p>
+            Bắt <code>Exception</code> là <em>đúng</em> ở đúng một loại vị trí: <strong>biên của chương trình</strong>
+            — vòng lặp worker không được chết vì một job hỏng, handler HTTP phải trả 500 thay vì sập server, hàm
+            <code>main()</code> muốn in thông điệp thân thiện thay vì traceback thô. Ở mọi nơi khác trong code nghiệp
+            vụ, hãy nêu tên loại lỗi cụ thể.
+          </p>
+        </div>
+
+        <h2 id="exception-group">11. <code>ExceptionGroup</code> và <code>except*</code> (Python 3.11+)</h2>
+
+        <p>
+          Trước 3.11, một khối <code>try</code> chỉ ném được <em>một</em> exception. Điều đó thành vấn đề khi bạn chạy
+          nhiều tác vụ song song: nếu 3 trong 10 request thất bại, bạn chỉ thấy được lỗi đầu tiên. Python 3.11 giới
+          thiệu <code>ExceptionGroup</code> — một exception <strong>chứa nhiều exception con</strong> — cùng cú pháp
+          <code>except*</code> để bắt theo loại xuyên qua nhóm.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>exception_group.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">kiem_tra_tat_ca</span>(nguoi_dung: <span class="tok-type">dict</span>) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-str">"""Gom TẤT CẢ lỗi validate thay vì dừng ở lỗi đầu tiên."""</span>
+    loi: <span class="tok-type">list</span>[<span class="tok-cls">Exception</span>] = []
+
+    <span class="tok-kw">if not</span> nguoi_dung.<span class="tok-fn">get</span>(<span class="tok-str">"email"</span>, <span class="tok-str">""</span>).<span class="tok-fn">count</span>(<span class="tok-str">"@"</span>):
+        loi.<span class="tok-fn">append</span>(<span class="tok-cls">ValueError</span>(<span class="tok-str">"email không hợp lệ"</span>))
+    <span class="tok-kw">if</span> nguoi_dung.<span class="tok-fn">get</span>(<span class="tok-str">"tuoi"</span>, <span class="tok-num">0</span>) &lt; <span class="tok-num">18</span>:
+        loi.<span class="tok-fn">append</span>(<span class="tok-cls">ValueError</span>(<span class="tok-str">"phải từ 18 tuổi"</span>))
+    <span class="tok-kw">if not</span> nguoi_dung.<span class="tok-fn">get</span>(<span class="tok-str">"mat_khau"</span>):
+        loi.<span class="tok-fn">append</span>(<span class="tok-cls">KeyError</span>(<span class="tok-str">"mat_khau"</span>))
+
+    <span class="tok-kw">if</span> loi:
+        <span class="tok-kw">raise</span> <span class="tok-cls">ExceptionGroup</span>(<span class="tok-str">"Dữ liệu đăng ký không hợp lệ"</span>, loi)
+
+
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">kiem_tra_tat_ca</span>({<span class="tok-str">"email"</span>: <span class="tok-str">"sai"</span>, <span class="tok-str">"tuoi"</span>: <span class="tok-num">15</span>})
+<span class="tok-kw">except</span>* <span class="tok-cls">ValueError</span> <span class="tok-kw">as</span> nhom:
+    <span class="tok-kw">for</span> e <span class="tok-kw">in</span> nhom.exceptions:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"  giá trị sai: </span>{e}<span class="tok-str">"</span>)
+<span class="tok-kw">except</span>* <span class="tok-cls">KeyError</span> <span class="tok-kw">as</span> nhom:
+    <span class="tok-kw">for</span> e <span class="tok-kw">in</span> nhom.exceptions:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"  thiếu trường: </span>{e}<span class="tok-str">"</span>)
+
+<span class="tok-com"># giá trị sai: email không hợp lệ</span>
+<span class="tok-com"># giá trị sai: phải từ 18 tuổi</span>
+<span class="tok-com"># thiếu trường: 'mat_khau'</span></code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 <code>except*</code> khác <code>except</code> ở ba điểm</div>
+          <ul>
+            <li><strong>Nhiều khối cùng chạy</strong>: không dừng ở khối đầu tiên khớp — cả <code>except* ValueError</code> lẫn <code>except* KeyError</code> đều chạy.</li>
+            <li><strong>Biến bắt được luôn là một nhóm</strong>, không phải một exception đơn — phải duyệt <code>nhom.exceptions</code>.</li>
+            <li><strong>Không trộn được</strong>: trong cùng một <code>try</code>, hoặc dùng toàn <code>except</code>, hoặc toàn <code>except*</code>.</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            Nơi bạn gặp <code>ExceptionGroup</code> nhiều nhất là <code>asyncio.TaskGroup</code> —
+            <a href="chuong11.html">Chương 11 (Async Python)</a> sẽ dùng lại chính xác cơ chế này.
+          </p>
+        </div>
+
+        <h2 id="assert-warning-log">12. <code>assert</code>, <code>warnings</code>, và cách ghi log lỗi</h2>
+
+        <h3 id="assert">12.1. <code>assert</code> — chỉ để bắt lỗi lập trình</h3>
+
+        <p>
+          <code>assert dieu_kien, thong_diep</code> ném <code>AssertionError</code> khi điều kiện sai. Điểm mấu chốt:
+          Python <strong>xoá sạch mọi <code>assert</code></strong> khi chạy với cờ tối ưu <code>python -O</code>.
+          Vì vậy tuyệt đối không dùng <code>assert</code> để kiểm tra dữ liệu người dùng hay điều kiện bảo mật.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>assert_dung_sai.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># ✅ ĐÚNG — kiểm tra bất biến nội bộ ("chuyện này không thể xảy ra")</span>
+<span class="tok-kw">def</span> <span class="tok-fn">chia_deu</span>(tong: <span class="tok-type">int</span>, phan: <span class="tok-type">list</span>[<span class="tok-type">int</span>]) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-com"># ... thuật toán chia ...</span>
+    <span class="tok-kw">assert</span> <span class="tok-fn">sum</span>(phan) == tong, <span class="tok-str">f"bug thuật toán: </span>{<span class="tok-fn">sum</span>(phan)}<span class="tok-str"> != </span>{tong}<span class="tok-str">"</span>
+
+<span class="tok-com"># ❌ SAI — kiểm tra input người dùng bằng assert</span>
+<span class="tok-kw">def</span> <span class="tok-fn">dang_nhap</span>(mat_khau: <span class="tok-type">str</span>) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-kw">assert</span> <span class="tok-fn">len</span>(mat_khau) &gt;= <span class="tok-num">8</span>       <span class="tok-com"># biến mất khi chạy python -O !!</span>
+
+<span class="tok-com"># ✅ Sửa</span>
+<span class="tok-kw">def</span> <span class="tok-fn">dang_nhap</span>(mat_khau: <span class="tok-type">str</span>) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-kw">if</span> <span class="tok-fn">len</span>(mat_khau) &lt; <span class="tok-num">8</span>:
+        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"mật khẩu phải từ 8 ký tự"</span>)</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Bẫy — <code>assert</code> với tuple luôn đúng</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>assert_tuple.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">assert</span> (x &gt; <span class="tok-num">0</span>, <span class="tok-str">"x phải dương"</span>)   <span class="tok-com"># ❌ đây là 1 TUPLE — luôn truthy!</span>
+<span class="tok-kw">assert</span> x &gt; <span class="tok-num">0</span>, <span class="tok-str">"x phải dương"</span>     <span class="tok-com"># ✅ đúng — không có ngoặc</span></code></pre>
+          </div>
+          <p>
+            Bản Python mới cảnh báo <code>SyntaxWarning</code> cho trường hợp này, nhưng nó vẫn lọt qua ở nhiều
+            codebase cũ. <code>ruff</code> rule <code>F631</code> bắt được.
+          </p>
+        </div>
+
+        <h3 id="warnings">12.2. <code>warnings</code> — báo mà không dừng</h3>
+
+        <p>
+          Khi muốn nói "cách dùng này sắp bị bỏ" hoặc "kết quả có thể không như mong đợi" mà <em>không</em> làm hỏng
+          chương trình, dùng module <code>warnings</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>warnings_demo.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> warnings
+
+<span class="tok-kw">def</span> <span class="tok-fn">tinh_thue_cu</span>(x: <span class="tok-type">float</span>) -&gt; <span class="tok-type">float</span>:
+    warnings.<span class="tok-fn">warn</span>(
+        <span class="tok-str">"tinh_thue_cu() sẽ bị xoá ở v3.0, dùng tinh_thue() thay thế"</span>,
+        <span class="tok-cls">DeprecationWarning</span>,
+        stacklevel=<span class="tok-num">2</span>,      <span class="tok-com"># trỏ vào NGƯỜI GỌI, không phải dòng này</span>
+    )
+    <span class="tok-kw">return</span> x * <span class="tok-num">0.1</span>
+
+<span class="tok-com"># Biến warning thành lỗi trong test — để không ai lỡ dùng API cũ</span>
+warnings.<span class="tok-fn">simplefilter</span>(<span class="tok-str">"error"</span>, <span class="tok-cls">DeprecationWarning</span>)</code></pre>
+        </div>
+
+        <h3 id="logging">12.3. Ghi log lỗi cho đúng</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>logging_loi.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> logging
+
+log = logging.<span class="tok-fn">getLogger</span>(__name__)
+
+<span class="tok-kw">try</span>:
+    <span class="tok-fn">xu_ly</span>()
+<span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
+    <span class="tok-com"># ✅ log.exception() — CHỈ gọi trong khối except, tự đính kèm traceback</span>
+    log.<span class="tok-fn">exception</span>(<span class="tok-str">"Xử lý thất bại"</span>)
+
+    <span class="tok-com"># tương đương:</span>
+    <span class="tok-com"># log.error("Xử lý thất bại", exc_info=True)</span>
+
+    <span class="tok-com"># ❌ mất traceback — chỉ còn dòng chữ, không biết hỏng ở đâu</span>
+    <span class="tok-com"># log.error(f"Xử lý thất bại: {e}")</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Ba quy tắc log lỗi</div>
+          <ul>
+            <li>Dùng <code>log.exception(...)</code> (không phải <code>log.error(f"...{e}")</code>) — để giữ traceback.</li>
+            <li>Log ở <strong>biên</strong>, nơi lỗi dừng lại — không log lại ở mọi tầng.</li>
+            <li>Đừng log dữ liệu nhạy cảm (mật khẩu, token, số thẻ) vào thông điệp lỗi — chúng sẽ nằm trong log file mãi mãi.</li>
+          </ul>
+        </div>
+
+        <h2 id="cheat-sheet">13. Cheat sheet chương 5</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Cách viết</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Bắt một loại lỗi</td><td><code>except ValueError as e:</code></td></tr>
+              <tr><td>Bắt nhiều loại, cùng cách xử lý</td><td><code>except (ValueError, TypeError) as e:</code></td></tr>
+              <tr><td>Bắt mọi lỗi nghiệp vụ (ở biên)</td><td><code>except Exception:</code> — <em>không phải</em> <code>except:</code></td></tr>
+              <tr><td>Ném lại nguyên vẹn</td><td><code>raise</code> (trần, trong <code>except</code>)</td></tr>
+              <tr><td>Đổi loại lỗi, giữ nguyên nhân</td><td><code>raise MyError("...") from e</code></td></tr>
+              <tr><td>Đổi loại lỗi, giấu nguyên nhân</td><td><code>raise MyError("...") from None</code></td></tr>
+              <tr><td>Bỏ qua một loại lỗi có chủ đích</td><td><code>with suppress(FileNotFoundError): ...</code></td></tr>
+              <tr><td>Chỉ chạy khi không có lỗi</td><td>khối <code>else:</code></td></tr>
+              <tr><td>Luôn dọn dẹp</td><td>khối <code>finally:</code> (không <code>return</code> trong đó!)</td></tr>
+              <tr><td>Gom nhiều lỗi song song</td><td><code>raise ExceptionGroup("...", ds)</code> + <code>except*</code></td></tr>
+              <tr><td>Ghi log kèm traceback</td><td><code>log.exception("...")</code></td></tr>
+              <tr><td>Kiểm tra bất biến nội bộ</td><td><code>assert dk, "msg"</code> (không dùng cho input!)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <h2 id="bai-tap">Bài tập</h2>
 
         <div class="exercises">
 
           <div class="exercise">
-            <h4>Vector 2D với toán tử</h4>
+            <h4>Hàm <code>chuyen_so_an_toan</code></h4>
             <div class="exercise-body">
               <p>
-                Viết class <code>Vector2D</code> với hai thuộc tính <code>x</code>, <code>y</code>. Implement các
-                dunder method: <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>,
-                <code>__add__</code>, <code>__sub__</code>, <code>__mul__</code> (scalar bên phải). Yêu cầu:
+                Viết <code>chuyen_so_an_toan(gia_tri, mac_dinh=None)</code> nhận bất kỳ thứ gì và trả về
+                <code>float</code>. Yêu cầu:
               </p>
               <ul>
-                <li><code>Vector2D(1, 2) + Vector2D(3, 4) == Vector2D(4, 6)</code></li>
-                <li><code>Vector2D(3, 4) - Vector2D(1, 2) == Vector2D(2, 2)</code></li>
-                <li><code>Vector2D(1, 2) * 3 == Vector2D(3, 6)</code></li>
-                <li><code>repr(Vector2D(1, 2))</code> phải eval lại được</li>
+                <li>Chuỗi số (<code>"3.14"</code>, <code>" 42 "</code>) → chuyển được, có <code>strip()</code>.</li>
+                <li>Chuỗi rác (<code>"abc"</code>), <code>None</code>, <code>list</code> → trả <code>mac_dinh</code>.</li>
+                <li>Nếu <code>mac_dinh is None</code> → thay vì trả <code>None</code>, hãy <code>raise ValueError</code> có thông điệp nêu rõ giá trị nhận được (dùng <code>!r</code>).</li>
+                <li>Viết bằng phong cách <strong>EAFP</strong>, không dùng <code>isinstance</code> hay <code>str.isdigit()</code>.</li>
               </ul>
               <details class="exercise-hint">
                 <summary>Gợi ý</summary>
                 <div class="hint-content">
                   <p>
-                    Trong các toán tử <code>__add__</code>/<code>__sub__</code>, trả về một instance mới — không
-                    mutate <code>self</code>. <code>__mul__(self, scalar)</code> nhận một số làm tham số thứ hai. Khi
-                    so sánh kiểu khác, trả <code>NotImplemented</code>. Để ổn định <code>repr</code>, dùng
-                    <code>f"Vector2D({self.x}, {self.y})"</code>.
+                    <code>float(x)</code> ném <code>ValueError</code> với chuỗi rác và <code>TypeError</code> với
+                    <code>None</code>/<code>list</code> — bắt gộp cả hai bằng tuple. Dùng sentinel để phân biệt
+                    "người dùng không truyền <code>mac_dinh</code>" với "người dùng truyền <code>None</code>":
+                    <code>_KHONG_TRUYEN = object()</code> làm giá trị mặc định.
                   </p>
                 </div>
               </details>
@@ -942,62 +1119,32 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
           </div>
 
           <div class="exercise">
-            <h4>Hierarchy <code>Shape</code> với ABC</h4>
+            <h4>Cây lỗi cho một thư viện HTTP mini</h4>
             <div class="exercise-body">
-              <p>
-                Tạo class trừu tượng <code>Shape</code> (kế thừa <code>abc.ABC</code>) với
-                <code>@abstractmethod area()</code>. Implement <code>Circle(radius)</code>, <code>Square(side)</code>,
-                <code>Rectangle(width, height)</code>. Sau đó:
-              </p>
-              <ul>
-                <li>Tạo list <code>shapes = [Circle(2), Square(3), Rectangle(2, 5)]</code></li>
-                <li>In ra tổng diện tích bằng <code>sum(s.area() for s in shapes)</code></li>
-                <li>Thử <code>Shape()</code> → phải ra <code>TypeError</code></li>
-              </ul>
-              <details class="exercise-hint">
-                <summary>Gợi ý</summary>
-                <div class="hint-content">
-                  <p>
-                    <code>area()</code> ở <code>Shape</code> chỉ cần <code>...</code> (Ellipsis literal) làm body.
-                    Mỗi subclass override <code>area()</code> với công thức riêng. Đây là ví dụ kinh điển của
-                    <strong>polymorphism</strong> — code dùng list không cần biết từng phần tử là Circle hay Square.
-                  </p>
-                </div>
-              </details>
-            </div>
-          </div>
-
-          <div class="exercise">
-            <h4>Refactor <code>User</code> sang <code>@dataclass(frozen=True)</code></h4>
-            <div class="exercise-body">
-              <p>
-                Cho class <code>User</code> dạng "manual":
-              </p>
+              <p>Thiết kế cây exception cho một client HTTP giả lập, gồm:</p>
               <div class="code-wrap">
-                <div class="code-meta"><span>before.py</span><button class="copy-btn">Copy</button></div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
-        <span class="tok-kw">self</span>.name = name
-        <span class="tok-kw">self</span>.age = age
-    <span class="tok-kw">def</span> <span class="tok-fn">__repr__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-str">f"User(name=</span>{<span class="tok-kw">self</span>.name!r}<span class="tok-str">, age=</span>{<span class="tok-kw">self</span>.age}<span class="tok-str">)"</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">__eq__</span>(<span class="tok-kw">self</span>, other):
-        <span class="tok-kw">if not</span> <span class="tok-fn">isinstance</span>(other, <span class="tok-cls">User</span>): <span class="tok-kw">return</span> <span class="tok-kw">NotImplemented</span>
-        <span class="tok-kw">return</span> (<span class="tok-kw">self</span>.name, <span class="tok-kw">self</span>.age) == (other.name, other.age)
-    <span class="tok-kw">def</span> <span class="tok-fn">__hash__</span>(<span class="tok-kw">self</span>):
-        <span class="tok-kw">return</span> <span class="tok-fn">hash</span>((<span class="tok-kw">self</span>.name, <span class="tok-kw">self</span>.age))</code></pre>
+                <div class="code-meta"><span>khung.py</span><button class="copy-btn">Copy</button></div>
+<pre><code>HttpError                <span class="tok-com"># gốc — mọi lỗi của thư viện</span>
+ ├── ConnectionFailed     <span class="tok-com"># không kết nối được (mang theo .host, .port)</span>
+ ├── Timeout              <span class="tok-com"># quá hạn (mang theo .seconds)</span>
+ └── StatusError          <span class="tok-com"># server trả mã lỗi (mang theo .status, .body)</span>
+      ├── ClientError      <span class="tok-com"># 4xx</span>
+      └── ServerError      <span class="tok-com"># 5xx</span></code></pre>
               </div>
               <p>
-                Viết lại dưới dạng <code>@dataclass(frozen=True)</code>. So sánh số dòng. Kiểm tra:
-                <code>hash(User("A", 1))</code> hoạt động, <code>User("A", 1) == User("A", 1)</code> trả
-                <code>True</code>, và <code>user.name = "B"</code> ném <code>FrozenInstanceError</code>.
+                Viết hàm <code>raise_for_status(status: int, body: str)</code>: không làm gì nếu 2xx/3xx, ném
+                <code>ClientError</code> nếu 400-499, <code>ServerError</code> nếu ≥500. Sau đó viết một khối
+                <code>try</code> minh hoạ ba mức bắt: bắt riêng <code>ServerError</code> (để retry), bắt
+                <code>StatusError</code> (để log), bắt <code>HttpError</code> (lưới cuối).
               </p>
               <details class="exercise-hint">
                 <summary>Gợi ý</summary>
                 <div class="hint-content">
                   <p>
-                    <code>frozen=True</code> đồng thời cấm set attribute <em>và</em> bật <code>eq=True</code>
-                    (mặc định) sẽ kéo theo auto-generate <code>__hash__</code>. Phiên bản sau gọn còn ~4 dòng.
+                    <code>StatusError.__init__(self, status, body)</code> nên gọi
+                    <code>super().__init__(f"HTTP {status}: {body[:100]}")</code> để message tự sinh, đồng thời lưu
+                    <code>self.status</code>, <code>self.body</code>. Trong <code>raise_for_status</code>, chọn class
+                    con bằng một biểu thức: <code>cls = ClientError if status &lt; 500 else ServerError</code>.
                   </p>
                 </div>
               </details>
@@ -1005,26 +1152,65 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
           </div>
 
           <div class="exercise">
-            <h4>Lớp <code>Temperature</code> đa đơn vị</h4>
+            <h4>Đoán output — thứ tự <code>try/except/else/finally</code></h4>
+            <div class="exercise-body">
+              <p>Không chạy code, viết ra output của cả ba lời gọi. Sau đó chạy để kiểm chứng.</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>doan_output.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">f</span>(n):
+    <span class="tok-kw">try</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"A"</span>)
+        <span class="tok-kw">if</span> n == <span class="tok-num">0</span>:
+            <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"zero"</span>)
+        <span class="tok-kw">if</span> n == <span class="tok-num">1</span>:
+            <span class="tok-kw">return</span> <span class="tok-str">"B"</span>
+    <span class="tok-kw">except</span> <span class="tok-cls">ValueError</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"C"</span>)
+        <span class="tok-kw">return</span> <span class="tok-str">"D"</span>
+    <span class="tok-kw">else</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"E"</span>)
+        <span class="tok-kw">return</span> <span class="tok-str">"F"</span>
+    <span class="tok-kw">finally</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"G"</span>)
+
+<span class="tok-fn">print</span>(<span class="tok-fn">f</span>(<span class="tok-num">0</span>))
+<span class="tok-fn">print</span>(<span class="tok-fn">f</span>(<span class="tok-num">1</span>))
+<span class="tok-fn">print</span>(<span class="tok-fn">f</span>(<span class="tok-num">2</span>))</code></pre>
+              </div>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Ba câu hỏi dẫn đường: (1) khi <code>try</code> có <code>return</code> thì <code>else</code> có
+                    chạy không? (2) <code>finally</code> chạy trước hay sau khi giá trị <code>return</code> được xác
+                    định? (3) với <code>n = 2</code>, khối nào chạy — <code>try</code> hết bình thường thì đi đâu?
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Decorator <code>@retry</code> có backoff</h4>
             <div class="exercise-body">
               <p>
-                Tạo class <code>Temperature</code> lưu state trong <code>_celsius</code> (convention private).
-                Implement <code>@property</code> cho ba đơn vị: <code>celsius</code>, <code>fahrenheit</code>,
-                <code>kelvin</code>. Mỗi property có cả getter và setter — setter chuyển ngược về Celsius rồi cập nhật
-                <code>_celsius</code>.
+                Viết decorator <code>retry(lan=3, cho=(ConnectionError,), delay=0.5)</code>: gọi lại hàm tối đa
+                <code>lan</code> lần nếu nó ném exception thuộc tuple <code>cho</code>, mỗi lần chờ gấp đôi lần trước
+                (0.5s → 1s → 2s). Yêu cầu:
               </p>
               <ul>
-                <li>Công thức: <code>F = C × 9/5 + 32</code>, <code>K = C + 273.15</code></li>
-                <li><code>t = Temperature(); t.celsius = 100; print(t.fahrenheit, t.kelvin)</code> → <code>212.0 373.15</code></li>
-                <li><code>t.fahrenheit = 32; print(t.celsius)</code> → <code>0.0</code></li>
+                <li>Exception <em>không</em> thuộc <code>cho</code> phải bay lên ngay, không retry.</li>
+                <li>Hết số lần vẫn hỏng → ném lại exception <strong>cuối cùng</strong> với traceback nguyên vẹn.</li>
+                <li>Gói tất cả lỗi đã gặp vào một <code>ExceptionGroup</code> làm <code>__cause__</code> để debug được toàn bộ.</li>
               </ul>
               <details class="exercise-hint">
                 <summary>Gợi ý</summary>
                 <div class="hint-content">
                   <p>
-                    Validation hợp lý: setter <code>kelvin</code> kiểm tra <code>value &lt; 0</code> →
-                    <code>ValueError("dưới 0 K không có nghĩa")</code>. Mỗi setter cập nhật <code>_celsius</code>
-                    duy nhất; getter các đơn vị khác đều derive từ <code>_celsius</code>.
+                    Khung: <code>for i in range(lan): try: return fn(*a, **k) except cho as e: loi.append(e); time.sleep(delay * 2**i)</code>.
+                    Sau vòng lặp: <code>raise loi[-1] from ExceptionGroup("tất cả lần thử đều hỏng", loi)</code>.
+                    Cú pháp decorator có tham số và <code>functools.wraps</code> sẽ được đào sâu ở
+                    <a href="chuong10.html">Chương 10</a> — ở đây chỉ cần hai lớp hàm lồng nhau.
                   </p>
                 </div>
               </details>
@@ -1032,37 +1218,39 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
           </div>
 
           <div class="exercise">
-            <h4>Mixin <code>Serializable</code></h4>
+            <h4>Sửa 5 anti-pattern trong một file thật</h4>
             <div class="exercise-body">
-              <p>
-                Tạo mixin <code>Serializable</code> với method <code>to_json(self)</code> trả về chuỗi JSON đại diện
-                cho instance. Dùng <code>dataclasses.asdict</code> để convert dataclass thành dict, rồi
-                <code>json.dumps</code>. Áp dụng lên dataclass <code>Product</code>:
-              </p>
+              <p>Đoạn code dưới mắc đủ 5 lỗi đã học. Tìm và sửa từng lỗi, giải thích ngắn gọn mỗi chỗ sửa.</p>
               <div class="code-wrap">
-                <div class="code-meta"><span>start.py</span><button class="copy-btn">Copy</button></div>
-<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
+                <div class="code-meta"><span>can_sua.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">import</span> json, logging
 
-<span class="tok-dec">@dataclass</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Product</span>(<span class="tok-cls">Serializable</span>):
-    sku: <span class="tok-type">str</span>
-    name: <span class="tok-type">str</span>
-    price: <span class="tok-type">float</span>
-
-<span class="tok-fn">print</span>(<span class="tok-cls">Product</span>(<span class="tok-str">"P001"</span>, <span class="tok-str">"Book"</span>, <span class="tok-num">19.99</span>).<span class="tok-fn">to_json</span>())
-<span class="tok-com"># {"sku": "P001", "name": "Book", "price": 19.99}</span></code></pre>
+<span class="tok-kw">def</span> <span class="tok-fn">xu_ly_hang_loat</span>(duong_dan):
+    ket_qua = []
+    <span class="tok-kw">try</span>:
+        f = <span class="tok-fn">open</span>(duong_dan)
+        du_lieu = json.<span class="tok-fn">load</span>(f)
+        <span class="tok-kw">for</span> item <span class="tok-kw">in</span> du_lieu:
+            <span class="tok-kw">try</span>:
+                ket_qua.<span class="tok-fn">append</span>(item[<span class="tok-str">"gia"</span>] * item[<span class="tok-str">"sl"</span>])
+            <span class="tok-kw">except</span>:
+                <span class="tok-kw">pass</span>
+        f.<span class="tok-fn">close</span>()
+    <span class="tok-kw">except</span> <span class="tok-cls">Exception</span> <span class="tok-kw">as</span> e:
+        logging.<span class="tok-fn">error</span>(<span class="tok-str">f"lỗi: </span>{e}<span class="tok-str">"</span>)
+        <span class="tok-kw">raise</span> <span class="tok-cls">Exception</span>(<span class="tok-str">"xử lý thất bại"</span>)
+    <span class="tok-kw">finally</span>:
+        <span class="tok-kw">return</span> ket_qua</code></pre>
               </div>
-              <p>
-                Vẽ <code>Product.__mro__</code> và xác nhận thứ tự: <code>Product → Serializable → object</code>.
-              </p>
               <details class="exercise-hint">
                 <summary>Gợi ý</summary>
                 <div class="hint-content">
                   <p>
-                    Mixin là một class thông thường, không cần inherit <code>ABC</code> — chỉ chứa method công cộng để
-                    được mix vào nhiều class khác qua multiple inheritance. Đặt mixin <em>trước</em>
-                    <code>object</code> trong khai báo, nhưng theo convention nên đặt <em>sau</em> class chính nếu có
-                    nhiều base.
+                    Danh sách kiểm: (1) <code>finally: return</code> nuốt lỗi; (2) bare <code>except</code>;
+                    (3) <code>pass</code> nuốt lỗi im lặng; (4) <code>raise Exception(...)</code> làm mất kiểu và
+                    traceback gốc — cần custom exception + <code>from e</code>; (5) <code>try</code> quá rộng và file
+                    không đóng khi có lỗi giữa chừng — thay bằng <code>with open(...)</code>.
+                    Bản sửa nên giữ lại được <em>những item hỏng là item nào</em>, thay vì bỏ qua âm thầm.
                   </p>
                 </div>
               </details>
@@ -1076,17 +1264,20 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q1</span>
-            <div class="quiz-q-text"><p><code>self</code> là gì? Tại sao phải khai báo như tham số đầu?</p></div>
+            <div class="quiz-q-text"><p>Vì sao <code>except:</code> (bare) nguy hiểm hơn <code>except Exception:</code>?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>self</code> là tham chiếu tới instance mà method đang được gọi trên. Khi viết <code>obj.method(x)</code>,
-                Python ngầm dịch thành <code>Class.method(obj, x)</code> — instance được truyền vào tham số đầu. Vì vậy
-                method instance bắt buộc nhận <code>self</code>. Cái tên "self" chỉ là convention (PEP 8); thay đổi sẽ
-                vẫn chạy được nhưng làm code khó đọc và bị linter cảnh báo.
+                <code>except:</code> bắt <code>BaseException</code> — tức là bắt cả <code>KeyboardInterrupt</code>
+                (Ctrl+C), <code>SystemExit</code> (<code>sys.exit()</code>) và <code>GeneratorExit</code>. Hệ quả thực
+                tế: người dùng bấm Ctrl+C mà chương trình không thoát; script gọi <code>sys.exit(1)</code> nhưng vẫn
+                chạy tiếp và trả exit code 0 làm CI báo pass sai.
+                <code>except Exception:</code> để ba tín hiệu đó đi qua bình thường. Nếu thật sự cần bắt mọi thứ
+                (rất hiếm — ví dụ để ghi log crash cuối cùng), hãy viết <code>except BaseException:</code> tường minh
+                rồi <code>raise</code> lại.
               </p>
             </div>
           </details>
@@ -1095,18 +1286,19 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q2</span>
-            <div class="quiz-q-text"><p><code>@classmethod</code> và <code>@staticmethod</code> khác nhau ra sao?</p></div>
+            <div class="quiz-q-text"><p>Khối <code>else</code> của <code>try</code> chạy khi nào, và vì sao nó tồn tại?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>@classmethod</code> nhận <code>cls</code> tự động — là class <em>thực tế</em> được gọi (subclass
-                sẽ thấy class mình). Thường dùng làm <strong>alternative constructor</strong> (<code>from_dict</code>,
-                <code>from_file</code>...). <code>@staticmethod</code> không nhận tham số tự động nào — chỉ là utility
-                được đặt trong namespace class cho gọn. Vì không có <code>cls</code>, static method không hỗ trợ
-                polymorphism qua class. Khi cần override theo subclass, chọn <code>@classmethod</code>.
+                <code>else</code> chạy khi khối <code>try</code> kết thúc <strong>mà không ném exception nào</strong>
+                (và không <code>return</code>/<code>break</code> ra ngoài). Lý do tồn tại: giữ khối <code>try</code>
+                <em>hẹp nhất có thể</em>. Nếu nhét toàn bộ logic "đường sáng" vào <code>try</code>, một exception cùng
+                loại vô tình phát sinh từ logic đó sẽ bị handler bắt nhầm và bị hiểu sai nguyên nhân.
+                <code>else</code> tách rạch ròi: <code>try</code> = thao tác rủi ro, <code>else</code> = việc làm tiếp
+                khi nó thành công.
               </p>
             </div>
           </details>
@@ -1115,19 +1307,21 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q3</span>
-            <div class="quiz-q-text"><p><code>__str__</code> và <code>__repr__</code> khác gì? Khi nào ta cần cả hai?</p></div>
+            <div class="quiz-q-text"><p><code>raise B from a</code>, <code>raise B</code> trong <code>except</code>, và <code>raise B from None</code> khác nhau thế nào?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>__str__</code> dành cho <strong>người dùng cuối</strong> — gọn, đẹp, dễ đọc (vd
-                <code>"(1, 2)"</code>). <code>__repr__</code> dành cho <strong>developer</strong> — chi tiết, mục tiêu
-                lý tưởng là <code>eval(repr(obj))</code> trả về object tương đương (vd <code>"Point(x=1, y=2)"</code>).
-                Nếu chỉ định nghĩa <code>__repr__</code>, Python tự lấy nó làm <code>__str__</code> — nên một class
-                tối thiểu chỉ cần <code>__repr__</code>. Override cả hai khi muốn UX hiển thị khác (vd log internal
-                chi tiết hơn cho debug).
+                <code>raise B from a</code> đặt <code>B.__cause__ = a</code>, traceback in
+                <em>"The above exception was the direct cause of the following exception"</em> — bạn <strong>chủ
+                ý</strong> chuyển đổi lỗi.<br/>
+                <code>raise B</code> bên trong <code>except</code> đặt <code>B.__context__</code> tự động, traceback
+                in <em>"During handling of the above exception, another exception occurred"</em> — thường là
+                <strong>ngoài ý muốn</strong>, dấu hiệu handler của bạn cũng lỗi.<br/>
+                <code>raise B from None</code> bật <code>__suppress_context__</code>, ẩn hoàn toàn lỗi gốc — dùng khi
+                lỗi gốc là chi tiết cài đặt nội bộ chỉ gây nhiễu cho người dùng thư viện.
               </p>
             </div>
           </details>
@@ -1136,17 +1330,19 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q4</span>
-            <div class="quiz-q-text"><p>Với <code>class C(A, B)</code>, Python quyết định thứ tự lookup method ra sao?</p></div>
+            <div class="quiz-q-text"><p>Đoạn này in gì? <code>def f(): try: return 1 finally: return 2</code></p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Python dùng thuật toán <strong>C3 linearization</strong> để tính MRO (Method Resolution Order). Quy
-                tắc: (1) class con trước class cha, (2) bên trái trước bên phải trong khai báo, (3) thứ tự nhất quán
-                giữa các MRO. Có thể xem qua <code>C.__mro__</code> hoặc <code>C.mro()</code>. <code>super()</code> đi
-                theo MRO chứ không phải "cha trực tiếp" — đó là chìa khóa làm cho diamond inheritance hoạt động đúng.
+                In <code>2</code>. <code>finally</code> luôn chạy trước khi hàm thực sự trả về, và một
+                <code>return</code> trong <code>finally</code> <strong>ghi đè</strong> giá trị đã chọn ở
+                <code>try</code>. Tệ hơn: nếu <code>try</code> đang ném exception mà <code>finally</code> có
+                <code>return</code>, exception bị <strong>nuốt hoàn toàn</strong> — chương trình chạy tiếp như không
+                có gì xảy ra. Quy tắc: <code>finally</code> chỉ chứa code dọn dẹp, không bao giờ chứa
+                <code>return</code>/<code>break</code>/<code>continue</code>.
               </p>
             </div>
           </details>
@@ -1155,19 +1351,19 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q5</span>
-            <div class="quiz-q-text"><p><code>@dataclass</code> tự generate những method nào? Khi nào có <code>__hash__</code>?</p></div>
+            <div class="quiz-q-text"><p>Vì sao đặt <code>except OSError</code> trước <code>except FileNotFoundError</code> là sai?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Mặc định: <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>. Option <code>order=True</code>
-                bổ sung <code>__lt__</code>...<code>__ge__</code>. <code>__hash__</code> được generate khi
-                <code>frozen=True</code> (cùng với <code>eq=True</code>, đây là mặc định). Nếu chỉ có
-                <code>eq=True</code> mà không <code>frozen=True</code>, dataclass đặt <code>__hash__ = None</code> →
-                instance unhashable. Có thể ép <code>unsafe_hash=True</code> nhưng rủi ro (instance mutable mà hashable
-                → hỏng dict/set).
+                <code>FileNotFoundError</code> kế thừa <code>OSError</code>. Python duyệt các khối <code>except</code>
+                từ trên xuống và chạy khối <strong>đầu tiên khớp</strong> — mà một <code>FileNotFoundError</code>
+                <em>cũng là</em> một <code>OSError</code>, nên khối trên luôn thắng. Khối
+                <code>except FileNotFoundError</code> phía dưới trở thành code chết. Quy tắc chung:
+                <strong>cụ thể trước, tổng quát sau</strong>. Nếu không chắc quan hệ cha-con, kiểm tra bằng
+                <code>FileNotFoundError.__mro__</code> hoặc <code>issubclass(FileNotFoundError, OSError)</code>.
               </p>
             </div>
           </details>
@@ -1176,18 +1372,19 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q6</span>
-            <div class="quiz-q-text"><p>Setter của <code>@property</code> có bắt buộc không?</p></div>
+            <div class="quiz-q-text"><p>Khi nào EAFP thực sự <em>đúng hơn</em> LBYL, chứ không chỉ "Pythonic hơn"?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Không bắt buộc. Nếu chỉ có <code>@property</code> mà không có <code>@xxx.setter</code>, attribute
-                trở thành <strong>read-only</strong> — gán <code>obj.xxx = ...</code> sẽ ném
-                <code>AttributeError: can't set attribute</code>. Đây là cách phổ biến để khai báo <strong>computed
-                property</strong> (vd <code>area</code> tính từ <code>radius</code>) hoặc <strong>immutable field</strong>.
-                Có thể thêm <code>@xxx.deleter</code> để custom <code>del obj.xxx</code>.
+                Khi có <strong>race condition</strong>. Kiểu <code>if os.path.exists(p): open(p)</code> có một khoảng
+                thời gian giữa lúc kiểm tra và lúc dùng; trong khoảng đó tiến trình khác (hoặc người dùng) có thể xoá
+                file, đổi quyền, thay symlink. Lỗ hổng này có tên <strong>TOCTOU</strong> (Time-Of-Check to
+                Time-Of-Use) và là nguồn của nhiều lỗ hổng bảo mật thật. Với file, socket, database, hay bất kỳ tài
+                nguyên chia sẻ nào, <code>try/except</code> là cách <em>duy nhất</em> đúng vì thao tác và việc kiểm
+                tra xảy ra <strong>nguyên tử</strong> ở tầng hệ điều hành.
               </p>
             </div>
           </details>
@@ -1196,19 +1393,19 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q7</span>
-            <div class="quiz-q-text"><p>Khi override <code>__eq__</code>, ta còn phải override gì? Tại sao?</p></div>
+            <div class="quiz-q-text"><p>Vì sao không được dùng <code>assert</code> để kiểm tra input người dùng?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Phải override <code>__hash__</code>. Lý do: Python <em>tự đặt</em> <code>__hash__ = None</code> khi
-                phát hiện <code>__eq__</code> custom — instance sẽ unhashable. Quy tắc hash bất di bất dịch:
-                <code>a == b ⇒ hash(a) == hash(b)</code>. Nếu chỉ override <code>__eq__</code> mà không cập nhật hash,
-                hai instance "bằng nhau" lại có hash khác → vi phạm hợp đồng của <code>set</code>/<code>dict</code>,
-                dẫn đến bug khủng khiếp. Quy tắc đơn giản: object mutable (có thể đổi state) → đừng hashable; object
-                immutable → hash từ một tuple các field.
+                Khi chạy Python với cờ tối ưu <code>python -O</code> (hoặc biến môi trường
+                <code>PYTHONOPTIMIZE=1</code>), interpreter <strong>xoá bỏ hoàn toàn mọi câu <code>assert</code></strong>
+                khỏi bytecode. Một hệ thống production bật <code>-O</code> sẽ mất sạch các kiểm tra đó — nếu bạn dùng
+                <code>assert len(mat_khau) &gt;= 8</code> thì mật khẩu một ký tự sẽ lọt qua. <code>assert</code> chỉ
+                dành cho <strong>bất biến nội bộ</strong> — những điều kiện mà nếu sai thì nghĩa là <em>code của bạn
+                có bug</em>, không phải người dùng nhập sai. Kiểm tra input luôn dùng <code>if ... raise</code>.
               </p>
             </div>
           </details>
@@ -1217,21 +1414,20 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q8</span>
-            <div class="quiz-q-text"><p>Duck typing vs <code>isinstance</code> check — cái nào "Pythonic" hơn?</p></div>
+            <div class="quiz-q-text"><p><code>ExceptionGroup</code> giải quyết vấn đề gì mà exception thường không giải quyết được?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Trong đa số trường hợp, <strong>duck typing</strong> Pythonic hơn — kết hợp với phong cách
-                <strong>EAFP</strong> (cứ làm, exception thì bắt). Code linh hoạt, dễ test (mock object chỉ cần expose
-                đúng method), không khóa kiểu cụ thể.<br/>
-                <code>isinstance</code> hợp lý khi: (a) thực sự cần phân biệt nhiều kiểu khác nhau (vd hỗ trợ
-                <code>str</code> và <code>list</code> input cho cùng API); (b) viết API public cần guarantee mạnh;
-                (c) dùng <code>typing.Protocol</code> với <code>@runtime_checkable</code> để kết hợp ưu điểm cả hai —
-                có structural type vẫn check được runtime. Tránh <code>isinstance</code> theo thói quen ép kiểu;
-                tin vào hành vi của object.
+                Vấn đề <strong>nhiều lỗi độc lập xảy ra cùng lúc</strong>. Một khối <code>try</code> truyền thống chỉ
+                ném được một exception, nên khi chạy 10 tác vụ song song và 3 tác vụ hỏng, bạn chỉ thấy được lỗi đầu
+                tiên — hai lỗi kia biến mất. <code>ExceptionGroup</code> (Python 3.11+) gói tất cả vào một object,
+                còn <code>except*</code> cho phép bắt <em>theo loại xuyên qua nhóm</em>: nhiều khối
+                <code>except*</code> đều có thể chạy trong cùng một lần. Đây chính là cơ chế
+                <code>asyncio.TaskGroup</code> dùng để báo cáo lỗi của nhiều task song song, và cũng hữu ích cho
+                validate form (gom hết lỗi rồi trả về một lượt thay vì bắt người dùng sửa từng lỗi một).
               </p>
             </div>
           </details>
@@ -1241,23 +1437,28 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
 
         <p>Sau chương 5, bạn đã master:</p>
         <ul>
-          <li><strong>Class &amp; <code>__init__</code></strong>: cú pháp, <code>self</code>, instance vs class attribute, bẫy mutable.</li>
-          <li><strong>Ba loại method</strong>: instance, <code>@classmethod</code> (alternative constructor), <code>@staticmethod</code> (namespace utility).</li>
-          <li><strong>Inheritance</strong>: <code>class B(A)</code>, override, <code>super().__init__</code> chain.</li>
-          <li><strong>Multiple inheritance &amp; MRO</strong>: C3 linearization, <code>__mro__</code>, diamond.</li>
-          <li><strong>Dunder methods</strong>: <code>__repr__</code>/<code>__str__</code>, <code>__eq__</code>/<code>__hash__</code> luôn đi đôi, <code>__len__</code>, <code>__iter__</code>, <code>__contains__</code>, <code>__getitem__</code>, <code>__call__</code>.</li>
-          <li><strong><code>@property</code></strong>: computed value, validation, read-only attribute.</li>
-          <li><strong><code>@dataclass</code></strong>: <code>frozen</code>, <code>slots</code>, <code>field(default_factory=...)</code>.</li>
-          <li><strong>ABC vs Protocol</strong>: nominal vs structural typing; duck typing &amp; EAFP làm tinh thần cốt lõi.</li>
+          <li><strong>Cơ chế</strong>: exception cắt ngang luồng, gỡ ngăn xếp cho tới khi có handler khớp; không ai bắt thì in traceback và thoát.</li>
+          <li><strong>Bộ tứ</strong>: <code>try</code> hẹp nhất có thể, <code>except</code> cụ thể trước tổng quát sau, <code>else</code> cho đường sáng, <code>finally</code> chỉ dọn dẹp.</li>
+          <li><strong>Cây phân cấp</strong>: <code>BaseException</code> → <code>Exception</code> → các nhánh <code>LookupError</code>/<code>OSError</code>/<code>ValueError</code>/<code>TypeError</code>…</li>
+          <li><strong>Ném lỗi</strong>: thông điệp đủ 3 phần; <code>raise</code> trần để ném lại; <code>from</code> để nối chuỗi nguyên nhân; <code>from None</code> để giấu chi tiết nội bộ.</li>
+          <li><strong>Custom exception</strong>: một lớp gốc cho cả module, mang <em>dữ liệu</em> chứ không chỉ chữ.</li>
+          <li><strong>EAFP</strong> là mặc định của Python — và là lựa chọn <em>đúng</em> (không chỉ đẹp) khi có race condition.</li>
+          <li><strong>Traceback</strong>: đọc từ dưới lên; hiểu hai câu nối "direct cause" và "During handling".</li>
+          <li><strong>Anti-pattern</strong>: bare <code>except</code>, nuốt lỗi, <code>try</code> quá rộng, exception thay <code>if</code>, log ở mọi tầng.</li>
+          <li><strong>Công cụ phụ</strong>: <code>ExceptionGroup</code>/<code>except*</code>, <code>assert</code> (chỉ cho bất biến nội bộ), <code>warnings</code>, <code>log.exception()</code>.</li>
         </ul>
 
         <h2 id="ket-noi">Kết nối</h2>
         <ul>
-          <li><strong>Chương 6 (Iterators &amp; Generators)</strong> — đào sâu <code>__iter__</code>/<code>__next__</code>, iterable protocol và <code>yield</code> để tạo class lazy.</li>
-          <li><strong>Chương 7 (Decorators &amp; Context Managers)</strong> — <code>@functools.wraps</code> bảo toàn metadata khi decorator class method; <code>__enter__</code>/<code>__exit__</code> cho <code>with</code> statement.</li>
-          <li><strong>Chương 9 (Typing &amp; Static Analysis)</strong> — <code>Protocol</code> đi với <code>Generic</code>, <code>TypedDict</code>, type narrowing qua <code>isinstance</code>; PEP 695 Generic syntax (3.12+).</li>
-          <li><strong>JavaScript Chương 4 (Objects, Prototypes &amp; Classes)</strong> — đối chiếu mô hình prototype của JS với class-as-namespace của Python.</li>
-          <li><strong>Dart Chương 4 (Class Modifiers)</strong> — Dart 3 đưa ra <code>sealed/base/final/interface class</code>, đối lập với phong cách tự do của Python (không có private thật sự, không có sealed).</li>
+          <li><strong>Chương 6 (Modules &amp; Packages)</strong> — <code>ImportError</code>/<code>ModuleNotFoundError</code> và mẫu <code>try: import nhanh except ImportError: import cham</code> để chọn thư viện dự phòng.</li>
+          <li><strong>Chương 7 (File I/O &amp; Regex)</strong> — <code>FileNotFoundError</code>, <code>PermissionError</code>, <code>UnicodeDecodeError</code> gặp hằng ngày; <code>with</code> thay cho <code>finally</code>.</li>
+          <li><strong>Chương 8 (OOP in Python)</strong> — exception cũng là class: kế thừa, <code>__init__</code>, <code>__str__</code>; <code>NotImplementedError</code> cho method trừu tượng.</li>
+          <li><strong>Chương 9 (Iterators &amp; Generators)</strong> — <code>StopIteration</code> là exception điều khiển luồng của <code>for</code>; <code>gen.throw()</code> ném lỗi vào trong generator.</li>
+          <li><strong>Chương 10 (Decorators &amp; Context Managers)</strong> — <code>__exit__</code> nhận bộ ba <code>(exc_type, exc_val, exc_tb)</code> và có thể nuốt lỗi bằng cách trả <code>True</code>; <code>contextlib.suppress</code>.</li>
+          <li><strong>Chương 11 (Async Python)</strong> — <code>asyncio.TaskGroup</code> ném <code>ExceptionGroup</code>; <code>asyncio.CancelledError</code> kế thừa <code>BaseException</code> nên <code>except Exception</code> không bắt nhầm.</li>
+          <li><strong>Chương 13 (Testing)</strong> — <code>pytest.raises(ValueError, match="...")</code> để khẳng định lỗi đúng loại và đúng thông điệp.</li>
+          <li><strong>JavaScript Chương 2</strong> — đối chiếu: JS chỉ có một khối <code>catch</code>, phải tự phân loại bằng <code>instanceof</code>; không có <code>else</code>.</li>
+          <li><strong>Dart Chương 3</strong> — <code>on Type catch (e, st)</code> tách stack trace thành tham số riêng, gần với Python nhất trong ba ngôn ngữ.</li>
         </ul>
 
         <nav class="chapter-nav">
@@ -1267,7 +1468,7 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
           </a>
           <a href="chuong6.html" class="next">
             <div class="dir">Chương 6 →</div>
-            <div class="label">Iterators &amp; Generators</div>
+            <div class="label">Modules &amp; Packages</div>
           </a>
         </nav>
 
@@ -1276,22 +1477,26 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
       <aside class="toc">
         <div class="toc-label">Trong chương này</div>
         <ul>
-          <li><a href="#class-basics">1. <code>class</code> cơ bản</a></li>
-          <li><a href="#init">2. <code>__init__</code> &amp; <code>self</code></a></li>
-          <li><a href="#instance-vs-class-attr">3. Instance vs class attribute</a></li>
-          <li><a href="#method-types">4. Instance / class / static method</a></li>
-          <li><a href="#inheritance">5. Inheritance &amp; <code>super()</code></a></li>
-          <li><a href="#multiple-inheritance">6. Multiple inheritance &amp; MRO</a></li>
-          <li><a href="#dunder">7. Dunder methods</a></li>
-          <li class="level-3"><a href="#repr-str">7.1. <code>__repr__</code> vs <code>__str__</code></a></li>
-          <li class="level-3"><a href="#eq-hash">7.2. <code>__eq__</code> &amp; <code>__hash__</code></a></li>
-          <li class="level-3"><a href="#iter-contains">7.3. <code>__iter__</code> / <code>__getitem__</code></a></li>
-          <li class="level-3"><a href="#call">7.4. <code>__call__</code></a></li>
-          <li><a href="#property">8. <code>@property</code></a></li>
-          <li><a href="#dataclass">9. <code>@dataclass</code></a></li>
-          <li><a href="#abc">10. <code>abc.ABC</code></a></li>
-          <li><a href="#protocol">11. <code>typing.Protocol</code></a></li>
-          <li><a href="#duck-typing">12. Duck typing &amp; EAFP</a></li>
+          <li><a href="#co-che">1. Cơ chế exception</a></li>
+          <li><a href="#try-except">2. <code>try</code> / <code>except</code></a></li>
+          <li class="level-3"><a href="#as-e">2.1. <code>as e</code></a></li>
+          <li class="level-3"><a href="#nhieu-except">2.2. Nhiều <code>except</code></a></li>
+          <li><a href="#cay-phan-cap">3. Cây phân cấp built-in</a></li>
+          <li><a href="#else-finally">4. <code>else</code> &amp; <code>finally</code></a></li>
+          <li class="level-3"><a href="#finally-return">4.1. Bẫy <code>return</code></a></li>
+          <li><a href="#raise">5. <code>raise</code></a></li>
+          <li class="level-3"><a href="#re-raise">5.1. <code>raise</code> trần</a></li>
+          <li><a href="#chaining">6. Exception chaining</a></li>
+          <li><a href="#custom-exception">7. Custom exception</a></li>
+          <li><a href="#eafp-lbyl">8. EAFP vs LBYL</a></li>
+          <li><a href="#traceback">9. Đọc traceback</a></li>
+          <li><a href="#anti-pattern">10. Năm anti-pattern</a></li>
+          <li><a href="#exception-group">11. <code>ExceptionGroup</code></a></li>
+          <li><a href="#assert-warning-log">12. <code>assert</code> / warnings / log</a></li>
+          <li class="level-3"><a href="#assert">12.1. <code>assert</code></a></li>
+          <li class="level-3"><a href="#warnings">12.2. <code>warnings</code></a></li>
+          <li class="level-3"><a href="#logging">12.3. Ghi log lỗi</a></li>
+          <li><a href="#cheat-sheet">13. Cheat sheet</a></li>
           <li><a href="#bai-tap">Bài tập</a></li>
           <li><a href="#quiz">Quiz</a></li>
           <li><a href="#tong-ket">Tổng kết</a></li>
@@ -1305,7 +1510,7 @@ p = <span class="tok-fn">Point</span>(<span class="tok-num">1.0</span>, <span cl
   <footer class="site-footer">
     <div class="container">
       <p>
-        Chương 5 — OOP in Python · Python sub-pillar · Pillar 9 IT Basic<br/>
+        Chương 5 — Exceptions &amp; Error Handling · Python sub-pillar · Pillar 9 IT Basic<br/>
         <a href="chuong4.html">← Chương 4</a> · <a href="../index.html">Python TOC</a> · <a href="chuong6.html">Chương 6 →</a>
       </p>
     </div>

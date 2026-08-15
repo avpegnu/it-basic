@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 13 — JDBC &amp; cơ sở dữ liệu · Java Sub-pillar</title>
+  <meta name="description" content="Kiến trúc JDBC, bốn loại driver, DriverManager và Connection, Statement vs PreparedStatement, SQL injection, ResultSet, CRUD đầy đủ, giao dịch và mức cô lập, batch, connection pool HikariCP, và mẫu DAO." />
+  <meta name="theme-color" content="#e76f00" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bitter:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-java">Jv</span>
+        Java · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Java</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Java</a><span class="sep">/</span>
+        <span>Chương 13</span>
+      </div>
+      <div class="chapter-num">Chương 13 · JDBC</div>
+      <h1 style="font-size: 2.6rem; margin: 0 0 12px; color: var(--ink);">
+        JDBC và cơ sở dữ liệu
+      </h1>
+      <p class="lead">
+        <strong>JDBC</strong> (Java Database Connectivity) là API chuẩn để ứng dụng Java nói chuyện với cơ sở dữ
+        liệu. Nó là nền móng của <em>mọi</em> thứ phía trên — Hibernate, JPA, Spring Data, MyBatis đều chạy trên
+        JDBC. Hiểu tầng này giúp bạn gỡ lỗi được những vấn đề mà framework che giấu: truy vấn chậm, rò rỉ kết nối,
+        giao dịch không rollback. Và quan trọng nhất — chương này dạy bạn cách <strong>không</strong> để lộ lỗ hổng
+        SQL injection.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1600 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-12</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu <strong>kiến trúc JDBC</strong>: ứng dụng → JDBC API → driver → database.</li>
+            <li>Biết bốn loại driver và vì sao ngày nay chỉ dùng Type 4.</li>
+            <li>Mở <code>Connection</code> đúng cách và <strong>luôn đóng</strong> bằng try-with-resources.</li>
+            <li>Phân biệt <code>Statement</code> và <code>PreparedStatement</code> — và vì sao chỉ dùng cái sau.</li>
+            <li>Hiểu <strong>SQL injection</strong> tận gốc, tự tay tái hiện được.</li>
+            <li>Duyệt <code>ResultSet</code>; lấy khoá tự sinh.</li>
+            <li>Viết đủ <strong>CRUD</strong> và ánh xạ sang object.</li>
+            <li>Quản lý <strong>giao dịch</strong>: <code>commit</code>, <code>rollback</code>, savepoint, mức cô lập.</li>
+            <li>Dùng <strong>batch</strong> để tăng tốc ghi hàng loạt.</li>
+            <li>Dùng <strong>connection pool</strong> (HikariCP) — bắt buộc trong sản xuất.</li>
+            <li>Áp dụng mẫu <strong>DAO</strong> để tách tầng truy cập dữ liệu.</li>
+          </ul>
+        </div>
+
+        <h2 id="kien-truc">1. Kiến trúc JDBC</h2>
+
+        <div class="jvm-flow">
+          <div class="stages" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
+            <div class="stage">
+              <div class="stage-title">Ứng dụng Java</div>
+              <div class="stage-content">Code của bạn<br/>DAO / Service</div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">JDBC API</div>
+              <div class="stage-content"><code>java.sql.*</code><br/>Interface chuẩn</div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">Driver</div>
+              <div class="stage-content">Cài đặt cụ thể<br/>mysql-connector-j</div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">Database</div>
+              <div class="stage-content">MySQL<br/>PostgreSQL…</div>
+            </div>
+          </div>
+          <div class="caption">
+            Code của bạn chỉ dùng <strong>interface</strong> trong <code>java.sql</code>. Driver là bản cài đặt cụ
+            thể do nhà cung cấp database viết. Nhờ vậy đổi từ MySQL sang PostgreSQL chỉ cần đổi driver và chuỗi
+            kết nối — <em>trên lý thuyết</em>.
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Interface chính</th><th>Vai trò</th><th>Tạo từ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>DriverManager</code></td><td>Class (không phải interface) — quản lý driver, tạo kết nối</td><td>—</td></tr>
+              <tr><td><code>DataSource</code></td><td>Nguồn kết nối hiện đại, hỗ trợ pool ⭐</td><td>Thư viện pool</td></tr>
+              <tr><td><code>Connection</code></td><td>Một phiên làm việc với database</td><td><code>DriverManager</code>/<code>DataSource</code></td></tr>
+              <tr><td><code>Statement</code></td><td>Thực thi SQL tĩnh — ⚠️ tránh dùng</td><td><code>Connection</code></td></tr>
+              <tr><td><code>PreparedStatement</code></td><td>SQL có tham số, đã biên dịch trước ⭐</td><td><code>Connection</code></td></tr>
+              <tr><td><code>CallableStatement</code></td><td>Gọi stored procedure</td><td><code>Connection</code></td></tr>
+              <tr><td><code>ResultSet</code></td><td>Con trỏ duyệt kết quả truy vấn</td><td><code>Statement</code></td></tr>
+              <tr><td><code>SQLException</code></td><td>Mọi lỗi database (checked)</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Loại driver</th><th>Cơ chế</th><th>Trạng thái</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Type 1</strong> — JDBC-ODBC Bridge</td><td>Qua cầu nối ODBC của hệ điều hành</td><td>❌ Đã loại bỏ từ Java 8</td></tr>
+              <tr><td><strong>Type 2</strong> — Native API</td><td>Gọi thư viện gốc của database (C/C++)</td><td>❌ Cần cài thư viện gốc, không di động</td></tr>
+              <tr><td><strong>Type 3</strong> — Network Protocol</td><td>Qua một máy chủ trung gian</td><td>⚠️ Hiếm dùng</td></tr>
+              <tr><td><strong>Type 4</strong> — Thin Driver ⭐</td><td>Thuần Java, nói trực tiếp giao thức mạng của database</td><td>✅ <strong>Mọi driver hiện đại</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pom.xml — thêm driver</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">&lt;!-- MySQL --&gt;</span>
+&lt;<span class="tok-kw">dependency</span>&gt;
+    &lt;<span class="tok-kw">groupId</span>&gt;com.mysql&lt;/<span class="tok-kw">groupId</span>&gt;
+    &lt;<span class="tok-kw">artifactId</span>&gt;mysql-connector-j&lt;/<span class="tok-kw">artifactId</span>&gt;
+    &lt;<span class="tok-kw">version</span>&gt;9.1.0&lt;/<span class="tok-kw">version</span>&gt;
+&lt;/<span class="tok-kw">dependency</span>&gt;
+
+<span class="tok-com">&lt;!-- PostgreSQL --&gt;</span>
+&lt;<span class="tok-kw">dependency</span>&gt;
+    &lt;<span class="tok-kw">groupId</span>&gt;org.postgresql&lt;/<span class="tok-kw">groupId</span>&gt;
+    &lt;<span class="tok-kw">artifactId</span>&gt;postgresql&lt;/<span class="tok-kw">artifactId</span>&gt;
+    &lt;<span class="tok-kw">version</span>&gt;42.7.4&lt;/<span class="tok-kw">version</span>&gt;
+&lt;/<span class="tok-kw">dependency</span>&gt;
+
+<span class="tok-com">&lt;!-- SQLite — không cần cài server, rất hợp để học --&gt;</span>
+&lt;<span class="tok-kw">dependency</span>&gt;
+    &lt;<span class="tok-kw">groupId</span>&gt;org.xerial&lt;/<span class="tok-kw">groupId</span>&gt;
+    &lt;<span class="tok-kw">artifactId</span>&gt;sqlite-jdbc&lt;/<span class="tok-kw">artifactId</span>&gt;
+    &lt;<span class="tok-kw">version</span>&gt;3.47.1.0&lt;/<span class="tok-kw">version</span>&gt;
+&lt;/<span class="tok-kw">dependency</span>&gt;</code></pre>
+        </div>
+
+        <h2 id="connection">2. <code>Connection</code></h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>KetNoi.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> java.sql.*;
+
+<span class="tok-com">// Chuỗi kết nối: jdbc:&lt;database&gt;://&lt;host&gt;:&lt;port&gt;/&lt;tên_db&gt;?&lt;tham_số&gt;</span>
+<span class="tok-cls">String</span> url = <span class="tok-str">"jdbc:mysql://localhost:3306/quan_ly"</span>
+           + <span class="tok-str">"?useUnicode=true&amp;characterEncoding=UTF-8"</span>   <span class="tok-com">// ⭐ cho tiếng Việt</span>
+           + <span class="tok-str">"&amp;serverTimezone=Asia/Ho_Chi_Minh"</span>
+           + <span class="tok-str">"&amp;useSSL=false"</span>;
+
+<span class="tok-com">// ⭐ LUÔN dùng try-with-resources (Connection là AutoCloseable)</span>
+<span class="tok-kw">try</span> (<span class="tok-cls">Connection</span> conn = <span class="tok-cls">DriverManager</span>.<span class="tok-fn">getConnection</span>(url, <span class="tok-str">"root"</span>, matKhau)) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"Kết nối thành công"</span>);
+
+    <span class="tok-cls">DatabaseMetaData</span> md = conn.<span class="tok-fn">getMetaData</span>();
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(md.<span class="tok-fn">getDatabaseProductName</span>() + <span class="tok-str">" "</span>
+                     + md.<span class="tok-fn">getDatabaseProductVersion</span>());
+} <span class="tok-kw">catch</span> (<span class="tok-cls">SQLException</span> e) {
+    <span class="tok-cls">System</span>.err.<span class="tok-fn">println</span>(<span class="tok-str">"Mã lỗi: "</span> + e.<span class="tok-fn">getErrorCode</span>());     <span class="tok-com">// mã riêng của DB</span>
+    <span class="tok-cls">System</span>.err.<span class="tok-fn">println</span>(<span class="tok-str">"SQLState: "</span> + e.<span class="tok-fn">getSQLState</span>());     <span class="tok-com">// mã chuẩn 5 ký tự</span>
+    <span class="tok-kw">throw new</span> <span class="tok-cls">RuntimeException</span>(<span class="tok-str">"Không kết nối được database"</span>, e);
+}
+
+<span class="tok-com">// ⚠️ Từ JDBC 4.0 (Java 6), KHÔNG cần Class.forName() nữa —
+//    driver tự đăng ký qua cơ chế ServiceLoader.
+// Class.forName("com.mysql.cj.jdbc.Driver");   // code cũ, không cần</span>
+
+<span class="tok-com">// ⭐ KHÔNG BAO GIỜ ghi mật khẩu trong mã nguồn</span>
+<span class="tok-cls">String</span> mk = <span class="tok-cls">System</span>.<span class="tok-fn">getenv</span>(<span class="tok-str">"DB_PASSWORD"</span>);
+<span class="tok-cls">Objects</span>.<span class="tok-fn">requireNonNull</span>(mk, <span class="tok-str">"Chưa đặt biến môi trường DB_PASSWORD"</span>);</code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Rò rỉ kết nối — lỗi tốn kém nhất</div>
+          <p>
+            Mỗi <code>Connection</code> chiếm một socket và một tiến trình/luồng phía database. Không đóng thì sau
+            vài trăm lần bạn nhận <code>Too many connections</code> — và <em>toàn bộ</em> ứng dụng ngừng hoạt động,
+            không chỉ phần code lỗi.
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>RoRi.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ❌ Lỗi giữa chừng → không bao giờ đóng</span>
+<span class="tok-cls">Connection</span> conn = <span class="tok-cls">DriverManager</span>.<span class="tok-fn">getConnection</span>(url, u, p);
+<span class="tok-cls">Statement</span> st = conn.<span class="tok-fn">createStatement</span>();
+<span class="tok-cls">ResultSet</span> rs = st.<span class="tok-fn">executeQuery</span>(sql);   <span class="tok-com">// ném lỗi ở đây → rò rỉ</span>
+conn.<span class="tok-fn">close</span>();
+
+<span class="tok-com">// ✅ try-with-resources — đóng theo THỨ TỰ NGƯỢC: rs → ps → conn</span>
+<span class="tok-kw">try</span> (<span class="tok-cls">Connection</span> conn = <span class="tok-cls">DriverManager</span>.<span class="tok-fn">getConnection</span>(url, u, p);
+     <span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(sql);
+     <span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) {
+    <span class="tok-kw">while</span> (rs.<span class="tok-fn">next</span>()) { ... }
+}</code></pre>
+          </div>
+        </div>
+
+        <h2 id="sql-injection">3. <code>Statement</code> vs <code>PreparedStatement</code> — và SQL injection</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>SqlInjection.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌❌ CỰC KỲ NGUY HIỂM — nối chuỗi SQL</span>
+<span class="tok-cls">String</span> ten = nguoiDungNhap;
+<span class="tok-cls">String</span> sql = <span class="tok-str">"SELECT * FROM nguoi_dung WHERE ten = '"</span> + ten + <span class="tok-str">"'"</span>;
+<span class="tok-kw">try</span> (<span class="tok-cls">Statement</span> st = conn.<span class="tok-fn">createStatement</span>();
+     <span class="tok-cls">ResultSet</span> rs = st.<span class="tok-fn">executeQuery</span>(sql)) { ... }
+
+<span class="tok-com">// Người dùng nhập:  ' OR '1'='1</span>
+<span class="tok-com">// SQL thành:  SELECT * FROM nguoi_dung WHERE ten = '' OR '1'='1'
+//             → trả về TOÀN BỘ bảng ⚠️</span>
+
+<span class="tok-com">// Người dùng nhập:  '; DROP TABLE nguoi_dung; --</span>
+<span class="tok-com">// SQL thành:  SELECT * FROM nguoi_dung WHERE ten = ''; DROP TABLE nguoi_dung; --'
+//             → 💥 MẤT TOÀN BỘ BẢNG</span>
+
+<span class="tok-com">// Người dùng nhập:  ' UNION SELECT ma_the, cvv, NULL FROM the_tin_dung --</span>
+<span class="tok-com">// → đọc được dữ liệu bảng khác ⚠️</span>
+
+
+<span class="tok-com">// ✅ AN TOÀN — PreparedStatement với tham số ?</span>
+<span class="tok-cls">String</span> sql2 = <span class="tok-str">"SELECT * FROM nguoi_dung WHERE ten = ?"</span>;
+<span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(sql2)) {
+    ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, ten);          <span class="tok-com">// ⚠️ chỉ số bắt đầu từ 1, KHÔNG phải 0!</span>
+    <span class="tok-kw">try</span> (<span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) { ... }
+}
+<span class="tok-com">// Dù người dùng nhập gì, nó LUÔN được coi là một CHUỖI GIÁ TRỊ,
+// không bao giờ được diễn dịch thành cú pháp SQL.</span></code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Vì sao <code>PreparedStatement</code> an toàn tuyệt đối</h4>
+          <p>
+            Nó gửi <strong>câu lệnh và dữ liệu riêng biệt</strong> tới database. Database phân tích cú pháp câu lệnh
+            <em>trước</em>, tạo ra kế hoạch thực thi với các "chỗ trống", rồi mới điền dữ liệu vào. Dữ liệu không bao
+            giờ đi qua bộ phân tích cú pháp SQL — nên nó <em>không thể</em> trở thành lệnh.
+          </p>
+          <p style="margin-top: 8px;">
+            Đây là khác biệt về <strong>cơ chế</strong>, không phải về "lọc ký tự đặc biệt". Không có chuỗi đầu vào
+            nào có thể phá được nó. So sánh: cố gắng tự escape dấu nháy là cuộc chiến bạn không bao giờ thắng — có
+            hàng chục cách mã hoá và cách vượt qua tuỳ database.
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th><code>Statement</code></th><th><code>PreparedStatement</code> ⭐</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>SQL injection</td><td>❌ <strong>Dễ bị tấn công</strong></td><td>✅ An toàn tuyệt đối</td></tr>
+              <tr><td>Biên dịch</td><td>Mỗi lần chạy phân tích lại</td><td>Phân tích một lần, tái dùng kế hoạch</td></tr>
+              <tr><td>Hiệu năng khi lặp</td><td>Chậm</td><td><strong>Nhanh hơn nhiều</strong></td></tr>
+              <tr><td>Kiểu dữ liệu</td><td>Tự nối chuỗi — dễ sai định dạng ngày</td><td><code>setDate</code>, <code>setBigDecimal</code>… đúng kiểu</td></tr>
+              <tr><td>Ký tự đặc biệt</td><td>Phải tự escape (rất dễ sai)</td><td>Tự động xử lý</td></tr>
+              <tr><td>Batch</td><td>Hạn chế</td><td>Hỗ trợ đầy đủ</td></tr>
+              <tr><td>Khi nào dùng</td><td>DDL không tham số (<code>CREATE TABLE</code>)</td><td><strong>Mọi trường hợp còn lại</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="java-rule">
+          <strong>Không có ngoại lệ:</strong> mọi giá trị đi vào SQL phải qua tham số <code>?</code>. Nếu bạn thấy
+          dấu <code>+</code> nối chuỗi trong một câu SQL, đó là lỗ hổng — bất kể dữ liệu "chắc chắn an toàn" tới
+          đâu.
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Tên bảng và tên cột không tham số hoá được</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>TenCot.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ❌ Không hoạt động — ? chỉ dùng cho GIÁ TRỊ</span>
+<span class="tok-cls">String</span> sql = <span class="tok-str">"SELECT * FROM nguoi_dung ORDER BY ?"</span>;
+ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, <span class="tok-str">"ten"</span>);   <span class="tok-com">// → ORDER BY 'ten' (chuỗi hằng), không sắp gì cả</span>
+
+<span class="tok-com">// ✅ Phải dùng DANH SÁCH TRẮNG</span>
+<span class="tok-kw">private static final</span> <span class="tok-cls">Set</span>&lt;<span class="tok-cls">String</span>&gt; COT_HOP_LE =
+    <span class="tok-cls">Set</span>.<span class="tok-fn">of</span>(<span class="tok-str">"ten"</span>, <span class="tok-str">"tuoi"</span>, <span class="tok-str">"ngay_tao"</span>);
+
+<span class="tok-kw">if</span> (!COT_HOP_LE.<span class="tok-fn">contains</span>(cot))
+    <span class="tok-kw">throw new</span> <span class="tok-cls">IllegalArgumentException</span>(<span class="tok-str">"Cột không hợp lệ: "</span> + cot);
+<span class="tok-cls">String</span> sql2 = <span class="tok-str">"SELECT * FROM nguoi_dung ORDER BY "</span> + cot;   <span class="tok-com">// giờ mới an toàn</span>
+
+<span class="tok-com">// Tương tự với danh sách IN (...): phải sinh đúng số dấu ?</span>
+<span class="tok-cls">String</span> dauHoi = <span class="tok-cls">String</span>.<span class="tok-fn">join</span>(<span class="tok-str">","</span>, <span class="tok-cls">Collections</span>.<span class="tok-fn">nCopies</span>(ids.<span class="tok-fn">size</span>(), <span class="tok-str">"?"</span>));
+<span class="tok-cls">String</span> sql3 = <span class="tok-str">"SELECT * FROM nguoi_dung WHERE id IN ("</span> + dauHoi + <span class="tok-str">")"</span>;
+<span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; ids.<span class="tok-fn">size</span>(); i++) ps.<span class="tok-fn">setLong</span>(i + <span class="tok-num">1</span>, ids.<span class="tok-fn">get</span>(i));</code></pre>
+          </div>
+        </div>
+
+        <h2 id="resultset">4. <code>ResultSet</code></h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ResultSet.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">String</span> sql = <span class="tok-str">"SELECT id, ho_ten, diem, ngay_sinh FROM sinh_vien WHERE lop = ?"</span>;
+<span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(sql)) {
+    ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, <span class="tok-str">"CNTT-K18"</span>);
+
+    <span class="tok-kw">try</span> (<span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) {
+        <span class="tok-kw">while</span> (rs.<span class="tok-fn">next</span>()) {           <span class="tok-com">// ⭐ con trỏ bắt đầu TRƯỚC hàng đầu tiên</span>
+            <span class="tok-kw">long</span>   id  = rs.<span class="tok-fn">getLong</span>(<span class="tok-str">"id"</span>);            <span class="tok-com">// theo TÊN cột ✅ rõ ràng</span>
+            <span class="tok-cls">String</span> ten = rs.<span class="tok-fn">getString</span>(<span class="tok-str">"ho_ten"</span>);
+            <span class="tok-kw">double</span> d   = rs.<span class="tok-fn">getDouble</span>(<span class="tok-str">"diem"</span>);
+            <span class="tok-cls">LocalDate</span> ns = rs.<span class="tok-fn">getObject</span>(<span class="tok-str">"ngay_sinh"</span>, <span class="tok-cls">LocalDate</span>.<span class="tok-kw">class</span>);  <span class="tok-com">// JDBC 4.2+</span>
+
+            <span class="tok-com">// ⚠️ Kiểu nguyên thủy: NULL trở thành 0 / false — không phân biệt được!</span>
+            <span class="tok-kw">int</span> tuoi = rs.<span class="tok-fn">getInt</span>(<span class="tok-str">"tuoi"</span>);
+            <span class="tok-kw">if</span> (rs.<span class="tok-fn">wasNull</span>()) tuoi = -<span class="tok-num">1</span>;              <span class="tok-com">// kiểm tra ngay SAU khi đọc</span>
+
+            <span class="tok-com">// ✅ Hoặc dùng getObject để nhận null thật</span>
+            <span class="tok-cls">Integer</span> tuoi2 = rs.<span class="tok-fn">getObject</span>(<span class="tok-str">"tuoi"</span>, <span class="tok-cls">Integer</span>.<span class="tok-kw">class</span>);
+        }
+    }
+}
+
+<span class="tok-com">// --- Metadata: khi không biết trước cấu trúc kết quả ---</span>
+<span class="tok-cls">ResultSetMetaData</span> md = rs.<span class="tok-fn">getMetaData</span>();
+<span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">1</span>; i &lt;= md.<span class="tok-fn">getColumnCount</span>(); i++) {
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">printf</span>(<span class="tok-str">"%s (%s)%n"</span>,
+        md.<span class="tok-fn">getColumnLabel</span>(i), md.<span class="tok-fn">getColumnTypeName</span>(i));
+}</code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Kiểu SQL</th><th>Phương thức <code>ResultSet</code></th><th>Kiểu Java</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>INT</code></td><td><code>getInt</code> / <code>getObject(…, Integer.class)</code></td><td><code>int</code> / <code>Integer</code></td></tr>
+              <tr><td><code>BIGINT</code></td><td><code>getLong</code></td><td><code>long</code></td></tr>
+              <tr><td><code>VARCHAR</code>, <code>TEXT</code></td><td><code>getString</code></td><td><code>String</code></td></tr>
+              <tr><td><code>DECIMAL</code>, <code>NUMERIC</code></td><td><code>getBigDecimal</code> ⭐</td><td><code>BigDecimal</code> — <strong>tiền tệ</strong></td></tr>
+              <tr><td><code>DATE</code></td><td><code>getObject(…, LocalDate.class)</code></td><td><code>LocalDate</code></td></tr>
+              <tr><td><code>TIMESTAMP</code></td><td><code>getObject(…, LocalDateTime.class)</code></td><td><code>LocalDateTime</code></td></tr>
+              <tr><td><code>BOOLEAN</code>, <code>TINYINT(1)</code></td><td><code>getBoolean</code></td><td><code>boolean</code></td></tr>
+              <tr><td><code>BLOB</code></td><td><code>getBytes</code> / <code>getBinaryStream</code></td><td><code>byte[]</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Đừng dùng <code>java.sql.Date</code> và <code>java.util.Date</code></div>
+          <p>
+            Chúng là API cũ, có <code>Date</code> lại chứa cả giờ, tháng đánh số từ 0, và không an toàn luồng. Từ
+            JDBC 4.2 (Java 8), dùng <code>getObject(cot, LocalDate.class)</code> và
+            <code>setObject(i, localDate)</code> để làm việc thẳng với <code>java.time</code> — API ngày giờ hiện
+            đại, bất biến, rõ ràng.
+          </p>
+        </div>
+
+        <h2 id="crud">5. CRUD đầy đủ</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Crud.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">record</span> <span class="tok-cls">SinhVien</span>(<span class="tok-cls">Long</span> id, <span class="tok-cls">String</span> maSv, <span class="tok-cls">String</span> hoTen,
+                 <span class="tok-cls">BigDecimal</span> diem, <span class="tok-cls">LocalDate</span> ngaySinh) { }
+
+<span class="tok-com">// ---------- CREATE: lấy khoá tự sinh ----------</span>
+<span class="tok-kw">long</span> <span class="tok-fn">them</span>(<span class="tok-cls">Connection</span> conn, <span class="tok-cls">SinhVien</span> sv) <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+    <span class="tok-cls">String</span> sql = <span class="tok-str">"""
+        INSERT INTO sinh_vien (ma_sv, ho_ten, diem, ngay_sinh)
+        VALUES (?, ?, ?, ?)
+        """</span>;
+    <span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps =
+             conn.<span class="tok-fn">prepareStatement</span>(sql, <span class="tok-cls">Statement</span>.RETURN_GENERATED_KEYS)) {
+        ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, sv.<span class="tok-fn">maSv</span>());
+        ps.<span class="tok-fn">setString</span>(<span class="tok-num">2</span>, sv.<span class="tok-fn">hoTen</span>());
+        ps.<span class="tok-fn">setBigDecimal</span>(<span class="tok-num">3</span>, sv.<span class="tok-fn">diem</span>());
+        ps.<span class="tok-fn">setObject</span>(<span class="tok-num">4</span>, sv.<span class="tok-fn">ngaySinh</span>());
+
+        <span class="tok-kw">int</span> soHang = ps.<span class="tok-fn">executeUpdate</span>();       <span class="tok-com">// trả về SỐ HÀNG bị ảnh hưởng</span>
+        <span class="tok-kw">if</span> (soHang == <span class="tok-num">0</span>)
+            <span class="tok-kw">throw new</span> <span class="tok-cls">SQLException</span>(<span class="tok-str">"Thêm thất bại, không có hàng nào"</span>);
+
+        <span class="tok-kw">try</span> (<span class="tok-cls">ResultSet</span> khoa = ps.<span class="tok-fn">getGeneratedKeys</span>()) {
+            <span class="tok-kw">if</span> (khoa.<span class="tok-fn">next</span>()) <span class="tok-kw">return</span> khoa.<span class="tok-fn">getLong</span>(<span class="tok-num">1</span>);
+            <span class="tok-kw">throw new</span> <span class="tok-cls">SQLException</span>(<span class="tok-str">"Không lấy được id tự sinh"</span>);
+        }
+    }
+}
+
+<span class="tok-com">// ---------- READ ----------</span>
+<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">SinhVien</span>&gt; <span class="tok-fn">timTheoId</span>(<span class="tok-cls">Connection</span> conn, <span class="tok-kw">long</span> id) <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+    <span class="tok-cls">String</span> sql = <span class="tok-str">"SELECT * FROM sinh_vien WHERE id = ?"</span>;
+    <span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(sql)) {
+        ps.<span class="tok-fn">setLong</span>(<span class="tok-num">1</span>, id);
+        <span class="tok-kw">try</span> (<span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) {
+            <span class="tok-kw">return</span> rs.<span class="tok-fn">next</span>() ? <span class="tok-cls">Optional</span>.<span class="tok-fn">of</span>(<span class="tok-fn">anhXa</span>(rs)) : <span class="tok-cls">Optional</span>.<span class="tok-fn">empty</span>();
+        }
+    }
+}
+
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt; <span class="tok-fn">timTheoLop</span>(<span class="tok-cls">Connection</span> conn, <span class="tok-cls">String</span> lop,
+                             <span class="tok-kw">int</span> trang, <span class="tok-kw">int</span> kichThuoc) <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+    <span class="tok-cls">String</span> sql = <span class="tok-str">"""
+        SELECT * FROM sinh_vien WHERE lop = ?
+        ORDER BY diem DESC, ho_ten
+        LIMIT ? OFFSET ?
+        """</span>;
+    <span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(sql)) {
+        ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, lop);
+        ps.<span class="tok-fn">setInt</span>(<span class="tok-num">2</span>, kichThuoc);
+        ps.<span class="tok-fn">setInt</span>(<span class="tok-num">3</span>, trang * kichThuoc);
+        <span class="tok-kw">try</span> (<span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) {
+            <span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt; ds = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;();
+            <span class="tok-kw">while</span> (rs.<span class="tok-fn">next</span>()) ds.<span class="tok-fn">add</span>(<span class="tok-fn">anhXa</span>(rs));
+            <span class="tok-kw">return</span> ds;
+        }
+    }
+}
+
+<span class="tok-com">// ---------- UPDATE / DELETE ----------</span>
+<span class="tok-kw">boolean</span> <span class="tok-fn">capNhat</span>(<span class="tok-cls">Connection</span> conn, <span class="tok-cls">SinhVien</span> sv) <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+    <span class="tok-cls">String</span> sql = <span class="tok-str">"UPDATE sinh_vien SET ho_ten = ?, diem = ? WHERE id = ?"</span>;
+    <span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(sql)) {
+        ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, sv.<span class="tok-fn">hoTen</span>());
+        ps.<span class="tok-fn">setBigDecimal</span>(<span class="tok-num">2</span>, sv.<span class="tok-fn">diem</span>());
+        ps.<span class="tok-fn">setLong</span>(<span class="tok-num">3</span>, sv.<span class="tok-fn">id</span>());
+        <span class="tok-kw">return</span> ps.<span class="tok-fn">executeUpdate</span>() &gt; <span class="tok-num">0</span>;
+    }
+}
+
+<span class="tok-com">// ---------- Ánh xạ dùng chung ----------</span>
+<span class="tok-kw">private static</span> <span class="tok-cls">SinhVien</span> <span class="tok-fn">anhXa</span>(<span class="tok-cls">ResultSet</span> rs) <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+    <span class="tok-kw">return new</span> <span class="tok-cls">SinhVien</span>(
+        rs.<span class="tok-fn">getLong</span>(<span class="tok-str">"id"</span>),
+        rs.<span class="tok-fn">getString</span>(<span class="tok-str">"ma_sv"</span>),
+        rs.<span class="tok-fn">getString</span>(<span class="tok-str">"ho_ten"</span>),
+        rs.<span class="tok-fn">getBigDecimal</span>(<span class="tok-str">"diem"</span>),
+        rs.<span class="tok-fn">getObject</span>(<span class="tok-str">"ngay_sinh"</span>, <span class="tok-cls">LocalDate</span>.<span class="tok-kw">class</span>)
+    );
+}</code></pre>
+        </div>
+
+        <h2 id="transaction">6. Giao dịch (Transaction)</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Transaction.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ⚠️ Mặc định JDBC ở chế độ AUTO-COMMIT: mỗi câu lệnh là một giao dịch riêng.
+//    Với thao tác nhiều bước, điều đó là THẢM HOẠ.</span>
+
+<span class="tok-kw">void</span> <span class="tok-fn">chuyenTien</span>(<span class="tok-cls">Connection</span> conn, <span class="tok-kw">long</span> tu, <span class="tok-kw">long</span> den, <span class="tok-cls">BigDecimal</span> tien)
+        <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+
+    conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">false</span>);        <span class="tok-com">// ⭐ BẮT ĐẦU giao dịch</span>
+    <span class="tok-kw">try</span> {
+        <span class="tok-com">// Bước 1: trừ tiền — có kiểm tra số dư ngay trong SQL</span>
+        <span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(
+                <span class="tok-str">"UPDATE tai_khoan SET so_du = so_du - ? WHERE id = ? AND so_du &gt;= ?"</span>)) {
+            ps.<span class="tok-fn">setBigDecimal</span>(<span class="tok-num">1</span>, tien);
+            ps.<span class="tok-fn">setLong</span>(<span class="tok-num">2</span>, tu);
+            ps.<span class="tok-fn">setBigDecimal</span>(<span class="tok-num">3</span>, tien);
+            <span class="tok-kw">if</span> (ps.<span class="tok-fn">executeUpdate</span>() == <span class="tok-num">0</span>)
+                <span class="tok-kw">throw new</span> <span class="tok-cls">SQLException</span>(<span class="tok-str">"Không đủ số dư hoặc tài khoản không tồn tại"</span>);
+        }
+
+        <span class="tok-com">// Bước 2: cộng tiền</span>
+        <span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(
+                <span class="tok-str">"UPDATE tai_khoan SET so_du = so_du + ? WHERE id = ?"</span>)) {
+            ps.<span class="tok-fn">setBigDecimal</span>(<span class="tok-num">1</span>, tien);
+            ps.<span class="tok-fn">setLong</span>(<span class="tok-num">2</span>, den);
+            <span class="tok-kw">if</span> (ps.<span class="tok-fn">executeUpdate</span>() == <span class="tok-num">0</span>)
+                <span class="tok-kw">throw new</span> <span class="tok-cls">SQLException</span>(<span class="tok-str">"Tài khoản đích không tồn tại"</span>);
+        }
+
+        <span class="tok-com">// Bước 3: ghi nhật ký</span>
+        <span class="tok-fn">ghiNhatKy</span>(conn, tu, den, tien);
+
+        conn.<span class="tok-fn">commit</span>();                  <span class="tok-com">// ⭐ mọi bước thành công → LƯU</span>
+
+    } <span class="tok-kw">catch</span> (<span class="tok-cls">SQLException</span> e) {
+        conn.<span class="tok-fn">rollback</span>();                <span class="tok-com">// ⭐ bất kỳ bước nào lỗi → HOÀN TÁC TẤT CẢ</span>
+        <span class="tok-kw">throw</span> e;
+    } <span class="tok-kw">finally</span> {
+        conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">true</span>);      <span class="tok-com">// khôi phục cho lần dùng sau (quan trọng với pool!)</span>
+    }
+}
+
+<span class="tok-com">// --- Savepoint: rollback một phần ---</span>
+conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">false</span>);
+<span class="tok-fn">buoc1</span>(conn);
+<span class="tok-cls">Savepoint</span> sp = conn.<span class="tok-fn">setSavepoint</span>(<span class="tok-str">"sau_buoc_1"</span>);
+<span class="tok-kw">try</span> {
+    <span class="tok-fn">buoc2CoTheLoi</span>(conn);
+} <span class="tok-kw">catch</span> (<span class="tok-cls">SQLException</span> e) {
+    conn.<span class="tok-fn">rollback</span>(sp);              <span class="tok-com">// chỉ huỷ bước 2, giữ bước 1</span>
+}
+conn.<span class="tok-fn">commit</span>();</code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>ACID</th><th>Nghĩa là</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>A</strong>tomicity — Nguyên tử</td><td>Hoặc tất cả thành công, hoặc không gì cả</td></tr>
+              <tr><td><strong>C</strong>onsistency — Nhất quán</td><td>Database luôn ở trạng thái hợp lệ (ràng buộc được giữ)</td></tr>
+              <tr><td><strong>I</strong>solation — Cô lập</td><td>Giao dịch đồng thời không thấy trạng thái dở dang của nhau</td></tr>
+              <tr><td><strong>D</strong>urability — Bền vững</td><td>Đã commit thì mất điện cũng không mất dữ liệu</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Mức cô lập</th><th>Dirty read</th><th>Non-repeatable read</th><th>Phantom read</th><th>Ghi chú</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>READ_UNCOMMITTED</code></td><td>❌ Có thể</td><td>❌ Có thể</td><td>❌ Có thể</td><td>Nhanh nhất, gần như không bao giờ dùng</td></tr>
+              <tr><td><code>READ_COMMITTED</code></td><td>✅ Không</td><td>❌ Có thể</td><td>❌ Có thể</td><td>Mặc định của PostgreSQL, Oracle, SQL Server</td></tr>
+              <tr><td><code>REPEATABLE_READ</code></td><td>✅</td><td>✅</td><td>❌ Có thể</td><td><strong>Mặc định của MySQL/InnoDB</strong></td></tr>
+              <tr><td><code>SERIALIZABLE</code></td><td>✅</td><td>✅</td><td>✅</td><td>An toàn nhất, chậm nhất</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Ba hiện tượng bất thường</div>
+          <ul>
+            <li><strong>Dirty read</strong> — đọc được dữ liệu mà giao dịch khác <em>chưa commit</em>; nếu nó rollback thì bạn đã đọc dữ liệu không bao giờ tồn tại.</li>
+            <li><strong>Non-repeatable read</strong> — đọc cùng một hàng hai lần trong một giao dịch nhưng nhận hai giá trị khác nhau (vì giao dịch khác đã sửa và commit ở giữa).</li>
+            <li><strong>Phantom read</strong> — chạy cùng một truy vấn hai lần nhưng lần sau có thêm <em>hàng mới</em> xuất hiện.</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            Đặt mức: <code>conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED)</code>. Trong hầu hết
+            ứng dụng, giữ mặc định của database là hợp lý — chỉ nâng lên khi có yêu cầu nghiệp vụ cụ thể, vì mức
+            cao hơn nghĩa là nhiều khoá hơn và ít đồng thời hơn.
+          </p>
+        </div>
+
+        <h2 id="batch">7. Batch — ghi hàng loạt</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Batch.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ CHẬM: 10.000 lượt đi về mạng</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">SinhVien</span> sv : ds) {
+    ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, sv.<span class="tok-fn">maSv</span>());
+    ps.<span class="tok-fn">executeUpdate</span>();        <span class="tok-com">// mỗi lần một lượt đi về</span>
+}
+<span class="tok-com">// 10.000 bản ghi ≈ 60 giây</span>
+
+<span class="tok-com">// ✅ NHANH: gom thành lô</span>
+conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">false</span>);
+<span class="tok-kw">try</span> (<span class="tok-cls">PreparedStatement</span> ps = conn.<span class="tok-fn">prepareStatement</span>(
+        <span class="tok-str">"INSERT INTO sinh_vien (ma_sv, ho_ten, diem) VALUES (?, ?, ?)"</span>)) {
+
+    <span class="tok-kw">int</span> dem = <span class="tok-num">0</span>;
+    <span class="tok-kw">for</span> (<span class="tok-cls">SinhVien</span> sv : ds) {
+        ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, sv.<span class="tok-fn">maSv</span>());
+        ps.<span class="tok-fn">setString</span>(<span class="tok-num">2</span>, sv.<span class="tok-fn">hoTen</span>());
+        ps.<span class="tok-fn">setBigDecimal</span>(<span class="tok-num">3</span>, sv.<span class="tok-fn">diem</span>());
+        ps.<span class="tok-fn">addBatch</span>();                  <span class="tok-com">// ⭐ thêm vào lô, chưa gửi</span>
+
+        <span class="tok-kw">if</span> (++dem % <span class="tok-num">1000</span> == <span class="tok-num">0</span>) {
+            ps.<span class="tok-fn">executeBatch</span>();           <span class="tok-com">// gửi mỗi 1000 bản — tránh phình bộ nhớ</span>
+            ps.<span class="tok-fn">clearBatch</span>();
+        }
+    }
+    ps.<span class="tok-fn">executeBatch</span>();                  <span class="tok-com">// phần còn lại</span>
+    conn.<span class="tok-fn">commit</span>();
+} <span class="tok-kw">catch</span> (<span class="tok-cls">SQLException</span> e) {
+    conn.<span class="tok-fn">rollback</span>();
+    <span class="tok-kw">throw</span> e;
+} <span class="tok-kw">finally</span> {
+    conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">true</span>);
+}
+<span class="tok-com">// 10.000 bản ghi ≈ 1 giây — nhanh hơn khoảng 50-60 lần</span>
+
+<span class="tok-com">// ⭐ MySQL: thêm tham số này vào chuỗi kết nối để batch thực sự hiệu quả</span>
+<span class="tok-com">// ?rewriteBatchedStatements=true
+//   → driver gộp thành một câu INSERT nhiều VALUES, nhanh thêm vài lần nữa</span>
+
+<span class="tok-com">// Xử lý lỗi trong batch</span>
+<span class="tok-kw">try</span> {
+    ps.<span class="tok-fn">executeBatch</span>();
+} <span class="tok-kw">catch</span> (<span class="tok-cls">BatchUpdateException</span> e) {
+    <span class="tok-kw">int</span>[] kq = e.<span class="tok-fn">getUpdateCounts</span>();   <span class="tok-com">// biết bản ghi thứ mấy hỏng</span>
+}</code></pre>
+        </div>
+
+        <h2 id="pool">8. Connection pool — bắt buộc trong sản xuất</h2>
+
+        <div class="java-note">
+          <h4>Vì sao cần pool</h4>
+          <p>
+            Mở một <code>Connection</code> tốn <strong>50-200 ms</strong>: bắt tay TCP, xác thực, thiết lập phiên,
+            có thể cả bắt tay TLS. Với một API xử lý 1.000 request mỗi giây, chi phí đó lớn hơn cả bản thân truy vấn
+            nhiều lần.
+          </p>
+          <p style="margin-top: 8px;">
+            Pool giữ sẵn một số kết nối mở. <code>getConnection()</code> lấy một cái từ pool (mất vài micro giây),
+            và <code>close()</code> <em>không</em> đóng thật mà <strong>trả lại pool</strong>. Đây là lý do bạn vẫn
+            phải gọi <code>close()</code> — nó có nghĩa "tôi dùng xong rồi", không phải "hãy ngắt kết nối".
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>HikariCP.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">&lt;!-- pom.xml --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.zaxxer&lt;/groupId&gt;
+    &lt;artifactId&gt;HikariCP&lt;/artifactId&gt;
+    &lt;version&gt;6.2.1&lt;/version&gt;
+&lt;/dependency&gt;</span>
+
+<span class="tok-kw">import</span> com.zaxxer.hikari.*;
+
+<span class="tok-kw">public class</span> <span class="tok-cls">Db</span> {
+    <span class="tok-kw">private static final</span> <span class="tok-cls">HikariDataSource</span> DS;
+
+    <span class="tok-kw">static</span> {
+        <span class="tok-cls">HikariConfig</span> cf = <span class="tok-kw">new</span> <span class="tok-cls">HikariConfig</span>();
+        cf.<span class="tok-fn">setJdbcUrl</span>(<span class="tok-cls">System</span>.<span class="tok-fn">getenv</span>(<span class="tok-str">"DB_URL"</span>));
+        cf.<span class="tok-fn">setUsername</span>(<span class="tok-cls">System</span>.<span class="tok-fn">getenv</span>(<span class="tok-str">"DB_USER"</span>));
+        cf.<span class="tok-fn">setPassword</span>(<span class="tok-cls">System</span>.<span class="tok-fn">getenv</span>(<span class="tok-str">"DB_PASSWORD"</span>));
+
+        cf.<span class="tok-fn">setMaximumPoolSize</span>(<span class="tok-num">10</span>);            <span class="tok-com">// xem callout về cách chọn</span>
+        cf.<span class="tok-fn">setMinimumIdle</span>(<span class="tok-num">5</span>);
+        cf.<span class="tok-fn">setConnectionTimeout</span>(<span class="tok-num">30_000</span>);      <span class="tok-com">// chờ lấy kết nối tối đa 30s</span>
+        cf.<span class="tok-fn">setIdleTimeout</span>(<span class="tok-num">600_000</span>);           <span class="tok-com">// 10 phút không dùng thì đóng</span>
+        cf.<span class="tok-fn">setMaxLifetime</span>(<span class="tok-num">1_800_000</span>);         <span class="tok-com">// 30 phút thì làm mới</span>
+        cf.<span class="tok-fn">setLeakDetectionThreshold</span>(<span class="tok-num">60_000</span>); <span class="tok-com">// ⭐ cảnh báo nếu giữ quá 60s</span>
+
+        <span class="tok-com">// Tối ưu cho MySQL</span>
+        cf.<span class="tok-fn">addDataSourceProperty</span>(<span class="tok-str">"cachePrepStmts"</span>, <span class="tok-str">"true"</span>);
+        cf.<span class="tok-fn">addDataSourceProperty</span>(<span class="tok-str">"prepStmtCacheSize"</span>, <span class="tok-str">"250"</span>);
+        cf.<span class="tok-fn">addDataSourceProperty</span>(<span class="tok-str">"rewriteBatchedStatements"</span>, <span class="tok-str">"true"</span>);
+
+        DS = <span class="tok-kw">new</span> <span class="tok-cls">HikariDataSource</span>(cf);
+    }
+
+    <span class="tok-kw">public static</span> <span class="tok-cls">Connection</span> <span class="tok-fn">layKetNoi</span>() <span class="tok-kw">throws</span> <span class="tok-cls">SQLException</span> {
+        <span class="tok-kw">return</span> DS.<span class="tok-fn">getConnection</span>();
+    }
+    <span class="tok-kw">public static void</span> <span class="tok-fn">dong</span>() { DS.<span class="tok-fn">close</span>(); }
+}
+
+<span class="tok-com">// Dùng — y hệt như trước, chỉ đổi nguồn kết nối</span>
+<span class="tok-kw">try</span> (<span class="tok-cls">Connection</span> conn = <span class="tok-cls">Db</span>.<span class="tok-fn">layKetNoi</span>()) {
+    ...
+}   <span class="tok-com">// close() TRẢ LẠI POOL, không ngắt kết nối thật</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Chọn kích thước pool — nhỏ hơn bạn nghĩ</div>
+          <p>
+            Trực giác nói "nhiều kết nối hơn = nhanh hơn", nhưng thực tế ngược lại. Database chỉ xử lý được một số
+            truy vấn đồng thời nhất định; vượt quá thì chúng tranh chấp CPU, đĩa và khoá, làm <em>mọi</em> truy vấn
+            chậm lại.
+          </p>
+          <p style="margin-top: 8px;">
+            Công thức tham khảo của HikariCP: <code>số_kết_nối = ((số_nhân_CPU_của_DB × 2) + số_đĩa)</code>. Với
+            server database 4 nhân và SSD, con số hợp lý là khoảng 10 — không phải 100.
+          </p>
+          <p style="margin-top: 8px;">
+            <code>leakDetectionThreshold</code> là tính năng đáng giá nhất: nó in stack trace của chỗ lấy kết nối mà
+            quên trả, giúp bạn tìm ra chính xác dòng code rò rỉ.
+          </p>
+        </div>
+
+        <h2 id="dao">9. Mẫu DAO</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Dao.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ① Interface — tầng nghiệp vụ chỉ biết cái này</span>
+<span class="tok-kw">public interface</span> <span class="tok-cls">SinhVienDao</span> {
+    <span class="tok-kw">long</span> <span class="tok-fn">them</span>(<span class="tok-cls">SinhVien</span> sv);
+    <span class="tok-cls">Optional</span>&lt;<span class="tok-cls">SinhVien</span>&gt; <span class="tok-fn">timTheoId</span>(<span class="tok-kw">long</span> id);
+    <span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt; <span class="tok-fn">timTheoLop</span>(<span class="tok-cls">String</span> lop);
+    <span class="tok-kw">boolean</span> <span class="tok-fn">capNhat</span>(<span class="tok-cls">SinhVien</span> sv);
+    <span class="tok-kw">boolean</span> <span class="tok-fn">xoa</span>(<span class="tok-kw">long</span> id);
+}
+
+<span class="tok-com">// ② Cài đặt JDBC — bọc SQLException thành unchecked (chương 6)</span>
+<span class="tok-kw">public class</span> <span class="tok-cls">SinhVienDaoJdbc</span> <span class="tok-kw">implements</span> <span class="tok-cls">SinhVienDao</span> {
+    <span class="tok-kw">private final</span> <span class="tok-cls">DataSource</span> ds;
+
+    <span class="tok-kw">public</span> <span class="tok-fn">SinhVienDaoJdbc</span>(<span class="tok-cls">DataSource</span> ds) { <span class="tok-kw">this</span>.ds = ds; }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-cls">Optional</span>&lt;<span class="tok-cls">SinhVien</span>&gt; <span class="tok-fn">timTheoId</span>(<span class="tok-kw">long</span> id) {
+        <span class="tok-cls">String</span> sql = <span class="tok-str">"SELECT * FROM sinh_vien WHERE id = ?"</span>;
+        <span class="tok-kw">try</span> (<span class="tok-cls">Connection</span> c = ds.<span class="tok-fn">getConnection</span>();
+             <span class="tok-cls">PreparedStatement</span> ps = c.<span class="tok-fn">prepareStatement</span>(sql)) {
+            ps.<span class="tok-fn">setLong</span>(<span class="tok-num">1</span>, id);
+            <span class="tok-kw">try</span> (<span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) {
+                <span class="tok-kw">return</span> rs.<span class="tok-fn">next</span>() ? <span class="tok-cls">Optional</span>.<span class="tok-fn">of</span>(<span class="tok-fn">anhXa</span>(rs)) : <span class="tok-cls">Optional</span>.<span class="tok-fn">empty</span>();
+            }
+        } <span class="tok-kw">catch</span> (<span class="tok-cls">SQLException</span> e) {
+            <span class="tok-kw">throw new</span> <span class="tok-cls">DataAccessException</span>(<span class="tok-str">"Lỗi khi tìm sinh viên id="</span> + id, e);
+        }
+    }
+    ...
+}
+
+<span class="tok-com">// ③ Exception riêng của tầng dữ liệu — unchecked</span>
+<span class="tok-kw">public class</span> <span class="tok-cls">DataAccessException</span> <span class="tok-kw">extends</span> <span class="tok-cls">RuntimeException</span> {
+    <span class="tok-kw">public</span> <span class="tok-fn">DataAccessException</span>(<span class="tok-cls">String</span> msg, <span class="tok-cls">Throwable</span> nguyenNhan) {
+        <span class="tok-kw">super</span>(msg, nguyenNhan);      <span class="tok-com">// ⭐ giữ nguyên nhân gốc</span>
+    }
+}
+
+<span class="tok-com">// ④ Tầng service — không biết gì về JDBC</span>
+<span class="tok-kw">public class</span> <span class="tok-cls">SinhVienService</span> {
+    <span class="tok-kw">private final</span> <span class="tok-cls">SinhVienDao</span> dao;
+    <span class="tok-kw">public</span> <span class="tok-fn">SinhVienService</span>(<span class="tok-cls">SinhVienDao</span> dao) { <span class="tok-kw">this</span>.dao = dao; }
+
+    <span class="tok-kw">public</span> <span class="tok-cls">SinhVien</span> <span class="tok-fn">layBatBuoc</span>(<span class="tok-kw">long</span> id) {
+        <span class="tok-kw">return</span> dao.<span class="tok-fn">timTheoId</span>(id).<span class="tok-fn">orElseThrow</span>(
+            () -&gt; <span class="tok-kw">new</span> <span class="tok-cls">KhongTimThayException</span>(<span class="tok-str">"Sinh viên id="</span> + id));
+    }
+}</code></pre>
+        </div>
+
+        <div class="java-rule">
+          <strong>Ba lợi ích của DAO:</strong> (1) tầng nghiệp vụ không phụ thuộc JDBC — đổi sang JPA hay MongoDB
+          chỉ cần đổi cài đặt; (2) <em>test được</em> — dùng cài đặt giả trong bộ nhớ cho unit test, không cần
+          database thật; (3) SQL tập trung một chỗ, dễ rà soát lỗi bảo mật và tối ưu.
+        </div>
+
+        <h2 id="cheat-sheet">10. Cheat sheet chương 13</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Cách viết</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Mọi truy vấn có tham số</td><td><code>PreparedStatement</code> + <code>?</code> — <strong>không bao giờ</strong> nối chuỗi</td></tr>
+              <tr><td>Chỉ số tham số</td><td>Bắt đầu từ <strong>1</strong>, không phải 0</td></tr>
+              <tr><td>Quản lý tài nguyên</td><td>try-with-resources cho <code>Connection</code>, <code>Statement</code>, <code>ResultSet</code></td></tr>
+              <tr><td>Truy vấn</td><td><code>executeQuery()</code> → <code>ResultSet</code></td></tr>
+              <tr><td>Thêm/sửa/xoá</td><td><code>executeUpdate()</code> → số hàng bị ảnh hưởng</td></tr>
+              <tr><td>Lấy id tự sinh</td><td><code>prepareStatement(sql, RETURN_GENERATED_KEYS)</code> + <code>getGeneratedKeys()</code></td></tr>
+              <tr><td>Duyệt kết quả</td><td><code>while (rs.next())</code>, đọc theo <strong>tên cột</strong></td></tr>
+              <tr><td>Kiểm tra NULL</td><td><code>rs.wasNull()</code> ngay sau khi đọc, hoặc dùng <code>getObject</code></td></tr>
+              <tr><td>Tiền tệ</td><td><code>getBigDecimal</code> / <code>setBigDecimal</code></td></tr>
+              <tr><td>Ngày giờ</td><td><code>getObject(cot, LocalDate.class)</code> — không dùng <code>java.sql.Date</code></td></tr>
+              <tr><td>Nhiều bước phải nguyên tử</td><td><code>setAutoCommit(false)</code> + <code>commit</code>/<code>rollback</code></td></tr>
+              <tr><td>Sau giao dịch</td><td>Khôi phục <code>setAutoCommit(true)</code> trong <code>finally</code></td></tr>
+              <tr><td>Ghi hàng loạt</td><td><code>addBatch()</code> + <code>executeBatch()</code> mỗi 1000 bản</td></tr>
+              <tr><td>Sản xuất</td><td><strong>Connection pool</strong> (HikariCP) — không dùng <code>DriverManager</code> trực tiếp</td></tr>
+              <tr><td>Kích thước pool</td><td><code>(nhân_CPU × 2) + số_đĩa</code> — nhỏ hơn bạn nghĩ</td></tr>
+              <tr><td>Tên bảng/cột động</td><td>Danh sách trắng — <code>?</code> không dùng được</td></tr>
+              <tr><td>Mật khẩu</td><td>Biến môi trường — <strong>không bao giờ</strong> trong mã nguồn</td></tr>
+              <tr><td>Kiến trúc</td><td>Mẫu DAO: interface + cài đặt + exception riêng</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Tự tay tái hiện SQL injection</h4>
+            <div class="exercise-body">
+              <p>Trên database <strong>SQLite cục bộ</strong> (an toàn, không cần server), tạo bảng <code>nguoi_dung(id, ten, mat_khau, vai_tro)</code> với vài bản ghi, rồi:</p>
+              <ol>
+                <li>Viết hàm đăng nhập <strong>dễ bị tấn công</strong> bằng <code>Statement</code> và nối chuỗi.</li>
+                <li>Đăng nhập thành công <em>không cần biết mật khẩu</em>, dùng <code>' OR '1'='1</code>. Chép lại câu SQL cuối cùng.</li>
+                <li>Dùng <code>UNION SELECT</code> để đọc dữ liệu từ một bảng khác.</li>
+                <li>Xoá bảng bằng <code>'; DROP TABLE …; --</code> (nhớ sao lưu trước).</li>
+                <li>Viết lại bằng <code>PreparedStatement</code>. Thử <em>tất cả</em> các payload trên — ghi lại kết quả.</li>
+                <li>In ra giá trị mà database thực sự nhận được sau <code>setString</code> — chứng minh nó chỉ là chuỗi.</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    SQLite là lựa chọn tốt để thực hành: chỉ cần thêm dependency, không cần cài server, và database
+                    là một tệp bạn xoá được. URL: <code>jdbc:sqlite:test.db</code>.<br/>
+                    Lưu ý: nhiều driver mặc định <em>tắt</em> nhiều câu lệnh trong một lần gửi
+                    (<code>allowMultiQueries=false</code> ở MySQL), nên payload <code>DROP TABLE</code> có thể không
+                    chạy. Đó là <em>lớp phòng thủ thứ hai</em>, không phải lý do để nối chuỗi — payload
+                    <code>OR '1'='1</code> và <code>UNION</code> vẫn hoạt động bình thường.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>DAO hoàn chỉnh cho quản lý thư viện</h4>
+            <div class="exercise-body">
+              <p>Thiết kế lược đồ và xây dựng tầng DAO đầy đủ:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Lược đồ</span><button class="copy-btn">Copy</button></div>
+<pre><code>sach(id, isbn UNIQUE, tieu_de, tac_gia, nam_xb, so_luong)
+doc_gia(id, ma_the UNIQUE, ho_ten, email, ngay_dang_ky)
+muon_tra(id, sach_id FK, doc_gia_id FK, ngay_muon, ngay_hen_tra, ngay_tra)</code></pre>
+              </div>
+              <ul>
+                <li>DAO cho cả ba bảng với đầy đủ CRUD, dùng <code>record</code> làm entity.</li>
+                <li><code>muonSach(sachId, docGiaId)</code>: <strong>một giao dịch</strong> — kiểm tra còn sách, giảm <code>so_luong</code>, tạo bản ghi mượn. Hết sách thì rollback.</li>
+                <li><code>traSach(muonId)</code>: cập nhật <code>ngay_tra</code>, tăng <code>so_luong</code>, tính tiền phạt nếu quá hạn.</li>
+                <li>Truy vấn báo cáo: sách đang được mượn nhiều nhất, độc giả mượn quá hạn, sách chưa ai mượn.</li>
+                <li>Phân trang cho danh sách sách với <code>LIMIT</code>/<code>OFFSET</code>.</li>
+                <li>Dùng HikariCP; mật khẩu qua biến môi trường.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Giảm số lượng an toàn với đồng thời: dùng
+                    <code>UPDATE sach SET so_luong = so_luong - 1 WHERE id = ? AND so_luong &gt; 0</code> rồi kiểm
+                    tra <code>executeUpdate() == 1</code>. Cách này để <em>database</em> lo việc kiểm tra nguyên tử
+                    — an toàn hơn nhiều so với đọc rồi ghi ở tầng Java (đó chính là race condition ở chương 12,
+                    nhưng ở tầng database).<br/>
+                    Truy vấn báo cáo là dịp tốt để ôn <code>JOIN</code>, <code>GROUP BY</code>,
+                    <code>LEFT JOIN … WHERE … IS NULL</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Đo hiệu năng batch và pool</h4>
+            <div class="exercise-body">
+              <p>Đo và lập bảng bốn cấu hình khi chèn 10.000 bản ghi:</p>
+              <ol>
+                <li><code>Statement</code>, auto-commit, không pool.</li>
+                <li><code>PreparedStatement</code>, auto-commit, không pool.</li>
+                <li><code>PreparedStatement</code> + giao dịch (một commit duy nhất).</li>
+                <li><code>PreparedStatement</code> + giao dịch + <code>addBatch</code> (lô 1000).</li>
+              </ol>
+              <p>Sau đó thêm <code>rewriteBatchedStatements=true</code> (MySQL) và đo lại (4). Cuối cùng, so sánh thời gian <code>getConnection()</code> có pool và không pool, lặp 1.000 lần.</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Kết quả điển hình: (1) → (4) nhanh hơn khoảng 50-100 lần. Phần lớn cải thiện đến từ <em>giao
+                    dịch</em> (bước 3) chứ không phải batch — vì mỗi commit là một lần ghi đĩa đồng bộ (fsync).<br/>
+                    <code>rewriteBatchedStatements</code> cho thêm 3-5 lần nữa vì driver gộp nhiều
+                    <code>INSERT</code> thành một câu <code>INSERT … VALUES (…),(…),(…)</code>.<br/>
+                    <code>getConnection()</code>: không pool khoảng 50-200 ms, có pool khoảng 0,01 ms — chênh nhau
+                    hàng nghìn lần.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Thí nghiệm giao dịch và mức cô lập</h4>
+            <div class="exercise-body">
+              <p>Mở <strong>hai</strong> kết nối song song trong cùng chương trình và quan sát:</p>
+              <ol>
+                <li><strong>Dirty read:</strong> kết nối A sửa một hàng nhưng chưa commit; B đọc. Thử ở <code>READ_UNCOMMITTED</code> và <code>READ_COMMITTED</code> — khác nhau thế nào?</li>
+                <li><strong>Non-repeatable read:</strong> B đọc một hàng, A sửa và commit, B đọc lại. Ở mức nào B thấy giá trị mới?</li>
+                <li><strong>Phantom read:</strong> B đếm số hàng thoả điều kiện, A chèn hàng mới và commit, B đếm lại.</li>
+                <li><strong>Deadlock database:</strong> A khoá hàng 1 rồi chờ hàng 2; B khoá hàng 2 rồi chờ hàng 1. Database phản ứng thế nào? Chép lại thông điệp lỗi.</li>
+                <li><strong>Rollback:</strong> thực hiện ba câu <code>UPDATE</code> rồi ném lỗi ở câu thứ ba. Xác nhận cả ba đều bị hoàn tác.</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Dùng hai luồng với hai <code>Connection</code> riêng, và <code>CountDownLatch</code> để đồng bộ
+                    thứ tự các bước — nếu không, kết quả sẽ ngẫu nhiên và không rút ra được gì.<br/>
+                    (4): database <em>tự phát hiện</em> deadlock và huỷ một trong hai giao dịch với thông điệp như
+                    <em>"Deadlock found when trying to get lock; try restarting transaction"</em>. Khác với deadlock
+                    Java (chương 12) — nơi không ai phát hiện và chương trình treo vĩnh viễn. Bài học: khi gặp lỗi
+                    này, ứng dụng nên <strong>thử lại</strong> giao dịch.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Trình chạy migration mini</h4>
+            <div class="exercise-body">
+              <p>Viết công cụ quản lý phiên bản lược đồ database (bản rút gọn của Flyway):</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Cấu trúc</span><button class="copy-btn">Copy</button></div>
+<pre><code>migrations/
+├── V1__tao_bang_sach.sql
+├── V2__them_cot_isbn.sql
+└── V3__tao_bang_doc_gia.sql</code></pre>
+              </div>
+              <ul>
+                <li>Tạo bảng <code>schema_version(phien_ban, ten, chay_luc, checksum)</code> nếu chưa có.</li>
+                <li>Quét thư mục, sắp theo số phiên bản, chỉ chạy những bản <em>chưa</em> áp dụng.</li>
+                <li>Mỗi migration chạy trong <strong>một giao dịch riêng</strong>; lỗi thì rollback và dừng hẳn.</li>
+                <li>Tính checksum (SHA-256) mỗi tệp; nếu tệp đã chạy bị <em>sửa đổi</em> thì báo lỗi và dừng.</li>
+                <li>Lệnh <code>--info</code> in bảng trạng thái: bản nào đã chạy, chạy lúc nào, bản nào đang chờ.</li>
+                <li>Xử lý an toàn khi hai tiến trình cùng chạy migration (dùng khoá ở tầng database).</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Checksum bảo vệ khỏi lỗi nguy hiểm nhất: ai đó sửa một migration <em>đã chạy</em> trên
+                    production, khiến môi trường dev và production khác nhau âm thầm.<br/>
+                    Khoá liên tiến trình: MySQL có <code>SELECT GET_LOCK('migration', 10)</code>, PostgreSQL có
+                    <code>pg_advisory_lock</code>. Không có khoá thì hai container khởi động cùng lúc sẽ cùng chạy
+                    migration và gây lỗi.<br/>
+                    Lưu ý: một số DDL (như <code>CREATE TABLE</code> ở MySQL) tự động commit, nên rollback không
+                    hoàn tác được — đó là lý do mỗi migration nên nhỏ và làm đúng một việc.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>SQL injection là gì? Vì sao <code>PreparedStatement</code> chống được?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                SQL injection xảy ra khi dữ liệu người dùng được <strong>nối thẳng</strong> vào câu SQL, khiến nó
+                không còn là <em>dữ liệu</em> mà trở thành <em>mã lệnh</em>:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>TanCong.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">String</span> sql = <span class="tok-str">"SELECT * FROM nd WHERE ten = '"</span> + input + <span class="tok-str">"'"</span>;
+<span class="tok-com">// input = ' OR '1'='1        → trả về TOÀN BỘ bảng
+// input = '; DROP TABLE nd; -- → mất bảng
+// input = ' UNION SELECT cvv, ... → đọc bảng khác</span></code></pre>
+              </div>
+              <p style="margin-top: 8px;">
+                <strong><code>PreparedStatement</code> chống được ở tầng cơ chế</strong>, không phải bằng cách lọc
+                ký tự: nó gửi <em>câu lệnh</em> và <em>dữ liệu</em> tới database <strong>riêng biệt</strong>.
+                Database phân tích cú pháp câu lệnh trước, tạo kế hoạch thực thi với các chỗ trống, rồi mới điền dữ
+                liệu vào. Dữ liệu <em>không bao giờ</em> đi qua bộ phân tích SQL, nên không thể trở thành lệnh —
+                dù nội dung là gì.
+              </p>
+              <p style="margin-top: 8px;">
+                Lưu ý: <code>?</code> chỉ dùng cho <em>giá trị</em>. Tên bảng và tên cột phải kiểm tra bằng danh
+                sách trắng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Vì sao phải đóng <code>Connection</code>, <code>Statement</code>, <code>ResultSet</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Vì mỗi thứ chiếm tài nguyên ở <strong>cả hai phía</strong>:</p>
+              <ul>
+                <li><strong><code>Connection</code></strong> — một socket TCP phía client, một tiến trình/luồng phía database. Không đóng thì sau vài trăm lần bạn nhận <code>Too many connections</code> và <em>toàn bộ</em> ứng dụng ngừng hoạt động.</li>
+                <li><strong><code>Statement</code></strong> — con trỏ và kế hoạch thực thi ở phía database.</li>
+                <li><strong><code>ResultSet</code></strong> — bộ đệm kết quả, có thể rất lớn.</li>
+              </ul>
+              <p style="margin-top: 8px;">
+                Cách đúng là <strong>try-with-resources</strong>, đóng theo thứ tự ngược (<code>rs</code> →
+                <code>ps</code> → <code>conn</code>) và hoạt động kể cả khi có exception:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Dung.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">try</span> (<span class="tok-cls">Connection</span> c = ds.<span class="tok-fn">getConnection</span>();
+     <span class="tok-cls">PreparedStatement</span> ps = c.<span class="tok-fn">prepareStatement</span>(sql);
+     <span class="tok-cls">ResultSet</span> rs = ps.<span class="tok-fn">executeQuery</span>()) { ... }</code></pre>
+              </div>
+              <p>
+                Với connection pool, <code>close()</code> <em>không</em> ngắt kết nối thật mà <strong>trả nó lại
+                pool</strong> — nên vẫn phải gọi, và càng quan trọng hơn: quên trả thì pool cạn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Giao dịch là gì? Vì sao cần <code>setAutoCommit(false)</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Giao dịch là một nhóm thao tác được coi như <strong>một đơn vị không thể chia nhỏ</strong>: hoặc tất
+                cả thành công (<code>commit</code>), hoặc không gì cả (<code>rollback</code>).
+              </p>
+              <p style="margin-top: 8px;">
+                JDBC mặc định ở chế độ <strong>auto-commit</strong> — mỗi câu lệnh là một giao dịch riêng, commit
+                ngay. Với thao tác nhiều bước, đó là thảm hoạ:
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>ThamHoa.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// Auto-commit BẬT:</span>
+<span class="tok-fn">truTien</span>(tu, <span class="tok-num">1000</span>);        <span class="tok-com">// ✅ commit ngay — tiền đã bị trừ</span>
+<span class="tok-fn">congTien</span>(den, <span class="tok-num">1000</span>);     <span class="tok-com">// 💥 lỗi mạng ở đây</span>
+<span class="tok-com">// → Tiền BỐC HƠI. Không hoàn tác được.</span></code></pre>
+              </div>
+              <p style="margin-top: 8px;">Mẫu chuẩn:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Mau.java</span><button class="copy-btn">Copy</button></div>
+<pre><code>conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">false</span>);
+<span class="tok-kw">try</span> {
+    <span class="tok-fn">buoc1</span>(); <span class="tok-fn">buoc2</span>(); <span class="tok-fn">buoc3</span>();
+    conn.<span class="tok-fn">commit</span>();
+} <span class="tok-kw">catch</span> (<span class="tok-cls">SQLException</span> e) {
+    conn.<span class="tok-fn">rollback</span>();
+    <span class="tok-kw">throw</span> e;
+} <span class="tok-kw">finally</span> {
+    conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">true</span>);   <span class="tok-com">// ⚠️ BẮT BUỘC với pool</span>
+}</code></pre>
+              </div>
+              <p>
+                Bước <code>finally</code> rất quan trọng: kết nối được trả lại pool và tái sử dụng — nếu để nguyên
+                <code>autoCommit=false</code>, đoạn code tiếp theo dùng kết nối đó sẽ không commit và mất dữ liệu
+                một cách bí ẩn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Vì sao cần connection pool? <code>close()</code> khi có pool nghĩa là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì mở một kết nối tốn <strong>50-200 ms</strong>: bắt tay TCP, xác thực, thiết lập phiên, có thể cả
+                TLS. Với API xử lý 1.000 request mỗi giây, chi phí đó lớn hơn bản thân truy vấn nhiều lần.
+              </p>
+              <p style="margin-top: 8px;">
+                Pool giữ sẵn một số kết nối đã mở. <code>getConnection()</code> lấy một cái từ pool — mất vài
+                <em>micro</em> giây thay vì mili giây. Chênh lệch khoảng <strong>1.000 lần</strong>.
+              </p>
+              <p style="margin-top: 8px;">
+                Với pool, <code><strong>close()</strong></code> <strong>không ngắt kết nối</strong> — nó
+                <em>trả kết nối về pool</em>. Nghĩa là "tôi dùng xong rồi", không phải "hãy đóng lại". Vì vậy bạn
+                vẫn <em>phải</em> gọi <code>close()</code>: quên thì kết nối không bao giờ được trả, pool cạn dần,
+                và ứng dụng treo với <code>Connection is not available, request timed out</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Chọn kích thước:</strong> nhỏ hơn trực giác. Công thức HikariCP:
+                <code>(nhân_CPU_của_DB × 2) + số_đĩa</code> — với server 4 nhân và SSD thì khoảng 10, không phải
+                100. Quá nhiều kết nối khiến database tranh chấp tài nguyên và <em>chậm hơn</em>.<br/>
+                Bật <code>leakDetectionThreshold</code> để HikariCP in stack trace chỗ rò rỉ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Batch giúp gì? Vì sao nó nhanh hơn nhiều?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Batch gom nhiều câu lệnh rồi gửi <strong>một lần</strong>, thay vì một lượt đi-về mạng cho mỗi câu.
+                Với 10.000 bản ghi: từ khoảng 60 giây xuống còn khoảng 1 giây.
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Batch.java</span><button class="copy-btn">Copy</button></div>
+<pre><code>conn.<span class="tok-fn">setAutoCommit</span>(<span class="tok-kw">false</span>);
+<span class="tok-kw">for</span> (<span class="tok-kw">var</span> x : ds) {
+    ps.<span class="tok-fn">setString</span>(<span class="tok-num">1</span>, x.<span class="tok-fn">ten</span>());
+    ps.<span class="tok-fn">addBatch</span>();
+    <span class="tok-kw">if</span> (++i % <span class="tok-num">1000</span> == <span class="tok-num">0</span>) { ps.<span class="tok-fn">executeBatch</span>(); ps.<span class="tok-fn">clearBatch</span>(); }
+}
+ps.<span class="tok-fn">executeBatch</span>();
+conn.<span class="tok-fn">commit</span>();</code></pre>
+              </div>
+              <p style="margin-top: 8px;"><strong>Ba nguồn cải thiện, theo mức độ:</strong></p>
+              <ul>
+                <li><strong>Giao dịch</strong> — lớn nhất. Mỗi commit là một lần ghi đĩa đồng bộ (fsync); gộp 10.000 commit thành một là tiết kiệm khổng lồ.</li>
+                <li><strong>Giảm lượt đi-về mạng</strong> — mỗi lượt tốn độ trễ mạng.</li>
+                <li><strong>Tái dùng kế hoạch thực thi</strong> — <code>PreparedStatement</code> chỉ phân tích cú pháp một lần.</li>
+              </ul>
+              <p>
+                Chia lô mỗi 1.000 bản để tránh phình bộ nhớ. Với MySQL, thêm
+                <code>rewriteBatchedStatements=true</code> vào chuỗi kết nối để driver gộp thành một câu
+                <code>INSERT … VALUES (…),(…)</code> — nhanh thêm vài lần nữa.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Mức cô lập giao dịch là gì? Nêu ba hiện tượng bất thường.</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Mức cô lập quy định các giao dịch đồng thời "nhìn thấy" nhau tới đâu. Càng cô lập cao càng an toàn
+                nhưng càng ít đồng thời (nhiều khoá hơn).
+              </p>
+              <p style="margin-top: 8px;"><strong>Ba hiện tượng:</strong></p>
+              <ul>
+                <li><strong>Dirty read</strong> — đọc được dữ liệu mà giao dịch khác chưa commit. Nếu nó rollback, bạn đã đọc dữ liệu <em>chưa bao giờ tồn tại</em>.</li>
+                <li><strong>Non-repeatable read</strong> — đọc cùng một hàng hai lần trong một giao dịch mà nhận hai giá trị khác nhau.</li>
+                <li><strong>Phantom read</strong> — chạy cùng một truy vấn hai lần, lần sau xuất hiện thêm <em>hàng mới</em>.</li>
+              </ul>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Mức</th><th>Dirty</th><th>Non-repeat</th><th>Phantom</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>READ_UNCOMMITTED</code></td><td>❌</td><td>❌</td><td>❌</td></tr>
+                    <tr><td><code>READ_COMMITTED</code></td><td>✅</td><td>❌</td><td>❌</td></tr>
+                    <tr><td><code>REPEATABLE_READ</code></td><td>✅</td><td>✅</td><td>❌</td></tr>
+                    <tr><td><code>SERIALIZABLE</code></td><td>✅</td><td>✅</td><td>✅</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>
+                Mặc định: <code>READ_COMMITTED</code> ở PostgreSQL/Oracle/SQL Server,
+                <code>REPEATABLE_READ</code> ở MySQL InnoDB. Trong hầu hết ứng dụng, giữ mặc định là hợp lý.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Vì sao dùng mẫu DAO thay vì viết SQL rải rác trong code nghiệp vụ?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Bốn lý do:</p>
+              <ul>
+                <li><strong>Tách tầng</strong> — code nghiệp vụ không biết gì về JDBC. Đổi sang JPA, MyBatis hay MongoDB chỉ cần viết cài đặt mới, tầng service không đổi một dòng.</li>
+                <li><strong>Test được</strong> — quan trọng nhất. Với interface, unit test dùng cài đặt giả trong bộ nhớ, chạy trong mili giây, không cần database thật.</li>
+                <li><strong>SQL tập trung</strong> — mọi câu SQL nằm một chỗ, dễ rà soát lỗ hổng injection, dễ tối ưu chỉ mục, dễ tìm khi lược đồ đổi.</li>
+                <li><strong>Xử lý lỗi nhất quán</strong> — DAO bọc <code>SQLException</code> (checked, đặc thù JDBC) thành exception unchecked của riêng ứng dụng, giữ nguyên nhân gốc. Tầng trên không phải khai báo <code>throws SQLException</code> khắp nơi.</li>
+              </ul>
+              <p style="margin-top: 8px;">
+                Đây chính là mẫu mà Spring Data dùng: bạn khai báo <code>interface Repository</code>, Spring sinh
+                cài đặt lúc chạy. Hiểu DAO thủ công giúp bạn hiểu framework đó đang làm gì.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Vì sao dùng <code>BigDecimal</code> cho tiền và <code>LocalDate</code> thay <code>java.sql.Date</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong><code>BigDecimal</code> cho tiền</strong> — vì <code>double</code> theo IEEE 754 không biểu
+                diễn chính xác được nhiều phân số thập phân (chương 2). Cột <code>DECIMAL(19,2)</code> trong database
+                <em>là</em> chính xác; đọc nó vào <code>double</code> là tự nguyện làm hỏng dữ liệu. Dùng
+                <code>rs.getBigDecimal()</code> và <code>ps.setBigDecimal()</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong><code>LocalDate</code> thay <code>java.sql.Date</code></strong> — API ngày giờ cũ có nhiều
+                khiếm khuyết: <code>java.util.Date</code> thực chất chứa cả giờ (tên gây hiểu lầm), tháng đánh số từ
+                0, năm tính từ 1900, object <em>thay đổi được</em> nên không an toàn luồng, và
+                <code>java.sql.Date</code> kế thừa nó một cách gượng ép.
+              </p>
+              <p style="margin-top: 8px;">Từ JDBC 4.2 (Java 8), dùng thẳng <code>java.time</code>:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>NgayGio.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">LocalDate</span> d = rs.<span class="tok-fn">getObject</span>(<span class="tok-str">"ngay_sinh"</span>, <span class="tok-cls">LocalDate</span>.<span class="tok-kw">class</span>);
+ps.<span class="tok-fn">setObject</span>(<span class="tok-num">1</span>, <span class="tok-cls">LocalDate</span>.<span class="tok-fn">now</span>());
+<span class="tok-cls">LocalDateTime</span> t = rs.<span class="tok-fn">getObject</span>(<span class="tok-str">"tao_luc"</span>, <span class="tok-cls">LocalDateTime</span>.<span class="tok-kw">class</span>);
+<span class="tok-cls">OffsetDateTime</span> o = rs.<span class="tok-fn">getObject</span>(<span class="tok-str">"tao_luc"</span>, <span class="tok-cls">OffsetDateTime</span>.<span class="tok-kw">class</span>);  <span class="tok-com">// có múi giờ</span></code></pre>
+              </div>
+              <p>
+                Nhớ đặt <code>serverTimezone</code> trong chuỗi kết nối để tránh lệch múi giờ giữa ứng dụng và
+                database — nguồn bug rất khó tìm.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 13, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Kiến trúc JDBC</strong>: ứng dụng → API → driver Type 4 → database.</li>
+          <li><strong><code>Connection</code></strong> luôn trong try-with-resources; mật khẩu qua biến môi trường.</li>
+          <li><strong><code>PreparedStatement</code></strong> là bắt buộc — cơ chế tách câu lệnh khỏi dữ liệu chống SQL injection tuyệt đối.</li>
+          <li><strong>Tên bảng/cột</strong> không tham số hoá được — phải dùng danh sách trắng.</li>
+          <li><strong><code>ResultSet</code></strong>: <code>while (rs.next())</code>, đọc theo tên cột, <code>wasNull()</code> cho kiểu nguyên thủy.</li>
+          <li><strong>CRUD</strong> đầy đủ, lấy khoá tự sinh, phân trang, ánh xạ sang <code>record</code>.</li>
+          <li><strong>Giao dịch</strong>: ACID, <code>commit</code>/<code>rollback</code>, savepoint, bốn mức cô lập.</li>
+          <li><strong>Batch</strong> tăng tốc ghi hàng loạt 50-100 lần — phần lớn nhờ gộp commit.</li>
+          <li><strong>Connection pool</strong> bắt buộc trong sản xuất; kích thước nhỏ hơn trực giác.</li>
+          <li><strong>Mẫu DAO</strong>: tách tầng, test được, SQL tập trung, exception nhất quán.</li>
+          <li><strong><code>BigDecimal</code></strong> cho tiền, <strong><code>java.time</code></strong> cho ngày giờ.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 2 (Kiểu dữ liệu)</strong> — vì sao <code>BigDecimal</code> chứ không phải <code>double</code> cho tiền.</li>
+          <li><strong>Chương 5 (OOP nâng cao)</strong> — <code>record</code> làm entity; interface DAO cho phép nhiều cài đặt.</li>
+          <li><strong>Chương 6 (Ngoại lệ)</strong> — <code>SQLException</code> là checked; bọc thành unchecked ở biên và giữ nguyên nhân gốc.</li>
+          <li><strong>Chương 9 (Generics)</strong> — mẫu <code>Repository&lt;T, ID&gt;</code> tổng quát.</li>
+          <li><strong>Chương 11 (Tệp tin)</strong> — cùng mẫu try-with-resources cho mọi <code>AutoCloseable</code>.</li>
+          <li><strong>Chương 12 (Đa luồng)</strong> — pool là một dạng resource pool; deadlock ở tầng database và cách xử lý (thử lại).</li>
+          <li><strong>Chương 14 (Dự án)</strong> — ghép DAO vào ứng dụng hoàn chỉnh, có test với database trong bộ nhớ.</li>
+          <li><strong>Trụ cột Database</strong> — SQL, chỉ mục, chuẩn hoá, kế hoạch thực thi truy vấn.</li>
+          <li><strong>Python Chương 14</strong> — đối chiếu: <code>sqlite3</code> của Python cũng dùng tham số <code>?</code> với đúng lý do; API tương tự nhưng gọn hơn.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong12.html" class="prev">
+            <div class="dir">← Chương 12</div>
+            <div class="label">Đa luồng &amp; đồng thời</div>
+          </a>
+          <a href="chuong14.html" class="next">
+            <div class="dir">Chương 14 →</div>
+            <div class="label">Kiểm thử, build &amp; dự án</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#kien-truc">1. Kiến trúc JDBC</a></li>
+          <li><a href="#connection">2. <code>Connection</code></a></li>
+          <li><a href="#sql-injection">3. SQL injection</a></li>
+          <li><a href="#resultset">4. <code>ResultSet</code></a></li>
+          <li><a href="#crud">5. CRUD đầy đủ</a></li>
+          <li><a href="#transaction">6. Giao dịch</a></li>
+          <li><a href="#batch">7. Batch</a></li>
+          <li><a href="#pool">8. Connection pool</a></li>
+          <li><a href="#dao">9. Mẫu DAO</a></li>
+          <li><a href="#cheat-sheet">10. Cheat sheet</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 13 — JDBC &amp; cơ sở dữ liệu · Java sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong12.html">← Chương 12</a> · <a href="../index.html">Java TOC</a> · <a href="chuong14.html">Chương 14 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

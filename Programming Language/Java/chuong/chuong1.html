@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 1 — Hello Java: JDK, JVM &amp; công cụ · Java Sub-pillar</title>
+  <meta name="description" content="JDK vs JRE vs JVM, cài Java bằng SDKMAN, javac và java, bytecode với javap, JShell, quy tắc đặt tên file, package, Maven vs Gradle, phiên bản LTS." />
+  <meta name="theme-color" content="#e76f00" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bitter:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-java">Jv</span>
+        Java · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Java</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Java</a><span class="sep">/</span>
+        <span>Chương 1</span>
+      </div>
+      <div class="chapter-num">Chương 01 · Hello Java</div>
+      <h1 style="font-size: 2.6rem; margin: 0 0 12px; color: var(--ink);">
+        JDK, JVM và bộ công cụ Java
+      </h1>
+      <p class="lead">
+        Trước khi viết dòng code Java đầu tiên, có một câu hỏi phải trả lời dứt điểm: <strong>JDK, JRE, JVM khác
+        nhau chỗ nào?</strong> Đây là thứ gây rối cho gần như mọi người mới, và cũng là chìa khoá để hiểu vì sao
+        Java hoạt động theo cách của nó — vì sao có bước biên dịch, vì sao "write once, run anywhere" là thật, và
+        vì sao chương trình Java khởi động chậm nhưng chạy lâu lại nhanh. Chương này dựng xong môi trường, chạy
+        được chương trình đầu tiên, và cho bạn thấy tận mắt cái bytecode mà JVM thực sự đọc.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1400 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Không có</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phân biệt dứt điểm <strong>JVM</strong>, <strong>JRE</strong>, <strong>JDK</strong> — và biết mình cần cài cái nào.</li>
+            <li>Hiểu chuỗi <strong>mã nguồn → bytecode → JVM → mã máy</strong>, và vì sao Java vừa biên dịch vừa thông dịch.</li>
+            <li>Cài Java 21 LTS bằng <strong>SDKMAN</strong>; biết chọn giữa Temurin, Corretto, Zulu, Oracle JDK.</li>
+            <li>Biên dịch và chạy bằng <code>javac</code> / <code>java</code>; hiểu chế độ chạy một tệp (Java 11+).</li>
+            <li>Đọc bytecode bằng <code>javap</code> — nhìn thấy thứ JVM thực sự thực thi.</li>
+            <li>Dùng <strong>JShell</strong> để thử nghiệm nhanh mà không cần tạo class.</li>
+            <li>Nắm quy tắc bắt buộc: tên tệp phải trùng tên class public; cấu trúc <code>package</code> ↔ thư mục.</li>
+            <li>Hiểu vai trò của <strong>Maven</strong> và <strong>Gradle</strong>; đọc được <code>pom.xml</code>.</li>
+            <li>Biết lịch phát hành và ý nghĩa của <strong>LTS</strong> — chọn phiên bản cho dự án thật.</li>
+          </ul>
+        </div>
+
+        <h2 id="java-la-gi">1. Java là gì — và vì sao nó được thiết kế như vậy</h2>
+
+        <p>
+          Java ra đời năm 1995 tại Sun Microsystems, do nhóm của <strong>James Gosling</strong> phát triển. Bài toán
+          họ nhắm tới ban đầu không phải web hay doanh nghiệp, mà là <em>thiết bị điện tử gia dụng</em>: đầu thu
+          truyền hình, lò vi sóng, thiết bị cầm tay. Mỗi hãng dùng một loại chip khác nhau, và viết lại phần mềm cho
+          từng chip là ác mộng.
+        </p>
+
+        <p>
+          Giải pháp của họ về sau trở thành khẩu hiệu nổi tiếng nhất ngành phần mềm:
+          <strong>"Write Once, Run Anywhere"</strong> — viết một lần, chạy mọi nơi. Cách làm: đừng biên dịch thẳng ra
+          mã máy của một CPU cụ thể. Hãy biên dịch ra một <em>ngôn ngữ trung gian</em>, rồi viết một chương trình
+          nhỏ (máy ảo) cho từng nền tảng để dịch ngôn ngữ trung gian đó sang mã máy tại chỗ.
+        </p>
+
+        <div class="jvm-flow">
+          <div class="stages">
+            <div class="stage">
+              <div class="stage-title">1. Mã nguồn</div>
+              <div class="stage-content">Hello.java<br/><span style="color:var(--text-muted)">bạn viết</span></div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">2. Biên dịch</div>
+              <div class="stage-content">javac<br/><span style="color:var(--text-muted)">một lần duy nhất</span></div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">3. Bytecode</div>
+              <div class="stage-content">Hello.class<br/><span style="color:var(--text-muted)">độc lập nền tảng</span></div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">4. JVM</div>
+              <div class="stage-content">java<br/><span style="color:var(--text-muted)">riêng mỗi OS</span></div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">5. Mã máy</div>
+              <div class="stage-content">x86 / ARM<br/><span style="color:var(--text-muted)">CPU thực thi</span></div>
+            </div>
+          </div>
+          <div class="caption">
+            Bước 1-3 làm <strong>một lần</strong> trên máy lập trình viên. Bước 4-5 làm <strong>mỗi lần chạy</strong>,
+            trên bất kỳ máy nào có JVM. Tệp <code>.class</code> mang từ macOS sang Linux chạy được ngay, không cần
+            biên dịch lại.
+          </div>
+        </div>
+
+        <div class="callout callout-compare">
+          <div class="callout-label">🔁 Ba mô hình thực thi</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mô hình</th><th>Ngôn ngữ</th><th>Cách chạy</th><th>Đánh đổi</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Biên dịch trước (AOT)</strong></td>
+                  <td>C, C++, Go, Rust</td>
+                  <td>Mã nguồn → mã máy trực tiếp</td>
+                  <td>Nhanh nhất, khởi động tức thì — nhưng mỗi nền tảng cần một bản build riêng</td>
+                </tr>
+                <tr>
+                  <td><strong>Thông dịch</strong></td>
+                  <td>Python, JavaScript, PHP</td>
+                  <td>Đọc và thực thi từng dòng lúc chạy</td>
+                  <td>Linh hoạt, chạy ngay — nhưng chậm hơn và lỗi kiểu chỉ lộ ra lúc chạy</td>
+                </tr>
+                <tr>
+                  <td><strong>Lai (bytecode + JIT)</strong></td>
+                  <td><strong>Java</strong>, C#, Kotlin, Scala</td>
+                  <td>Mã nguồn → bytecode → JVM thông dịch, phần nóng thì biên dịch JIT sang mã máy</td>
+                  <td>Khởi động chậm hơn AOT, nhưng chạy lâu thì nhanh gần bằng — và một bản build chạy mọi nơi</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="java-note">
+          <h4>JIT — vì sao Java chạy lâu lại nhanh lên</h4>
+          <p>
+            JVM không chỉ thông dịch bytecode. Nó <em>quan sát</em> chương trình đang chạy: phương thức nào được gọi
+            hàng nghìn lần, vòng lặp nào chạy nóng. Những phần đó được trình biên dịch <strong>JIT</strong>
+            (Just-In-Time) dịch thẳng sang mã máy và tối ưu — với lợi thế mà trình biên dịch AOT không có: nó biết
+            <em>dữ liệu thật</em> đang chạy qua đó. Kết quả là một dịch vụ Java chạy vài phút có thể nhanh ngang C++
+            ở những đoạn nóng nhất. Đổi lại, mấy giây đầu tiên luôn chậm — đây là lý do Java từng không hợp với
+            hàm serverless khởi động liên tục (và là lý do GraalVM Native Image ra đời).
+          </p>
+        </div>
+
+        <h3 id="ai-dung-java">1.1. Ai đang dùng Java</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Lĩnh vực</th><th>Ví dụ cụ thể</th><th>Vì sao chọn Java</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ngân hàng &amp; tài chính</td><td>Hệ thống core banking, thanh toán, giao dịch chứng khoán</td><td>Ổn định nhiều thập kỷ, kiểu tường minh, hệ sinh thái kiểm toán trưởng thành</td></tr>
+              <tr><td>Backend doanh nghiệp</td><td>Spring Boot, Jakarta EE</td><td>Hệ sinh thái lớn nhất, dễ tuyển người, công cụ giám sát tốt</td></tr>
+              <tr><td>Dữ liệu lớn</td><td>Hadoop, Spark, Kafka, Elasticsearch, Flink</td><td>Chạy trên JVM, đa luồng mạnh, quản lý bộ nhớ tự động</td></tr>
+              <tr><td>Android</td><td>Toàn bộ nền tảng Android</td><td>Java là ngôn ngữ gốc; Kotlin nay phổ biến hơn nhưng vẫn chạy trên cùng máy ảo</td></tr>
+              <tr><td>Công cụ lập trình</td><td>IntelliJ IDEA, Eclipse, Jenkins, SonarQube</td><td>Đa nền tảng thật sự — một bản build cho cả ba hệ điều hành</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="jdk-jre-jvm">2. JVM, JRE, JDK — ba tầng lồng nhau</h2>
+
+        <p>
+          Đây là phần bị hiểu nhầm nhiều nhất. Ba khái niệm này <strong>lồng vào nhau</strong> như búp bê Nga, mỗi
+          tầng bao gồm tầng bên trong cộng thêm một số thứ.
+        </p>
+
+        <div class="hierarchy">
+<span class="root">┌─ JDK (Java Development Kit) ────────────────────────────┐</span>
+<span class="root">│</span>  <span class="note">Bộ công cụ PHÁT TRIỂN — cái bạn cần cài</span>            <span class="root">│</span>
+<span class="root">│</span>                                                          <span class="root">│</span>
+<span class="root">│</span>  javac      <span class="note">← trình biên dịch (.java → .class)</span>          <span class="root">│</span>
+<span class="root">│</span>  javadoc    <span class="note">← sinh tài liệu HTML từ comment</span>            <span class="root">│</span>
+<span class="root">│</span>  jar        <span class="note">← đóng gói nhiều .class thành 1 tệp</span>         <span class="root">│</span>
+<span class="root">│</span>  jdb        <span class="note">← trình gỡ lỗi</span>                              <span class="root">│</span>
+<span class="root">│</span>  javap      <span class="note">← dịch ngược bytecode để xem</span>               <span class="root">│</span>
+<span class="root">│</span>  jshell     <span class="note">← REPL tương tác (Java 9+)</span>                 <span class="root">│</span>
+<span class="root">│</span>                                                          <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">┌─ JRE (Java Runtime Environment) ────────────────┐</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="note">Môi trường CHẠY — đủ để chạy app, không build</span> <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>                                                  <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="impl">Thư viện chuẩn: java.lang, java.util,</span>          <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="impl">java.io, java.nio, java.time, java.sql...</span>      <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>                                                  <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">┌─ JVM (Java Virtual Machine) ───────────┐</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>  <span class="note">Máy ảo — thực thi bytecode</span>            <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>                                          <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>  <span class="impl">• Class Loader — nạp .class</span>            <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>  <span class="impl">• Bộ thông dịch bytecode</span>               <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>  <span class="impl">• Trình biên dịch JIT</span>                  <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>  <span class="impl">• Garbage Collector</span>                    <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">│</span>  <span class="impl">• Vùng nhớ: Heap, Stack, Metaspace</span>     <span class="root">│</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">│</span>  <span class="root">└────────────────────────────────────────┘</span>     <span class="iface">│</span>   <span class="root">│</span>
+<span class="root">│</span>  <span class="iface">└──────────────────────────────────────────────────┘</span>   <span class="root">│</span>
+<span class="root">└──────────────────────────────────────────────────────────┘</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>JVM</th><th>JRE</th><th>JDK</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Viết tắt của</td><td>Java Virtual Machine</td><td>Java Runtime Environment</td><td>Java Development Kit</td></tr>
+              <tr><td>Là gì</td><td>Máy ảo thực thi bytecode</td><td>JVM + thư viện chuẩn</td><td>JRE + công cụ phát triển</td></tr>
+              <tr><td>Chạy được app?</td><td>Không (thiếu thư viện)</td><td>Có</td><td>Có</td></tr>
+              <tr><td>Biên dịch được?</td><td>Không</td><td>Không</td><td><strong>Có</strong></td></tr>
+              <tr><td>Ai cần</td><td>—</td><td>Người dùng cuối chạy app Java</td><td><strong>Lập trình viên — chính là bạn</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Từ Java 11, JRE không còn phát hành riêng</div>
+          <p>
+            Trước Java 11, Oracle phát hành JRE thành gói cài đặt riêng cho người dùng cuối. Từ Java 11 điều đó chấm
+            dứt — nay cách phân phối hiện đại là dùng <code>jlink</code> để tạo một runtime <em>gọn nhẹ chỉ chứa
+            đúng module ứng dụng cần</em>, rồi đóng gói kèm ứng dụng. Vì vậy trong thực tế hôm nay bạn chỉ cần nhớ:
+            <strong>cài JDK là xong</strong>. Khái niệm JRE vẫn cần hiểu vì nó xuất hiện dày đặc trong tài liệu cũ
+            và câu hỏi phỏng vấn.
+          </p>
+        </div>
+
+        <h2 id="cai-java">3. Cài Java 21 — chọn bản phân phối nào</h2>
+
+        <p>
+          Java có một điểm khác thường: bản đặc tả (specification) là chuẩn mở, nên <strong>nhiều tổ chức cùng phát
+          hành JDK</strong> từ cùng một mã nguồn OpenJDK. Chúng gần như giống hệt nhau về tính năng, khác nhau ở
+          giấy phép và chính sách hỗ trợ.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Bản phân phối</th><th>Do ai</th><th>Giấy phép</th><th>Nên chọn khi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Eclipse Temurin</strong> ⭐</td><td>Eclipse Adoptium</td><td>Miễn phí hoàn toàn, kể cả thương mại</td><td><strong>Mặc định</strong> — trung lập, cộng đồng lớn nhất</td></tr>
+              <tr><td>Amazon Corretto</td><td>Amazon</td><td>Miễn phí</td><td>Triển khai trên AWS</td></tr>
+              <tr><td>Azul Zulu</td><td>Azul Systems</td><td>Miễn phí (có bản trả phí)</td><td>Cần hỗ trợ thương mại</td></tr>
+              <tr><td>Microsoft Build of OpenJDK</td><td>Microsoft</td><td>Miễn phí</td><td>Triển khai trên Azure</td></tr>
+              <tr><td>Oracle JDK</td><td>Oracle</td><td>⚠️ Giấy phép có điều kiện, đã đổi nhiều lần</td><td>Chỉ khi công ty có hợp đồng với Oracle</td></tr>
+              <tr><td>GraalVM</td><td>Oracle</td><td>Bản Community miễn phí</td><td>Cần biên dịch ra binary gốc (native image)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Cẩn thận với Oracle JDK</div>
+          <p>
+            Oracle đã thay đổi giấy phép JDK nhiều lần trong những năm gần đây, có giai đoạn yêu cầu trả phí cho sử
+            dụng thương mại. Nhiều công ty đã dính rắc rối pháp lý vì lập trình viên tải nhầm bản này. Với dự án
+            thật, hãy dùng <strong>Temurin</strong> hoặc bản của nhà cung cấp đám mây bạn đang dùng — chúng cùng
+            xuất phát từ OpenJDK và không có ràng buộc giấy phép.
+          </p>
+        </div>
+
+        <h3 id="sdkman">3.1. SDKMAN — cách cài tốt nhất trên macOS/Linux</h3>
+
+        <p>
+          Bạn sẽ cần nhiều phiên bản Java cùng lúc (dự án cũ dùng Java 8, dự án mới dùng 21).
+          <strong>SDKMAN</strong> quản lý việc đó — tương đương <code>pyenv</code> của Python hay <code>nvm</code>
+          của Node.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — cài SDKMAN và Java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ curl -s "https://get.sdkman.io" | bash
+$ source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+<span class="tok-com"># Xem các bản Java có sẵn (danh sách rất dài)</span>
+$ sdk list java
+
+<span class="tok-com"># Cài Java 21 LTS bản Temurin</span>
+$ sdk install java 21.0.5-tem
+
+<span class="tok-com"># Cài thêm bản khác để chuyển qua lại</span>
+$ sdk install java 17.0.13-tem
+$ sdk install java 8.0.432-tem
+
+<span class="tok-com"># Chuyển bản — CHỈ trong phiên terminal hiện tại</span>
+$ sdk use java 17.0.13-tem
+
+<span class="tok-com"># Đặt bản mặc định cho mọi phiên</span>
+$ sdk default java 21.0.5-tem
+
+<span class="tok-com"># Kiểm tra</span>
+$ java -version
+openjdk version "21.0.5" 2024-10-15 LTS
+OpenJDK Runtime Environment Temurin-21.0.5+11 (build 21.0.5+11-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.5+11 (build 21.0.5+11-LTS, mixed mode)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Ghim phiên bản cho từng dự án với <code>.sdkmanrc</code></div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>Terminal</span><button class="copy-btn">Copy</button></div>
+<pre><code>$ cd du-an-cua-toi
+$ sdk env init          <span class="tok-com"># tạo tệp .sdkmanrc ghi bản hiện tại</span>
+$ cat .sdkmanrc
+java=21.0.5-tem
+
+$ sdk env               <span class="tok-com"># chuyển sang bản ghi trong .sdkmanrc</span></code></pre>
+          </div>
+          <p>
+            Commit <code>.sdkmanrc</code> vào git để cả nhóm dùng đúng một phiên bản. Bật
+            <code>sdkman_auto_env=true</code> trong <code>~/.sdkman/etc/config</code> để SDKMAN tự chuyển mỗi khi
+            bạn <code>cd</code> vào thư mục.
+          </p>
+        </div>
+
+        <h3 id="cai-windows">3.2. Windows</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>PowerShell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Cách 1: winget (có sẵn trên Windows 11)</span>
+&gt; winget install EclipseAdoptium.Temurin.21.JDK
+
+<span class="tok-com"># Cách 2: Scoop (quản lý gói kiểu Unix)</span>
+&gt; scoop bucket add java
+&gt; scoop install temurin21-jdk
+
+<span class="tok-com"># Kiểm tra</span>
+&gt; java -version
+&gt; javac -version
+
+<span class="tok-com"># Nếu lệnh không nhận: kiểm tra biến môi trường</span>
+&gt; echo $env:JAVA_HOME
+&gt; echo $env:PATH</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ <code>JAVA_HOME</code> — biến môi trường hay gây rắc rối</div>
+          <p>
+            Nhiều công cụ (Maven, Gradle, Tomcat, IDE) không tìm Java qua <code>PATH</code> mà qua biến
+            <code>JAVA_HOME</code>. Triệu chứng kinh điển: <code>java -version</code> báo 21 nhưng Maven lại build
+            bằng Java 8, hoặc báo <code>JAVA_HOME is not set</code>.
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>Terminal</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># Kiểm tra hai thứ này có khớp nhau không</span>
+$ echo $JAVA_HOME
+$ which java
+
+<span class="tok-com"># SDKMAN tự đặt JAVA_HOME đúng — đây là lý do lớn để dùng nó</span>
+$ sdk use java 21.0.5-tem &amp;&amp; echo $JAVA_HOME
+/Users/ban/.sdkman/candidates/java/21.0.5-tem</code></pre>
+          </div>
+        </div>
+
+        <h2 id="hello-world">4. Hello World — và những quy tắc bắt buộc</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Hello.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">public class</span> <span class="tok-cls">Hello</span> {
+    <span class="tok-kw">public static void</span> <span class="tok-fn">main</span>(<span class="tok-cls">String</span>[] args) {
+        <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"Xin chào Java!"</span>);
+    }
+}</code></pre>
+        </div>
+
+        <p>
+          Bốn dòng, nhưng có tới sáu quy tắc đang được áp dụng cùng lúc. Hãy mổ xẻ từng phần — mỗi phần sẽ được đào
+          sâu ở các chương sau, giờ chỉ cần biết nó ở đó vì lý do gì.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Thành phần</th><th>Nghĩa là gì</th><th>Bỏ đi thì sao</th><th>Học kỹ ở</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>public class Hello</code></td><td>Khai báo một class tên <code>Hello</code>, ai cũng truy cập được</td><td>Java <em>bắt buộc</em> mọi code phải nằm trong class</td><td>Chương 4</td></tr>
+              <tr><td><code>public</code> (ở method)</td><td>JVM ở ngoài class phải gọi được <code>main</code></td><td><code>main</code> không tìm thấy → không chạy</td><td>Chương 4</td></tr>
+              <tr><td><code>static</code></td><td>Thuộc về class, không cần tạo object mới gọi được</td><td>JVM sẽ phải tạo object trước — mà nó không biết tạo thế nào</td><td>Chương 4</td></tr>
+              <tr><td><code>void</code></td><td>Phương thức không trả về giá trị</td><td>Chữ ký sai → JVM không nhận</td><td>Chương 4</td></tr>
+              <tr><td><code>String[] args</code></td><td>Mảng tham số dòng lệnh</td><td>Chữ ký sai → JVM không nhận</td><td>Chương 3</td></tr>
+              <tr><td><code>System.out.println</code></td><td>Ghi một dòng ra luồng đầu ra chuẩn</td><td>—</td><td>Chương 3</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="java-note">
+          <h4>Vì sao <code>main</code> phải là <code>public static void main(String[])</code></h4>
+          <p>
+            Đây là <em>hợp đồng</em> giữa bạn và JVM. Khi bạn gõ <code>java Hello</code>, JVM nạp class
+            <code>Hello</code> rồi tìm đúng một phương thức có chữ ký này để gọi. Nó phải là
+            <code>static</code> vì lúc đó <strong>chưa có object nào tồn tại</strong> — JVM không thể tạo instance
+            của <code>Hello</code> khi chưa biết constructor nào phù hợp. Nó phải <code>public</code> vì JVM gọi từ
+            bên ngoài. Sai một chữ, bạn nhận:
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>Terminal</span><button class="copy-btn">Copy</button></div>
+<pre><code>Error: Main method not found in class Hello, please define the main method as:
+   public static void main(String[] args)</code></pre>
+          </div>
+          <p>
+            Từ Java 21, bạn có thể bỏ bớt (JEP 445 — tính năng xem trước): class ẩn danh và
+            <code>void main()</code> không tham số. Nhưng chữ ký đầy đủ vẫn là thứ bạn gặp ở 99% code thật.
+          </p>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Quy tắc vàng: tên tệp phải trùng tên class public</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>Terminal</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># Class là "Hello" nhưng tệp đặt tên "hello.java"</span>
+$ javac hello.java
+hello.java:1: error: class Hello is public, should be declared
+               in a file named Hello.java
+public class Hello {
+       ^</code></pre>
+          </div>
+          <p>
+            Quy tắc: một tệp <code>.java</code> chứa tối đa <strong>một</strong> class <code>public</code>, và tên
+            tệp phải trùng khít tên class đó — kể cả chữ hoa chữ thường. Các class không <code>public</code> thì
+            được đặt chung tệp thoải mái. Đây là ràng buộc của trình biên dịch, không phải quy ước —
+            <em>khác hẳn</em> Python và JavaScript, nơi tên tệp và tên class hoàn toàn độc lập.
+          </p>
+        </div>
+
+        <h2 id="bien-dich-chay">5. Biên dịch và chạy</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — cách truyền thống, hai bước</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ ls
+Hello.java
+
+<span class="tok-com"># Bước 1: biên dịch — sinh ra Hello.class</span>
+$ javac Hello.java
+$ ls
+Hello.class   Hello.java
+
+<span class="tok-com"># Bước 2: chạy — LƯU Ý: KHÔNG có đuôi .class</span>
+$ java Hello
+Xin chào Java!
+
+<span class="tok-com"># ❌ Sai — đây là lỗi kinh điển của người mới</span>
+$ java Hello.class
+Error: Could not find or load main class Hello.class</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Vì sao <code>java Hello</code> chứ không phải <code>java Hello.class</code></div>
+          <p>
+            Vì tham số bạn truyền cho lệnh <code>java</code> không phải <em>tên tệp</em> mà là <strong>tên đủ điều
+            kiện của class</strong> (fully-qualified class name). JVM tự tìm tệp <code>.class</code> tương ứng trên
+            classpath. Với class nằm trong package <code>com.vidu</code>, bạn phải gõ đầy đủ:
+            <code>java com.vidu.Hello</code> — dùng dấu chấm, không phải dấu gạch chéo.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — chạy một tệp trực tiếp (Java 11+)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Từ Java 11: chạy thẳng .java, không cần javac</span>
+$ java Hello.java
+Xin chào Java!
+
+<span class="tok-com"># JVM biên dịch trong bộ nhớ, KHÔNG sinh ra tệp .class</span>
+$ ls
+Hello.java          <span class="tok-com"># không có Hello.class</span></code></pre>
+        </div>
+
+        <p>
+          Chế độ một tệp rất tiện để học và viết script, nhưng chỉ dùng được khi toàn bộ chương trình nằm gọn trong
+          <em>một</em> tệp. Dự án nhiều tệp vẫn phải qua <code>javac</code> hoặc — thực tế hơn — qua công cụ build.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — các cờ hay dùng của javac</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Đưa tệp .class vào thư mục riêng, không lẫn với mã nguồn</span>
+$ javac -d out src/Hello.java
+$ java -cp out Hello
+
+<span class="tok-com"># Biên dịch nhiều tệp cùng lúc</span>
+$ javac -d out src/*.java
+
+<span class="tok-com"># Bật cảnh báo đầy đủ — nên dùng khi học</span>
+$ javac -Xlint:all -d out src/*.java
+
+<span class="tok-com"># Chỉ định phiên bản đích (biên dịch bằng JDK 21, chạy được trên Java 17)</span>
+$ javac --release 17 -d out src/*.java
+
+<span class="tok-com"># Chỉ định bảng mã tệp nguồn — QUAN TRỌNG với tiếng Việt</span>
+$ javac -encoding UTF-8 -d out src/*.java</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Tiếng Việt bị lỗi phông khi biên dịch</div>
+          <p>
+            Trên Windows, bảng mã mặc định của <code>javac</code> có thể không phải UTF-8, khiến chuỗi tiếng Việt
+            trong mã nguồn biến thành ký tự rác. Luôn thêm <code>-encoding UTF-8</code>, hoặc từ Java 18 trở đi thì
+            UTF-8 đã là mặc định (JEP 400). Nếu ký tự vẫn sai <em>khi in ra terminal</em>, đó lại là vấn đề của
+            terminal chứ không phải Java — thử <code>chcp 65001</code> trên Windows.
+          </p>
+        </div>
+
+        <h2 id="bytecode">6. Nhìn tận mắt bytecode với <code>javap</code></h2>
+
+        <p>
+          Bytecode không phải khái niệm trừu tượng — bạn xem được nó ngay bây giờ. Đây là cách nhanh nhất để hiểu
+          "JVM thực sự chạy cái gì", và nó giải thích được rất nhiều hành vi kỳ lạ của Java mà chúng ta sẽ gặp ở
+          các chương sau.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — javap -c</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ javac Hello.java
+$ javap -c Hello
+
+Compiled from "Hello.java"
+public class Hello {
+  public Hello();                          <span class="tok-com">// ← constructor mặc định, javac TỰ THÊM</span>
+    Code:
+       0: aload_0                          <span class="tok-com">// nạp 'this' lên ngăn xếp</span>
+       1: invokespecial #1                 <span class="tok-com">// gọi Object.&lt;init&gt;() — constructor lớp cha</span>
+       4: return
+
+  public static void main(java.lang.String[]);
+    Code:
+       0: getstatic     #7                 <span class="tok-com">// lấy trường System.out</span>
+       3: ldc           #13                <span class="tok-com">// nạp hằng chuỗi "Xin chào Java!"</span>
+       5: invokevirtual #15                <span class="tok-com">// gọi println(String)</span>
+       8: return
+}</code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Ba điều bytecode vừa tiết lộ</h4>
+          <ul>
+            <li>
+              <strong>JVM là máy ngăn xếp.</strong> Không có thanh ghi như CPU thật. Mọi thao tác đều là "đẩy giá trị
+              lên ngăn xếp" rồi "lấy ra và xử lý". Đây là lý do bytecode chạy được trên mọi kiến trúc CPU —
+              nó không giả định gì về phần cứng.
+            </li>
+            <li>
+              <strong><code>javac</code> tự thêm constructor.</strong> Bạn không viết constructor nào, nhưng
+              <code>public Hello()</code> vẫn xuất hiện. Đó là <em>constructor mặc định</em> — Chương 4 sẽ nói kỹ,
+              kể cả trường hợp nó <em>không</em> được thêm.
+            </li>
+            <li>
+              <strong>Chuỗi nằm trong "constant pool".</strong> Lệnh <code>ldc #13</code> nạp hằng số ở vị trí 13
+              của bảng hằng. Đây chính là nền tảng của <strong>String pool</strong> — thứ giải thích vì sao
+              <code>"abc" == "abc"</code> trả về <code>true</code> còn <code>new String("abc") == "abc"</code> lại
+              trả <code>false</code>. Chương 2 sẽ mổ xẻ.
+            </li>
+          </ul>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — các chế độ khác của javap</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ javap Hello                <span class="tok-com"># chỉ chữ ký public — xem API của class</span>
+$ javap -p Hello             <span class="tok-com"># kèm cả thành viên private</span>
+$ javap -c Hello             <span class="tok-com"># kèm bytecode</span>
+$ javap -v Hello             <span class="tok-com"># đầy đủ: constant pool, phiên bản class file...</span>
+
+<span class="tok-com"># Xem API của class trong thư viện chuẩn — không cần tải mã nguồn</span>
+$ javap java.util.ArrayList
+$ javap java.lang.String</code></pre>
+        </div>
+
+        <h2 id="jshell">7. JShell — thử nghiệm không cần class</h2>
+
+        <p>
+          Từ Java 9, JDK có sẵn một REPL. Không cần tạo class, không cần <code>main</code>, không cần biên dịch —
+          gõ biểu thức là thấy kết quả ngay. Đây là công cụ tốt nhất để kiểm chứng nhanh một nghi vấn về ngôn ngữ.
+        </p>
+
+        <div class="code-wrap jshell">
+          <div class="code-meta">
+            <span>Terminal</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ jshell
+|  Welcome to JShell -- Version 21.0.5
+|  For an introduction type: /help intro
+
+jshell&gt; 2 + 3 * 4
+$1 ==&gt; 14
+
+jshell&gt; String ten = "Việt Anh"
+ten ==&gt; "Việt Anh"
+
+jshell&gt; ten.toUpperCase()
+$3 ==&gt; "VIỆT ANH"
+
+jshell&gt; var ds = new java.util.ArrayList&lt;String&gt;()
+ds ==&gt; []
+
+jshell&gt; ds.add("a"); ds.add("b"); ds
+ds ==&gt; [a, b]
+
+jshell&gt; int tong(int a, int b) { return a + b; }    <span class="tok-com">// định nghĩa method ở cấp cao nhất!</span>
+|  created method tong(int,int)
+
+jshell&gt; tong(3, 4)
+$8 ==&gt; 7
+
+jshell&gt; 0.1 + 0.2                                   <span class="tok-com">// kiểm chứng nghi vấn về số thực</span>
+$9 ==&gt; 0.30000000000000004
+
+jshell&gt; /vars          <span class="tok-com">// liệt kê biến đã khai báo</span>
+jshell&gt; /methods       <span class="tok-com">// liệt kê method đã định nghĩa</span>
+jshell&gt; /imports       <span class="tok-com">// xem import mặc định</span>
+jshell&gt; /list          <span class="tok-com">// xem lại mọi lệnh đã gõ</span>
+jshell&gt; /save bai.jsh  <span class="tok-com">// lưu phiên làm việc ra tệp</span>
+jshell&gt; /exit</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Dùng JShell như một phần của việc học</div>
+          <p>
+            Xuyên suốt sub-pillar này, mỗi khi gặp một khẳng định về hành vi của Java ("<code>Integer</code> nhỏ
+            được cache", "<code>HashMap</code> không giữ thứ tự", "chia số nguyên thì cắt phần thập phân"),
+            <strong>hãy mở JShell và tự kiểm chứng</strong>. Mất năm giây và bạn nhớ được lâu hơn nhiều so với đọc
+            suông. JShell còn tự động import sẵn <code>java.util.*</code>, <code>java.io.*</code>,
+            <code>java.math.*</code> và vài package khác nên bạn gõ ít hơn.
+          </p>
+        </div>
+
+        <h2 id="package">8. <code>package</code> — không gian tên và cấu trúc thư mục</h2>
+
+        <p>
+          Dự án thật có hàng trăm class. <code>package</code> nhóm chúng lại và tránh trùng tên — hai thư viện đều
+          có class <code>Logger</code> vẫn sống chung được vì chúng ở
+          <code>org.slf4j.Logger</code> và <code>java.util.logging.Logger</code>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>src/com/vidu/quanly/Main.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">package</span> com.vidu.quanly;      <span class="tok-com">// PHẢI là câu lệnh đầu tiên (sau comment)</span>
+
+<span class="tok-kw">import</span> java.util.List;          <span class="tok-com">// nhập một class cụ thể</span>
+<span class="tok-kw">import</span> java.util.ArrayList;
+<span class="tok-com">// import java.util.*;         // nhập cả package — tránh dùng, xem callout</span>
+
+<span class="tok-kw">public class</span> <span class="tok-cls">Main</span> {
+    <span class="tok-kw">public static void</span> <span class="tok-fn">main</span>(<span class="tok-cls">String</span>[] args) {
+        <span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; ds = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;();
+        ds.<span class="tok-fn">add</span>(<span class="tok-str">"Xin chào"</span>);
+        <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(ds);
+    }
+}</code></pre>
+        </div>
+
+        <p>
+          Cấu trúc thư mục <strong>bắt buộc</strong> phải phản chiếu tên package — mỗi dấu chấm là một cấp thư mục:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Cấu trúc thư mục</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>du-an/
+└── src/
+    └── com/
+        └── vidu/
+            └── quanly/
+                ├── Main.java          <span class="tok-com">// package com.vidu.quanly</span>
+                ├── SinhVien.java      <span class="tok-com">// package com.vidu.quanly</span>
+                └── kho/
+                    └── SinhVienDao.java   <span class="tok-com">// package com.vidu.quanly.kho</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — biên dịch và chạy code có package</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ javac -d out src/com/vidu/quanly/*.java
+
+$ find out -name "*.class"
+out/com/vidu/quanly/Main.class     <span class="tok-com"># javac tự tạo cây thư mục theo package</span>
+out/com/vidu/quanly/SinhVien.class
+
+<span class="tok-com"># Chạy: tên ĐẦY ĐỦ, dùng dấu chấm</span>
+$ java -cp out com.vidu.quanly.Main
+Xin chào
+
+<span class="tok-com"># ❌ Sai — thiếu package</span>
+$ java -cp out Main
+Error: Could not find or load main class Main</code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Quy ước</th><th>Ví dụ</th><th>Lý do</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Toàn chữ thường</td><td><code>com.vidu.quanly</code></td><td>Tránh xung đột với tên class (PascalCase) và với hệ tệp không phân biệt hoa thường</td></tr>
+              <tr><td>Tên miền đảo ngược</td><td>Công ty <code>vidu.com</code> → <code>com.vidu</code></td><td>Đảm bảo duy nhất toàn cầu — không ai khác sở hữu tên miền đó</td></tr>
+              <tr><td>Không dùng từ khoá</td><td>Không đặt <code>com.vidu.new</code></td><td><code>new</code>, <code>int</code>, <code>class</code>… là từ khoá của ngôn ngữ</td></tr>
+              <tr><td>Nhóm theo tính năng</td><td><code>...donhang</code>, <code>...thanhtoan</code></td><td>Dễ tìm hơn nhóm theo tầng kỹ thuật (<code>...dao</code>, <code>...service</code>)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Tránh <code>import java.util.*;</code></div>
+          <p>
+            Nó <em>không</em> làm chương trình chậm hơn (trình biên dịch chỉ nạp thứ thực sự dùng), nhưng gây hai
+            vấn đề thật: <strong>(1)</strong> người đọc không biết <code>List</code> đến từ đâu —
+            <code>java.util.List</code> hay <code>java.awt.List</code>? <strong>(2)</strong> xung đột tên: nếu bạn
+            import cả <code>java.util.*</code> và <code>java.sql.*</code>, chữ <code>Date</code> trở nên nhập nhằng
+            và trình biên dịch báo lỗi. IDE tự sinh import cụ thể chỉ với một phím tắt — không có lý do gì dùng
+            dấu sao.
+          </p>
+        </div>
+
+        <h2 id="build-tool">9. Maven và Gradle — vì sao không thể chỉ dùng <code>javac</code></h2>
+
+        <p>
+          <code>javac</code> đủ cho vài tệp. Dự án thật cần: tải thư viện phụ thuộc (và phụ thuộc <em>của</em> thư
+          viện đó), biên dịch theo thứ tự đúng, chạy test, đóng gói JAR, quản lý phiên bản. Đó là việc của
+          <strong>công cụ build</strong>.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>Maven</th><th>Gradle</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Tệp cấu hình</td><td><code>pom.xml</code> (XML)</td><td><code>build.gradle.kts</code> (Kotlin) hoặc <code>.gradle</code> (Groovy)</td></tr>
+              <tr><td>Triết lý</td><td><em>Quy ước hơn cấu hình</em> — làm theo chuẩn thì rất gọn</td><td>Kịch bản linh hoạt — muốn gì cũng viết được</td></tr>
+              <tr><td>Cú pháp</td><td>Dài dòng nhưng đoán được</td><td>Ngắn gọn nhưng cần biết ngôn ngữ kịch bản</td></tr>
+              <tr><td>Tốc độ</td><td>Chậm hơn</td><td>Nhanh hơn (build tăng dần, daemon, cache)</td></tr>
+              <tr><td>Phổ biến ở</td><td>Doanh nghiệp, Spring Boot, thư viện</td><td>Android (mặc định), dự án đa module lớn</td></tr>
+              <tr><td>Nên học trước</td><td><strong>Maven</strong> — đơn giản hơn, tài liệu nhiều hơn</td><td>Học sau, khi cần</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pom.xml — dự án Maven tối thiểu</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>&lt;<span class="tok-kw">project</span> xmlns=<span class="tok-str">"http://maven.apache.org/POM/4.0.0"</span>&gt;
+    &lt;<span class="tok-kw">modelVersion</span>&gt;4.0.0&lt;/<span class="tok-kw">modelVersion</span>&gt;
+
+    <span class="tok-com">&lt;!-- Toạ độ định danh dự án: groupId:artifactId:version --&gt;</span>
+    &lt;<span class="tok-kw">groupId</span>&gt;com.vidu&lt;/<span class="tok-kw">groupId</span>&gt;
+    &lt;<span class="tok-kw">artifactId</span>&gt;quan-ly-sinh-vien&lt;/<span class="tok-kw">artifactId</span>&gt;
+    &lt;<span class="tok-kw">version</span>&gt;1.0.0&lt;/<span class="tok-kw">version</span>&gt;
+
+    &lt;<span class="tok-kw">properties</span>&gt;
+        &lt;<span class="tok-kw">maven.compiler.release</span>&gt;21&lt;/<span class="tok-kw">maven.compiler.release</span>&gt;
+        &lt;<span class="tok-kw">project.build.sourceEncoding</span>&gt;UTF-8&lt;/<span class="tok-kw">project.build.sourceEncoding</span>&gt;
+    &lt;/<span class="tok-kw">properties</span>&gt;
+
+    &lt;<span class="tok-kw">dependencies</span>&gt;
+        <span class="tok-com">&lt;!-- Thư viện test — chỉ dùng khi chạy test, không đóng gói vào JAR --&gt;</span>
+        &lt;<span class="tok-kw">dependency</span>&gt;
+            &lt;<span class="tok-kw">groupId</span>&gt;org.junit.jupiter&lt;/<span class="tok-kw">groupId</span>&gt;
+            &lt;<span class="tok-kw">artifactId</span>&gt;junit-jupiter&lt;/<span class="tok-kw">artifactId</span>&gt;
+            &lt;<span class="tok-kw">version</span>&gt;5.11.3&lt;/<span class="tok-kw">version</span>&gt;
+            &lt;<span class="tok-kw">scope</span>&gt;test&lt;/<span class="tok-kw">scope</span>&gt;
+        &lt;/<span class="tok-kw">dependency</span>&gt;
+    &lt;/<span class="tok-kw">dependencies</span>&gt;
+&lt;/<span class="tok-kw">project</span>&gt;</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Cấu trúc thư mục chuẩn Maven — nhớ cấu trúc này</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>quan-ly-sinh-vien/
+├── pom.xml
+├── src/
+│   ├── main/
+│   │   ├── java/                <span class="tok-com">// mã nguồn chính</span>
+│   │   │   └── com/vidu/quanly/Main.java
+│   │   └── resources/           <span class="tok-com">// tệp cấu hình, dữ liệu tĩnh</span>
+│   │       └── application.properties
+│   └── test/
+│       ├── java/                <span class="tok-com">// mã nguồn test</span>
+│       │   └── com/vidu/quanly/MainTest.java
+│       └── resources/
+└── target/                      <span class="tok-com">// Maven sinh ra — thêm vào .gitignore</span>
+    ├── classes/
+    └── quan-ly-sinh-vien-1.0.0.jar</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — vòng đời Maven</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>$ mvn compile      <span class="tok-com"># biên dịch src/main/java → target/classes</span>
+$ mvn test         <span class="tok-com"># biên dịch + chạy test</span>
+$ mvn package      <span class="tok-com"># biên dịch + test + đóng gói JAR</span>
+$ mvn clean        <span class="tok-com"># xoá thư mục target/</span>
+$ mvn clean package -DskipTests    <span class="tok-com"># build nhanh, bỏ qua test</span>
+
+<span class="tok-com"># Các pha CHẠY TUẦN TỰ: mvn package tự chạy compile và test trước.</span>
+<span class="tok-com"># Đây là ý nghĩa của "vòng đời" (lifecycle) trong Maven.</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Kho <code>~/.m2</code> và Maven Central</div>
+          <p>
+            Khi bạn khai báo một dependency, Maven tải nó từ <strong>Maven Central</strong>
+            (<code>central.sonatype.com</code>) về kho cục bộ <code>~/.m2/repository/</code>, rồi mọi dự án trên máy
+            dùng chung bản đã tải. Đây là lý do lần build đầu tiên rất lâu còn các lần sau thì nhanh. Muốn build
+            hoàn toàn ngoại tuyến: <code>mvn -o package</code>. Muốn xoá cache một thư viện lỗi: xoá thư mục tương
+            ứng trong <code>~/.m2/repository/</code>.
+          </p>
+        </div>
+
+        <h2 id="phien-ban">10. Phiên bản Java — LTS nghĩa là gì</h2>
+
+        <p>
+          Từ 2018, Java phát hành phiên bản mới <strong>mỗi 6 tháng</strong> (tháng 3 và tháng 9). Nhưng chỉ một số
+          bản được đánh dấu <strong>LTS</strong> (Long-Term Support) — có bản vá bảo mật trong nhiều năm. Dự án
+          production gần như luôn chọn LTS.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Phiên bản</th><th>Phát hành</th><th>Loại</th><th>Tính năng đáng nhớ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Java 8</td><td>2014</td><td>LTS (rất cũ)</td><td>Lambda, Stream API, <code>Optional</code>, <code>java.time</code> — bước ngoặt lớn nhất lịch sử Java</td></tr>
+              <tr><td>Java 11</td><td>2018</td><td>LTS</td><td><code>var</code> cho tham số lambda, chạy tệp <code>.java</code> trực tiếp, HTTP Client mới</td></tr>
+              <tr><td>Java 17</td><td>2021</td><td>LTS</td><td><code>sealed</code> class, pattern matching cho <code>instanceof</code>, <code>record</code> chính thức, text block</td></tr>
+              <tr><td><strong>Java 21</strong></td><td>2023</td><td><strong>LTS ⭐</strong></td><td><strong>Virtual thread</strong>, pattern matching cho <code>switch</code>, record pattern, sequenced collection</td></tr>
+              <tr><td>Java 25</td><td>2025</td><td>LTS</td><td>LTS mới nhất — nâng cấp dần các tính năng của 21</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Vì sao sub-pillar này chọn Java 21</div>
+          <p>
+            Java 21 là bản LTS được triển khai rộng rãi nhất hiện nay và chứa đủ mọi tính năng hiện đại quan trọng
+            (record, sealed, pattern matching, virtual thread, text block). Mọi code trong 14 chương đều chạy trên
+            Java 21 trở lên. Nơi nào dùng tính năng chỉ có ở bản mới, chúng ta ghi rõ phiên bản tối thiểu — để bạn
+            biết code của mình có chạy được trên hệ thống công ty (nhiều nơi vẫn ở Java 8 hoặc 11) hay không.
+          </p>
+        </div>
+
+        <h2 id="ide">11. IDE — dùng gì để viết</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Công cụ</th><th>Chi phí</th><th>Điểm mạnh</th><th>Phù hợp</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>IntelliJ IDEA Community</strong> ⭐</td><td>Miễn phí</td><td>Gợi ý code và refactor tốt nhất trong ngành Java</td><td><strong>Khuyên dùng</strong> cho mọi mức</td></tr>
+              <tr><td>IntelliJ IDEA Ultimate</td><td>Trả phí (miễn phí cho sinh viên)</td><td>Thêm Spring, JPA, công cụ database, HTTP client</td><td>Làm web/doanh nghiệp</td></tr>
+              <tr><td>VS Code + Extension Pack for Java</td><td>Miễn phí</td><td>Nhẹ, quen thuộc nếu bạn đến từ JS/Python</td><td>Dự án nhỏ, đa ngôn ngữ</td></tr>
+              <tr><td>Eclipse</td><td>Miễn phí</td><td>Lâu đời, nhiều plugin doanh nghiệp</td><td>Dự án kế thừa</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Ba phím tắt IntelliJ đáng học ngay ngày đầu</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>macOS</th><th>Windows/Linux</th><th>Làm gì</th></tr></thead>
+              <tbody>
+                <tr><td><code>⌘ B</code></td><td><code>Ctrl B</code></td><td>Nhảy tới định nghĩa — kể cả vào mã nguồn thư viện chuẩn</td></tr>
+                <tr><td><code>⌥ ↵</code></td><td><code>Alt Enter</code></td><td>Sửa nhanh: tự import, tạo method còn thiếu, chuyển sang cách viết hiện đại</td></tr>
+                <tr><td><code>⇧⇧</code></td><td><code>Shift Shift</code></td><td>Tìm mọi thứ: tệp, class, hành động, cài đặt</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Mẹo học rất hiệu quả: <code>⌘ B</code> vào <code>ArrayList</code>, <code>HashMap</code>,
+            <code>String</code> để <em>đọc mã nguồn thật</em> của thư viện chuẩn. Nó được viết bởi những người giỏi
+            nhất và có comment giải thích rất kỹ.
+          </p>
+        </div>
+
+        <h2 id="cheat-sheet">12. Cheat sheet chương 1</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Việc cần làm</th><th>Lệnh</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Kiểm tra phiên bản</td><td><code>java -version</code> · <code>javac -version</code></td></tr>
+              <tr><td>Biên dịch một tệp</td><td><code>javac Hello.java</code></td></tr>
+              <tr><td>Biên dịch vào thư mục riêng</td><td><code>javac -d out src/*.java</code></td></tr>
+              <tr><td>Chạy</td><td><code>java -cp out com.vidu.Main</code> (không có <code>.class</code>)</td></tr>
+              <tr><td>Chạy thẳng một tệp (11+)</td><td><code>java Hello.java</code></td></tr>
+              <tr><td>Xem bytecode</td><td><code>javap -c Hello</code></td></tr>
+              <tr><td>Xem API một class</td><td><code>javap java.util.ArrayList</code></td></tr>
+              <tr><td>REPL</td><td><code>jshell</code></td></tr>
+              <tr><td>Cài / đổi phiên bản Java</td><td><code>sdk install java 21.0.5-tem</code> · <code>sdk use java …</code></td></tr>
+              <tr><td>Đóng gói JAR</td><td><code>mvn package</code> → <code>target/*.jar</code></td></tr>
+              <tr><td>Chạy JAR</td><td><code>java -jar ten.jar</code></td></tr>
+              <tr><td>Bảng mã UTF-8</td><td><code>javac -encoding UTF-8 …</code> (mặc định từ Java 18)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="java-rule">
+          <strong>Ba điều nhớ nhất chương này:</strong> (1) JDK ⊃ JRE ⊃ JVM — cài JDK là đủ.
+          (2) <code>javac</code> ra bytecode độc lập nền tảng, JVM mới là thứ phụ thuộc hệ điều hành.
+          (3) Tên tệp phải trùng tên class <code>public</code>, và cây thư mục phải khớp <code>package</code>.
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Dựng môi trường và xác minh</h4>
+            <div class="exercise-body">
+              <p>Cài SDKMAN (hoặc winget trên Windows), rồi thực hiện đủ các bước sau và ghi lại kết quả:</p>
+              <ol>
+                <li>Cài <strong>ba</strong> bản Java: 8, 17, 21 (Temurin).</li>
+                <li>Chạy <code>java -version</code> với từng bản, ghi lại chuỗi phiên bản đầy đủ.</li>
+                <li>In <code>$JAVA_HOME</code> sau mỗi lần <code>sdk use</code> — xác nhận nó đổi theo.</li>
+                <li>Tạo tệp <code>.sdkmanrc</code> ghim Java 21 cho một thư mục dự án.</li>
+                <li>Viết <code>Hello.java</code>, thử biên dịch bằng Java 21 với <code>--release 8</code>, rồi chạy nó bằng JVM 8. Nó chạy được không?</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Câu 5 minh hoạ tính <em>tương thích ngược</em> của Java: bytecode biên dịch cho phiên bản
+                    <em>thấp hơn</em> chạy được trên JVM mới hơn, nhưng chiều ngược lại thì không. Thử biên dịch
+                    bằng Java 21 <em>không có</em> <code>--release</code> rồi chạy bằng JVM 8 — bạn sẽ gặp
+                    <code>UnsupportedClassVersionError</code> kèm hai con số "class file version". Hãy tra xem
+                    version 65 và version 52 tương ứng với Java mấy.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Đọc bytecode của ba chương trình</h4>
+            <div class="exercise-body">
+              <p>Viết ba tệp sau, biên dịch, rồi chạy <code>javap -c</code> với từng tệp:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>ba_chuong_trinh.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// A.java — cộng hai hằng số</span>
+<span class="tok-kw">public class</span> <span class="tok-cls">A</span> { <span class="tok-kw">public static void</span> <span class="tok-fn">main</span>(<span class="tok-cls">String</span>[] a) { <span class="tok-kw">int</span> x = <span class="tok-num">2</span> + <span class="tok-num">3</span>; } }
+
+<span class="tok-com">// B.java — nối hai chuỗi trong vòng lặp</span>
+<span class="tok-kw">public class</span> <span class="tok-cls">B</span> {
+    <span class="tok-kw">public static void</span> <span class="tok-fn">main</span>(<span class="tok-cls">String</span>[] a) {
+        <span class="tok-cls">String</span> s = <span class="tok-str">""</span>;
+        <span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) s = s + i;
+    }
+}
+
+<span class="tok-com">// C.java — dùng StringBuilder</span>
+<span class="tok-kw">public class</span> <span class="tok-cls">C</span> {
+    <span class="tok-kw">public static void</span> <span class="tok-fn">main</span>(<span class="tok-cls">String</span>[] a) {
+        <span class="tok-cls">StringBuilder</span> sb = <span class="tok-kw">new</span> <span class="tok-cls">StringBuilder</span>();
+        <span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">3</span>; i++) sb.<span class="tok-fn">append</span>(i);
+    }
+}</code></pre>
+              </div>
+              <p>Trả lời:</p>
+              <ul>
+                <li>Trong <code>A</code>, phép <code>2 + 3</code> có xuất hiện trong bytecode không? Vì sao?</li>
+                <li>Trong <code>B</code>, phép <code>s + i</code> được dịch thành cái gì? Nó nằm trong hay ngoài vòng lặp?</li>
+                <li>So sánh bytecode của <code>B</code> và <code>C</code> — chúng khác nhau ở đâu, và điều đó nói gì về hiệu năng?</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Câu 1: tìm chữ <code>iconst_5</code> hoặc <code>bipush 5</code> — trình biên dịch đã tính sẵn
+                    (constant folding).<br/>
+                    Câu 2-3: bạn sẽ thấy <code>B</code> tạo một <code>StringBuilder</code> <em>mới ở mỗi vòng lặp</em>
+                    (hoặc gọi <code>makeConcatWithConstants</code> qua invokedynamic, tuỳ phiên bản), còn
+                    <code>C</code> chỉ tạo một lần. Đây chính là lý do quy tắc "đừng nối chuỗi bằng <code>+</code>
+                    trong vòng lặp" tồn tại. Chương 2 sẽ quay lại vấn đề này với số đo cụ thể.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Dự án nhiều package đầu tiên</h4>
+            <div class="exercise-body">
+              <p>Tạo cấu trúc sau và làm cho nó chạy được <em>chỉ bằng <code>javac</code> và <code>java</code></em> (chưa dùng Maven):</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Cấu trúc</span><button class="copy-btn">Copy</button></div>
+<pre><code>src/
+└── com/vidu/cuahang/
+    ├── Main.java              <span class="tok-com">// có main(), gọi hai class kia</span>
+    ├── model/SanPham.java     <span class="tok-com">// class có tên, giá; có toString()</span>
+    └── tienich/DinhDang.java  <span class="tok-com">// method static: đinhDangTien(long) → "1.500.000đ"</span></code></pre>
+              </div>
+              <ul>
+                <li>Biên dịch tất cả vào <code>out/</code> bằng <strong>một</strong> lệnh <code>javac</code>.</li>
+                <li>Chạy bằng <code>java -cp out com.vidu.cuahang.Main</code>.</li>
+                <li>Đóng gói thành JAR chạy được: <code>java -jar cuahang.jar</code> phải hoạt động.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Biên dịch đệ quy: <code>find src -name "*.java" | xargs javac -d out</code> (macOS/Linux) hoặc
+                    <code>javac -d out $(find src -name "*.java")</code>.<br/>
+                    Để JAR chạy được, tệp manifest phải khai báo lớp chính:
+                    <code>jar --create --file cuahang.jar --main-class com.vidu.cuahang.Main -C out .</code>
+                    Kiểm chứng bằng cách giải nén và đọc <code>META-INF/MANIFEST.MF</code>.<br/>
+                    Định dạng tiền: <code>String.format("%,dđ", tien)</code> — dấu phẩy cho phân cách hàng nghìn.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Chuyển dự án sang Maven</h4>
+            <div class="exercise-body">
+              <p>Lấy dự án ở bài trên và tái cấu trúc theo chuẩn Maven:</p>
+              <ul>
+                <li>Chuyển mã nguồn vào <code>src/main/java/</code>.</li>
+                <li>Viết <code>pom.xml</code> với <code>maven.compiler.release = 21</code> và encoding UTF-8.</li>
+                <li>Thêm <code>maven-jar-plugin</code> để cấu hình <code>mainClass</code>.</li>
+                <li>Chạy <code>mvn clean package</code> rồi <code>java -jar target/*.jar</code>.</li>
+                <li>Thêm dependency <code>org.apache.commons:commons-lang3:3.17.0</code> và dùng thử một hàm của nó (ví dụ <code>StringUtils.capitalize</code>). Quan sát Maven tải về <code>~/.m2</code>.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    JAR do <code>maven-jar-plugin</code> tạo <em>không</em> chứa dependency — chạy sẽ gặp
+                    <code>NoClassDefFoundError</code> cho <code>StringUtils</code>. Đây là điểm quan trọng cần hiểu:
+                    muốn một JAR chạy độc lập ("fat JAR"/"uber JAR") phải dùng
+                    <code>maven-shade-plugin</code> hoặc <code>maven-assembly-plugin</code>. Chương 14 sẽ làm kỹ.
+                    Chạy <code>mvn dependency:tree</code> để xem cây phụ thuộc.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Kiểm chứng bằng JShell</h4>
+            <div class="exercise-body">
+              <p>Mở JShell và tự kiểm chứng năm khẳng định sau. Với mỗi cái, ghi lại kết quả thật và giải thích ngắn gọn:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Kiểm chứng</span><button class="copy-btn">Copy</button></div>
+<pre><code>jshell&gt; <span class="tok-num">7</span> / <span class="tok-num">2</span>
+jshell&gt; <span class="tok-num">7.0</span> / <span class="tok-num">2</span>
+jshell&gt; <span class="tok-num">0.1</span> + <span class="tok-num">0.2</span> == <span class="tok-num">0.3</span>
+jshell&gt; <span class="tok-cls">Integer</span> a = <span class="tok-num">127</span>, b = <span class="tok-num">127</span>; a == b
+jshell&gt; <span class="tok-cls">Integer</span> c = <span class="tok-num">128</span>, d = <span class="tok-num">128</span>; c == d
+jshell&gt; <span class="tok-cls">Integer</span>.MAX_VALUE + <span class="tok-num">1</span>
+jshell&gt; <span class="tok-str">"abc"</span> == <span class="tok-str">"abc"</span>
+jshell&gt; <span class="tok-kw">new</span> <span class="tok-cls">String</span>(<span class="tok-str">"abc"</span>) == <span class="tok-str">"abc"</span></code></pre>
+              </div>
+              <p>
+                Đừng lo nếu chưa giải thích được — chương 2 sẽ trả lời tất cả. Mục đích bài này là để bạn
+                <strong>tự mình nhìn thấy</strong> kết quả bất ngờ trước, rồi mới đọc lời giải thích. Ghi lại phỏng
+                đoán của bạn ngay bây giờ và đối chiếu sau khi học xong chương 2.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Bốn hiện tượng bạn vừa gặp có tên riêng: <em>chia số nguyên</em>, <em>sai số dấu phẩy động
+                    IEEE 754</em>, <em>bộ nhớ đệm Integer</em> (từ −128 đến 127), <em>tràn số</em>, và
+                    <em>String pool</em>. Google từng cái sau khi học xong chương 2 để củng cố.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>JDK, JRE, JVM khác nhau thế nào? Lập trình viên cần cài cái nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Chúng lồng vào nhau: <strong>JDK ⊃ JRE ⊃ JVM</strong>.<br/>
+                <strong>JVM</strong> là máy ảo — nạp và thực thi bytecode, quản lý bộ nhớ, chạy garbage collector và
+                trình biên dịch JIT. Một mình nó không chạy được ứng dụng vì thiếu thư viện.<br/>
+                <strong>JRE</strong> = JVM + thư viện chuẩn (<code>java.lang</code>, <code>java.util</code>,
+                <code>java.io</code>…). Đủ để <em>chạy</em> ứng dụng, không đủ để biên dịch.<br/>
+                <strong>JDK</strong> = JRE + công cụ phát triển (<code>javac</code>, <code>javap</code>,
+                <code>jar</code>, <code>jshell</code>, <code>javadoc</code>).<br/>
+                Lập trình viên cài <strong>JDK</strong>. Lưu ý từ Java 11, JRE không còn được phát hành riêng —
+                cách phân phối hiện đại là dùng <code>jlink</code> tạo runtime tối giản đóng gói kèm ứng dụng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>"Write once, run anywhere" hoạt động nhờ cơ chế nào? Phần nào của Java <em>không</em> đa nền tảng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Nhờ tầng trung gian <strong>bytecode</strong>. <code>javac</code> không biên dịch ra mã máy của một
+                CPU cụ thể mà ra bytecode — tập lệnh của một máy ảo trừu tượng, giống nhau trên mọi nền tảng. Tệp
+                <code>.class</code> mang từ macOS sang Linux hay Windows đều chạy được, không cần biên dịch lại.
+              </p>
+              <p style="margin-top: 8px;">
+                Phần <strong>không</strong> đa nền tảng chính là <strong>JVM</strong>: mỗi hệ điều hành và kiến trúc
+                CPU cần một bản JVM riêng (macOS ARM64, Linux x86-64, Windows x86-64…). Nói cách khác, gánh nặng
+                đa nền tảng được chuyển từ <em>lập trình viên ứng dụng</em> sang <em>nhà cung cấp JVM</em> — và đó
+                chính là ý tưởng thiên tài của thiết kế này.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Vì sao <code>main</code> phải là <code>public static void main(String[] args)</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Đây là <em>hợp đồng</em> cố định giữa chương trình và JVM. Từng phần có lý do riêng:
+              </p>
+              <ul>
+                <li><code>public</code> — JVM gọi phương thức này từ bên ngoài class, nên nó phải truy cập được.</li>
+                <li><code>static</code> — <strong>lý do quan trọng nhất</strong>: tại thời điểm khởi động chưa có object nào tồn tại. JVM không biết phải gọi constructor nào với tham số gì để tạo instance, nên phương thức phải thuộc về <em>class</em> chứ không phải instance.</li>
+                <li><code>void</code> — mã thoát của chương trình được đặt qua <code>System.exit(n)</code>, không qua giá trị trả về.</li>
+                <li><code>String[] args</code> — nơi JVM đưa các tham số dòng lệnh vào.</li>
+              </ul>
+              <p>
+                Sai bất kỳ phần nào, bạn nhận <code>Error: Main method not found in class …</code>. Tên tham số
+                (<code>args</code>) thì đổi tuỳ ý, và <code>String... args</code> cũng hợp lệ vì varargs biên dịch
+                ra đúng một mảng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Vì sao <code>java Hello.class</code> báo lỗi trong khi tệp <code>Hello.class</code> rõ ràng đang nằm đó?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì tham số của lệnh <code>java</code> <strong>không phải tên tệp</strong> mà là <strong>tên đủ điều
+                kiện của class</strong>. JVM nhận tên đó, rồi tự đi tìm tệp <code>.class</code> tương ứng trên
+                classpath. Khi bạn gõ <code>java Hello.class</code>, JVM hiểu là "tìm class tên
+                <code>class</code> trong package <code>Hello</code>" — dấu chấm là dấu phân cách package!
+              </p>
+              <p style="margin-top: 8px;">
+                Hệ quả: với class trong package, phải gõ tên đầy đủ với dấu chấm —
+                <code>java -cp out com.vidu.Main</code>, chứ không phải
+                <code>java out/com/vidu/Main.class</code>.<br/>
+                Ngoại lệ duy nhất: từ Java 11, <code>java Hello.java</code> (đuôi <code>.java</code>, không phải
+                <code>.class</code>) là chế độ chạy một tệp — JVM biên dịch trong bộ nhớ rồi chạy luôn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Một tệp <code>.java</code> chứa được bao nhiêu class? Quy tắc đặt tên tệp là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Chứa được <strong>bao nhiêu class cũng được</strong>, nhưng <strong>tối đa một class
+                <code>public</code></strong> — và nếu có, tên tệp phải trùng khít tên class đó (phân biệt hoa
+                thường).
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Hello.java — hợp lệ</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">public class</span> <span class="tok-cls">Hello</span> { ... }    <span class="tok-com">// public → tên tệp phải là Hello.java</span>
+<span class="tok-kw">class</span> <span class="tok-cls">TroGiup</span> { ... }          <span class="tok-com">// không public → đặt chung tệp được</span>
+<span class="tok-kw">class</span> <span class="tok-cls">CauHinh</span> { ... }          <span class="tok-com">// cũng được</span></code></pre>
+              </div>
+              <p>
+                Sau khi biên dịch, <code>javac</code> sinh ra <strong>ba</strong> tệp <code>.class</code> riêng biệt
+                — mỗi class một tệp. Lý do của quy tắc này là kỹ thuật: trình biên dịch cần tìm được mã nguồn của
+                một class chỉ từ tên nó, không phải quét toàn bộ dự án.<br/>
+                Trong dự án thật, quy ước là <strong>mỗi class một tệp</strong> cho dễ tìm — nhiều class chung tệp
+                chỉ dùng cho class trợ giúp rất nhỏ, chỉ dùng nội bộ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Java là ngôn ngữ biên dịch hay thông dịch?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Cả hai</strong> — và đó là câu trả lời chính xác, không phải né tránh.
+              </p>
+              <ul>
+                <li><strong>Biên dịch</strong>: <code>javac</code> dịch mã nguồn sang bytecode. Bước này kiểm tra kiểu, cú pháp, và các lỗi khác <em>trước khi</em> chương trình chạy — đây là lý do Java bắt được rất nhiều lỗi mà Python/JavaScript phải đợi tới lúc chạy mới biết.</li>
+                <li><strong>Thông dịch</strong>: JVM đọc và thực thi từng lệnh bytecode.</li>
+                <li><strong>Biên dịch lần hai (JIT)</strong>: JVM theo dõi những phương thức được gọi nhiều, dịch chúng sang mã máy và tối ưu dựa trên dữ liệu chạy thực tế.</li>
+              </ul>
+              <p>
+                Hệ quả thực tế của mô hình lai này: chương trình Java <strong>khởi động chậm</strong> (JVM phải nạp
+                class, thông dịch trước khi JIT kịp làm việc) nhưng <strong>chạy lâu thì rất nhanh</strong> — đôi khi
+                ngang C++ ở những đoạn nóng nhất, vì JIT có thông tin mà trình biên dịch AOT không thể có.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>LTS là gì? Vì sao dự án production nên chọn bản LTS?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>LTS = Long-Term Support</strong> — phiên bản được cam kết vá lỗi và vá bảo mật trong nhiều
+                năm (thường 5-8 năm tuỳ nhà cung cấp).
+              </p>
+              <p style="margin-top: 8px;">
+                Từ 2018, Java ra bản mới mỗi 6 tháng, nhưng bản <em>không phải</em> LTS chỉ được hỗ trợ đúng
+                6 tháng — hết hạn là không còn bản vá bảo mật. Với một hệ thống ngân hàng chạy 10 năm, nâng cấp
+                Java hai lần mỗi năm là không khả thi, và chạy phiên bản không còn được vá là rủi ro bảo mật
+                nghiêm trọng.
+              </p>
+              <p style="margin-top: 8px;">
+                Các bản LTS: <strong>8</strong> (2014), <strong>11</strong> (2018), <strong>17</strong> (2021),
+                <strong>21</strong> (2023), <strong>25</strong> (2025). Bản không-LTS (18, 19, 20, 22…) dùng để thử
+                nghiệm tính năng mới, không dành cho production.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Vì sao cần Maven/Gradle khi đã có <code>javac</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>javac</code> chỉ làm đúng một việc: dịch <code>.java</code> thành <code>.class</code>. Dự án
+                thật cần nhiều hơn thế:
+              </p>
+              <ul>
+                <li><strong>Quản lý phụ thuộc bắc cầu</strong> — bạn khai báo cần thư viện A; A lại cần B và C; B cần D phiên bản 2.0 còn C cần D phiên bản 1.5. Giải quyết xung đột này bằng tay là bất khả thi.</li>
+                <li><strong>Thứ tự biên dịch</strong> — hàng trăm tệp phụ thuộc lẫn nhau.</li>
+                <li><strong>Vòng đời chuẩn hoá</strong> — <code>compile</code> → <code>test</code> → <code>package</code> → <code>install</code>, giống nhau ở mọi dự án nên ai cũng biết cách build.</li>
+                <li><strong>Build lặp lại được</strong> — cùng một lệnh cho kết quả giống nhau trên máy bạn, máy đồng nghiệp, và máy chủ CI.</li>
+                <li><strong>Tích hợp</strong> — chạy test, đo độ phủ, kiểm tra chất lượng, đóng gói, publish, tất cả trong một quy trình.</li>
+              </ul>
+              <p>
+                Nói ngắn gọn: <code>javac</code> là trình biên dịch, Maven/Gradle là <em>hệ thống xây dựng</em>.
+                So sánh: <code>gcc</code> ↔ <code>make</code>/CMake, hoặc <code>tsc</code> ↔ npm scripts.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 1, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Ba tầng</strong>: JDK ⊃ JRE ⊃ JVM; lập trình viên cài JDK.</li>
+          <li><strong>Chuỗi thực thi</strong>: mã nguồn → <code>javac</code> → bytecode → JVM (thông dịch + JIT) → mã máy.</li>
+          <li><strong>Mô hình lai</strong> giải thích cả điểm yếu (khởi động chậm) lẫn điểm mạnh (chạy lâu thì nhanh) của Java.</li>
+          <li><strong>Cài đặt</strong>: SDKMAN + Temurin; tránh Oracle JDK vì vấn đề giấy phép; ghim phiên bản bằng <code>.sdkmanrc</code>.</li>
+          <li><strong>Hợp đồng <code>main</code></strong>: <code>public static void main(String[])</code> — và lý do của từng từ khoá.</li>
+          <li><strong>Quy tắc tệp</strong>: tên tệp trùng tên class <code>public</code>; cây thư mục khớp <code>package</code>.</li>
+          <li><strong><code>javap</code></strong> để nhìn bytecode — công cụ giải thích nhiều hành vi kỳ lạ của Java.</li>
+          <li><strong>JShell</strong> để kiểm chứng nhanh mọi nghi vấn về ngôn ngữ.</li>
+          <li><strong>Maven</strong>: <code>pom.xml</code>, cấu trúc <code>src/main/java</code>, vòng đời build.</li>
+          <li><strong>LTS</strong>: 8, 11, 17, 21, 25 — production luôn chọn LTS.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 2 (Biến &amp; kiểu dữ liệu)</strong> — giải thích mọi kết quả bất ngờ bạn vừa thấy trong bài tập JShell: chia số nguyên, IEEE 754, cache <code>Integer</code>, String pool.</li>
+          <li><strong>Chương 4 (OOP cơ bản)</strong> — vì sao mọi thứ phải nằm trong class; <code>static</code> thực sự nghĩa là gì; constructor mặc định mà <code>javap</code> vừa cho bạn thấy.</li>
+          <li><strong>Chương 12 (Đa luồng)</strong> — vùng nhớ của JVM (Heap, Stack, Metaspace) và garbage collector.</li>
+          <li><strong>Chương 14 (Kiểm thử &amp; build)</strong> — Maven đầy đủ, fat JAR, JUnit, CI.</li>
+          <li><strong>Python Chương 1</strong> — đối chiếu: Python cũng "biên dịch" ngầm ra bytecode <code>.pyc</code>, nhưng không có JIT trong CPython và không kiểm tra kiểu lúc biên dịch.</li>
+          <li><strong>JavaScript Chương 1</strong> — V8 cũng dùng JIT, nhưng biên dịch từ mã nguồn chứ không qua bước bytecode do lập trình viên tạo ra.</li>
+          <li><strong>Trụ cột CLI</strong> — biến môi trường <code>PATH</code>, <code>JAVA_HOME</code>, chuyển hướng đầu ra.</li>
+          <li><strong>Trụ cột DevOps</strong> — đóng gói ứng dụng Java vào Docker, chọn ảnh nền JRE tối giản.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="../index.html" class="prev">
+            <div class="dir">← Mục lục</div>
+            <div class="label">Java sub-pillar</div>
+          </a>
+          <a href="chuong2.html" class="next">
+            <div class="dir">Chương 2 →</div>
+            <div class="label">Biến, kiểu dữ liệu &amp; toán tử</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#java-la-gi">1. Java là gì</a></li>
+          <li class="level-3"><a href="#ai-dung-java">1.1. Ai đang dùng Java</a></li>
+          <li><a href="#jdk-jre-jvm">2. JVM / JRE / JDK</a></li>
+          <li><a href="#cai-java">3. Cài Java 21</a></li>
+          <li class="level-3"><a href="#sdkman">3.1. SDKMAN</a></li>
+          <li class="level-3"><a href="#cai-windows">3.2. Windows</a></li>
+          <li><a href="#hello-world">4. Hello World</a></li>
+          <li><a href="#bien-dich-chay">5. Biên dịch &amp; chạy</a></li>
+          <li><a href="#bytecode">6. Bytecode với <code>javap</code></a></li>
+          <li><a href="#jshell">7. JShell</a></li>
+          <li><a href="#package">8. <code>package</code></a></li>
+          <li><a href="#build-tool">9. Maven &amp; Gradle</a></li>
+          <li><a href="#phien-ban">10. Phiên bản &amp; LTS</a></li>
+          <li><a href="#ide">11. IDE</a></li>
+          <li><a href="#cheat-sheet">12. Cheat sheet</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 1 — Hello Java · Java sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="../index.html">Java TOC</a> · <a href="chuong2.html">Chương 2 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

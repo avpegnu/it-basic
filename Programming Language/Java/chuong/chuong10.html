@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — Java hàm: lambda, Stream API &amp; Optional · Java Sub-pillar</title>
+  <meta name="description" content="Functional interface, lambda, method reference, các interface hàm dựng sẵn, Stream API với thao tác trung gian và kết thúc, Collectors và groupingBy, Optional dùng đúng cách, parallel stream và khi nào nên dùng." />
+  <meta name="theme-color" content="#e76f00" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bitter:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark mark-java">Jv</span>
+        Java · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Pillar 9</a></li>
+          <li><a href="../index.html" class="active">Java</a></li>
+          <li><a href="../../Python/index.html">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Pillar 9</a><span class="sep">/</span>
+        <a href="../index.html">Java</a><span class="sep">/</span>
+        <span>Chương 10</span>
+      </div>
+      <div class="chapter-num">Chương 10 · Lambda &amp; Stream</div>
+      <h1 style="font-size: 2.6rem; margin: 0 0 12px; color: var(--ink);">
+        Java hàm — lambda, Stream API và Optional
+      </h1>
+      <p class="lead">
+        Java 8 (2014) là bản cập nhật thay đổi ngôn ngữ nhiều nhất kể từ khi ra đời. Nó mang <strong>lập trình
+        hàm</strong> vào một ngôn ngữ vốn thuần hướng đối tượng: lambda thay cho anonymous class dài dòng, Stream
+        API thay cho vòng lặp lồng nhau, và <code>Optional</code> thay cho việc trả về <code>null</code>. Chương
+        này dạy cả ba — cùng với điều quan trọng không kém: <em>khi nào không nên dùng chúng</em>.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1700 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Prerequisites:</strong> Chương 1-9</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu <strong>functional interface</strong> — nền tảng của mọi thứ trong chương này.</li>
+            <li>Viết <strong>lambda</strong> và biết mọi dạng rút gọn.</li>
+            <li>Dùng bốn loại <strong>method reference</strong>.</li>
+            <li>Thuộc các <strong>interface hàm dựng sẵn</strong>: <code>Function</code>, <code>Predicate</code>, <code>Consumer</code>, <code>Supplier</code>, <code>BiFunction</code>, <code>UnaryOperator</code>.</li>
+            <li>Nắm ba đặc tính của <strong>Stream</strong>: lười, một lần dùng, không sửa nguồn.</li>
+            <li>Phân biệt thao tác <strong>trung gian</strong> và <strong>kết thúc</strong>.</li>
+            <li>Làm chủ <code>Collectors</code>: <code>toList</code>, <code>groupingBy</code>, <code>partitioningBy</code>, <code>joining</code>, <code>toMap</code>.</li>
+            <li>Dùng <code>Optional</code> <strong>đúng cách</strong> — và biết ba cách dùng sai phổ biến.</li>
+            <li>Hiểu <strong>parallel stream</strong> và vì sao nó thường <em>chậm hơn</em>.</li>
+            <li>Biết khi nào vòng lặp <code>for</code> vẫn tốt hơn Stream.</li>
+          </ul>
+        </div>
+
+        <h2 id="functional-interface">1. Functional interface</h2>
+
+        <p>
+          <strong>Functional interface</strong> là interface có <em>đúng một</em> phương thức trừu tượng. Đó là toàn
+          bộ định nghĩa — và cũng là điều kiện để dùng lambda.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>FunctionalInterface.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-ann">@FunctionalInterface</span>              <span class="tok-com">// tuỳ chọn, nhưng NÊN có</span>
+<span class="tok-kw">interface</span> <span class="tok-cls">PhepTinh</span> {
+    <span class="tok-kw">double</span> <span class="tok-fn">tinh</span>(<span class="tok-kw">double</span> a, <span class="tok-kw">double</span> b);      <span class="tok-com">// ← đúng MỘT method trừu tượng</span>
+
+    <span class="tok-com">// default và static method KHÔNG tính — bao nhiêu cũng được</span>
+    <span class="tok-kw">default</span> <span class="tok-cls">PhepTinh</span> <span class="tok-fn">roiThi</span>(<span class="tok-cls">DoubleUnaryOperator</span> sau) {
+        <span class="tok-kw">return</span> (a, b) -&gt; sau.<span class="tok-fn">applyAsDouble</span>(<span class="tok-fn">tinh</span>(a, b));
+    }
+    <span class="tok-kw">static</span> <span class="tok-cls">PhepTinh</span> <span class="tok-fn">cong</span>() { <span class="tok-kw">return</span> (a, b) -&gt; a + b; }
+}
+
+<span class="tok-com">// ❌ Không phải functional interface — hai method trừu tượng</span>
+<span class="tok-com">// @FunctionalInterface
+// interface Hai { void a(); void b(); }
+//   error: Hai is not a functional interface</span>
+
+<span class="tok-com">// --- Ba cách cài đặt, từ cũ tới mới ---</span>
+
+<span class="tok-com">// ① Class riêng (Java 1.0) — 5 dòng cho một phép cộng</span>
+<span class="tok-kw">class</span> <span class="tok-cls">Cong</span> <span class="tok-kw">implements</span> <span class="tok-cls">PhepTinh</span> {
+    <span class="tok-ann">@Override</span> <span class="tok-kw">public double</span> <span class="tok-fn">tinh</span>(<span class="tok-kw">double</span> a, <span class="tok-kw">double</span> b) { <span class="tok-kw">return</span> a + b; }
+}
+<span class="tok-cls">PhepTinh</span> p1 = <span class="tok-kw">new</span> <span class="tok-cls">Cong</span>();
+
+<span class="tok-com">// ② Anonymous class (Java 1.1) — 3 dòng</span>
+<span class="tok-cls">PhepTinh</span> p2 = <span class="tok-kw">new</span> <span class="tok-cls">PhepTinh</span>() {
+    <span class="tok-ann">@Override</span> <span class="tok-kw">public double</span> <span class="tok-fn">tinh</span>(<span class="tok-kw">double</span> a, <span class="tok-kw">double</span> b) { <span class="tok-kw">return</span> a + b; }
+};
+
+<span class="tok-com">// ③ Lambda (Java 8) — MỘT dòng ⭐</span>
+<span class="tok-cls">PhepTinh</span> p3 = (a, b) -&gt; a + b;</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Luôn thêm <code>@FunctionalInterface</code></div>
+          <p>
+            Nó không thay đổi hành vi — chỉ bảo trình biên dịch <em>kiểm tra</em> rằng interface thực sự có đúng một
+            phương thức trừu tượng. Không có nó, ai đó thêm method thứ hai vào interface của bạn và <em>mọi</em>
+            lambda dùng nó trong toàn dự án đột nhiên không biên dịch được — với thông điệp lỗi ở chỗ khác, rất khó
+            truy nguyên. Có chú thích thì lỗi báo ngay tại interface.
+          </p>
+        </div>
+
+        <h2 id="lambda">2. Lambda</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Lambda.java — mọi dạng rút gọn</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Cú pháp đầy đủ: (kiểu tên, kiểu tên) -&gt; { câu lệnh; return giaTri; }</span>
+<span class="tok-cls">PhepTinh</span> a = (<span class="tok-kw">double</span> x, <span class="tok-kw">double</span> y) -&gt; { <span class="tok-kw">return</span> x + y; };
+
+<span class="tok-com">// Bỏ kiểu — trình biên dịch tự suy ra</span>
+<span class="tok-cls">PhepTinh</span> b = (x, y) -&gt; { <span class="tok-kw">return</span> x + y; };
+
+<span class="tok-com">// Một biểu thức → bỏ luôn ngoặc nhọn và return</span>
+<span class="tok-cls">PhepTinh</span> c = (x, y) -&gt; x + y;
+
+<span class="tok-com">// MỘT tham số → bỏ được cả ngoặc tròn</span>
+<span class="tok-cls">Predicate</span>&lt;<span class="tok-cls">String</span>&gt; d = s -&gt; s.<span class="tok-fn">isEmpty</span>();
+
+<span class="tok-com">// KHÔNG tham số → ngoặc tròn rỗng là bắt buộc</span>
+<span class="tok-cls">Supplier</span>&lt;<span class="tok-cls">String</span>&gt; e = () -&gt; <span class="tok-str">"xin chào"</span>;
+
+<span class="tok-com">// Nhiều dòng → cần ngoặc nhọn và return tường minh</span>
+<span class="tok-cls">PhepTinh</span> f = (x, y) -&gt; {
+    <span class="tok-kw">if</span> (y == <span class="tok-num">0</span>) <span class="tok-kw">throw new</span> <span class="tok-cls">ArithmeticException</span>(<span class="tok-str">"Chia cho 0"</span>);
+    <span class="tok-kw">return</span> x / y;
+};
+
+<span class="tok-com">// var trong tham số (Java 11+) — chỉ hữu ích khi cần thêm annotation</span>
+<span class="tok-cls">PhepTinh</span> g = (<span class="tok-kw">var</span> x, <span class="tok-kw">var</span> y) -&gt; x + y;</code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Biến bên ngoài phải "effectively final"</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>EffectivelyFinal.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">int</span> dem = <span class="tok-num">0</span>;
+<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>).<span class="tok-fn">forEach</span>(s -&gt; dem++);
+<span class="tok-com">// ❌ error: local variables referenced from a lambda expression
+//    must be final or effectively final</span>
+
+<span class="tok-com">// ✅ Cách 1: dùng mảng một phần tử (thô nhưng chạy)</span>
+<span class="tok-kw">int</span>[] dem2 = {<span class="tok-num">0</span>};
+<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>).<span class="tok-fn">forEach</span>(s -&gt; dem2[<span class="tok-num">0</span>]++);   <span class="tok-com">// mảng là tham chiếu → OK</span>
+
+<span class="tok-com">// ✅ Cách 2: AtomicInteger (an toàn đa luồng)</span>
+<span class="tok-cls">AtomicInteger</span> dem3 = <span class="tok-kw">new</span> <span class="tok-cls">AtomicInteger</span>();
+<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>).<span class="tok-fn">forEach</span>(s -&gt; dem3.<span class="tok-fn">incrementAndGet</span>());
+
+<span class="tok-com">// ✅✅ Cách 3: dùng Stream đúng cách — không cần biến đếm nào</span>
+<span class="tok-kw">long</span> dem4 = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>).<span class="tok-fn">stream</span>().<span class="tok-fn">count</span>();</code></pre>
+          </div>
+          <p>
+            <strong>Vì sao có ràng buộc này:</strong> lambda có thể sống lâu hơn phương thức tạo ra nó (được lưu vào
+            trường, truyền sang luồng khác). Biến cục bộ nằm trên stack và biến mất khi phương thức kết thúc, nên
+            lambda phải <em>sao chép</em> giá trị. Nếu cho phép sửa, hai bên sẽ thấy hai giá trị khác nhau — nên Java
+            cấm hẳn. Đây cũng là lý do <code>this</code> trong lambda trỏ tới object bao ngoài, không phải lambda
+            (khác hẳn anonymous class).
+          </p>
+        </div>
+
+        <h2 id="method-reference">3. Method reference</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>MethodReference.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ① Phương thức STATIC:  Class::method</span>
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; f1 = s -&gt; <span class="tok-cls">Integer</span>.<span class="tok-fn">parseInt</span>(s);
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; f2 = <span class="tok-cls">Integer</span>::<span class="tok-fn">parseInt</span>;          <span class="tok-com">// ✅</span>
+
+<span class="tok-com">// ② Phương thức của MỘT INSTANCE cụ thể:  bien::method</span>
+<span class="tok-cls">String</span> tienTo = <span class="tok-str">"Java"</span>;
+<span class="tok-cls">Predicate</span>&lt;<span class="tok-cls">String</span>&gt; p1 = s -&gt; tienTo.<span class="tok-fn">startsWith</span>(s);
+<span class="tok-cls">Predicate</span>&lt;<span class="tok-cls">String</span>&gt; p2 = tienTo::<span class="tok-fn">startsWith</span>;                 <span class="tok-com">// ✅</span>
+
+<span class="tok-com">// ③ Phương thức của instance TUỲ Ý thuộc một class:  Class::method</span>
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; f3 = s -&gt; s.<span class="tok-fn">length</span>();
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; f4 = <span class="tok-cls">String</span>::<span class="tok-fn">length</span>;             <span class="tok-com">// ✅ tham số đầu thành receiver</span>
+
+<span class="tok-cls">Comparator</span>&lt;<span class="tok-cls">String</span>&gt; c1 = (a, b) -&gt; a.<span class="tok-fn">compareTo</span>(b);
+<span class="tok-cls">Comparator</span>&lt;<span class="tok-cls">String</span>&gt; c2 = <span class="tok-cls">String</span>::<span class="tok-fn">compareTo</span>;                <span class="tok-com">// ✅</span>
+
+<span class="tok-com">// ④ CONSTRUCTOR:  Class::new</span>
+<span class="tok-cls">Supplier</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt;&gt; s1 = () -&gt; <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;();
+<span class="tok-cls">Supplier</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt;&gt; s2 = <span class="tok-cls">ArrayList</span>::<span class="tok-kw">new</span>;              <span class="tok-com">// ✅</span>
+
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">SinhVien</span>&gt; s3 = <span class="tok-cls">SinhVien</span>::<span class="tok-kw">new</span>;           <span class="tok-com">// constructor 1 tham số</span>
+<span class="tok-cls">IntFunction</span>&lt;<span class="tok-cls">String</span>[]&gt; s4 = <span class="tok-cls">String</span>[]::<span class="tok-kw">new</span>;                 <span class="tok-com">// constructor MẢNG</span>
+
+<span class="tok-com">// --- Ứng dụng thực tế ---</span>
+danhSach.<span class="tok-fn">forEach</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);
+danhSach.<span class="tok-fn">sort</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">comparing</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">getTen</span>));
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">Integer</span>&gt; doDai = ten.<span class="tok-fn">stream</span>().<span class="tok-fn">map</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>).<span class="tok-fn">toList</span>();</code></pre>
+        </div>
+
+        <h2 id="interface-dung-san">4. Interface hàm dựng sẵn</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Interface</th><th>Phương thức</th><th>Nhận → Trả</th><th>Dùng để</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>Function&lt;T,R&gt;</code></td><td><code>R apply(T)</code></td><td>T → R</td><td>Biến đổi giá trị</td></tr>
+              <tr><td><code>Predicate&lt;T&gt;</code></td><td><code>boolean test(T)</code></td><td>T → boolean</td><td>Kiểm tra điều kiện</td></tr>
+              <tr><td><code>Consumer&lt;T&gt;</code></td><td><code>void accept(T)</code></td><td>T → ∅</td><td>Thực hiện tác dụng phụ</td></tr>
+              <tr><td><code>Supplier&lt;T&gt;</code></td><td><code>T get()</code></td><td>∅ → T</td><td>Sinh giá trị (lười)</td></tr>
+              <tr><td><code>UnaryOperator&lt;T&gt;</code></td><td><code>T apply(T)</code></td><td>T → T</td><td><code>Function&lt;T,T&gt;</code></td></tr>
+              <tr><td><code>BinaryOperator&lt;T&gt;</code></td><td><code>T apply(T,T)</code></td><td>(T,T) → T</td><td>Gộp hai giá trị cùng kiểu</td></tr>
+              <tr><td><code>BiFunction&lt;T,U,R&gt;</code></td><td><code>R apply(T,U)</code></td><td>(T,U) → R</td><td>Hai tham số</td></tr>
+              <tr><td><code>BiPredicate&lt;T,U&gt;</code></td><td><code>boolean test(T,U)</code></td><td>(T,U) → boolean</td><td>Kiểm tra hai giá trị</td></tr>
+              <tr><td><code>BiConsumer&lt;T,U&gt;</code></td><td><code>void accept(T,U)</code></td><td>(T,U) → ∅</td><td><code>Map.forEach</code></td></tr>
+              <tr><td><code>Runnable</code></td><td><code>void run()</code></td><td>∅ → ∅</td><td>Tác vụ chạy trong luồng</td></tr>
+              <tr><td><code>Callable&lt;V&gt;</code></td><td><code>V call()</code></td><td>∅ → V (ném được)</td><td>Tác vụ có kết quả</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>SuDung.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// --- Kết hợp Function ---</span>
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Integer</span>&gt; doDai = <span class="tok-cls">String</span>::<span class="tok-fn">length</span>;
+<span class="tok-cls">Function</span>&lt;<span class="tok-cls">Integer</span>, <span class="tok-cls">String</span>&gt; moTa  = n -&gt; <span class="tok-str">"dài "</span> + n;
+
+doDai.<span class="tok-fn">andThen</span>(moTa).<span class="tok-fn">apply</span>(<span class="tok-str">"Java"</span>);   <span class="tok-com">// "dài 4"  — doDai TRƯỚC</span>
+moTa.<span class="tok-fn">compose</span>(doDai).<span class="tok-fn">apply</span>(<span class="tok-str">"Java"</span>);  <span class="tok-com">// "dài 4"  — doDai cũng trước</span>
+<span class="tok-cls">Function</span>.&lt;<span class="tok-cls">String</span>&gt;<span class="tok-fn">identity</span>();               <span class="tok-com">// x -&gt; x</span>
+
+<span class="tok-com">// --- Kết hợp Predicate ---</span>
+<span class="tok-cls">Predicate</span>&lt;<span class="tok-cls">String</span>&gt; rong   = <span class="tok-cls">String</span>::<span class="tok-fn">isEmpty</span>;
+<span class="tok-cls">Predicate</span>&lt;<span class="tok-cls">String</span>&gt; ngan   = s -&gt; s.<span class="tok-fn">length</span>() &lt; <span class="tok-num">5</span>;
+
+rong.<span class="tok-fn">negate</span>();                          <span class="tok-com">// không rỗng</span>
+rong.<span class="tok-fn">or</span>(ngan);                          <span class="tok-com">// rỗng HOẶC ngắn</span>
+rong.<span class="tok-fn">negate</span>().<span class="tok-fn">and</span>(ngan);                <span class="tok-com">// không rỗng VÀ ngắn</span>
+<span class="tok-cls">Predicate</span>.<span class="tok-fn">not</span>(rong);                     <span class="tok-com">// Java 11+, dùng được với method reference</span>
+
+<span class="tok-com">// --- Consumer nối tiếp ---</span>
+<span class="tok-cls">Consumer</span>&lt;<span class="tok-cls">String</span>&gt; in    = <span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>;
+<span class="tok-cls">Consumer</span>&lt;<span class="tok-cls">String</span>&gt; ghiLog = s -&gt; log.<span class="tok-fn">info</span>(s);
+in.<span class="tok-fn">andThen</span>(ghiLog).<span class="tok-fn">accept</span>(<span class="tok-str">"xin chào"</span>);   <span class="tok-com">// làm cả hai</span>
+
+<span class="tok-com">// --- Supplier: hoãn tính toán tới khi thực sự cần ---</span>
+<span class="tok-cls">Supplier</span>&lt;<span class="tok-cls">String</span>&gt; tonKem = () -&gt; <span class="tok-fn">tinhToanRatLau</span>();
+<span class="tok-cls">Optional</span>.<span class="tok-fn">ofNullable</span>(x).<span class="tok-fn">orElseGet</span>(tonKem);   <span class="tok-com">// chỉ chạy khi x là null ⭐</span>
+
+<span class="tok-com">// --- Phiên bản NGUYÊN THỦY: tránh autoboxing ---</span>
+<span class="tok-cls">IntPredicate</span>       chan  = n -&gt; n % <span class="tok-num">2</span> == <span class="tok-num">0</span>;   <span class="tok-com">// thay Predicate&lt;Integer&gt;</span>
+<span class="tok-cls">IntFunction</span>&lt;<span class="tok-cls">String</span>&gt; doi   = n -&gt; <span class="tok-str">"số "</span> + n;
+<span class="tok-cls">ToIntFunction</span>&lt;<span class="tok-cls">String</span>&gt; dai = <span class="tok-cls">String</span>::<span class="tok-fn">length</span>;
+<span class="tok-cls">IntUnaryOperator</span>   binh  = n -&gt; n * n;
+<span class="tok-com">// Với hàng triệu phần tử, các phiên bản này nhanh hơn 4-6 lần</span></code></pre>
+        </div>
+
+        <h2 id="stream">5. Stream API — ba đặc tính</h2>
+
+        <div class="jvm-flow">
+          <div class="stages" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div class="stage">
+              <div class="stage-title">Nguồn</div>
+              <div class="stage-content"><code>collection.stream()</code><br/><code>Arrays.stream()</code><br/><code>Stream.of()</code></div>
+            </div>
+            <div class="stage blue">
+              <div class="stage-title">Trung gian (0..n)</div>
+              <div class="stage-content"><code>filter</code> <code>map</code><br/><code>sorted</code> <code>distinct</code><br/><span style="color:var(--text-muted)">trả về Stream — LƯỜI</span></div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">Kết thúc (1)</div>
+              <div class="stage-content"><code>collect</code> <code>forEach</code><br/><code>count</code> <code>reduce</code><br/><span style="color:var(--text-muted)">kích hoạt xử lý</span></div>
+            </div>
+          </div>
+          <div class="caption">
+            Không có thao tác kết thúc thì <strong>không có gì chạy cả</strong>. Đây là điều gây bất ngờ nhất cho
+            người mới dùng Stream.
+          </div>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>BaDacTinh.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ① LƯỜI — không có thao tác kết thúc thì KHÔNG CHẠY GÌ</span>
+<span class="tok-cls">Stream</span>&lt;<span class="tok-cls">String</span>&gt; s = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>).<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">filter</span>(x -&gt; { <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"lọc "</span> + x); <span class="tok-kw">return</span> <span class="tok-kw">true</span>; });
+<span class="tok-com">// KHÔNG in gì cả! filter chưa hề chạy.</span>
+s.<span class="tok-fn">count</span>();     <span class="tok-com">// bây giờ mới in "lọc a", "lọc b"</span>
+
+
+<span class="tok-com">// ② MỘT LẦN DÙNG</span>
+<span class="tok-cls">Stream</span>&lt;<span class="tok-cls">String</span>&gt; s2 = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>).<span class="tok-fn">stream</span>();
+s2.<span class="tok-fn">count</span>();   <span class="tok-com">// ✅</span>
+s2.<span class="tok-fn">count</span>();   <span class="tok-com">// 💥 IllegalStateException: stream has already been
+             //    operated upon or closed</span>
+
+
+<span class="tok-com">// ③ KHÔNG SỬA NGUỒN</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; goc = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;(<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"b"</span>, <span class="tok-str">"a"</span>));
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; moi = goc.<span class="tok-fn">stream</span>().<span class="tok-fn">sorted</span>().<span class="tok-fn">toList</span>();
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(goc);   <span class="tok-com">// [b, a] — không đổi</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(moi);   <span class="tok-com">// [a, b]</span>
+
+
+<span class="tok-com">// ⭐ HỆ QUẢ CỦA TÍNH LƯỜI: xử lý theo CHIỀU DỌC, không phải chiều ngang</span>
+<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"bb"</span>, <span class="tok-str">"ccc"</span>).<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">filter</span>(x -&gt; { <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"lọc "</span> + x);  <span class="tok-kw">return</span> x.<span class="tok-fn">length</span>() &gt; <span class="tok-num">1</span>; })
+    .<span class="tok-fn">map</span>(x    -&gt; { <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"  ánh xạ "</span> + x); <span class="tok-kw">return</span> x.<span class="tok-fn">toUpperCase</span>(); })
+    .<span class="tok-fn">findFirst</span>();
+<span class="tok-com">// lọc a
+// lọc bb
+//   ánh xạ bb        ← DỪNG LUÔN! "ccc" không hề được chạm tới</span></code></pre>
+        </div>
+
+        <div class="java-note">
+          <h4>Xử lý theo chiều dọc — vì sao Stream nhanh hơn tưởng tượng</h4>
+          <p>
+            Vòng lặp thông thường xử lý <em>theo chiều ngang</em>: lọc hết toàn bộ danh sách, tạo list trung gian,
+            rồi ánh xạ hết. Stream xử lý <em>theo chiều dọc</em>: mỗi phần tử đi qua toàn bộ chuỗi thao tác rồi mới
+            tới phần tử tiếp theo.
+          </p>
+          <p style="margin-top: 8px;">
+            Hai lợi ích: <strong>(1)</strong> không tạo collection trung gian — tiết kiệm bộ nhớ;
+            <strong>(2)</strong> các thao tác "ngắn mạch" như <code>findFirst</code>, <code>anyMatch</code>,
+            <code>limit</code> dừng ngay khi đủ, không duyệt phần còn lại. Với danh sách một triệu phần tử mà bạn chỉ
+            cần phần tử đầu tiên thoả điều kiện, Stream có thể chỉ duyệt vài phần tử.
+          </p>
+        </div>
+
+        <h2 id="tao-stream">6. Tạo Stream</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>TaoStream.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Từ collection</span>
+danhSach.<span class="tok-fn">stream</span>();
+danhSach.<span class="tok-fn">parallelStream</span>();
+
+<span class="tok-com">// Từ mảng</span>
+<span class="tok-cls">Arrays</span>.<span class="tok-fn">stream</span>(mang);
+<span class="tok-cls">Arrays</span>.<span class="tok-fn">stream</span>(mang, <span class="tok-num">1</span>, <span class="tok-num">4</span>);          <span class="tok-com">// một phần</span>
+
+<span class="tok-com">// Từ giá trị rời</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>, <span class="tok-str">"c"</span>);
+<span class="tok-cls">Stream</span>.<span class="tok-fn">empty</span>();
+<span class="tok-cls">Stream</span>.<span class="tok-fn">ofNullable</span>(coTheNull);        <span class="tok-com">// Java 9+: rỗng nếu null</span>
+
+<span class="tok-com">// Stream số nguyên thủy — tránh autoboxing</span>
+<span class="tok-cls">IntStream</span>.<span class="tok-fn">range</span>(<span class="tok-num">0</span>, <span class="tok-num">5</span>);              <span class="tok-com">// 0 1 2 3 4</span>
+<span class="tok-cls">IntStream</span>.<span class="tok-fn">rangeClosed</span>(<span class="tok-num">1</span>, <span class="tok-num">5</span>);        <span class="tok-com">// 1 2 3 4 5</span>
+<span class="tok-cls">IntStream</span>.<span class="tok-fn">of</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>).<span class="tok-fn">sum</span>();
+
+<span class="tok-com">// Vô hạn — BẮT BUỘC có limit() hoặc thao tác ngắn mạch</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">iterate</span>(<span class="tok-num">1</span>, n -&gt; n * <span class="tok-num">2</span>).<span class="tok-fn">limit</span>(<span class="tok-num">10</span>);        <span class="tok-com">// 1 2 4 8 ...</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">iterate</span>(<span class="tok-num">1</span>, n -&gt; n &lt; <span class="tok-num">100</span>, n -&gt; n * <span class="tok-num">2</span>);   <span class="tok-com">// Java 9+: có điều kiện dừng</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">generate</span>(<span class="tok-cls">Math</span>::<span class="tok-fn">random</span>).<span class="tok-fn">limit</span>(<span class="tok-num">5</span>);
+
+<span class="tok-com">// Từ chuỗi</span>
+<span class="tok-str">"a,b,c"</span>.<span class="tok-fn">chars</span>();                     <span class="tok-com">// IntStream các mã ký tự</span>
+<span class="tok-cls">Pattern</span>.<span class="tok-fn">compile</span>(<span class="tok-str">","</span>).<span class="tok-fn">splitAsStream</span>(<span class="tok-str">"a,b,c"</span>);
+
+<span class="tok-com">// Từ tệp — nhớ đóng! (chương 11)</span>
+<span class="tok-kw">try</span> (<span class="tok-cls">Stream</span>&lt;<span class="tok-cls">String</span>&gt; dong = <span class="tok-cls">Files</span>.<span class="tok-fn">lines</span>(<span class="tok-cls">Path</span>.<span class="tok-fn">of</span>(<span class="tok-str">"data.txt"</span>))) {
+    dong.<span class="tok-fn">filter</span>(l -&gt; l.<span class="tok-fn">contains</span>(<span class="tok-str">"ERROR"</span>)).<span class="tok-fn">forEach</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);
+}
+
+<span class="tok-com">// Từ Map</span>
+map.<span class="tok-fn">entrySet</span>().<span class="tok-fn">stream</span>();
+map.<span class="tok-fn">keySet</span>().<span class="tok-fn">stream</span>();
+map.<span class="tok-fn">values</span>().<span class="tok-fn">stream</span>();</code></pre>
+        </div>
+
+        <h2 id="trung-gian">7. Thao tác trung gian</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>TrungGian.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; ds = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"java"</span>, <span class="tok-str">"python"</span>, <span class="tok-str">"go"</span>, <span class="tok-str">"java"</span>, <span class="tok-str">"rust"</span>);
+
+<span class="tok-com">// filter — giữ phần tử thoả điều kiện</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">filter</span>(s -&gt; s.<span class="tok-fn">length</span>() &gt; <span class="tok-num">2</span>)
+
+<span class="tok-com">// map — biến đổi từng phần tử</span>
+   .<span class="tok-fn">map</span>(<span class="tok-cls">String</span>::<span class="tok-fn">toUpperCase</span>)
+
+<span class="tok-com">// distinct — loại trùng (dùng equals)</span>
+   .<span class="tok-fn">distinct</span>()
+
+<span class="tok-com">// sorted — sắp xếp</span>
+   .<span class="tok-fn">sorted</span>()
+   .<span class="tok-fn">sorted</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">comparingInt</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>))
+
+<span class="tok-com">// limit / skip — phân trang</span>
+   .<span class="tok-fn">skip</span>(<span class="tok-num">1</span>).<span class="tok-fn">limit</span>(<span class="tok-num">3</span>)
+
+<span class="tok-com">// peek — xem giữa chừng, CHỈ để gỡ lỗi</span>
+   .<span class="tok-fn">peek</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>)
+   .<span class="tok-fn">toList</span>();
+
+
+<span class="tok-com">// ⭐ flatMap — LÀM PHẲNG cấu trúc lồng nhau</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt;&gt; long2 = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(
+    <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>),
+    <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"c"</span>, <span class="tok-str">"d"</span>)
+);
+long2.<span class="tok-fn">stream</span>().<span class="tok-fn">flatMap</span>(<span class="tok-cls">List</span>::<span class="tok-fn">stream</span>).<span class="tok-fn">toList</span>();   <span class="tok-com">// [a, b, c, d]</span>
+
+<span class="tok-com">// Tách câu thành từ</span>
+<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"xin chào"</span>, <span class="tok-str">"thế giới"</span>).<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">flatMap</span>(c -&gt; <span class="tok-cls">Arrays</span>.<span class="tok-fn">stream</span>(c.<span class="tok-fn">split</span>(<span class="tok-str">" "</span>)))
+    .<span class="tok-fn">toList</span>();                          <span class="tok-com">// [xin, chào, thế, giới]</span>
+
+<span class="tok-com">// Lấy mọi đơn hàng của mọi khách</span>
+khachHang.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">flatMap</span>(k -&gt; k.<span class="tok-fn">getDonHang</span>().<span class="tok-fn">stream</span>())
+    .<span class="tok-fn">toList</span>();
+
+
+<span class="tok-com">// mapToInt/Long/Double — chuyển sang stream nguyên thủy</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">mapToInt</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>).<span class="tok-fn">sum</span>();
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">mapToInt</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>).<span class="tok-fn">average</span>().<span class="tok-fn">orElse</span>(<span class="tok-num">0</span>);
+
+<span class="tok-com">// takeWhile / dropWhile (Java 9+) — dừng/bỏ theo điều kiện</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">of</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">10</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>).<span class="tok-fn">takeWhile</span>(n -&gt; n &lt; <span class="tok-num">5</span>).<span class="tok-fn">toList</span>();  <span class="tok-com">// [1,2,3]</span>
+<span class="tok-cls">Stream</span>.<span class="tok-fn">of</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">10</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>).<span class="tok-fn">dropWhile</span>(n -&gt; n &lt; <span class="tok-num">5</span>).<span class="tok-fn">toList</span>();  <span class="tok-com">// [10,4,5]</span>
+<span class="tok-com">// ⚠️ Khác filter: chúng DỪNG ở phần tử đầu tiên không thoả</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>peek</code> chỉ để gỡ lỗi</div>
+          <p>
+            <code>peek</code> nhận một <code>Consumer</code> và trả về stream nguyên vẹn — có vẻ tiện để "làm gì đó
+            giữa chừng". Nhưng hai vấn đề: <strong>(1)</strong> vì stream lười, <code>peek</code> có thể không chạy
+            với mọi phần tử (hoặc không chạy chút nào nếu thiếu thao tác kết thúc); <strong>(2)</strong> từ Java 9,
+            trình biên dịch được phép <em>bỏ qua</em> <code>peek</code> nếu nó chứng minh được kết quả không đổi (ví
+            dụ khi bạn chỉ gọi <code>count()</code>).
+          </p>
+          <p style="margin-top: 8px;">
+            Javadoc nói rõ <code>peek</code> "tồn tại chủ yếu để hỗ trợ gỡ lỗi". Đừng dùng nó để thay đổi trạng thái.
+          </p>
+        </div>
+
+        <h2 id="ket-thuc">8. Thao tác kết thúc</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>KetThuc.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; ds = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"java"</span>, <span class="tok-str">"python"</span>, <span class="tok-str">"go"</span>);
+
+<span class="tok-com">// --- Thu thập ---</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">toList</span>();                       <span class="tok-com">// Java 16+, BẤT BIẾN ⭐</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">toList</span>());   <span class="tok-com">// cách cũ, sửa được</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">toArray</span>(<span class="tok-cls">String</span>[]::<span class="tok-kw">new</span>);
+
+<span class="tok-com">// --- Duyệt ---</span>
+ds.<span class="tok-fn">forEach</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">forEachOrdered</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);   <span class="tok-com">// giữ thứ tự cả khi song song</span>
+
+<span class="tok-com">// --- Đếm và thống kê ---</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">count</span>();
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">mapToInt</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>).<span class="tok-fn">summaryStatistics</span>();
+<span class="tok-com">// IntSummaryStatistics{count=3, sum=12, min=2, average=4.0, max=6}</span>
+
+<span class="tok-com">// --- Tìm kiếm (NGẮN MẠCH — dừng ngay khi có kết quả) ---</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">findFirst</span>();                    <span class="tok-com">// Optional</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">findAny</span>();                      <span class="tok-com">// Optional (hợp với song song)</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">anyMatch</span>(s -&gt; s.<span class="tok-fn">startsWith</span>(<span class="tok-str">"j"</span>));   <span class="tok-com">// true</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">allMatch</span>(s -&gt; s.<span class="tok-fn">length</span>() &gt; <span class="tok-num">1</span>);      <span class="tok-com">// true</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">noneMatch</span>(<span class="tok-cls">String</span>::<span class="tok-fn">isEmpty</span>);        <span class="tok-com">// true</span>
+
+<span class="tok-com">// --- Min / max ---</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">max</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">comparingInt</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>));
+
+<span class="tok-com">// --- reduce: gộp về một giá trị ---</span>
+<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; noi = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">reduce</span>((a, b) -&gt; a + <span class="tok-str">", "</span> + b);
+<span class="tok-cls">String</span> noi2 = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">reduce</span>(<span class="tok-str">""</span>, (a, b) -&gt; a + b);   <span class="tok-com">// có giá trị khởi đầu</span>
+<span class="tok-kw">int</span> tongDoDai = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">reduce</span>(<span class="tok-num">0</span>, (t, s) -&gt; t + s.<span class="tok-fn">length</span>(), <span class="tok-cls">Integer</span>::<span class="tok-fn">sum</span>);
+
+<span class="tok-com">// ⚠️ Nhưng thường có cách gọn hơn reduce:</span>
+<span class="tok-kw">int</span> tot = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">mapToInt</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>).<span class="tok-fn">sum</span>();   <span class="tok-com">// ✅ rõ hơn</span></code></pre>
+        </div>
+
+        <h2 id="collectors">9. <code>Collectors</code> — sức mạnh thật sự</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Collectors.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">record</span> <span class="tok-cls">SinhVien</span>(<span class="tok-cls">String</span> ten, <span class="tok-cls">String</span> lop, <span class="tok-kw">double</span> diem, <span class="tok-kw">int</span> tuoi) { }
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt; ds = ...;
+
+<span class="tok-com">// --- Thu thập cơ bản ---</span>
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">toList</span>());
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">toSet</span>());
+ds.<span class="tok-fn">stream</span>().<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">toCollection</span>(<span class="tok-cls">TreeSet</span>::<span class="tok-kw">new</span>));
+
+<span class="tok-com">// --- toMap ---</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Double</span>&gt; tenDiem = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">toMap</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">ten</span>, <span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>));
+<span class="tok-com">// ⚠️ Khoá TRÙNG → IllegalStateException: Duplicate key</span>
+
+<span class="tok-com">// ✅ Xử lý trùng bằng hàm gộp</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Double</span>&gt; anToan = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">toMap</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">ten</span>, <span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>, <span class="tok-cls">Double</span>::<span class="tok-fn">max</span>));
+
+<span class="tok-com">// --- joining: nối chuỗi ---</span>
+<span class="tok-cls">String</span> tenAll = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">map</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">ten</span>)
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">joining</span>(<span class="tok-str">", "</span>, <span class="tok-str">"["</span>, <span class="tok-str">"]"</span>));   <span class="tok-com">// [An, Bình, Chi]</span>
+
+<span class="tok-com">// --- Thống kê ---</span>
+<span class="tok-cls">Collectors</span>.<span class="tok-fn">counting</span>();
+<span class="tok-cls">Collectors</span>.<span class="tok-fn">summingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>);
+<span class="tok-cls">Collectors</span>.<span class="tok-fn">averagingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>);
+<span class="tok-cls">Collectors</span>.<span class="tok-fn">summarizingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>);   <span class="tok-com">// count/sum/min/avg/max</span>
+<span class="tok-cls">Collectors</span>.<span class="tok-fn">maxBy</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">comparingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>));
+
+
+<span class="tok-com">// ⭐⭐ groupingBy — thao tác mạnh nhất của Stream API</span>
+
+<span class="tok-com">// Nhóm đơn giản</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt;&gt; theoLop = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>));
+
+<span class="tok-com">// Nhóm + đếm</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Long</span>&gt; siSo = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>, <span class="tok-cls">Collectors</span>.<span class="tok-fn">counting</span>()));
+
+<span class="tok-com">// Nhóm + tính trung bình</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Double</span>&gt; diemTb = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>,
+                          <span class="tok-cls">Collectors</span>.<span class="tok-fn">averagingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>)));
+
+<span class="tok-com">// Nhóm + lấy danh sách tên</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt;&gt; tenTheoLop = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>,
+                          <span class="tok-cls">Collectors</span>.<span class="tok-fn">mapping</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">ten</span>, <span class="tok-cls">Collectors</span>.<span class="tok-fn">toList</span>())));
+
+<span class="tok-com">// Nhóm HAI TẦNG</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Map</span>&lt;<span class="tok-cls">Boolean</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt;&gt;&gt; hai = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>,
+                          <span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(s -&gt; s.<span class="tok-fn">diem</span>() &gt;= <span class="tok-num">8</span>)));
+
+<span class="tok-com">// Chỉ định kiểu Map cụ thể</span>
+<span class="tok-cls">TreeMap</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Long</span>&gt; sapXep = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>,
+                          <span class="tok-cls">TreeMap</span>::<span class="tok-kw">new</span>, <span class="tok-cls">Collectors</span>.<span class="tok-fn">counting</span>()));
+
+
+<span class="tok-com">// --- partitioningBy: chia ĐÔI theo điều kiện (nhanh hơn groupingBy) ---</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">Boolean</span>, <span class="tok-cls">List</span>&lt;<span class="tok-cls">SinhVien</span>&gt;&gt; dat = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">partitioningBy</span>(s -&gt; s.<span class="tok-fn">diem</span>() &gt;= <span class="tok-num">5</span>));
+dat.<span class="tok-fn">get</span>(<span class="tok-kw">true</span>);    <span class="tok-com">// đạt</span>
+dat.<span class="tok-fn">get</span>(<span class="tok-kw">false</span>);   <span class="tok-com">// không đạt — LUÔN có cả hai khoá, kể cả khi rỗng</span>
+
+<span class="tok-com">// --- teeing (Java 12+): hai collector cùng lúc ---</span>
+<span class="tok-kw">record</span> <span class="tok-cls">ThongKe</span>(<span class="tok-kw">double</span> min, <span class="tok-kw">double</span> max) { }
+<span class="tok-cls">ThongKe</span> tk = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">teeing</span>(
+    <span class="tok-cls">Collectors</span>.<span class="tok-fn">minBy</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">comparingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>)),
+    <span class="tok-cls">Collectors</span>.<span class="tok-fn">maxBy</span>(<span class="tok-cls">Comparator</span>.<span class="tok-fn">comparingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>)),
+    (a, b) -&gt; <span class="tok-kw">new</span> <span class="tok-cls">ThongKe</span>(a.<span class="tok-fn">map</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>).<span class="tok-fn">orElse</span>(<span class="tok-num">0.0</span>),
+                            b.<span class="tok-fn">map</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>).<span class="tok-fn">orElse</span>(<span class="tok-num">0.0</span>))
+));</code></pre>
+        </div>
+
+        <h2 id="optional">10. <code>Optional</code></h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Optional.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// --- Tạo ---</span>
+<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; a = <span class="tok-cls">Optional</span>.<span class="tok-fn">of</span>(<span class="tok-str">"giá trị"</span>);       <span class="tok-com">// NPE nếu null</span>
+<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; b = <span class="tok-cls">Optional</span>.<span class="tok-fn">ofNullable</span>(coTheNull);
+<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; c = <span class="tok-cls">Optional</span>.<span class="tok-fn">empty</span>();
+
+<span class="tok-com">// --- ❌ CÁCH DÙNG SAI: chỉ thay if-null bằng if-isPresent ---</span>
+<span class="tok-kw">if</span> (b.<span class="tok-fn">isPresent</span>()) {
+    <span class="tok-cls">String</span> s = b.<span class="tok-fn">get</span>();
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(s.<span class="tok-fn">toUpperCase</span>());
+}
+<span class="tok-com">// Không tốt hơn `if (x != null)` chút nào — chỉ dài hơn</span>
+
+<span class="tok-com">// --- ✅ CÁCH DÙNG ĐÚNG: nối chuỗi thao tác ---</span>
+b.<span class="tok-fn">map</span>(<span class="tok-cls">String</span>::<span class="tok-fn">toUpperCase</span>).<span class="tok-fn">ifPresent</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);
+
+<span class="tok-com">// --- Lấy giá trị ---</span>
+b.<span class="tok-fn">orElse</span>(<span class="tok-str">"mặc định"</span>);                   <span class="tok-com">// giá trị đã tính sẵn</span>
+b.<span class="tok-fn">orElseGet</span>(() -&gt; <span class="tok-fn">tinhToanTonKem</span>());     <span class="tok-com">// ⭐ CHỈ chạy khi rỗng</span>
+b.<span class="tok-fn">orElseThrow</span>();                          <span class="tok-com">// NoSuchElementException</span>
+b.<span class="tok-fn">orElseThrow</span>(() -&gt; <span class="tok-kw">new</span> <span class="tok-cls">MyException</span>(<span class="tok-str">"không thấy"</span>));
+
+<span class="tok-com">// --- Biến đổi ---</span>
+b.<span class="tok-fn">map</span>(<span class="tok-cls">String</span>::<span class="tok-fn">length</span>);                  <span class="tok-com">// Optional&lt;Integer&gt;</span>
+b.<span class="tok-fn">filter</span>(s -&gt; s.<span class="tok-fn">length</span>() &gt; <span class="tok-num">3</span>);          <span class="tok-com">// rỗng nếu không thoả</span>
+b.<span class="tok-fn">flatMap</span>(s -&gt; <span class="tok-fn">timTrongDb</span>(s));          <span class="tok-com">// khi hàm đã trả Optional</span>
+b.<span class="tok-fn">or</span>(() -&gt; <span class="tok-cls">Optional</span>.<span class="tok-fn">of</span>(<span class="tok-str">"dự phòng"</span>));    <span class="tok-com">// Java 9+</span>
+
+<span class="tok-com">// --- Thực hiện hành động ---</span>
+b.<span class="tok-fn">ifPresent</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);
+b.<span class="tok-fn">ifPresentOrElse</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>,
+                 () -&gt; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-str">"trống"</span>));   <span class="tok-com">// Java 9+</span>
+b.<span class="tok-fn">stream</span>();                               <span class="tok-com">// Java 9+: Stream 0 hoặc 1 phần tử</span>
+
+
+<span class="tok-com">// --- Ví dụ thực tế: chuỗi tra cứu an toàn ---</span>
+<span class="tok-cls">String</span> thanhPho = <span class="tok-fn">timNguoiDung</span>(id)          <span class="tok-com">// Optional&lt;NguoiDung&gt;</span>
+    .<span class="tok-fn">flatMap</span>(<span class="tok-cls">NguoiDung</span>::<span class="tok-fn">getDiaChi</span>)        <span class="tok-com">// Optional&lt;DiaChi&gt;</span>
+    .<span class="tok-fn">map</span>(<span class="tok-cls">DiaChi</span>::<span class="tok-fn">getThanhPho</span>)             <span class="tok-com">// Optional&lt;String&gt;</span>
+    .<span class="tok-fn">filter</span>(t -&gt; !t.<span class="tok-fn">isBlank</span>())
+    .<span class="tok-fn">orElse</span>(<span class="tok-str">"Không rõ"</span>);
+<span class="tok-com">// Thay cho bốn tầng kiểm tra null lồng nhau</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Ba cách dùng sai <code>Optional</code></div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>SaiLam.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com">// ❌ ① Làm TRƯỜNG của class</span>
+<span class="tok-kw">class</span> <span class="tok-cls">NguoiDung</span> {
+    <span class="tok-kw">private</span> <span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; email;   <span class="tok-com">// ❌ Optional KHÔNG Serializable,
+                                        //    tốn thêm object cho mỗi instance</span>
+    <span class="tok-kw">private</span> <span class="tok-cls">String</span> email;             <span class="tok-com">// ✅ trường có thể null...</span>
+    <span class="tok-kw">public</span> <span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; <span class="tok-fn">getEmail</span>() {
+        <span class="tok-kw">return</span> <span class="tok-cls">Optional</span>.<span class="tok-fn">ofNullable</span>(email);   <span class="tok-com">// ...nhưng getter trả Optional ✅</span>
+    }
+}
+
+<span class="tok-com">// ❌ ② Làm THAM SỐ method</span>
+<span class="tok-kw">void</span> <span class="tok-fn">xuLy</span>(<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; ten) { }        <span class="tok-com">// ❌ người gọi phải bọc thủ công,
+                                              //    và vẫn truyền null được!</span>
+<span class="tok-kw">void</span> <span class="tok-fn">xuLy</span>(<span class="tok-cls">String</span> ten) { }                   <span class="tok-com">// ✅ hoặc nạp chồng hai bản</span>
+
+<span class="tok-com">// ❌ ③ Gọi get() mà không kiểm tra</span>
+<span class="tok-cls">String</span> s = tim(id).<span class="tok-fn">get</span>();                  <span class="tok-com">// ❌ NoSuchElementException — không hơn gì NPE</span>
+<span class="tok-cls">String</span> s2 = tim(id).<span class="tok-fn">orElseThrow</span>(
+    () -&gt; <span class="tok-kw">new</span> <span class="tok-cls">KhongTimThay</span>(<span class="tok-str">"Không có người dùng "</span> + id));   <span class="tok-com">// ✅ có ngữ cảnh</span>
+
+<span class="tok-com">// ❌ Optional&lt;List&gt; — dùng list rỗng thay vì Optional rỗng</span>
+<span class="tok-cls">Optional</span>&lt;<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt;&gt; ds;      <span class="tok-com">// ❌ hai cách biểu diễn "không có gì"</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; ds2;                  <span class="tok-com">// ✅ trả List.of() khi rỗng</span></code></pre>
+          </div>
+          <p>
+            <strong>Mục đích thiết kế của <code>Optional</code></strong> (theo chính tác giả Brian Goetz): làm
+            <em>kiểu trả về</em> cho những phương thức mà "không có kết quả" là chuyện bình thường. Nó không phải
+            công cụ thay thế mọi chỗ dùng <code>null</code>.
+          </p>
+        </div>
+
+        <h2 id="parallel">11. Parallel stream — và vì sao thường không nên dùng</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Parallel.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// Chuyển sang song song chỉ cần một từ</span>
+<span class="tok-kw">long</span> tong = ds.<span class="tok-fn">parallelStream</span>().<span class="tok-fn">mapToLong</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>).<span class="tok-fn">sum</span>();
+<span class="tok-kw">long</span> tong2 = ds.<span class="tok-fn">stream</span>().<span class="tok-fn">parallel</span>().<span class="tok-fn">count</span>();
+
+<span class="tok-com">// ⚠️ Mặc định dùng ForkJoinPool.commonPool() — CHUNG cho toàn ứng dụng!</span>
+<span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(<span class="tok-cls">ForkJoinPool</span>.<span class="tok-fn">commonPool</span>().<span class="tok-fn">getParallelism</span>());
+<span class="tok-com">// = số nhân CPU - 1</span></code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Điều kiện để parallel <em>có thể</em> nhanh hơn</th><th>Vì sao</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Dữ liệu <strong>rất lớn</strong> (từ ~10.000 phần tử)</td><td>Chi phí chia việc và gộp kết quả phải nhỏ hơn phần tiết kiệm được</td></tr>
+              <tr><td>Mỗi phần tử tốn <strong>nhiều CPU</strong></td><td>Nếu thao tác chỉ là <code>x * 2</code>, chi phí điều phối lớn hơn công việc</td></tr>
+              <tr><td>Nguồn <strong>chia tách tốt</strong></td><td><code>ArrayList</code>, mảng, <code>IntStream.range</code> chia dễ; <code>LinkedList</code>, <code>Iterator</code> thì không</td></tr>
+              <tr><td>Thao tác <strong>không phụ thuộc thứ tự</strong></td><td><code>sorted</code>, <code>limit</code>, <code>forEachOrdered</code> buộc phải đồng bộ</td></tr>
+              <tr><td>Hàm <strong>không có tác dụng phụ</strong></td><td>Sửa biến chung từ nhiều luồng gây kết quả sai</td></tr>
+              <tr><td>Không dính <strong>I/O</strong></td><td>Luồng chờ I/O làm nghẽn pool chung của toàn ứng dụng</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ParallelSai.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ SAI: tác dụng phụ lên collection không an toàn luồng</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; kq = <span class="tok-kw">new</span> <span class="tok-cls">ArrayList</span>&lt;&gt;();
+ds.<span class="tok-fn">parallelStream</span>().<span class="tok-fn">forEach</span>(kq::<span class="tok-fn">add</span>);
+<span class="tok-com">// → mất phần tử, hoặc ArrayIndexOutOfBoundsException, hoặc null xen kẽ
+//   Kết quả KHÁC NHAU mỗi lần chạy — loại bug khó tái hiện nhất</span>
+
+<span class="tok-com">// ✅ ĐÚNG: để collect() lo việc gộp</span>
+<span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; kq2 = ds.<span class="tok-fn">parallelStream</span>().<span class="tok-fn">map</span>(...).<span class="tok-fn">toList</span>();
+
+
+<span class="tok-com">// ❌ SAI: I/O trong parallel stream</span>
+duongDan.<span class="tok-fn">parallelStream</span>().<span class="tok-fn">forEach</span>(p -&gt; <span class="tok-cls">Files</span>.<span class="tok-fn">readString</span>(p));
+<span class="tok-com">// → chiếm hết pool CHUNG, mọi parallel stream khác trong ứng dụng bị treo</span>
+
+
+<span class="tok-com">// ❌ SAI: dữ liệu quá nhỏ</span>
+<span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>).<span class="tok-fn">parallelStream</span>().<span class="tok-fn">map</span>(n -&gt; n * <span class="tok-num">2</span>).<span class="tok-fn">toList</span>();
+<span class="tok-com">// → chậm hơn tuần tự HÀNG CHỤC lần vì chi phí khởi tạo pool</span></code></pre>
+        </div>
+
+        <div class="java-rule">
+          <strong>Quy tắc về parallel stream:</strong> mặc định là <em>không dùng</em>. Chỉ dùng khi bạn đã
+          <strong>đo</strong> và chứng minh được nó nhanh hơn với dữ liệu thật của mình. Câu nói phổ biến trong cộng
+          đồng Java: <em>"nếu bạn không đo, bạn đang làm chậm chương trình."</em>
+        </div>
+
+        <h2 id="khi-nao-khong">12. Khi nào <em>không</em> dùng Stream</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>KhiNaoKhong.java</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com">// ❌ Stream cho việc quá đơn giản — dài hơn và chậm hơn</span>
+<span class="tok-cls">IntStream</span>.<span class="tok-fn">range</span>(<span class="tok-num">0</span>, <span class="tok-num">10</span>).<span class="tok-fn">forEach</span>(<span class="tok-cls">System</span>.out::<span class="tok-fn">println</span>);
+<span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; <span class="tok-num">10</span>; i++) <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(i);   <span class="tok-com">// ✅ rõ hơn</span>
+
+<span class="tok-com">// ❌ Cần cả CHỈ SỐ lẫn giá trị — Stream làm rất vụng</span>
+<span class="tok-cls">IntStream</span>.<span class="tok-fn">range</span>(<span class="tok-num">0</span>, ds.<span class="tok-fn">size</span>())
+    .<span class="tok-fn">forEach</span>(i -&gt; <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(i + <span class="tok-str">": "</span> + ds.<span class="tok-fn">get</span>(i)));
+<span class="tok-kw">for</span> (<span class="tok-kw">int</span> i = <span class="tok-num">0</span>; i &lt; ds.<span class="tok-fn">size</span>(); i++)                       <span class="tok-com">// ✅</span>
+    <span class="tok-cls">System</span>.out.<span class="tok-fn">println</span>(i + <span class="tok-str">": "</span> + ds.<span class="tok-fn">get</span>(i));
+
+<span class="tok-com">// ❌ Cần break/continue giữa chừng với logic phức tạp</span>
+<span class="tok-com">// Stream chỉ có findFirst/anyMatch/takeWhile — không linh hoạt bằng vòng lặp</span>
+
+<span class="tok-com">// ❌ Cần sửa biến bên ngoài</span>
+<span class="tok-com">// Vướng ràng buộc effectively final; ép dùng AtomicInteger là dấu hiệu
+// bạn đang dùng sai công cụ</span>
+
+<span class="tok-com">// ❌ Ném checked exception bên trong lambda</span>
+duongDan.<span class="tok-fn">forEach</span>(p -&gt; <span class="tok-cls">Files</span>.<span class="tok-fn">readString</span>(p));   <span class="tok-com">// ❌ không biên dịch được</span>
+<span class="tok-kw">for</span> (<span class="tok-cls">Path</span> p : duongDan) <span class="tok-cls">Files</span>.<span class="tok-fn">readString</span>(p);  <span class="tok-com">// ✅ với method có throws</span>
+
+<span class="tok-com">// ✅ Stream toả sáng khi: LỌC → BIẾN ĐỔI → NHÓM/TỔNG HỢP</span>
+<span class="tok-cls">Map</span>&lt;<span class="tok-cls">String</span>, <span class="tok-cls">Double</span>&gt; diemTbTheoLop = ds.<span class="tok-fn">stream</span>()
+    .<span class="tok-fn">filter</span>(s -&gt; s.<span class="tok-fn">tuoi</span>() &gt;= <span class="tok-num">18</span>)
+    .<span class="tok-fn">collect</span>(<span class="tok-cls">Collectors</span>.<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>,
+                          <span class="tok-cls">Collectors</span>.<span class="tok-fn">averagingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>)));
+<span class="tok-com">// Viết bằng vòng lặp: khoảng 15 dòng với Map lồng nhau và kiểm tra null</span></code></pre>
+        </div>
+
+        <h2 id="cheat-sheet">13. Cheat sheet chương 10</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Cách viết</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Lọc rồi thu về list</td><td><code>ds.stream().filter(dk).toList()</code></td></tr>
+              <tr><td>Biến đổi</td><td><code>.map(X::getY)</code></td></tr>
+              <tr><td>Làm phẳng lồng nhau</td><td><code>.flatMap(List::stream)</code></td></tr>
+              <tr><td>Nhóm theo tiêu chí</td><td><code>collect(groupingBy(X::getY))</code></td></tr>
+              <tr><td>Nhóm + đếm</td><td><code>collect(groupingBy(X::getY, counting()))</code></td></tr>
+              <tr><td>Chia đôi</td><td><code>collect(partitioningBy(dk))</code></td></tr>
+              <tr><td>Nối chuỗi</td><td><code>collect(joining(", ", "[", "]"))</code></td></tr>
+              <tr><td>Tổng / trung bình</td><td><code>.mapToInt(X::getY).sum()</code> / <code>.average()</code></td></tr>
+              <tr><td>Tìm phần tử đầu thoả</td><td><code>.filter(dk).findFirst()</code></td></tr>
+              <tr><td>Kiểm tra tồn tại</td><td><code>.anyMatch(dk)</code></td></tr>
+              <tr><td>Sắp nhiều tiêu chí</td><td><code>.sorted(comparing(A).thenComparing(B))</code></td></tr>
+              <tr><td>Top N</td><td><code>.sorted(cmp).limit(n)</code></td></tr>
+              <tr><td>Loại trùng</td><td><code>.distinct()</code> (cần <code>equals</code>/<code>hashCode</code>)</td></tr>
+              <tr><td>Tránh autoboxing</td><td><code>IntStream</code>, <code>mapToInt</code>, <code>IntPredicate</code></td></tr>
+              <tr><td>Giá trị mặc định tốn kém</td><td><code>opt.orElseGet(() -&gt; …)</code> — không phải <code>orElse</code></td></tr>
+              <tr><td>Chuỗi tra cứu an toàn</td><td><code>opt.flatMap(…).map(…).orElse(…)</code></td></tr>
+              <tr><td>Kiểu trả về "có thể không có"</td><td><code>Optional&lt;T&gt;</code> — không dùng cho trường/tham số</td></tr>
+              <tr><td>Song song</td><td><strong>Chỉ khi đã đo</strong> — mặc định là không</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Viết lại chương 8 bằng Stream</h4>
+            <div class="exercise-body">
+              <p>Lấy bài "Phân tích tệp nhật ký" ở chương 8 và viết lại <strong>toàn bộ</strong> bằng Stream:</p>
+              <ol>
+                <li>Số dòng theo cấp độ → <code>groupingBy</code> + <code>counting</code>.</li>
+                <li>Tập cấp độ của mỗi module → <code>groupingBy</code> + <code>mapping</code> + <code>toSet</code>.</li>
+                <li>Top 5 module nhiều lỗi nhất → <code>groupingBy</code> → <code>entrySet().stream()</code> → <code>sorted</code> → <code>limit</code>.</li>
+                <li>Lỗi theo giờ, sắp theo thời gian → <code>groupingBy(…, TreeMap::new, counting())</code>.</li>
+                <li>Module có lỗi mọi giờ → kết hợp <code>groupingBy</code> và <code>filter</code>.</li>
+              </ol>
+              <p>Sau đó lập bảng so sánh: <strong>số dòng code</strong>, <strong>độ dễ đọc</strong> (tự chấm 1-5), và <strong>thời gian chạy</strong> với tệp 1 triệu dòng.</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Kết luận bạn nên rút ra: Stream <em>ngắn hơn nhiều</em> ở các bài nhóm/tổng hợp (thường 1 dòng
+                    thay 8-10 dòng), nhưng có thể <em>chậm hơn một chút</em> vì chi phí tạo object trung gian. Với
+                    dữ liệu vừa và nhỏ, tính rõ ràng thắng; với vòng lặp nóng hàng triệu lần, vòng lặp thắng.<br/>
+                    Đọc tệp: <code>try (var dong = Files.lines(path)) { … }</code> — Stream từ tệp
+                    <strong>phải</strong> đóng.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Hệ thống báo cáo bán hàng</h4>
+            <div class="exercise-body">
+              <p>Cho <code>record DonHang(String maDon, String khachHang, String sanPham, int soLuong, long donGia, LocalDate ngay)</code>, viết các báo cáo <strong>chỉ dùng Stream</strong>:</p>
+              <ol>
+                <li>Tổng doanh thu theo tháng, sắp theo thời gian.</li>
+                <li>Top 3 sản phẩm bán chạy nhất (theo số lượng).</li>
+                <li>Top 3 khách hàng chi nhiều nhất (theo tổng tiền).</li>
+                <li>Với mỗi khách: số đơn, tổng tiền, đơn giá trị nhất — gom vào một <code>record ThongKeKhach</code>.</li>
+                <li>Sản phẩm nào <em>chưa từng</em> được khách VIP mua? (VIP = tổng chi &gt; 10 triệu)</li>
+                <li>Giá trị đơn hàng trung bình theo từng ngày trong tuần.</li>
+                <li>Chuỗi ngày <em>liên tiếp</em> dài nhất có đơn hàng.</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    (1): <code>groupingBy(d -&gt; YearMonth.from(d.ngay()), TreeMap::new, summingLong(this::tongTien))</code>.<br/>
+                    (4): <code>Collectors.collectingAndThen</code> hoặc <code>teeing</code>; hoặc đơn giản nhất là
+                    <code>groupingBy</code> rồi <code>entrySet().stream().map(…)</code>.<br/>
+                    (7) là bài duy nhất mà Stream <em>không</em> phải công cụ tốt — cần trạng thái giữa các phần tử.
+                    Hãy thử làm bằng Stream, thấy nó gượng ép ra sao, rồi viết lại bằng vòng lặp và so sánh. Đây là
+                    bài học về giới hạn của Stream.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Tự cài Stream tối giản</h4>
+            <div class="exercise-body">
+              <p>Cài đặt <code>MyStream&lt;T&gt;</code> với API tối giản để hiểu tính lười hoạt động thế nào:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>API</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">interface</span> <span class="tok-cls">MyStream</span>&lt;T&gt; {
+    <span class="tok-kw">static</span> &lt;T&gt; <span class="tok-cls">MyStream</span>&lt;T&gt; <span class="tok-fn">of</span>(<span class="tok-cls">List</span>&lt;T&gt; ds);
+    <span class="tok-cls">MyStream</span>&lt;T&gt; <span class="tok-fn">filter</span>(<span class="tok-cls">Predicate</span>&lt;? <span class="tok-kw">super</span> T&gt; dk);      <span class="tok-com">// lười</span>
+    &lt;R&gt; <span class="tok-cls">MyStream</span>&lt;R&gt; <span class="tok-fn">map</span>(<span class="tok-cls">Function</span>&lt;? <span class="tok-kw">super</span> T, ? <span class="tok-kw">extends</span> R&gt; f);  <span class="tok-com">// lười</span>
+    <span class="tok-cls">MyStream</span>&lt;T&gt; <span class="tok-fn">limit</span>(<span class="tok-kw">int</span> n);                          <span class="tok-com">// lười</span>
+    <span class="tok-cls">List</span>&lt;T&gt; <span class="tok-fn">toList</span>();                                <span class="tok-com">// kết thúc</span>
+    <span class="tok-cls">Optional</span>&lt;T&gt; <span class="tok-fn">findFirst</span>();                          <span class="tok-com">// kết thúc, ngắn mạch</span>
+    <span class="tok-kw">long</span> <span class="tok-fn">count</span>();                                    <span class="tok-com">// kết thúc</span>
+}</code></pre>
+              </div>
+              <ul>
+                <li>Thao tác trung gian <strong>không được</strong> xử lý gì — chỉ ghi lại việc cần làm.</li>
+                <li>Xử lý theo <strong>chiều dọc</strong>: mỗi phần tử đi qua toàn bộ chuỗi rồi mới tới phần tử sau.</li>
+                <li><code>findFirst</code> và <code>limit</code> phải <strong>ngắn mạch</strong> thật sự.</li>
+                <li>Ném <code>IllegalStateException</code> nếu dùng lại stream đã tiêu thụ.</li>
+                <li>Chứng minh bằng <code>System.out.println</code> trong lambda rằng thứ tự thực thi đúng như Stream thật.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Cách đơn giản nhất: lưu một danh sách các "giai đoạn", mỗi giai đoạn là một
+                    <code>Function&lt;Object, Object&gt;</code> hoặc một record mô tả loại thao tác. Khi thao tác
+                    kết thúc chạy, duyệt phần tử nguồn, cho từng phần tử đi qua toàn bộ giai đoạn, và dừng sớm khi
+                    đủ điều kiện.<br/>
+                    Cách "đúng chuẩn" hơn (và là cách JDK làm) là dùng mẫu <em>Sink</em>: mỗi giai đoạn bọc giai
+                    đoạn sau và có phương thức <code>accept(T)</code> cùng cờ <code>cancellationRequested()</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Refactor code null-check sang <code>Optional</code></h4>
+            <div class="exercise-body">
+              <p>Viết lại đoạn sau bằng <code>Optional</code>, rồi trả lời các câu hỏi bên dưới.</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>CanSua.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">public</span> <span class="tok-cls">String</span> <span class="tok-fn">layMaBuuChinh</span>(<span class="tok-cls">String</span> maNguoiDung) {
+    <span class="tok-cls">NguoiDung</span> nd = repo.<span class="tok-fn">tim</span>(maNguoiDung);
+    <span class="tok-kw">if</span> (nd != <span class="tok-kw">null</span>) {
+        <span class="tok-cls">DiaChi</span> dc = nd.<span class="tok-fn">getDiaChi</span>();
+        <span class="tok-kw">if</span> (dc != <span class="tok-kw">null</span>) {
+            <span class="tok-cls">String</span> ma = dc.<span class="tok-fn">getMaBuuChinh</span>();
+            <span class="tok-kw">if</span> (ma != <span class="tok-kw">null</span> &amp;&amp; !ma.<span class="tok-fn">isBlank</span>()) {
+                <span class="tok-kw">return</span> ma.<span class="tok-fn">toUpperCase</span>();
+            }
+        }
+    }
+    <span class="tok-kw">return</span> <span class="tok-str">"KHONG_RO"</span>;
+}</code></pre>
+              </div>
+              <ul>
+                <li>Viết lại với <code>Optional</code> — bao nhiêu dòng?</li>
+                <li>Nếu <code>repo.tim()</code> đổi thành trả <code>Optional&lt;NguoiDung&gt;</code>, code đổi thế nào?</li>
+                <li>Vì sao dùng <code>flatMap</code> chứ không phải <code>map</code> khi getter đã trả <code>Optional</code>?</li>
+                <li>Phiên bản nào dễ đọc hơn với người mới? Phiên bản nào dễ <em>mở rộng</em> hơn khi thêm một tầng nữa?</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>map</code> với hàm trả <code>Optional&lt;X&gt;</code> sẽ cho
+                    <code>Optional&lt;Optional&lt;X&gt;&gt;</code> — lồng hai tầng, vô dụng.
+                    <code>flatMap</code> "làm phẳng" một tầng, đúng như <code>flatMap</code> của Stream.<br/>
+                    Câu cuối là câu quan trọng: chuỗi <code>Optional</code> thêm một tầng chỉ tốn <em>một
+                    dòng</em>, còn null-check lồng nhau thêm <em>ba dòng và một cấp thụt lề</em>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Đo hiệu năng: vòng lặp vs Stream vs parallel</h4>
+            <div class="exercise-body">
+              <p>Benchmark ba cách với n = 1.000 / 100.000 / 10.000.000:</p>
+              <ol>
+                <li>Tổng bình phương các số chẵn — <strong>phép tính nhẹ</strong>.</li>
+                <li>Tổng của <code>Math.sqrt(Math.sin(x) * Math.cos(x))</code> — <strong>phép tính nặng</strong>.</li>
+                <li>Lọc + ánh xạ + thu thập 1 triệu chuỗi.</li>
+              </ol>
+              <p>Với mỗi bài, chạy cả ba cách: vòng lặp <code>for</code>, <code>stream()</code>, <code>parallelStream()</code>. Lập bảng và trả lời:</p>
+              <ul>
+                <li>Ở kích thước nào parallel bắt đầu thắng? Có khác nhau giữa bài 1 và bài 2 không? Vì sao?</li>
+                <li><code>IntStream</code> so với <code>Stream&lt;Integer&gt;</code> chênh nhau bao nhiêu? Giải thích bằng autoboxing.</li>
+                <li>Máy bạn có mấy nhân? Tốc độ tăng có tỉ lệ với số nhân không?</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Kết quả điển hình: với phép tính <em>nhẹ</em>, parallel chỉ thắng từ vài triệu phần tử trở lên;
+                    với phép tính <em>nặng</em>, nó thắng ngay từ vài nghìn. Điều này khẳng định:
+                    <strong>lượng công việc trên mỗi phần tử</strong> quan trọng hơn số lượng phần tử.<br/>
+                    <code>Stream&lt;Integer&gt;</code> chậm hơn <code>IntStream</code> khoảng 4-6 lần do
+                    autoboxing.<br/>
+                    Warm-up JIT rất quan trọng ở bài này: chạy ít nhất 5 lượt và bỏ 2 lượt đầu. Lý tưởng nhất là
+                    dùng JMH, nhưng đo thủ công cũng đủ thấy xu hướng.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Functional interface là gì? Vì sao nó cần thiết cho lambda?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Là interface có <strong>đúng một phương thức trừu tượng</strong> (SAM — Single Abstract Method).
+                Phương thức <code>default</code> và <code>static</code> không tính, muốn thêm bao nhiêu cũng được.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Vì sao cần thiết:</strong> lambda không có tên và không có kiểu riêng — nó chỉ là "cách viết
+                tắt" để cài đặt một interface. Trình biên dịch phải xác định được lambda đó cài đặt phương thức nào.
+                Nếu interface có hai phương thức trừu tượng, không có cách nào biết <code>(a, b) -&gt; a + b</code>
+                là cài đặt cái nào.
+              </p>
+              <p style="margin-top: 8px;">
+                Chú thích <code>@FunctionalInterface</code> là tuỳ chọn nhưng <strong>nên có</strong>: nó khiến trình
+                biên dịch kiểm tra ràng buộc. Không có nó, ai đó thêm phương thức thứ hai và mọi lambda dùng
+                interface đó trong toàn dự án ngừng biên dịch — với lỗi báo ở chỗ khác, rất khó truy nguyên.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Nêu ba đặc tính của Stream.</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ol>
+                <li>
+                  <strong>Lười (lazy)</strong> — thao tác trung gian (<code>filter</code>, <code>map</code>,
+                  <code>sorted</code>) không chạy gì cả cho tới khi có thao tác kết thúc. Không có thao tác kết
+                  thúc thì <em>không có gì xảy ra</em>.
+                </li>
+                <li>
+                  <strong>Một lần dùng</strong> — tiêu thụ xong là hết. Dùng lại ném
+                  <code>IllegalStateException: stream has already been operated upon or closed</code>. Cần dùng hai
+                  lần thì tạo hai stream từ nguồn.
+                </li>
+                <li>
+                  <strong>Không sửa nguồn</strong> — mọi thao tác trả về stream hoặc giá trị mới; collection gốc
+                  không đổi.
+                </li>
+              </ol>
+              <p style="margin-top: 8px;">
+                Hệ quả quan trọng nhất của tính lười: Stream xử lý <strong>theo chiều dọc</strong> — mỗi phần tử đi
+                qua toàn bộ chuỗi thao tác rồi mới tới phần tử sau. Nhờ vậy không tạo collection trung gian, và các
+                thao tác ngắn mạch (<code>findFirst</code>, <code>anyMatch</code>, <code>limit</code>) dừng ngay khi
+                đủ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p><code>map</code> và <code>flatMap</code> khác nhau thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code><strong>map</strong></code> biến đổi <em>một</em> phần tử thành <em>một</em> phần tử —
+                <code>T → R</code>. Số phần tử không đổi.
+              </p>
+              <p style="margin-top: 8px;">
+                <code><strong>flatMap</strong></code> biến đổi <em>một</em> phần tử thành <em>một stream</em>, rồi
+                <strong>nối tất cả các stream đó lại</strong> — <code>T → Stream&lt;R&gt;</code>, kết quả là
+                <code>Stream&lt;R&gt;</code> chứ không phải <code>Stream&lt;Stream&lt;R&gt;&gt;</code>. Số phần tử
+                thay đổi.
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>SoSanh.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">List</span>&lt;<span class="tok-cls">String</span>&gt; cau = <span class="tok-cls">List</span>.<span class="tok-fn">of</span>(<span class="tok-str">"xin chào"</span>, <span class="tok-str">"thế giới"</span>);
+
+cau.<span class="tok-fn">stream</span>().<span class="tok-fn">map</span>(c -&gt; c.<span class="tok-fn">split</span>(<span class="tok-str">" "</span>)).<span class="tok-fn">toList</span>();
+<span class="tok-com">// List&lt;String[]&gt; — hai mảng ❌</span>
+
+cau.<span class="tok-fn">stream</span>().<span class="tok-fn">flatMap</span>(c -&gt; <span class="tok-cls">Arrays</span>.<span class="tok-fn">stream</span>(c.<span class="tok-fn">split</span>(<span class="tok-str">" "</span>))).<span class="tok-fn">toList</span>();
+<span class="tok-com">// [xin, chào, thế, giới] ✅</span></code></pre>
+              </div>
+              <p>
+                Dùng <code>flatMap</code> khi cần <strong>làm phẳng</strong> cấu trúc lồng nhau:
+                <code>List&lt;List&lt;X&gt;&gt;</code> → <code>List&lt;X&gt;</code>, hoặc lấy mọi đơn hàng của mọi
+                khách hàng. <code>Optional</code> cũng có <code>flatMap</code> với ý nghĩa y hệt.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Vì sao biến bên ngoài dùng trong lambda phải "effectively final"?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì lambda có thể <strong>sống lâu hơn</strong> phương thức tạo ra nó — được lưu vào trường, truyền
+                sang luồng khác, hoặc trả về. Biến cục bộ nằm trên <em>stack</em> và biến mất khi phương thức kết
+                thúc, nên lambda phải <strong>sao chép giá trị</strong> vào chính nó.
+              </p>
+              <p style="margin-top: 8px;">
+                Nếu cho phép sửa, sẽ có hai bản sao khác nhau: biến gốc và bản trong lambda. Sửa bên nào thì bên kia
+                không thấy — nguồn bug cực kỳ khó hiểu. Java chọn cấm hẳn thay vì để lập trình viên tự xoay xở.
+              </p>
+              <p style="margin-top: 8px;"><strong>Cách xử lý khi cần "biến đổi":</strong></p>
+              <ul>
+                <li>Dùng mảng một phần tử <code>int[] dem = {0}</code> — bản thân mảng là tham chiếu, không đổi.</li>
+                <li>Dùng <code>AtomicInteger</code> — an toàn cả với đa luồng.</li>
+                <li><strong>Tốt nhất:</strong> viết lại bằng Stream để không cần biến đếm nào — <code>.count()</code>, <code>.sum()</code>, <code>.collect()</code>.</li>
+              </ul>
+              <p>
+                Liên quan: <code>this</code> trong lambda trỏ tới object <em>bao ngoài</em>, không phải lambda —
+                khác hẳn anonymous class. Lambda không tạo phạm vi <code>this</code> mới.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p><code>Optional.orElse</code> và <code>orElseGet</code> khác nhau thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code><strong>orElse(T)</strong></code> nhận một <em>giá trị đã tính sẵn</em> — biểu thức đó
+                <strong>luôn được đánh giá</strong>, kể cả khi <code>Optional</code> có giá trị.
+              </p>
+              <p style="margin-top: 8px;">
+                <code><strong>orElseGet(Supplier)</strong></code> nhận một <em>hàm</em> —
+                <strong>chỉ chạy khi</strong> <code>Optional</code> rỗng.
+              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>KhacBiet.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; co = <span class="tok-cls">Optional</span>.<span class="tok-fn">of</span>(<span class="tok-str">"giá trị"</span>);
+
+co.<span class="tok-fn">orElse</span>(<span class="tok-fn">tinhToanTonKem</span>());        <span class="tok-com">// ⚠️ tinhToanTonKem() VẪN CHẠY!</span>
+co.<span class="tok-fn">orElseGet</span>(() -&gt; <span class="tok-fn">tinhToanTonKem</span>()); <span class="tok-com">// ✅ KHÔNG chạy</span></code></pre>
+              </div>
+              <p style="margin-top: 8px;"><strong>Quy tắc chọn:</strong></p>
+              <ul>
+                <li><code>orElse</code> — hằng số hoặc giá trị rẻ: <code>orElse("")</code>, <code>orElse(0)</code>.</li>
+                <li><code>orElseGet</code> — mọi thứ tốn kém: truy vấn database, đọc tệp, tạo object lớn.</li>
+              </ul>
+              <p>
+                Đây là bẫy hiệu năng phổ biến nhất với <code>Optional</code>, và cũng là một lỗi âm thầm — code vẫn
+                đúng, chỉ chậm hơn cần thiết. Tương tự với <code>orElseThrow(Supplier)</code>: exception chỉ được
+                <em>tạo</em> khi thực sự cần ném.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Vì sao không nên dùng <code>Optional</code> làm trường của class hay tham số method?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Theo chính tác giả Brian Goetz, <code>Optional</code> được thiết kế cho <strong>một mục đích duy
+                nhất</strong>: làm <em>kiểu trả về</em> của phương thức mà "không có kết quả" là chuyện bình thường.
+              </p>
+              <p style="margin-top: 8px;"><strong>Làm trường:</strong></p>
+              <ul>
+                <li><code>Optional</code> <strong>không</strong> <code>Serializable</code> — phá vỡ serialization.</li>
+                <li>Tốn thêm một object cho <em>mỗi</em> instance — đáng kể với hàng triệu object.</li>
+                <li>Framework (JPA, Jackson) thường không xử lý được.</li>
+              </ul>
+              <p style="margin-top: 8px;"><strong>Làm tham số:</strong></p>
+              <ul>
+                <li>Người gọi phải tự bọc <code>Optional.of(x)</code> — dài dòng.</li>
+                <li>Vẫn truyền <code>null</code> vào được, nên chẳng an toàn hơn gì — chỉ thêm một tầng.</li>
+                <li>Thay vào đó: nạp chồng method, hoặc dùng builder.</li>
+              </ul>
+              <p style="margin-top: 8px;"><strong>Cách đúng:</strong></p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>Dung.java</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">private</span> <span class="tok-cls">String</span> email;                    <span class="tok-com">// trường: có thể null</span>
+<span class="tok-kw">public</span> <span class="tok-cls">Optional</span>&lt;<span class="tok-cls">String</span>&gt; <span class="tok-fn">getEmail</span>() {     <span class="tok-com">// getter: trả Optional ✅</span>
+    <span class="tok-kw">return</span> <span class="tok-cls">Optional</span>.<span class="tok-fn">ofNullable</span>(email);
+}</code></pre>
+              </div>
+              <p>
+                Cũng đừng dùng <code>Optional&lt;List&gt;</code> — trả về <code>List.of()</code> rỗng, vì list rỗng
+                đã biểu diễn "không có gì" rồi.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Khi nào parallel stream thực sự nhanh hơn?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Chỉ khi thoả <strong>đồng thời</strong> các điều kiện:</p>
+              <ul>
+                <li><strong>Dữ liệu lớn</strong> — từ khoảng 10.000 phần tử trở lên.</li>
+                <li><strong>Phép tính nặng trên mỗi phần tử</strong> — đây là yếu tố quan trọng <em>hơn</em> số lượng. Với <code>x * 2</code>, chi phí điều phối lớn hơn công việc.</li>
+                <li><strong>Nguồn chia tách tốt</strong> — <code>ArrayList</code>, mảng, <code>IntStream.range</code> chia dễ; <code>LinkedList</code>, <code>Iterator</code>, <code>Files.lines</code> thì không.</li>
+                <li><strong>Không phụ thuộc thứ tự</strong> — <code>sorted</code>, <code>limit</code>, <code>forEachOrdered</code> buộc phải đồng bộ, triệt tiêu lợi ích.</li>
+                <li><strong>Không có tác dụng phụ</strong> — sửa collection chung từ nhiều luồng cho kết quả sai.</li>
+                <li><strong>Không có I/O</strong> — luồng chờ I/O làm nghẽn <code>ForkJoinPool.commonPool()</code>, ảnh hưởng <em>toàn bộ</em> ứng dụng vì pool này dùng chung.</li>
+              </ul>
+              <p style="margin-top: 8px;">
+                <strong>Bẫy lớn nhất:</strong> mọi parallel stream mặc định chia sẻ một pool chung. Một tác vụ chậm
+                sẽ làm treo tất cả những chỗ khác.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Quy tắc:</strong> mặc định không dùng. Chỉ dùng khi đã <em>đo</em> với dữ liệu thật và chứng
+                minh được nó nhanh hơn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Khi nào vòng lặp <code>for</code> tốt hơn Stream?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p><strong>Dùng <code>for</code> khi:</strong></p>
+              <ul>
+                <li><strong>Cần cả chỉ số lẫn giá trị</strong> — Stream làm việc này rất vụng, phải qua <code>IntStream.range</code> rồi <code>get(i)</code>.</li>
+                <li><strong>Cần <code>break</code>/<code>continue</code> với logic phức tạp</strong> — Stream chỉ có <code>findFirst</code>, <code>anyMatch</code>, <code>takeWhile</code>.</li>
+                <li><strong>Cần sửa biến bên ngoài</strong> — vướng ràng buộc effectively final; phải dùng <code>AtomicInteger</code> là dấu hiệu sai công cụ.</li>
+                <li><strong>Ném checked exception</strong> — lambda không khai báo <code>throws</code> được.</li>
+                <li><strong>Thao tác quá đơn giản</strong> — <code>IntStream.range(0,10).forEach(…)</code> dài hơn và chậm hơn <code>for</code>.</li>
+                <li><strong>Vòng lặp nóng cực kỳ</strong> — Stream có chi phí tạo object trung gian và gọi lambda.</li>
+              </ul>
+              <p style="margin-top: 8px;"><strong>Dùng Stream khi:</strong> chuỗi <em>lọc → biến đổi → nhóm/tổng hợp</em>. Đây là chỗ nó thắng áp đảo:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>StreamThang.java</span><button class="copy-btn">Copy</button></div>
+<pre><code>ds.<span class="tok-fn">stream</span>()
+  .<span class="tok-fn">filter</span>(s -&gt; s.<span class="tok-fn">tuoi</span>() &gt;= <span class="tok-num">18</span>)
+  .<span class="tok-fn">collect</span>(<span class="tok-fn">groupingBy</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">lop</span>, <span class="tok-fn">averagingDouble</span>(<span class="tok-cls">SinhVien</span>::<span class="tok-fn">diem</span>)));
+<span class="tok-com">// Viết bằng vòng lặp: ~15 dòng với Map lồng nhau và kiểm tra null</span></code></pre>
+              </div>
+              <p>
+                Tiêu chí thực dụng: <em>"Cách nào diễn đạt ý định rõ hơn?"</em> Không có bên nào luôn thắng.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 10, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Functional interface</strong> — đúng một phương thức trừu tượng; luôn thêm <code>@FunctionalInterface</code>.</li>
+          <li><strong>Lambda</strong>: mọi dạng rút gọn; ràng buộc effectively final và lý do đằng sau.</li>
+          <li><strong>Bốn loại method reference</strong>: static, instance cụ thể, instance tuỳ ý, constructor.</li>
+          <li><strong>Interface hàm dựng sẵn</strong> và cách kết hợp (<code>andThen</code>, <code>compose</code>, <code>negate</code>, <code>and</code>, <code>or</code>).</li>
+          <li><strong>Ba đặc tính Stream</strong>: lười, một lần dùng, không sửa nguồn; xử lý theo chiều dọc.</li>
+          <li><strong>Trung gian</strong>: <code>filter</code>, <code>map</code>, <code>flatMap</code>, <code>distinct</code>, <code>sorted</code>, <code>limit</code>, <code>takeWhile</code>.</li>
+          <li><strong>Kết thúc</strong>: <code>toList</code>, <code>collect</code>, <code>reduce</code>, <code>count</code>, <code>anyMatch</code>, <code>findFirst</code>.</li>
+          <li><strong><code>Collectors</code></strong>: <code>groupingBy</code> nhiều tầng, <code>partitioningBy</code>, <code>joining</code>, <code>toMap</code>, <code>teeing</code>.</li>
+          <li><strong><code>Optional</code></strong> đúng cách: nối chuỗi thay vì <code>isPresent</code>+<code>get</code>; chỉ dùng làm kiểu trả về.</li>
+          <li><strong>Parallel stream</strong>: sáu điều kiện, pool chung, và quy tắc "đo trước khi dùng".</li>
+          <li><strong>Giới hạn của Stream</strong> — khi nào <code>for</code> vẫn tốt hơn.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 5 (OOP nâng cao)</strong> — lambda thay anonymous class; functional interface là interface một method.</li>
+          <li><strong>Chương 7-8 (Collections)</strong> — <code>stream()</code>, <code>removeIf</code>, <code>forEach</code>, <code>Comparator</code> tổ hợp.</li>
+          <li><strong>Chương 9 (Generics)</strong> — <code>Function&lt;? super T, ? extends R&gt;</code>: PECS ở khắp mọi chữ ký của Stream API.</li>
+          <li><strong>Chương 6 (Ngoại lệ)</strong> — vì sao lambda kỵ checked exception; <code>UncheckedIOException</code>.</li>
+          <li><strong>Chương 11 (Tệp tin)</strong> — <code>Files.lines()</code> trả Stream và <strong>phải đóng</strong>.</li>
+          <li><strong>Chương 12 (Đa luồng)</strong> — <code>ForkJoinPool</code> đứng sau parallel stream; <code>CompletableFuture</code> cũng dùng lambda.</li>
+          <li><strong>Chương 13-14</strong> — ánh xạ <code>ResultSet</code> bằng Stream; assertion của JUnit nhận lambda.</li>
+          <li><strong>Python Chương 9</strong> — đối chiếu: generator cũng lười và một lần dùng, nhưng dùng <code>yield</code> thay chuỗi phương thức; comprehension gần với <code>map</code>+<code>filter</code>.</li>
+          <li><strong>JavaScript Chương 5</strong> — <code>Array.map/filter/reduce</code> <em>không</em> lười (tạo mảng trung gian mỗi bước), khác hẳn Stream.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong9.html" class="prev">
+            <div class="dir">← Chương 9</div>
+            <div class="label">Generics</div>
+          </a>
+          <a href="chuong11.html" class="next">
+            <div class="dir">Chương 11 →</div>
+            <div class="label">Tệp tin &amp; Serialization</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#functional-interface">1. Functional interface</a></li>
+          <li><a href="#lambda">2. Lambda</a></li>
+          <li><a href="#method-reference">3. Method reference</a></li>
+          <li><a href="#interface-dung-san">4. Interface hàm dựng sẵn</a></li>
+          <li><a href="#stream">5. Ba đặc tính Stream</a></li>
+          <li><a href="#tao-stream">6. Tạo Stream</a></li>
+          <li><a href="#trung-gian">7. Thao tác trung gian</a></li>
+          <li><a href="#ket-thuc">8. Thao tác kết thúc</a></li>
+          <li><a href="#collectors">9. <code>Collectors</code></a></li>
+          <li><a href="#optional">10. <code>Optional</code></a></li>
+          <li><a href="#parallel">11. Parallel stream</a></li>
+          <li><a href="#khi-nao-khong">12. Khi nào không dùng</a></li>
+          <li><a href="#cheat-sheet">13. Cheat sheet</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 10 — Lambda &amp; Stream API · Java sub-pillar · Pillar 9 IT Basic<br/>
+        <a href="chuong9.html">← Chương 9</a> · <a href="../index.html">Java TOC</a> · <a href="chuong11.html">Chương 11 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+</body>
+</html>

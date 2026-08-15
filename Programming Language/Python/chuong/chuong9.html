@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chương 9 — Typing &amp; Static Analysis · Python Sub-pillar</title>
-  <meta name="description" content="Type hints Python, mypy/Pyright, Optional, Union, Literal, Final, TypeAlias, TypedDict, Protocol, Generic PEP 695 — kiểm tra type tĩnh trên ngôn ngữ động." />
+  <title>Chương 9 — Iterators, Generators &amp; Itertools · Python Sub-pillar</title>
+  <meta name="description" content="Iterable vs Iterator protocol, generator function với yield, lazy evaluation, yield from, send/throw/close, và toàn bộ toolset itertools — pipeline xử lý sequence vô hạn trong Python." />
   <meta name="theme-color" content="#306998" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,6 +13,90 @@
 
   <link rel="stylesheet" href="../../shared/css/base.css">
   <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Diagram iteration protocol */
+    .iter-diagram {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      margin: 22px 0;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 18px;
+      align-items: center;
+    }
+    .iter-diagram .node {
+      background: var(--bg-alt);
+      border: 1.5px solid var(--accent);
+      border-radius: 10px;
+      padding: 16px 18px;
+      text-align: center;
+    }
+    .iter-diagram .node .title {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent-deep);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .iter-diagram .node .desc {
+      font-size: 0.92rem;
+      color: var(--text-soft);
+      line-height: 1.5;
+    }
+    .iter-diagram .arrow {
+      font-family: var(--font-mono);
+      color: var(--py-yellow-deep);
+      font-weight: 700;
+      font-size: 0.84rem;
+      text-align: center;
+    }
+    .iter-diagram .arrow .line {
+      font-size: 1.3rem;
+      color: var(--accent);
+    }
+    @media (max-width: 680px) {
+      .iter-diagram { grid-template-columns: 1fr; }
+      .iter-diagram .arrow { transform: rotate(90deg); }
+    }
+
+    /* Generator state machine */
+    .gen-states {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .gen-state {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .gen-state .label {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .gen-state .text {
+      font-size: 0.86rem;
+      color: var(--text-soft);
+      line-height: 1.4;
+    }
+    @media (max-width: 720px) { .gen-states { grid-template-columns: repeat(2, 1fr); } }
+
+    /* Itertools category table styling */
+    .itertools-table th { background: var(--accent-soft); color: var(--accent-deep); }
+    .itertools-table td code { font-size: 0.85rem; }
+    .itertools-table tr td:first-child { font-family: var(--font-mono); white-space: nowrap; color: var(--accent-deep); font-weight: 600; }
+  </style>
 </head>
 <body>
 
@@ -26,8 +110,9 @@
         <ul class="site-nav">
           <li><a href="../../../index.html">IT Basic</a></li>
           <li><a href="../../index.html">Pillar 9</a></li>
-          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
           <li><a href="../index.html" class="active">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
         </ul>
       </nav>
     </div>
@@ -41,17 +126,16 @@
         <a href="../index.html">Python</a><span class="sep">/</span>
         <span>Chương 9</span>
       </div>
-      <div class="chapter-num">Chương 09 · Typing &amp; Static Analysis</div>
+      <div class="chapter-num">Chương 09 · Iterators, Generators &amp; Itertools</div>
       <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
-        Typing &amp; Static Analysis — đưa kiểm tra kiểu vào Python
+        Lặp lười, sequence vô hạn và toolset <code style="font-family: var(--font-mono); font-size: 0.78em;">itertools</code>
       </h1>
       <p class="lead">
-        Python là ngôn ngữ <strong>dynamic typing</strong>: một biến có thể đổi từ <code>int</code> sang <code>str</code>
-        bất cứ lúc nào và runtime không phàn nàn. Từ Python 3.5 (PEP 484), <strong>type hints</strong> được thêm vào như
-        một lớp <em>tự nguyện</em>: viết <code>x: int = 5</code> và <code>def f(x: int) -&gt; str</code> để mô tả contract.
-        Runtime <strong>vẫn bỏ qua</strong> hoàn toàn — nhưng công cụ <code>mypy</code>, <code>Pyright</code> đọc, kiểm
-        tra trước khi chạy và bắt bug mà unit test sẽ bỏ sót. Đây là phép tách "viết JavaScript với TypeScript" mang
-        sang Python: cùng triết lý, khác cú pháp, khác trải nghiệm.
+        Trong Python, <code>for</code> không lặp trên "mảng" — nó lặp trên <strong>iterator protocol</strong>.
+        Hiểu protocol này mở cánh cửa sang <strong>generator</strong> (lazy sequence), <strong>itertools</strong>
+        (toolset combinatoric + stream), và là nền tảng cho <code>async for</code>, decorator wrap generator,
+        cho cả pytest fixture. Chương này biến hai từ khoá nhỏ — <code>yield</code> và <code>iter</code> —
+        thành <em>siêu năng lực</em>.
       </p>
       <div class="chapter-meta">
         <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
@@ -63,957 +147,829 @@
 
     <div class="layout">
 
-      <main class="prose py-section">
+      <main class="prose">
 
         <div class="callout callout-goal">
           <div class="callout-label">🎯 Mục tiêu chương</div>
           <ul>
-            <li>Hiểu type hints là <em>compile-time only</em>: runtime bỏ qua, nhưng tooling đọc.</li>
-            <li>Master container generics (<code>list[T]</code>, <code>dict[K, V]</code>) và cú pháp <code>|</code> cho union/None.</li>
-            <li>Phân biệt <code>Any</code>, <code>object</code>, <code>Never</code>, <code>Literal</code>, <code>Final</code>.</li>
-            <li>Sử dụng <strong>TypedDict</strong> mô tả dict shape JSON, đối chiếu với <code>@dataclass</code> và <code>pydantic</code>.</li>
-            <li>Hiểu <strong>Protocol</strong> — structural typing duck-typed có check.</li>
-            <li>Viết generic function/class với syntax PEP 695 (Python 3.12+).</li>
-            <li>Cài và chạy <code>mypy --strict</code>; biết <code>Pyright</code> khác gì.</li>
-            <li>Tránh anti-pattern over-typing: nơi nào nên annotate, nơi nào để inference.</li>
+            <li>Phân biệt <strong>Iterable</strong> (có <code>__iter__</code>) và <strong>Iterator</strong> (có <code>__next__</code>) — vì sao đây là 2 khái niệm khác nhau.</li>
+            <li>Đọc được vòng <code>for</code> như "đường tốc ký" cho cặp <code>iter()</code> + <code>next()</code>.</li>
+            <li>Tự build iterable bằng class với <code>__iter__</code>/<code>__next__</code>.</li>
+            <li>Viết generator function bằng <code>yield</code>; viết generator expression bằng dấu <code>()</code>.</li>
+            <li>Hiểu <strong>lazy vs eager</strong> và khi nào nên chọn cái nào.</li>
+            <li>Tạo sequence <strong>vô hạn</strong> mà không treo máy — kết hợp với <code>islice</code>/<code>break</code>.</li>
+            <li>Dùng <code>yield from</code> để delegate, hiểu vì sao nó hơn vòng <code>for ... yield</code>.</li>
+            <li>Biết các tool kinh điển trong <code>itertools</code>: <code>chain</code>, <code>count</code>, <code>cycle</code>, <code>repeat</code>, <code>islice</code>, <code>groupby</code>, <code>combinations</code>, <code>permutations</code>, <code>product</code>, <code>accumulate</code>.</li>
+            <li>Nắm khái niệm <code>send()</code>/<code>throw()</code>/<code>close()</code> như nền cho coroutine cũ.</li>
           </ul>
         </div>
 
-        <h2 id="recap">1. Type hints — recap và sâu hơn</h2>
+        <h2 id="iterable-vs-iterator">1. Iterable vs Iterator — hai khái niệm tách bạch</h2>
 
         <p>
-          Chương 2 đã giới thiệu cú pháp cơ bản. Ở chương này ta khoét sâu vào ngữ nghĩa. Type hint trong Python được
-          giới thiệu qua <strong>PEP 484</strong> (2014) — Guido van Rossum cá nhân thiết kế sau khi thấy mypy của
-          Jukka Lehtosalo đáng giá. Cú pháp lấy cảm hứng từ ML/Haskell nhưng giữ kiểu Python:
+          Đây là <em>chìa khoá</em> để hiểu mọi thứ về sau. Python tách bạch 2 khái niệm:
+        </p>
+
+        <ul>
+          <li><strong>Iterable</strong>: đối tượng <em>có thể bắt đầu lặp</em>. Có method <code>__iter__()</code> trả về một iterator. Ví dụ: <code>list</code>, <code>tuple</code>, <code>str</code>, <code>dict</code>, <code>set</code>, <code>range</code>, file object.</li>
+          <li><strong>Iterator</strong>: đối tượng <em>đang trong tiến trình lặp</em>. Có method <code>__next__()</code> trả về phần tử kế tiếp hoặc raise <code>StopIteration</code> khi hết.</li>
+        </ul>
+
+        <div class="iter-diagram">
+          <div class="node">
+            <div class="title">Iterable</div>
+            <div class="desc">
+              Có <code>__iter__()</code><br/>
+              <em>VD: list, str, dict, range</em>
+            </div>
+          </div>
+          <div class="arrow">
+            <div class="line">→</div>
+            <div>iter(x)</div>
+          </div>
+          <div class="node">
+            <div class="title">Iterator</div>
+            <div class="desc">
+              Có <code>__next__()</code><br/>
+              Trả value hoặc raise <code>StopIteration</code>
+            </div>
+          </div>
+        </div>
+
+        <p>
+          Mọi iterator <em>cũng là</em> iterable (<code>__iter__</code> của iterator trả về chính nó). Nhưng iterable
+          chưa chắc đã là iterator — <code>list</code> không có <code>__next__</code>, bạn phải gọi <code>iter()</code>
+          để có iterator của nó.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Ẩn dụ — quyển sách và cái thư mục</div>
+          <p>
+            <strong>Iterable = quyển sách</strong>. Có thể "bắt đầu đọc" nhiều lần, từ trang 1.<br/>
+            <strong>Iterator = cái thư mục đang kẹp trang</strong>. Mỗi lần "next" lật một trang. Đọc hết thì
+            báo "hết" (StopIteration). Một thư mục chỉ đi được một chiều, không tua lại.
+          </p>
+        </div>
+
+        <h2 id="iter-next">2. Built-in <code>iter()</code> và <code>next()</code></h2>
+
+        <p>
+          Vòng <code>for x in xs</code> thực ra là <em>cú pháp đường</em> cho đoạn này:
         </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>Cú pháp cơ bản</span>
+            <span>for loop được Python dịch thành gì</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-com"># Biến — dấu hai chấm sau tên</span>
-x: <span class="tok-type">int</span> = <span class="tok-num">5</span>
-name: <span class="tok-type">str</span> = <span class="tok-str">"An"</span>
-active: <span class="tok-type">bool</span> = <span class="tok-kw">True</span>
-ratio: <span class="tok-type">float</span> = <span class="tok-num">3.14</span>
+<pre><code><span class="tok-com"># Python viết:</span>
+<span class="tok-kw">for</span> x <span class="tok-kw">in</span> [<span class="tok-num">10</span>, <span class="tok-num">20</span>, <span class="tok-num">30</span>]:
+    <span class="tok-fn">print</span>(x)
 
-<span class="tok-com"># Function — annotate parameter và return</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name: <span class="tok-type">str</span>, age: <span class="tok-type">int</span>) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">return</span> <span class="tok-str">f"Xin chào </span>{name}<span class="tok-str">, </span>{age}<span class="tok-str"> tuổi"</span>
+<span class="tok-com"># Ngầm tương đương:</span>
+_it = <span class="tok-fn">iter</span>([<span class="tok-num">10</span>, <span class="tok-num">20</span>, <span class="tok-num">30</span>])   <span class="tok-com"># lấy iterator</span>
+<span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+    <span class="tok-kw">try</span>:
+        x = <span class="tok-fn">next</span>(_it)               <span class="tok-com"># lấy giá trị kế tiếp</span>
+    <span class="tok-kw">except</span> <span class="tok-cls">StopIteration</span>:
+        <span class="tok-kw">break</span>                      <span class="tok-com"># hết → thoát vòng</span>
+    <span class="tok-fn">print</span>(x)</code></pre>
+        </div>
 
-<span class="tok-com"># Return None tường minh khi function không trả gì</span>
-<span class="tok-kw">def</span> <span class="tok-fn">log</span>(msg: <span class="tok-type">str</span>) -&gt; <span class="tok-kw">None</span>:
-    <span class="tok-fn">print</span>(msg)
+        <p>
+          <code>iter(obj)</code> gọi <code>obj.__iter__()</code>. <code>next(it)</code> gọi <code>it.__next__()</code>.
+          Cả hai có thể tự gọi tay khi cần điều khiển tinh vi.
+        </p>
 
-<span class="tok-com"># Attribute trong class</span>
-<span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    name: <span class="tok-type">str</span>
-    age: <span class="tok-type">int</span>
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Gọi tay iter/next</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>it = <span class="tok-fn">iter</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])
+<span class="tok-fn">next</span>(it)        <span class="tok-com"># 1</span>
+<span class="tok-fn">next</span>(it)        <span class="tok-com"># 2</span>
+<span class="tok-fn">next</span>(it)        <span class="tok-com"># 3</span>
+<span class="tok-fn">next</span>(it)        <span class="tok-com"># StopIteration</span>
 
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name: <span class="tok-type">str</span>, age: <span class="tok-type">int</span>) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>.name = name
-        <span class="tok-kw">self</span>.age = age</code></pre>
+<span class="tok-com"># next có default — tránh exception</span>
+it = <span class="tok-fn">iter</span>([<span class="tok-num">1</span>])
+<span class="tok-fn">next</span>(it, <span class="tok-str">'hết'</span>)   <span class="tok-com"># 1</span>
+<span class="tok-fn">next</span>(it, <span class="tok-str">'hết'</span>)   <span class="tok-com"># 'hết'  (không raise)</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — iterator chỉ đi được một chiều</div>
+<pre><code>it = <span class="tok-fn">iter</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])
+<span class="tok-fn">list</span>(it)        <span class="tok-com"># [1, 2, 3]   ← consume hết</span>
+<span class="tok-fn">list</span>(it)        <span class="tok-com"># []          ← rỗng! iterator đã "cạn"</span>
+
+<span class="tok-com"># Nhưng iterable lấy lại được iterator mới:</span>
+xs = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]
+<span class="tok-fn">list</span>(<span class="tok-fn">iter</span>(xs))  <span class="tok-com"># [1, 2, 3]</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">iter</span>(xs))  <span class="tok-com"># [1, 2, 3]   ← mỗi lần iter() tạo iterator MỚI</span></code></pre>
+          <p style="margin-top: 8px;">
+            Bug điển hình: lưu generator (là iterator) vào biến, rồi <code>for</code> nó hai lần — lần hai sẽ "không có gì".
+            Nếu cần lặp nhiều lần, hãy ép sang <code>list</code>/<code>tuple</code> hoặc viết hàm trả generator mới mỗi lần gọi.
+          </p>
+        </div>
+
+        <h2 id="custom-iterable">3. Tự build iterable bằng class</h2>
+
+        <p>
+          Có 2 cách thiết kế:
+        </p>
+
+        <ol>
+          <li><strong>Class chính nó là iterator</strong>: implement cả <code>__iter__</code> (trả <code>self</code>) lẫn <code>__next__</code>. Đơn giản, nhưng <em>không lặp lại được</em>.</li>
+          <li><strong>Tách iterable và iterator</strong>: class chính là iterable, <code>__iter__</code> trả về một object iterator riêng. Hỗ trợ lặp đồng thời / nhiều lần.</li>
+        </ol>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Cách 1 — class kiêm cả hai</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Countdown</span>:
+    <span class="tok-str">"""Đếm ngược từ start về 0."""</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(self, start: <span class="tok-type">int</span>):
+        self.current = start
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__iter__</span>(self):
+        <span class="tok-kw">return</span> self        <span class="tok-com"># chính nó là iterator</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__next__</span>(self):
+        <span class="tok-kw">if</span> self.current &lt; <span class="tok-num">0</span>:
+            <span class="tok-kw">raise</span> <span class="tok-cls">StopIteration</span>
+        v = self.current
+        self.current -= <span class="tok-num">1</span>
+        <span class="tok-kw">return</span> v
+
+<span class="tok-com"># Sử dụng</span>
+<span class="tok-kw">for</span> n <span class="tok-kw">in</span> <span class="tok-cls">Countdown</span>(<span class="tok-num">3</span>):
+    <span class="tok-fn">print</span>(n)     <span class="tok-com"># 3, 2, 1, 0</span>
+
+<span class="tok-com"># Gotcha: chạy lại không reset</span>
+c = <span class="tok-cls">Countdown</span>(<span class="tok-num">3</span>)
+<span class="tok-fn">list</span>(c)        <span class="tok-com"># [3, 2, 1, 0]</span>
+<span class="tok-fn">list</span>(c)        <span class="tok-com"># []   ← state đã hết</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Cách 2 — tách iterable / iterator (lặp nhiều lần)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Range</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(self, stop: <span class="tok-type">int</span>):
+        self.stop = stop
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__iter__</span>(self):
+        <span class="tok-kw">return</span> <span class="tok-cls">_RangeIter</span>(self.stop)  <span class="tok-com"># iterator MỚI mỗi lần</span>
+
+<span class="tok-kw">class</span> <span class="tok-cls">_RangeIter</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(self, stop):
+        self.i = <span class="tok-num">0</span>
+        self.stop = stop
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__iter__</span>(self):
+        <span class="tok-kw">return</span> self
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__next__</span>(self):
+        <span class="tok-kw">if</span> self.i &gt;= self.stop:
+            <span class="tok-kw">raise</span> <span class="tok-cls">StopIteration</span>
+        v = self.i
+        self.i += <span class="tok-num">1</span>
+        <span class="tok-kw">return</span> v
+
+r = <span class="tok-cls">Range</span>(<span class="tok-num">3</span>)
+<span class="tok-fn">list</span>(r)        <span class="tok-com"># [0, 1, 2]</span>
+<span class="tok-fn">list</span>(r)        <span class="tok-com"># [0, 1, 2]   ← lặp lại OK</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mẹo — quy luật chọn</div>
+          <p>
+            Nếu object đại diện <em>collection</em> (như list, range, queryset) — chọn cách 2 để lặp nhiều lần được.<br/>
+            Nếu object đại diện <em>stream / cursor</em> (như iterator file, network) — cách 1 đủ.<br/>
+            Trong 95% trường hợp tự build, bạn nên dùng <strong>generator function</strong> (mục 4 dưới) thay vì viết tay 2 class — Python sẽ tự lo state machine.
+          </p>
+        </div>
+
+        <h2 id="generator-function">4. Generator function — <code>yield</code></h2>
+
+        <p>
+          <strong>Generator function</strong> là hàm có chứa <code>yield</code>. Khi gọi, nó <em>không chạy ngay</em>
+          mà trả về một <strong>generator object</strong> (vừa là iterable vừa là iterator). Mỗi <code>next()</code>
+          chạy thân hàm đến <code>yield</code> tiếp theo, trả value, rồi <em>pause</em> giữ nguyên state local.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Generator cơ bản</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">count_up_to</span>(n: <span class="tok-type">int</span>):
+    <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(n):
+        <span class="tok-kw">yield</span> i
+
+g = <span class="tok-fn">count_up_to</span>(<span class="tok-num">3</span>)   <span class="tok-com"># KHÔNG chạy — chỉ tạo generator object</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">type</span>(g))         <span class="tok-com"># &lt;class 'generator'&gt;</span>
+
+<span class="tok-fn">next</span>(g)               <span class="tok-com"># 0   (chạy đến yield đầu, pause)</span>
+<span class="tok-fn">next</span>(g)               <span class="tok-com"># 1</span>
+<span class="tok-fn">next</span>(g)               <span class="tok-com"># 2</span>
+<span class="tok-fn">next</span>(g)               <span class="tok-com"># StopIteration</span>
+
+<span class="tok-com"># Hoặc consume bằng for / list</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">count_up_to</span>(<span class="tok-num">5</span>))   <span class="tok-com"># [0, 1, 2, 3, 4]</span>
+
+<span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">count_up_to</span>(<span class="tok-num">3</span>):
+    <span class="tok-fn">print</span>(i)            <span class="tok-com"># 0, 1, 2</span></code></pre>
+        </div>
+
+        <div class="gen-states">
+          <div class="gen-state">
+            <div class="label">CREATED</div>
+            <div class="text">Vừa gọi <code>f()</code>, chưa chạy.</div>
+          </div>
+          <div class="gen-state">
+            <div class="label">SUSPENDED</div>
+            <div class="text">Đang pause ở <code>yield</code>. State được giữ.</div>
+          </div>
+          <div class="gen-state">
+            <div class="label">EXECUTING</div>
+            <div class="text">Đang chạy code giữa 2 yield.</div>
+          </div>
+          <div class="gen-state">
+            <div class="label">CLOSED</div>
+            <div class="text">Đã <code>return</code> hoặc raise. Mọi <code>next()</code> đều <code>StopIteration</code>.</div>
+          </div>
         </div>
 
         <div class="callout callout-mental">
-          <div class="callout-label">🧠 Type hints là metadata, không phải runtime check</div>
+          <div class="callout-label">🧠 Mental model — hàm có nút Pause</div>
           <p>
-            Khi Python chạy file <code>.py</code>, nó <strong>thấy</strong> annotation (lưu trong
-            <code>__annotations__</code>) nhưng <strong>không kiểm tra</strong> giá trị có khớp không:
-          </p>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">add</span>(a: <span class="tok-type">int</span>, b: <span class="tok-type">int</span>) -&gt; <span class="tok-type">int</span>:
-    <span class="tok-kw">return</span> a + b
-
-<span class="tok-fn">add</span>(<span class="tok-str">"hello"</span>, <span class="tok-str">"world"</span>)  <span class="tok-com"># 'helloworld' — chạy bình thường!</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">add</span>.__annotations__)
-<span class="tok-com"># {'a': &lt;class 'int'&gt;, 'b': &lt;class 'int'&gt;, 'return': &lt;class 'int'&gt;}</span></code></pre>
-          <p>
-            Annotation chỉ trở thành <em>check</em> khi có tool đọc nó: <code>mypy</code>, <code>Pyright</code>,
-            <code>pyright</code>/<code>Pylance</code> trong VS Code, JetBrains type checker. Hoặc khi dùng thư viện
-            runtime như <code>pydantic</code>, <code>beartype</code>, <code>typeguard</code> — nhưng phải
-            <em>chủ động</em> bật.
+            Hàm thường: gọi → chạy đến hết → return.<br/>
+            Generator function: gọi → <em>không chạy gì</em> → trả "remote control". Mỗi lần bấm <code>next()</code>,
+            chạy đến nút "Pause" tiếp theo (<code>yield</code>), giao giá trị, rồi dừng — biến local vẫn còn nguyên.
+            Khi return / hết thân hàm → raise <code>StopIteration</code> tự động.
           </p>
         </div>
 
         <p>
-          So sánh nhanh với JavaScript/TypeScript (chương 9 sub-pillar JS): TS có 1 compiler chính thức (<code>tsc</code>),
-          chạy bắt buộc khi build. Python có <em>nhiều</em> tool độc lập, không bắt buộc — bạn có thể commit code không
-          type hint, không ai chặn. Đó là điểm yếu (dễ lười) và điểm mạnh (linh hoạt cho script nhỏ).
+          Có thể có nhiều <code>yield</code> theo dòng tuyến tính:
         </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">vai_buoc</span>():
+    <span class="tok-fn">print</span>(<span class="tok-str">'A'</span>)
+    <span class="tok-kw">yield</span> <span class="tok-num">1</span>
+    <span class="tok-fn">print</span>(<span class="tok-str">'B'</span>)
+    <span class="tok-kw">yield</span> <span class="tok-num">2</span>
+    <span class="tok-fn">print</span>(<span class="tok-str">'C'</span>)
+
+g = <span class="tok-fn">vai_buoc</span>()
+<span class="tok-fn">next</span>(g)    <span class="tok-com"># in 'A', trả 1</span>
+<span class="tok-fn">next</span>(g)    <span class="tok-com"># in 'B', trả 2</span>
+<span class="tok-fn">next</span>(g)    <span class="tok-com"># in 'C', rồi StopIteration</span></code></pre>
+        </div>
+
+        <h2 id="gen-expr">5. Generator expression — <code>(x for x in ...)</code></h2>
+
+        <p>
+          Cùng cú pháp với list comprehension, nhưng đổi <code>[]</code> thành <code>()</code>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>List comp vs gen expr</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># List comprehension — EAGER, tạo cả list ngay</span>
+squares_list = [x**<span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>)]
+<span class="tok-fn">type</span>(squares_list)        <span class="tok-com"># &lt;class 'list'&gt;</span>
+<span class="tok-fn">len</span>(squares_list)         <span class="tok-com"># 10</span>
+
+<span class="tok-com"># Generator expression — LAZY, không compute trước</span>
+squares_gen = (x**<span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>))
+<span class="tok-fn">type</span>(squares_gen)         <span class="tok-com"># &lt;class 'generator'&gt;</span>
+<span class="tok-fn">len</span>(squares_gen)          <span class="tok-com"># TypeError — generator không có len</span>
+
+<span class="tok-com"># Khi truyền vào hàm nhận iterable, có thể bỏ () thừa:</span>
+<span class="tok-fn">sum</span>(x**<span class="tok-num">2</span> <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>))    <span class="tok-com"># 285  — đẹp, gọn</span>
+<span class="tok-fn">max</span>(<span class="tok-fn">len</span>(w) <span class="tok-kw">for</span> w <span class="tok-kw">in</span> words)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Ưu tiên gen expr cho pipeline lớn</div>
+          <p>
+            Khi xử lý file 10GB, log stream, hay sequence vô hạn — luôn dùng generator expression để tránh
+            <em>materialize</em> toàn bộ vào RAM. Nếu data nhỏ và cần lặp nhiều lần — list comprehension lại tốt hơn
+            (cache result, không cần regenerate).
+          </p>
+        </div>
+
+        <h2 id="lazy-vs-eager">6. Lazy vs eager — đánh đổi RAM và CPU</h2>
 
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Ngôn ngữ</th><th>Type system</th><th>Tool check</th><th>Bắt buộc?</th></tr>
+              <tr><th>—</th><th>List comprehension (eager)</th><th>Generator (lazy)</th></tr>
             </thead>
             <tbody>
-              <tr><td>TypeScript</td><td>Compile-time, strip khi build</td><td><code>tsc</code> chính thức</td><td>Có (file <code>.ts</code> phải pass)</td></tr>
-              <tr><td>Python</td><td>Annotation, runtime ignore</td><td><code>mypy</code>, <code>Pyright</code> bên thứ 3</td><td>Không (tự nguyện)</td></tr>
-              <tr><td>Dart</td><td>Sound static, runtime check</td><td>Compiler tích hợp</td><td>Có (sound type system)</td></tr>
+              <tr><td>Khi nào compute</td><td>Ngay khi tạo</td><td>Khi <code>next()</code></td></tr>
+              <tr><td>Bộ nhớ</td><td>O(n) — giữ cả collection</td><td>O(1) — chỉ giữ state hiện tại</td></tr>
+              <tr><td>Lặp lại</td><td>Bao nhiêu lần cũng được</td><td>Một lần, hết là cạn</td></tr>
+              <tr><td>Random access</td><td><code>lst[5]</code></td><td>Không — phải <code>next()</code> tuần tự</td></tr>
+              <tr><td>Có <code>len()</code></td><td>Có</td><td>Không</td></tr>
+              <tr><td>Vô hạn?</td><td>❌ — sẽ hết RAM</td><td>✅</td></tr>
+              <tr><td>Sequence rất lớn / file</td><td>Tránh</td><td>Idiomatic</td></tr>
             </tbody>
           </table>
         </div>
 
-        <h2 id="container">2. Container types — <code>list[T]</code>, <code>dict[K,V]</code>, <code>tuple</code></h2>
-
-        <p>
-          Container generic là nơi type hint thật sự phát huy: thay vì <code>list</code> (list của <em>cái gì</em>?),
-          ta nói <code>list[int]</code>.
-        </p>
-
         <div class="code-wrap">
           <div class="code-meta">
-            <span>Generic container — cú pháp hiện đại (3.9+)</span>
+            <span>Đo memory thực tế</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code>nums: <span class="tok-type">list</span>[<span class="tok-type">int</span>] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]
-names: <span class="tok-type">list</span>[<span class="tok-type">str</span>] = [<span class="tok-str">"An"</span>, <span class="tok-str">"Bình"</span>]
-ages: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">int</span>] = {<span class="tok-str">"An"</span>: <span class="tok-num">22</span>, <span class="tok-str">"Bình"</span>: <span class="tok-num">30</span>}
+<pre><code><span class="tok-kw">import</span> sys
 
-<span class="tok-com"># Set</span>
-tags: <span class="tok-type">set</span>[<span class="tok-type">str</span>] = {<span class="tok-str">"py"</span>, <span class="tok-str">"ts"</span>}
+<span class="tok-com"># 10 triệu int</span>
+lst = [i <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10_000_000</span>)]
+gen = (i <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10_000_000</span>))
 
-<span class="tok-com"># Tuple — 2 nghĩa khác nhau</span>
-<span class="tok-com"># 1) Fixed shape: tuple với type cho từng slot</span>
-pair: <span class="tok-type">tuple</span>[<span class="tok-type">str</span>, <span class="tok-type">int</span>] = (<span class="tok-str">"age"</span>, <span class="tok-num">22</span>)
-point: <span class="tok-type">tuple</span>[<span class="tok-type">float</span>, <span class="tok-type">float</span>, <span class="tok-type">float</span>] = (<span class="tok-num">1.0</span>, <span class="tok-num">2.0</span>, <span class="tok-num">3.0</span>)
-
-<span class="tok-com"># 2) Variable length: tuple[T, ...]</span>
-many_ints: <span class="tok-type">tuple</span>[<span class="tok-type">int</span>, ...] = (<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>)
-
-<span class="tok-com"># Nested</span>
-matrix: <span class="tok-type">list</span>[<span class="tok-type">list</span>[<span class="tok-type">int</span>]] = [[<span class="tok-num">1</span>, <span class="tok-num">2</span>], [<span class="tok-num">3</span>, <span class="tok-num">4</span>]]
-config: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">list</span>[<span class="tok-type">int</span>]] = {<span class="tok-str">"primes"</span>: [<span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">5</span>]}</code></pre>
+sys.<span class="tok-fn">getsizeof</span>(lst)      <span class="tok-com"># ~80,000,056 bytes  (~80MB)</span>
+sys.<span class="tok-fn">getsizeof</span>(gen)      <span class="tok-com"># 200 bytes  ← chênh 400,000 lần</span></code></pre>
         </div>
 
         <div class="callout callout-gotcha">
-          <div class="callout-label">🔥 Trước Python 3.9 — phải import từ <code>typing</code></div>
-<pre><code><span class="tok-com"># Python 3.8 trở xuống (cũ, vẫn còn nhiều code base):</span>
-<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> List, Dict, Tuple, Set
+          <div class="callout-label">🔥 Gotcha — generator không có <code>len</code>, không indexable</div>
+<pre><code>gen = (x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">10</span>))
+<span class="tok-fn">len</span>(gen)        <span class="tok-com"># TypeError: object of type 'generator' has no len()</span>
+gen[<span class="tok-num">3</span>]          <span class="tok-com"># TypeError: 'generator' object is not subscriptable</span>
 
-nums: List[<span class="tok-type">int</span>] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>]
-ages: Dict[<span class="tok-type">str</span>, <span class="tok-type">int</span>] = {<span class="tok-str">"An"</span>: <span class="tok-num">22</span>}
-
-<span class="tok-com"># Từ Python 3.9 (PEP 585) — dùng trực tiếp built-in:</span>
-nums: <span class="tok-type">list</span>[<span class="tok-type">int</span>] = [<span class="tok-num">1</span>, <span class="tok-num">2</span>]
-ages: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">int</span>] = {<span class="tok-str">"An"</span>: <span class="tok-num">22</span>}</code></pre>
-          <p>
-            Cú pháp mới ngắn hơn, không cần import. <strong>Khuyến nghị</strong> dùng built-in nếu project target
-            Python 3.9+. Nếu phải support 3.8 và sớm hơn: dùng <code>List</code>, <code>Dict</code> từ
-            <code>typing</code>, hoặc thêm <code>from __future__ import annotations</code> để hoãn evaluation.
-          </p>
+<span class="tok-com"># Nếu cần — ép sang list, nhưng nhớ đánh đổi RAM:</span>
+<span class="tok-fn">len</span>(<span class="tok-fn">list</span>(gen))  <span class="tok-com"># 10   nhưng gen đã consume xong, lần sau sẽ là 0</span></code></pre>
         </div>
 
-        <h2 id="optional">3. <code>Optional[T]</code> và <code>T | None</code></h2>
+        <h2 id="infinite">7. Generator vô hạn</h2>
 
         <p>
-          Trong Python <code>None</code> là một giá trị riêng (singleton kiểu <code>NoneType</code>). Khi function có
-          thể trả <code>None</code> hoặc một type khác, dùng <code>Optional[T]</code> hoặc <code>T | None</code>.
+          Vì generator lazy, ta có thể viết sequence <strong>vô hạn</strong> mà vẫn an toàn — miễn người consume biết dừng.
         </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>2 cú pháp tương đương</span>
+            <span>Counter vô hạn</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-com"># Cách cũ (Python &lt;3.10) — Optional từ typing</span>
-<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Optional
-
-<span class="tok-kw">def</span> <span class="tok-fn">find_user</span>(uid: <span class="tok-type">int</span>) -&gt; Optional[<span class="tok-type">str</span>]:
-    <span class="tok-kw">if</span> uid == <span class="tok-num">1</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">"An"</span>
-    <span class="tok-kw">return</span> <span class="tok-kw">None</span>
-
-<span class="tok-com"># Cách mới (Python 3.10+, PEP 604) — toán tử |</span>
-<span class="tok-kw">def</span> <span class="tok-fn">find_user</span>(uid: <span class="tok-type">int</span>) -&gt; <span class="tok-type">str</span> | <span class="tok-kw">None</span>:
-    <span class="tok-kw">if</span> uid == <span class="tok-num">1</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">"An"</span>
-    <span class="tok-kw">return</span> <span class="tok-kw">None</span>
-
-<span class="tok-com"># Hai cái HOÀN TOÀN tương đương — Optional[T] = T | None</span></code></pre>
-        </div>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Khuyên dùng <code>T | None</code></div>
-          <p>
-            Cú pháp <code>|</code> (PEP 604, 3.10+) đọc tự nhiên hơn, không cần import. Cộng đồng dần chuyển sang nó.
-            <code>Optional[str]</code> còn dễ gây hiểu lầm: trông như "optional argument", thật ra là "string hoặc None".
-            Khi muốn parameter <em>optional</em> (có default), vẫn cần <code>=</code> riêng:
-          </p>
-<pre><code><span class="tok-com"># SAI: Optional[int] không làm parameter optional</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>(x: Optional[<span class="tok-type">int</span>]) -&gt; <span class="tok-kw">None</span>: ...
-<span class="tok-fn">f</span>()  <span class="tok-com"># TypeError: missing 1 required positional argument</span>
-
-<span class="tok-com"># ĐÚNG: muốn optional thì thêm default</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>(x: <span class="tok-type">int</span> | <span class="tok-kw">None</span> = <span class="tok-kw">None</span>) -&gt; <span class="tok-kw">None</span>: ...
-<span class="tok-fn">f</span>()       <span class="tok-com"># OK</span>
-<span class="tok-fn">f</span>(<span class="tok-num">5</span>)      <span class="tok-com"># OK</span>
-<span class="tok-fn">f</span>(<span class="tok-kw">None</span>)   <span class="tok-com"># OK</span></code></pre>
-        </div>
-
-        <h2 id="union">4. <code>Union[A, B]</code> và <code>A | B</code></h2>
-
-        <p>
-          Tổng quát hơn: union nhiều type. Cú pháp cũ <code>Union[A, B, C]</code>, mới <code>A | B | C</code>.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Union nhiều type</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Union
-
-<span class="tok-com"># Cũ</span>
-<span class="tok-kw">def</span> <span class="tok-fn">parse_id</span>(raw: Union[<span class="tok-type">int</span>, <span class="tok-type">str</span>]) -&gt; <span class="tok-type">int</span>:
-    <span class="tok-kw">return</span> <span class="tok-type">int</span>(raw)
-
-<span class="tok-com"># Mới (3.10+)</span>
-<span class="tok-kw">def</span> <span class="tok-fn">parse_id</span>(raw: <span class="tok-type">int</span> | <span class="tok-type">str</span>) -&gt; <span class="tok-type">int</span>:
-    <span class="tok-kw">return</span> <span class="tok-type">int</span>(raw)
-
-<span class="tok-com"># 3 type trở lên</span>
-<span class="tok-kw">def</span> <span class="tok-fn">to_str</span>(x: <span class="tok-type">int</span> | <span class="tok-type">float</span> | <span class="tok-type">str</span> | <span class="tok-kw">None</span>) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">if</span> x <span class="tok-kw">is</span> <span class="tok-kw">None</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">""</span>
-    <span class="tok-kw">return</span> <span class="tok-type">str</span>(x)</code></pre>
-        </div>
-
-        <p>
-          Union khác Optional ở chỗ Optional là một shortcut cho "T hoặc None" — còn union dùng chung cho mọi tổ hợp.
-          Một biến union không thể gọi method được cho đến khi <em>narrow</em> (xem section 14).
-        </p>
-
-        <h2 id="any">5. <code>Any</code> — escape hatch nguy hiểm</h2>
-
-        <p>
-          <code>Any</code> tương đương <code>any</code> của TypeScript: tắt mọi type check. Bất kỳ phép gán nào,
-          method call nào đều được phép.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Any disable check</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Any
-
-x: Any = <span class="tok-str">"hello"</span>
-x = <span class="tok-num">42</span>                     <span class="tok-com"># OK</span>
-x = [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>]                <span class="tok-com"># OK</span>
-x.<span class="tok-fn">whatever</span>().<span class="tok-fn">chain</span>()       <span class="tok-com"># OK ở mypy, 💥 runtime nếu sai</span>
-
-<span class="tok-com"># Any "lây lan": gán biến Any vào biến typed cũng OK</span>
-<span class="tok-kw">def</span> <span class="tok-fn">get_data</span>() -&gt; Any:
-    <span class="tok-kw">return</span> {<span class="tok-str">"k"</span>: <span class="tok-num">1</span>}
-
-n: <span class="tok-type">int</span> = <span class="tok-fn">get_data</span>()       <span class="tok-com"># OK (Any → int), nhưng runtime n là dict 💥</span></code></pre>
-        </div>
-
-        <p>
-          <code>Any</code> là backdoor. Mỗi <code>Any</code> trong codebase là một điểm <em>không được kiểm tra</em>.
-          Mypy strict mode (xem section 15) sẽ cảnh báo khi gặp implicit Any.
-        </p>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Khi nào Any là chấp nhận được?</div>
-          <ul>
-            <li>Dữ liệu thật sự không biết shape — vd <code>**kwargs</code> truyền vào library cũ.</li>
-            <li>Migration JS → TS, Python untyped → typed: tạm <code>Any</code>, ghi <code># TODO: type</code>.</li>
-            <li>Decorator generic phức tạp không thể type chính xác (đang dần được giải bởi <code>ParamSpec</code>).</li>
-          </ul>
-          <p>
-            Quy tắc: <em>luôn ưu tiên <code>object</code> hoặc <code>Unknown-like pattern</code> nếu được</em>. Với
-            input không tin được (JSON parse, file read), Python chưa có <code>unknown</code> như TS — pattern phổ
-            biến là dùng <code>object</code> rồi <code>isinstance</code> để narrow.
-          </p>
-        </div>
-
-        <h2 id="never">6. <code>Never</code> — bottom type</h2>
-
-        <p>
-          <code>Never</code> (PEP 484, alias <code>NoReturn</code> cho function) đánh dấu một function <em>không bao
-          giờ trả về</em>: nó throw exception hoặc loop vô hạn.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Never — function không return</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Never  <span class="tok-com"># Python 3.11+. Trước đó: NoReturn</span>
-
-<span class="tok-kw">def</span> <span class="tok-fn">fail</span>(msg: <span class="tok-type">str</span>) -&gt; Never:
-    <span class="tok-kw">raise</span> <span class="tok-cls">RuntimeError</span>(msg)
-
-<span class="tok-kw">def</span> <span class="tok-fn">infinite</span>() -&gt; Never:
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">count</span>():
+    i = <span class="tok-num">0</span>
     <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
-        <span class="tok-fn">do_something</span>()
+        <span class="tok-kw">yield</span> i
+        i += <span class="tok-num">1</span>
 
-<span class="tok-com"># Mypy hiểu: dòng sau fail() là "dead code"</span>
-<span class="tok-kw">def</span> <span class="tok-fn">divide</span>(a: <span class="tok-type">int</span>, b: <span class="tok-type">int</span>) -&gt; <span class="tok-type">float</span>:
-    <span class="tok-kw">if</span> b == <span class="tok-num">0</span>:
-        <span class="tok-fn">fail</span>(<span class="tok-str">"chia cho 0"</span>)
-        <span class="tok-com"># Mypy: ở đây code không thể đến được</span>
-    <span class="tok-kw">return</span> a / b</code></pre>
-        </div>
+<span class="tok-com"># Cách 1: break khi đủ</span>
+<span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">count</span>():
+    <span class="tok-kw">if</span> x &gt; <span class="tok-num">5</span>:
+        <span class="tok-kw">break</span>
+    <span class="tok-fn">print</span>(x)        <span class="tok-com"># 0, 1, 2, 3, 4, 5</span>
 
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Exhaustiveness check với Never</div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Never, assert_never
-
-Status = Literal[<span class="tok-str">"idle"</span>, <span class="tok-str">"loading"</span>, <span class="tok-str">"done"</span>]
-
-<span class="tok-kw">def</span> <span class="tok-fn">handle</span>(s: Status) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">match</span> s:
-        <span class="tok-kw">case</span> <span class="tok-str">"idle"</span>:    <span class="tok-kw">return</span> <span class="tok-str">"chờ"</span>
-        <span class="tok-kw">case</span> <span class="tok-str">"loading"</span>: <span class="tok-kw">return</span> <span class="tok-str">"đang tải"</span>
-        <span class="tok-kw">case</span> <span class="tok-str">"done"</span>:    <span class="tok-kw">return</span> <span class="tok-str">"xong"</span>
-        <span class="tok-kw">case</span> _:
-            <span class="tok-fn">assert_never</span>(s)  <span class="tok-com"># Mypy báo lỗi nếu thêm 'error' vào Status mà quên xử lý</span></code></pre>
-          <p>
-            Pattern này giống <code>const _exhaustive: never = s</code> của TypeScript — bắt thiếu case khi thêm
-            literal mới.
-          </p>
-        </div>
-
-        <h2 id="literal">7. <code>Literal</code> — type là giá trị cụ thể</h2>
-
-        <p>
-          Literal type giới hạn biến chỉ nhận một số <em>giá trị cụ thể</em>. Tương đương union literal của TS
-          (<code>'idle' | 'loading'</code>). Đây là pattern thay <code>Enum</code> trong nhiều trường hợp.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Literal type</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Literal
-
-Color = Literal[<span class="tok-str">"red"</span>, <span class="tok-str">"green"</span>, <span class="tok-str">"blue"</span>]
-
-<span class="tok-kw">def</span> <span class="tok-fn">paint</span>(c: Color) -&gt; <span class="tok-kw">None</span>:
-    <span class="tok-fn">print</span>(<span class="tok-str">f"Sơn </span>{c}<span class="tok-str">"</span>)
-
-<span class="tok-fn">paint</span>(<span class="tok-str">"red"</span>)      <span class="tok-com"># OK</span>
-<span class="tok-fn">paint</span>(<span class="tok-str">"yellow"</span>)   <span class="tok-com"># Mypy: Argument 1 has incompatible type "Literal['yellow']"</span>
-
-<span class="tok-com"># Literal số, bool — cũng được</span>
-<span class="tok-kw">def</span> <span class="tok-fn">flip</span>(side: Literal[<span class="tok-num">0</span>, <span class="tok-num">1</span>]) -&gt; Literal[<span class="tok-num">0</span>, <span class="tok-num">1</span>]:
-    <span class="tok-kw">return</span> <span class="tok-num">1</span> - side
-
-<span class="tok-com"># Discriminated union — pattern phổ biến</span>
-<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypedDict
-
-<span class="tok-kw">class</span> <span class="tok-cls">SuccessResult</span>(TypedDict):
-    status: Literal[<span class="tok-str">"ok"</span>]
-    data: <span class="tok-type">str</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">ErrorResult</span>(TypedDict):
-    status: Literal[<span class="tok-str">"error"</span>]
-    message: <span class="tok-type">str</span>
-
-Result = SuccessResult | ErrorResult
-
-<span class="tok-kw">def</span> <span class="tok-fn">handle</span>(r: Result) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">if</span> r[<span class="tok-str">"status"</span>] == <span class="tok-str">"ok"</span>:
-        <span class="tok-kw">return</span> r[<span class="tok-str">"data"</span>]      <span class="tok-com"># Narrow về SuccessResult</span>
-    <span class="tok-kw">else</span>:
-        <span class="tok-kw">return</span> r[<span class="tok-str">"message"</span>]   <span class="tok-com"># Narrow về ErrorResult</span></code></pre>
-        </div>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Literal vs Enum</div>
-          <p>
-            Python <code>Enum</code> (chương 5) là class runtime — có giá trị, có method, có identity. Literal chỉ là
-            kiểu compile-time, biến mất khi chạy. Quy tắc:
-          </p>
-          <ul>
-            <li><strong>Literal</strong>: khi cần một set giá trị cố định, không cần object riêng. Nhanh, đơn giản.</li>
-            <li><strong>Enum</strong>: khi cần object — vd <code>Color.RED.hex()</code>, hoặc serialize sang JSON với tên đẹp.</li>
-            <li>Đa số case scripting/web — Literal đủ.</li>
-          </ul>
-        </div>
-
-        <h2 id="final">8. <code>Final</code> — không reassign</h2>
-
-        <p>
-          <code>Final</code> đánh dấu biến chỉ gán <em>một lần</em>. Mypy enforce, runtime <strong>không</strong>.
-          Tương đương <code>const</code> của TS/JS về mặt ngữ nghĩa compile-time.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Final</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Final
-
-MAX_RETRIES: Final = <span class="tok-num">3</span>
-API_URL: Final[<span class="tok-type">str</span>] = <span class="tok-str">"https://api.example.com"</span>
-
-MAX_RETRIES = <span class="tok-num">5</span>   <span class="tok-com"># Mypy: Cannot assign to final name "MAX_RETRIES"</span>
-<span class="tok-com"># Nhưng runtime vẫn cho phép — Final chỉ là gợi ý cho tool</span>
-
-<span class="tok-com"># Trong class — không cho override ở subclass</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Base</span>:
-    name: Final[<span class="tok-type">str</span>] = <span class="tok-str">"Base"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">Sub</span>(<span class="tok-cls">Base</span>):
-    name = <span class="tok-str">"Sub"</span>     <span class="tok-com"># Mypy: Cannot override writable attribute "name"</span></code></pre>
-        </div>
-
-        <div class="callout callout-gotcha">
-          <div class="callout-label">🔥 Final ≠ immutable</div>
-          <p>
-            <code>Final</code> chỉ chặn <strong>reassign</strong> tên biến. Nội dung object vẫn mutate được:
-          </p>
-<pre><code>USERS: Final[<span class="tok-type">list</span>[<span class="tok-type">str</span>]] = []
-USERS.<span class="tok-fn">append</span>(<span class="tok-str">"An"</span>)   <span class="tok-com"># OK — list nội dung thay đổi</span>
-USERS = []            <span class="tok-com"># Mypy: error — không được gán lại</span></code></pre>
-          <p>
-            Để immutable thật: dùng <code>tuple</code> thay <code>list</code>, <code>frozenset</code> thay
-            <code>set</code>, hoặc <code>@dataclass(frozen=<span class="tok-kw">True</span>)</code>.
-          </p>
-        </div>
-
-        <h2 id="typealias">9. <code>TypeAlias</code> — đặt tên cho type</h2>
-
-        <p>
-          Khi một type phức tạp lặp lại nhiều chỗ, đặt tên cho nó.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>TypeAlias — cũ và mới</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-com"># Cũ (Python &lt;3.12) — TypeAlias từ typing</span>
-<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypeAlias
-
-UserId: TypeAlias = <span class="tok-type">int</span>
-Coord: TypeAlias = <span class="tok-type">tuple</span>[<span class="tok-type">float</span>, <span class="tok-type">float</span>]
-JsonValue: TypeAlias = <span class="tok-type">str</span> | <span class="tok-type">int</span> | <span class="tok-type">float</span> | <span class="tok-type">bool</span> | <span class="tok-kw">None</span> | <span class="tok-type">list</span>[<span class="tok-str">"JsonValue"</span>] | <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-str">"JsonValue"</span>]
-
-<span class="tok-kw">def</span> <span class="tok-fn">find_user</span>(uid: UserId) -&gt; <span class="tok-type">str</span> | <span class="tok-kw">None</span>: ...
-
-<span class="tok-com"># Mới (Python 3.12+, PEP 695) — keyword `type`</span>
-<span class="tok-kw">type</span> UserId = <span class="tok-type">int</span>
-<span class="tok-kw">type</span> Coord = <span class="tok-type">tuple</span>[<span class="tok-type">float</span>, <span class="tok-type">float</span>]
-<span class="tok-kw">type</span> JsonValue = <span class="tok-type">str</span> | <span class="tok-type">int</span> | <span class="tok-type">float</span> | <span class="tok-type">bool</span> | <span class="tok-kw">None</span> | <span class="tok-type">list</span>[<span class="tok-str">"JsonValue"</span>] | <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-str">"JsonValue"</span>]
-
-<span class="tok-kw">def</span> <span class="tok-fn">find_user</span>(uid: UserId) -&gt; <span class="tok-type">str</span> | <span class="tok-kw">None</span>: ...</code></pre>
-        </div>
-
-        <p>
-          Cú pháp <code>type</code> mới (PEP 695) ngắn gọn, scope rõ ràng. Lưu ý: <strong>không phải</strong> chỉ là
-          alias đồng nhất — type alias mới <em>lazy evaluate</em>, hỗ trợ self-reference tốt hơn.
-        </p>
-
-        <h2 id="typeddict">10. <code>TypedDict</code> — dict có shape</h2>
-
-        <p>
-          Python rất chuộng <code>dict</code> cho dữ liệu (config, JSON response). Vấn đề: <code>dict</code> không có
-          shape — mypy không biết key nào tồn tại, value type gì. <code>TypedDict</code> giải quyết:
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>TypedDict — dict có cấu trúc</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypedDict, NotRequired
-
-<span class="tok-kw">class</span> <span class="tok-cls">User</span>(TypedDict):
-    name: <span class="tok-type">str</span>
-    age: <span class="tok-type">int</span>
-    email: <span class="tok-type">str</span> | <span class="tok-kw">None</span>
-    tags: NotRequired[<span class="tok-type">list</span>[<span class="tok-type">str</span>]]  <span class="tok-com"># Optional field — 3.11+</span>
-
-u: User = {<span class="tok-str">"name"</span>: <span class="tok-str">"An"</span>, <span class="tok-str">"age"</span>: <span class="tok-num">22</span>, <span class="tok-str">"email"</span>: <span class="tok-kw">None</span>}  <span class="tok-com"># OK, tags vắng được</span>
-
-<span class="tok-com"># Truy cập như dict bình thường</span>
-<span class="tok-fn">print</span>(u[<span class="tok-str">"name"</span>])   <span class="tok-com"># "An"</span>
-u[<span class="tok-str">"age"</span>] = <span class="tok-num">23</span>      <span class="tok-com"># OK</span>
-u[<span class="tok-str">"unknown"</span>]      <span class="tok-com"># Mypy: TypedDict "User" has no key "unknown"</span>
-
-<span class="tok-com"># Mất type khi không annotate</span>
-data = <span class="tok-cls">json</span>.<span class="tok-fn">loads</span>(response)  <span class="tok-com"># type: dict[str, Any] — không phải User!</span>
-<span class="tok-com"># Phải cast/validate:</span>
-user: User = <span class="tok-fn">cast</span>(User, data)</code></pre>
-        </div>
-
-        <p>
-          <strong>TypedDict vs dataclass vs Pydantic</strong> — 3 lựa chọn cho "structured data":
-        </p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Tính chất</th><th><code>TypedDict</code></th><th><code>@dataclass</code></th><th><code>pydantic.BaseModel</code></th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Bản chất runtime</td><td><strong>Dict</strong> bình thường</td><td>Class với <code>__init__</code></td><td>Class + runtime validation</td></tr>
-              <tr><td>Truy cập field</td><td><code>u["name"]</code></td><td><code>u.name</code></td><td><code>u.name</code></td></tr>
-              <tr><td>Runtime check?</td><td>Không</td><td>Không (chỉ type hint)</td><td><strong>Có</strong> — validate input</td></tr>
-              <tr><td>Performance</td><td>Nhanh nhất (dict native)</td><td>Trung bình</td><td>Chậm hơn (validation overhead)</td></tr>
-              <tr><td>Serialize JSON</td><td>Trực tiếp <code>json.dumps</code></td><td>Cần <code>asdict()</code> hoặc tự viết</td><td>Có <code>.model_dump_json()</code></td></tr>
-              <tr><td>Nested validation</td><td>Mypy compile-time</td><td>Mypy compile-time</td><td>Runtime + descriptive errors</td></tr>
-              <tr><td>Use case</td><td>JSON shape, config dict</td><td>Domain object internal</td><td>API boundary, user input</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="py-feature">
-          <h4>Khuyến nghị thực tế</h4>
-          <p>
-            <strong>TypedDict</strong>: response API đã JSON, không cần object — vd hàm trả dict trực tiếp ra
-            <code>jsonify</code>. <strong>Dataclass</strong>: domain object nội bộ (User, Order, Product) — có method,
-            có behavior. <strong>Pydantic</strong>: lớp ranh giới ứng dụng — input từ HTTP request, từ file YAML, từ
-            CLI args — nơi cần validate giá trị thật, không chỉ type.
-          </p>
-        </div>
-
-        <h2 id="protocol">11. <code>Protocol</code> — structural typing</h2>
-
-        <p>
-          Python có truyền thống <strong>duck typing</strong>: "nếu nó kêu quack thì nó là vịt". Trước Python 3.8, duck
-          typing thoải mái nhưng <em>không kiểm tra</em>. <code>Protocol</code> (PEP 544) đem static check cho duck
-          typing: định nghĩa <em>shape</em> mà object phải có, không cần kế thừa.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Protocol — structural typing</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Protocol
-
-<span class="tok-kw">class</span> <span class="tok-cls">Drawable</span>(Protocol):
-    <span class="tok-kw">def</span> <span class="tok-fn">draw</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>: ...
-
-<span class="tok-kw">class</span> <span class="tok-cls">Circle</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">draw</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-fn">print</span>(<span class="tok-str">"○"</span>)
-
-<span class="tok-kw">class</span> <span class="tok-cls">Square</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">draw</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-fn">print</span>(<span class="tok-str">"□"</span>)
-
-<span class="tok-com"># Cả Circle và Square KHÔNG kế thừa Drawable</span>
-<span class="tok-com"># Nhưng đều "match" shape (có draw() -&gt; None) — đủ rồi</span>
-
-<span class="tok-kw">def</span> <span class="tok-fn">render</span>(items: <span class="tok-type">list</span>[Drawable]) -&gt; <span class="tok-kw">None</span>:
-    <span class="tok-kw">for</span> item <span class="tok-kw">in</span> items:
-        item.<span class="tok-fn">draw</span>()
-
-<span class="tok-fn">render</span>([<span class="tok-cls">Circle</span>(), <span class="tok-cls">Square</span>()])   <span class="tok-com"># Mypy OK — duck typing được type check!</span></code></pre>
-        </div>
-
-        <p>So sánh với ABC (Abstract Base Class) — pattern OOP truyền thống chương 5:</p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Khía cạnh</th><th><code>Protocol</code> (structural)</th><th><code>ABC</code> (nominal)</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Kiểm tra</td><td>Match <em>shape</em> (có method đúng signature)</td><td>Phải <em>kế thừa</em> tường minh</td></tr>
-              <tr><td>Linh hoạt</td><td>Cao — class nào có shape đều dùng được</td><td>Thấp — cần đổi class hierarchy</td></tr>
-              <tr><td>Áp dụng cho lib bên ngoài</td><td>Được — không cần sửa code lib</td><td>Khó — không thể inherit từ third-party</td></tr>
-              <tr><td>Runtime check</td><td>Có với <code>@runtime_checkable</code></td><td>Có (qua <code>isinstance</code>)</td></tr>
-              <tr><td>Pythonic</td><td>Rất Pythonic (duck typing)</td><td>Hơi Java-style</td></tr>
-              <tr><td>Khi dùng</td><td>Mô tả "interface" cho function input</td><td>Cần share code chung (mixin)</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Protocol với @runtime_checkable</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Protocol, runtime_checkable
-
-@runtime_checkable
-<span class="tok-kw">class</span> <span class="tok-cls">Closeable</span>(Protocol):
-    <span class="tok-kw">def</span> <span class="tok-fn">close</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>: ...
-
-<span class="tok-kw">def</span> <span class="tok-fn">safe_close</span>(obj: <span class="tok-type">object</span>) -&gt; <span class="tok-kw">None</span>:
-    <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(obj, <span class="tok-cls">Closeable</span>):  <span class="tok-com"># Check runtime!</span>
-        obj.<span class="tok-fn">close</span>()</code></pre>
+<span class="tok-com"># Cách 2: itertools.islice (slicing iterator)</span>
+<span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> islice
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">count</span>(), <span class="tok-num">6</span>))   <span class="tok-com"># [0, 1, 2, 3, 4, 5]</span></code></pre>
         </div>
 
         <div class="callout callout-warning">
-          <div class="callout-label">⚠️ <code>@runtime_checkable</code> chỉ check method tồn tại</div>
+          <div class="callout-label">⚠️ Đừng <code>list()</code> generator vô hạn</div>
           <p>
-            Không check signature có khớp không. Một class có method <code>close()</code> nhận 5 argument lạ vẫn pass
-            <code>isinstance(obj, Closeable)</code>. Đây là trade-off vì Python không reflect được signature lúc
-            runtime trọn vẹn.
+            <code>list(count())</code> sẽ chạy mãi và <em>treo máy</em>. Luôn <code>islice</code> hoặc kiểm tra điều kiện
+            break trước khi materialize.
           </p>
         </div>
 
-        <h2 id="generic-fn">12. Generic function — PEP 695 (3.12+)</h2>
+        <p>
+          Ví dụ Fibonacci infinite:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">fibonacci</span>():
+    a, b = <span class="tok-num">0</span>, <span class="tok-num">1</span>
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        <span class="tok-kw">yield</span> a
+        a, b = b, a + b
+
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">fibonacci</span>(), <span class="tok-num">10</span>))
+<span class="tok-com"># [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]</span></code></pre>
+        </div>
+
+        <h2 id="yield-from"><span style="white-space:nowrap;">8. <code>yield from</code></span> — delegate generator</h2>
 
         <p>
-          Generic là tham số type. Hàm hoạt động với bất kỳ type T nào — gặp ở <code>list[T]</code>,
-          <code>dict[K, V]</code>. Tự viết function generic giờ rất ngắn nhờ PEP 695.
+          Khi một generator muốn "phát lại" toàn bộ giá trị của generator (hay iterable) khác, viết <code>for x in g: yield x</code>
+          dài dòng. Python 3.3+ có cú pháp gọn hơn:
         </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>Generic function — cú pháp mới (3.12+)</span>
+            <span>yield from</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-com"># Python 3.12+ — cú pháp [T] sau tên</span>
-<span class="tok-kw">def</span> <span class="tok-fn">first</span>[T](items: <span class="tok-type">list</span>[T]) -&gt; T:
-    <span class="tok-kw">return</span> items[<span class="tok-num">0</span>]
+<pre><code><span class="tok-com"># Cách dài</span>
+<span class="tok-kw">def</span> <span class="tok-fn">chain_old</span>(*iterables):
+    <span class="tok-kw">for</span> it <span class="tok-kw">in</span> iterables:
+        <span class="tok-kw">for</span> x <span class="tok-kw">in</span> it:
+            <span class="tok-kw">yield</span> x
 
-x: <span class="tok-type">int</span> = <span class="tok-fn">first</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>])           <span class="tok-com"># T = int</span>
-s: <span class="tok-type">str</span> = <span class="tok-fn">first</span>([<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>])             <span class="tok-com"># T = str</span>
+<span class="tok-com"># Cách gọn — yield from</span>
+<span class="tok-kw">def</span> <span class="tok-fn">chain</span>(*iterables):
+    <span class="tok-kw">for</span> it <span class="tok-kw">in</span> iterables:
+        <span class="tok-kw">yield</span> <span class="tok-kw">from</span> it
 
-<span class="tok-com"># Nhiều type parameter</span>
-<span class="tok-kw">def</span> <span class="tok-fn">swap</span>[A, B](pair: <span class="tok-type">tuple</span>[A, B]) -&gt; <span class="tok-type">tuple</span>[B, A]:
-    a, b = pair
-    <span class="tok-kw">return</span> b, a
-
-<span class="tok-com"># Constraint: T phải là int hoặc float</span>
-<span class="tok-kw">def</span> <span class="tok-fn">double</span>[T: (<span class="tok-type">int</span>, <span class="tok-type">float</span>)](x: T) -&gt; T:
-    <span class="tok-kw">return</span> x * <span class="tok-num">2</span>
-
-<span class="tok-com"># Bound: T phải là subtype của Comparable</span>
-<span class="tok-kw">def</span> <span class="tok-fn">sort_items</span>[T: <span class="tok-cls">SupportsRichComparison</span>](items: <span class="tok-type">list</span>[T]) -&gt; <span class="tok-type">list</span>[T]:
-    <span class="tok-kw">return</span> <span class="tok-fn">sorted</span>(items)</code></pre>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Trước PEP 695 — cú pháp TypeVar (cũ, verbose)</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypeVar
-
-T = TypeVar(<span class="tok-str">"T"</span>)
-
-<span class="tok-kw">def</span> <span class="tok-fn">first</span>(items: <span class="tok-type">list</span>[T]) -&gt; T:
-    <span class="tok-kw">return</span> items[<span class="tok-num">0</span>]
-
-<span class="tok-com"># Constrained TypeVar</span>
-Num = TypeVar(<span class="tok-str">"Num"</span>, <span class="tok-type">int</span>, <span class="tok-type">float</span>)
-
-<span class="tok-kw">def</span> <span class="tok-fn">double</span>(x: Num) -&gt; Num:
-    <span class="tok-kw">return</span> x * <span class="tok-num">2</span>
-
-<span class="tok-com"># Bound TypeVar</span>
-TComp = TypeVar(<span class="tok-str">"TComp"</span>, bound=<span class="tok-cls">SupportsRichComparison</span>)</code></pre>
+<span class="tok-fn">list</span>(<span class="tok-fn">chain</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>], (<span class="tok-num">3</span>, <span class="tok-num">4</span>), <span class="tok-fn">range</span>(<span class="tok-num">5</span>, <span class="tok-num">7</span>)))
+<span class="tok-com"># [1, 2, 3, 4, 5, 6]</span></code></pre>
         </div>
 
         <p>
-          Cú pháp <code>TypeVar</code> cũ vẫn dùng được mãi mãi. Nhưng nếu project ≥ Python 3.12, viết
-          <code>def f[T]</code> ngắn hơn và scope của T rõ ràng (chỉ trong function đó). Cú pháp cũ T là biến module-level —
-          nếu dùng ở 2 function khác nhau dễ hiểu lầm là "cùng T".
-        </p>
-
-        <h2 id="generic-class">13. Generic class — PEP 695</h2>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Generic class — cú pháp mới</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-com"># Python 3.12+ — cú pháp class Name[T]:</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Stack</span>[T]:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>.items: <span class="tok-type">list</span>[T] = []
-
-    <span class="tok-kw">def</span> <span class="tok-fn">push</span>(<span class="tok-kw">self</span>, item: T) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>.items.<span class="tok-fn">append</span>(item)
-
-    <span class="tok-kw">def</span> <span class="tok-fn">pop</span>(<span class="tok-kw">self</span>) -&gt; T:
-        <span class="tok-kw">return</span> <span class="tok-kw">self</span>.items.<span class="tok-fn">pop</span>()
-
-s: <span class="tok-cls">Stack</span>[<span class="tok-type">int</span>] = <span class="tok-cls">Stack</span>()
-s.<span class="tok-fn">push</span>(<span class="tok-num">1</span>)
-s.<span class="tok-fn">push</span>(<span class="tok-str">"hello"</span>)    <span class="tok-com"># Mypy: incompatible type</span>
-
-<span class="tok-com"># Generic class với nhiều type parameter</span>
-<span class="tok-kw">class</span> <span class="tok-cls">Pair</span>[A, B]:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, first: A, second: B) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>.first = first
-        <span class="tok-kw">self</span>.second = second
-
-p: <span class="tok-cls">Pair</span>[<span class="tok-type">str</span>, <span class="tok-type">int</span>] = <span class="tok-cls">Pair</span>(<span class="tok-str">"age"</span>, <span class="tok-num">22</span>)</code></pre>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Trước PEP 695 — kế thừa Generic[T]</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Generic, TypeVar
-
-T = TypeVar(<span class="tok-str">"T"</span>)
-
-<span class="tok-kw">class</span> <span class="tok-cls">Stack</span>(Generic[T]):
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>.items: <span class="tok-type">list</span>[T] = []
-    <span class="tok-kw">def</span> <span class="tok-fn">push</span>(<span class="tok-kw">self</span>, item: T) -&gt; <span class="tok-kw">None</span>: <span class="tok-kw">self</span>.items.<span class="tok-fn">append</span>(item)
-    <span class="tok-kw">def</span> <span class="tok-fn">pop</span>(<span class="tok-kw">self</span>) -&gt; T: <span class="tok-kw">return</span> <span class="tok-kw">self</span>.items.<span class="tok-fn">pop</span>()</code></pre>
-        </div>
-
-        <h2 id="narrowing">14. Type narrowing — thu hẹp union</h2>
-
-        <p>
-          Khi biến có union (vd <code>int | str</code> hoặc <code>T | None</code>), không gọi method được ngay vì
-          method ở 2 type khác nhau. Cần <em>narrow</em> trước.
+          Ngoài cú pháp gọn, <code>yield from</code> còn <strong>forward</strong> được <code>send()</code>,
+          <code>throw()</code>, và giá trị <code>return</code> của sub-generator — đây là điều phiên bản <code>for ... yield x</code> không làm được. Sẽ rõ hơn ở mục 9.
         </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>isinstance narrowing</span>
+            <span>Flatten tree đệ quy</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">format_id</span>(x: <span class="tok-type">int</span> | <span class="tok-type">str</span>) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(x, <span class="tok-type">str</span>):
-        <span class="tok-kw">return</span> x.<span class="tok-fn">upper</span>()       <span class="tok-com"># mypy: x đã được narrow về str</span>
-    <span class="tok-kw">return</span> <span class="tok-type">str</span>(x)                <span class="tok-com"># mypy: x là int ở đây</span></code></pre>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">flatten</span>(items):
+    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> items:
+        <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(x, <span class="tok-fn">list</span>):
+            <span class="tok-kw">yield</span> <span class="tok-kw">from</span> <span class="tok-fn">flatten</span>(x)   <span class="tok-com"># đệ quy gọn</span>
+        <span class="tok-kw">else</span>:
+            <span class="tok-kw">yield</span> x
+
+<span class="tok-fn">list</span>(<span class="tok-fn">flatten</span>([<span class="tok-num">1</span>, [<span class="tok-num">2</span>, [<span class="tok-num">3</span>, [<span class="tok-num">4</span>, <span class="tok-num">5</span>]], <span class="tok-num">6</span>]]))
+<span class="tok-com"># [1, 2, 3, 4, 5, 6]</span></code></pre>
         </div>
+
+        <h2 id="send-throw-close">9. <code>send()</code>, <code>throw()</code>, <code>close()</code> — generator hai chiều</h2>
+
+        <p>
+          Generator không chỉ <em>phát</em> giá trị ra — nó còn <em>nhận</em> giá trị vào. Đây là nền tảng của coroutine
+          cũ (trước khi <code>async</code>/<code>await</code> chính thức xuất hiện ở Python 3.5).
+        </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>is None narrowing</span>
+            <span>send() — gửi giá trị vào yield</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name: <span class="tok-type">str</span> | <span class="tok-kw">None</span>) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">if</span> name <span class="tok-kw">is</span> <span class="tok-kw">None</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">"Khách"</span>
-    <span class="tok-kw">return</span> name.<span class="tok-fn">upper</span>()         <span class="tok-com"># name đã được narrow về str</span>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">echo</span>():
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        received = <span class="tok-kw">yield</span>          <span class="tok-com"># yield không có giá trị bên phải</span>
+        <span class="tok-fn">print</span>(<span class="tok-fn">f</span><span class="tok-str">'Nhận: '</span>{received}<span class="tok-str">'</span>)
 
-<span class="tok-com"># assert cũng narrow</span>
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(x: <span class="tok-type">int</span> | <span class="tok-kw">None</span>) -&gt; <span class="tok-type">int</span>:
-    <span class="tok-kw">assert</span> x <span class="tok-kw">is</span> <span class="tok-kw">not</span> <span class="tok-kw">None</span>
-    <span class="tok-kw">return</span> x + <span class="tok-num">1</span>                  <span class="tok-com"># x: int sau assert</span></code></pre>
+g = <span class="tok-fn">echo</span>()
+<span class="tok-fn">next</span>(g)              <span class="tok-com"># PHẢI prime — chạy đến yield đầu tiên</span>
+g.<span class="tok-fn">send</span>(<span class="tok-str">'hello'</span>)    <span class="tok-com"># in 'Nhận: hello'</span>
+g.<span class="tok-fn">send</span>(<span class="tok-str">'world'</span>)    <span class="tok-com"># in 'Nhận: world'</span>
+g.<span class="tok-fn">close</span>()           <span class="tok-com"># raise GeneratorExit bên trong → thoát</span></code></pre>
         </div>
+
+        <p>
+          Cơ chế: <code>g.send(x)</code> resume generator, biểu thức <code>yield</code> đang pause sẽ <em>trả về</em>
+          giá trị <code>x</code>. Lưu ý phải <code>next(g)</code> hoặc <code>g.send(None)</code> lần đầu để generator
+          chạy đến <code>yield</code> đầu tiên (gọi là <em>priming</em>).
+        </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>TypeGuard — custom predicate</span>
+            <span>throw / close</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypeGuard
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">safe_gen</span>():
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+            x = <span class="tok-kw">yield</span>
+            <span class="tok-fn">print</span>(x)
+    <span class="tok-kw">except</span> <span class="tok-cls">ValueError</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">'Bắt ValueError trong generator'</span>)
+    <span class="tok-kw">finally</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">'Cleanup'</span>)
 
-<span class="tok-kw">def</span> <span class="tok-fn">is_str_list</span>(x: <span class="tok-type">list</span>[<span class="tok-type">object</span>]) -&gt; TypeGuard[<span class="tok-type">list</span>[<span class="tok-type">str</span>]]:
-    <span class="tok-kw">return</span> <span class="tok-fn">all</span>(<span class="tok-fn">isinstance</span>(item, <span class="tok-type">str</span>) <span class="tok-kw">for</span> item <span class="tok-kw">in</span> x)
-
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(items: <span class="tok-type">list</span>[<span class="tok-type">object</span>]) -&gt; <span class="tok-kw">None</span>:
-    <span class="tok-kw">if</span> <span class="tok-fn">is_str_list</span>(items):
-        <span class="tok-kw">for</span> s <span class="tok-kw">in</span> items:
-            <span class="tok-fn">print</span>(s.<span class="tok-fn">upper</span>())    <span class="tok-com"># items đã được narrow về list[str]</span>
-
-<span class="tok-com"># Python 3.13+ giới thiệu TypeIs — narrow chính xác hơn (cả 2 branch)</span>
-<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypeIs   <span class="tok-com"># 3.13+</span>
-<span class="tok-kw">def</span> <span class="tok-fn">is_int</span>(x: <span class="tok-type">object</span>) -&gt; TypeIs[<span class="tok-type">int</span>]:
-    <span class="tok-kw">return</span> <span class="tok-fn">isinstance</span>(x, <span class="tok-type">int</span>)</code></pre>
+g = <span class="tok-fn">safe_gen</span>()
+<span class="tok-fn">next</span>(g)
+g.<span class="tok-fn">send</span>(<span class="tok-num">1</span>)               <span class="tok-com"># in 1</span>
+g.<span class="tok-fn">throw</span>(<span class="tok-cls">ValueError</span>)     <span class="tok-com"># inject exception</span>
+<span class="tok-com"># → 'Bắt ValueError trong generator'</span>
+<span class="tok-com"># → 'Cleanup'</span></code></pre>
         </div>
 
         <div class="callout callout-mental">
-          <div class="callout-label">🧠 So sánh narrowing Python vs TypeScript</div>
-          <ul>
-            <li>TS: <code>typeof x === 'string'</code> → Python: <code>isinstance(x, str)</code>.</li>
-            <li>TS: <code>x instanceof Foo</code> → Python: <code>isinstance(x, Foo)</code> (cùng tên).</li>
-            <li>TS: type predicate <code>x is T</code> → Python: <code>TypeGuard[T]</code>.</li>
-            <li>TS: discriminated union qua property literal → Python: <code>TypedDict</code> với <code>Literal</code> field, kết hợp <code>match</code>.</li>
-          </ul>
+          <div class="callout-label">🧠 Hiếm dùng trong code app, nhưng quan trọng để biết</div>
           <p>
-            Ý tưởng giống hệt, cú pháp khác. Cả 2 đều dựa trên control-flow analysis của tool.
+            Từ Python 3.5, <code>async</code>/<code>await</code> đã thay coroutine cũ. Tuy nhiên một số library
+            (như <code>contextlib.contextmanager</code> sẽ thấy ở chương 10) vẫn dùng generator hai chiều.
+            <code>close()</code> đặc biệt quan trọng — Python tự gọi nó khi generator bị GC, đảm bảo block
+            <code>finally</code> luôn chạy để đóng resource.
           </p>
         </div>
 
-        <h2 id="mypy">15. Cài và chạy <code>mypy</code></h2>
+        <h2 id="itertools-overview">10. <code>itertools</code> — toolset standard library</h2>
 
         <p>
-          <code>mypy</code> là static type checker chính thức của Python (Guido + Jukka Lehtosalo phát triển). Cài
-          bằng pip, chạy trực tiếp lên file/folder.
+          <code>itertools</code> là module stdlib chứa các <em>iterator building block</em>. Tất cả đều lazy và
+          có thể compose với nhau thành pipeline. Đây là <strong>bảng tham chiếu</strong> ngắn:
         </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Setup mypy</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-com"># Cài</span>
-pip install mypy
-<span class="tok-com"># hoặc với uv (chương 1)</span>
-uv pip install mypy
-
-<span class="tok-com"># Chạy</span>
-mypy app.py                     <span class="tok-com"># 1 file</span>
-mypy src/                       <span class="tok-com"># 1 folder</span>
-mypy --strict src/              <span class="tok-com"># Strict mode — kiểm tra tối đa</span>
-
-<span class="tok-com"># Output mẫu:</span>
-<span class="tok-com"># app.py:12: error: Argument 1 to "greet" has incompatible type "int"; expected "str"</span>
-<span class="tok-com"># Found 1 error in 1 file (checked 5 source files)</span></code></pre>
-        </div>
-
-        <p>Cấu hình qua <code>pyproject.toml</code> (chương 1) thay vì gõ flag mỗi lần:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>pyproject.toml — config mypy</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code>[tool.mypy]
-python_version = <span class="tok-str">"3.12"</span>
-strict = <span class="tok-kw">true</span>
-warn_return_any = <span class="tok-kw">true</span>
-warn_unused_ignores = <span class="tok-kw">true</span>
-disallow_untyped_defs = <span class="tok-kw">true</span>
-disallow_any_unimported = <span class="tok-kw">true</span>
-no_implicit_optional = <span class="tok-kw">true</span>
-check_untyped_defs = <span class="tok-kw">true</span>
-show_error_codes = <span class="tok-kw">true</span>
-
-<span class="tok-com"># Bỏ qua thư viện không có type stub</span>
-[[tool.mypy.overrides]]
-module = [<span class="tok-str">"untyped_lib.*"</span>]
-ignore_missing_imports = <span class="tok-kw">true</span></code></pre>
-        </div>
-
-        <p>
-          Cờ <code>--strict</code> bật một bộ cờ <em>tất cả-trong-một</em>: <code>disallow_untyped_defs</code> (cấm
-          function không annotate), <code>disallow_any_explicit</code>, <code>warn_unused_ignores</code>,
-          <code>strict_optional</code>, <code>check_untyped_defs</code>, <code>warn_return_any</code>,
-          <code>no_implicit_optional</code>, <code>warn_redundant_casts</code>, … Tổng cộng 10+ cờ.
-        </p>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Workflow điển hình</div>
-          <ol>
-            <li>Project mới — bật <code>strict = true</code> ngay từ commit đầu. Không nợ nần.</li>
-            <li>Project cũ — bật <code>strict</code> dần: chỉ apply cho module mới, dùng <code>files</code> trong config.</li>
-            <li>CI: chạy <code>mypy</code> mỗi PR, fail nếu có error mới (so với baseline).</li>
-            <li>IDE: cài plugin (Pylance VS Code / PyCharm tích hợp) để thấy lỗi khi gõ.</li>
-          </ol>
-        </div>
-
-        <h2 id="pyright">16. <code>Pyright</code> và <code>Pylance</code></h2>
-
-        <p>
-          <strong>Pyright</strong> là type checker của Microsoft, viết bằng TypeScript (chạy trên Node). Nhanh hơn
-          mypy đáng kể (5-10×) vì incremental check tốt. <strong>Pylance</strong> là extension VS Code đóng gói
-          Pyright + auto-complete + refactor.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Pyright CLI</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code>npm install -g pyright
-pyright src/
-pyright --strict src/
-
-<span class="tok-com"># Config qua pyrightconfig.json hoặc pyproject.toml</span>
-[tool.pyright]
-pythonVersion = <span class="tok-str">"3.12"</span>
-typeCheckingMode = <span class="tok-str">"strict"</span>
-reportMissingTypeStubs = <span class="tok-kw">true</span></code></pre>
-        </div>
 
         <div class="table-wrap">
-          <table>
+          <table class="itertools-table">
             <thead>
-              <tr><th>Khía cạnh</th><th><code>mypy</code></th><th><code>Pyright</code></th></tr>
+              <tr><th>Hàm</th><th>Kết quả mẫu</th><th>Mô tả</th></tr>
             </thead>
             <tbody>
-              <tr><td>Tác giả</td><td>Cộng đồng Python (Guido + Jukka)</td><td>Microsoft</td></tr>
-              <tr><td>Implementation</td><td>Python</td><td>TypeScript/Node</td></tr>
-              <tr><td>Tốc độ</td><td>Chậm hơn (full re-check)</td><td>Nhanh (incremental)</td></tr>
-              <tr><td>Tích hợp IDE</td><td>Plugin riêng</td><td>Pylance trong VS Code</td></tr>
-              <tr><td>Tương thích PEP</td><td>Reference cho PEP — implement chuẩn nhất</td><td>Đôi khi đi trước (vd PEP 695 sớm)</td></tr>
-              <tr><td>Strict mode</td><td><code>--strict</code></td><td><code>typeCheckingMode = "strict"</code></td></tr>
-              <tr><td>Lựa chọn</td><td>CI/CD chính thức</td><td>Dev IDE + check nhanh</td></tr>
+              <tr>
+                <td><code>count(5, 2)</code></td>
+                <td><code>5, 7, 9, 11, ...</code></td>
+                <td>Đếm vô hạn từ start, bước step</td>
+              </tr>
+              <tr>
+                <td><code>cycle([1,2,3])</code></td>
+                <td><code>1, 2, 3, 1, 2, 3, ...</code></td>
+                <td>Lặp vô hạn iterable</td>
+              </tr>
+              <tr>
+                <td><code>repeat('x', 3)</code></td>
+                <td><code>'x', 'x', 'x'</code></td>
+                <td>Lặp value n lần (hoặc vô hạn nếu bỏ n)</td>
+              </tr>
+              <tr>
+                <td><code>chain([1,2], [3,4])</code></td>
+                <td><code>1, 2, 3, 4</code></td>
+                <td>Nối nhiều iterable</td>
+              </tr>
+              <tr>
+                <td><code>islice(it, 5, 10)</code></td>
+                <td>Phần tử index 5..9</td>
+                <td>Slicing cho iterator (không cần list)</td>
+              </tr>
+              <tr>
+                <td><code>takewhile(p, it)</code></td>
+                <td>Đến khi p(x) false</td>
+                <td>Lấy prefix thoả điều kiện</td>
+              </tr>
+              <tr>
+                <td><code>dropwhile(p, it)</code></td>
+                <td>Bỏ qua prefix thoả</td>
+                <td>Ngược takewhile</td>
+              </tr>
+              <tr>
+                <td><code>filterfalse(p, it)</code></td>
+                <td>Phần tử p(x) false</td>
+                <td>Ngược filter</td>
+              </tr>
+              <tr>
+                <td><code>groupby(it, key)</code></td>
+                <td>(key, group_iter)</td>
+                <td>Group <em>adjacent</em> phần tử cùng key</td>
+              </tr>
+              <tr>
+                <td><code>accumulate(it, op)</code></td>
+                <td><code>1, 3, 6, 10</code></td>
+                <td>Cumulative reduce (mặc định +)</td>
+              </tr>
+              <tr>
+                <td><code>combinations(it, r)</code></td>
+                <td>Tổ hợp không trùng</td>
+                <td>C(n, r) — không phân biệt thứ tự</td>
+              </tr>
+              <tr>
+                <td><code>permutations(it, r)</code></td>
+                <td>Hoán vị</td>
+                <td>P(n, r) — phân biệt thứ tự</td>
+              </tr>
+              <tr>
+                <td><code>product(A, B)</code></td>
+                <td>Tích Đề-các</td>
+                <td>Thay nested loop</td>
+              </tr>
+              <tr>
+                <td><code>combinations_with_replacement</code></td>
+                <td>Tổ hợp có lặp</td>
+                <td>Cho phép chọn lại phần tử</td>
+              </tr>
+              <tr>
+                <td><code>pairwise(it)</code></td>
+                <td><code>(1,2), (2,3), (3,4)</code></td>
+                <td>Cặp kề nhau (Py 3.10+)</td>
+              </tr>
+              <tr>
+                <td><code>compress(it, mask)</code></td>
+                <td>Lọc theo mask boolean</td>
+                <td>Chọn phần tử ứng với True</td>
+              </tr>
+              <tr>
+                <td><code>starmap(f, iter)</code></td>
+                <td>f(*args) cho mỗi tuple</td>
+                <td>Map mà unpack arg</td>
+              </tr>
+              <tr>
+                <td><code>tee(it, n)</code></td>
+                <td>n iterator giống nhau</td>
+                <td>"Nhân bản" iterator (cẩn thận memory)</td>
+              </tr>
+              <tr>
+                <td><code>zip_longest(A, B, fillvalue)</code></td>
+                <td>Zip đến iterable dài nhất</td>
+                <td>Khác <code>zip</code> built-in (dừng ở ngắn nhất)</td>
+              </tr>
             </tbody>
           </table>
         </div>
 
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Chạy cả 2?</div>
+        <h3 id="itertools-chain">10.1. <code>chain</code> — nối iterable</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> chain
+
+<span class="tok-fn">list</span>(<span class="tok-fn">chain</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>], (<span class="tok-num">3</span>, <span class="tok-num">4</span>), <span class="tok-fn">range</span>(<span class="tok-num">5</span>, <span class="tok-num">7</span>)))
+<span class="tok-com"># [1, 2, 3, 4, 5, 6]</span>
+
+<span class="tok-com"># chain.from_iterable — flatten 1 cấp</span>
+<span class="tok-fn">list</span>(chain.<span class="tok-fn">from_iterable</span>([[<span class="tok-num">1</span>, <span class="tok-num">2</span>], [<span class="tok-num">3</span>], [<span class="tok-num">4</span>, <span class="tok-num">5</span>]]))
+<span class="tok-com"># [1, 2, 3, 4, 5]</span></code></pre>
+        </div>
+
+        <h3 id="itertools-infinite">10.2. <code>count</code> / <code>cycle</code> / <code>repeat</code> — vô hạn</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> count, cycle, repeat, islice
+
+<span class="tok-com"># count(start, step) — như range nhưng vô hạn</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">count</span>(<span class="tok-num">10</span>, <span class="tok-num">3</span>), <span class="tok-num">5</span>))     <span class="tok-com"># [10, 13, 16, 19, 22]</span>
+
+<span class="tok-com"># cycle — duyệt vòng vô hạn</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">cycle</span>([<span class="tok-str">'A'</span>, <span class="tok-str">'B'</span>, <span class="tok-str">'C'</span>]), <span class="tok-num">7</span>))
+<span class="tok-com"># ['A', 'B', 'C', 'A', 'B', 'C', 'A']</span>
+
+<span class="tok-com"># repeat — lặp value</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">repeat</span>(<span class="tok-str">'x'</span>, <span class="tok-num">3</span>))                  <span class="tok-com"># ['x', 'x', 'x']</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">repeat</span>(<span class="tok-num">0</span>), <span class="tok-num">4</span>))           <span class="tok-com"># [0, 0, 0, 0]</span>
+
+<span class="tok-com"># Pattern: enumerate kết hợp count với offset</span>
+<span class="tok-kw">for</span> i, ch <span class="tok-kw">in</span> <span class="tok-fn">zip</span>(<span class="tok-fn">count</span>(<span class="tok-num">100</span>), <span class="tok-str">'abc'</span>):
+    <span class="tok-fn">print</span>(i, ch)    <span class="tok-com"># 100 a, 101 b, 102 c</span></code></pre>
+        </div>
+
+        <h3 id="itertools-islice">10.3. <code>islice</code> — slice cho iterator</h3>
+
+        <p>
+          Không thể <code>gen[5:10]</code> như list — phải dùng <code>islice</code>:
+        </p>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> islice, count
+
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">count</span>(), <span class="tok-num">5</span>))           <span class="tok-com"># [0, 1, 2, 3, 4]   stop=5</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">count</span>(), <span class="tok-num">5</span>, <span class="tok-num">10</span>))       <span class="tok-com"># [5, 6, 7, 8, 9]   start=5, stop=10</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">count</span>(), <span class="tok-num">0</span>, <span class="tok-num">10</span>, <span class="tok-num">2</span>))    <span class="tok-com"># [0, 2, 4, 6, 8]   start, stop, step</span>
+
+<span class="tok-com"># LƯU Ý: không hỗ trợ index âm — vì iterator không biết "cuối"</span></code></pre>
+        </div>
+
+        <h3 id="itertools-groupby">10.4. <code>groupby</code> — group <em>adjacent</em></h3>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Chỉ group những phần tử <strong>kề nhau</strong> cùng key</div>
           <p>
-            Nhiều team chạy <strong>Pyright</strong> trong IDE (Pylance VS Code) để dev nhanh và <strong>mypy</strong>
-            trong CI để standardize. Không cần bắt buộc 1 lựa chọn — kết quả có thể khác đôi chút ở edge case, đa số
-            giống nhau.
+            Khác <code>SQL GROUP BY</code>! Nếu muốn group toàn bộ, phải <code>sort()</code> trước theo key.
           </p>
         </div>
 
-        <h2 id="anti-pattern">17. Anti-pattern: over-typing</h2>
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>groupby — không sort trước</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> groupby
+
+data = [<span class="tok-num">1</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">1</span>, <span class="tok-num">1</span>]
+<span class="tok-kw">for</span> key, group <span class="tok-kw">in</span> <span class="tok-fn">groupby</span>(data):
+    <span class="tok-fn">print</span>(key, <span class="tok-fn">list</span>(group))
+
+<span class="tok-com"># 1 [1, 1]</span>
+<span class="tok-com"># 2 [2, 2]</span>
+<span class="tok-com"># 1 [1, 1]    ← 3 group vì các nhóm "1" tách biệt</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>groupby — sort trước, rồi group</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>students = [
+    {<span class="tok-str">'name'</span>: <span class="tok-str">'An'</span>,    <span class="tok-str">'class'</span>: <span class="tok-str">'A'</span>},
+    {<span class="tok-str">'name'</span>: <span class="tok-str">'Bình'</span>,  <span class="tok-str">'class'</span>: <span class="tok-str">'B'</span>},
+    {<span class="tok-str">'name'</span>: <span class="tok-str">'Cường'</span>, <span class="tok-str">'class'</span>: <span class="tok-str">'A'</span>},
+    {<span class="tok-str">'name'</span>: <span class="tok-str">'Dung'</span>,   <span class="tok-str">'class'</span>: <span class="tok-str">'B'</span>},
+]
+
+<span class="tok-com"># PHẢI sort theo key trước!</span>
+keyfn = <span class="tok-kw">lambda</span> s: s[<span class="tok-str">'class'</span>]
+students.<span class="tok-fn">sort</span>(key=keyfn)
+
+<span class="tok-kw">for</span> cls, group <span class="tok-kw">in</span> <span class="tok-fn">groupby</span>(students, key=keyfn):
+    <span class="tok-fn">print</span>(cls, [s[<span class="tok-str">'name'</span>] <span class="tok-kw">for</span> s <span class="tok-kw">in</span> group])
+
+<span class="tok-com"># A ['An', 'Cường']</span>
+<span class="tok-com"># B ['Bình', 'Dung']</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Khi nào không cần sort</div>
+          <p>
+            Khi bạn <em>muốn</em> group run-length cùng dạng "đường chạy giống nhau liên tiếp" — ví dụ
+            <strong>run-length encoding</strong>, phát hiện block log liên tiếp cùng level, hay chia file theo
+            line ngắt — groupby trên dữ liệu chưa sort lại đúng yêu cầu.
+          </p>
+        </div>
+
+        <h3 id="itertools-combinatoric">10.5. <code>combinations</code> / <code>permutations</code> / <code>product</code></h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> combinations, permutations, product
+
+<span class="tok-com"># combinations — chọn r, KHÔNG quan trọng thứ tự</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">combinations</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>], <span class="tok-num">2</span>))
+<span class="tok-com"># [(1, 2), (1, 3), (2, 3)]</span>
+
+<span class="tok-com"># permutations — chọn r, CÓ quan trọng thứ tự</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">permutations</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>], <span class="tok-num">2</span>))
+<span class="tok-com"># [(1, 2), (1, 3), (2, 1), (2, 3), (3, 1), (3, 2)]</span>
+
+<span class="tok-com"># product — tích Đề-các (thay nested loop)</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">product</span>([<span class="tok-str">'a'</span>, <span class="tok-str">'b'</span>], [<span class="tok-num">1</span>, <span class="tok-num">2</span>]))
+<span class="tok-com"># [('a', 1), ('a', 2), ('b', 1), ('b', 2)]</span>
+
+<span class="tok-com"># product có repeat — duyệt mọi chuỗi length n</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">product</span>([<span class="tok-num">0</span>, <span class="tok-num">1</span>], repeat=<span class="tok-num">3</span>))
+<span class="tok-com"># [(0,0,0), (0,0,1), (0,1,0), ..., (1,1,1)]   ← bit pattern length 3</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Phân biệt 3 hàm</div>
+          <ul>
+            <li><code>combinations(n, r)</code>: C(n,r) — chọn nhóm. <em>"3 trong 10 người, không quan tâm thứ tự"</em>.</li>
+            <li><code>permutations(n, r)</code>: P(n,r) — sắp xếp. <em>"Xếp hàng 3 người từ 10"</em>.</li>
+            <li><code>product(A, B)</code>: |A| × |B| — bộ đôi từ 2 tập. <em>"Mọi cặp (size, màu)"</em>.</li>
+          </ul>
+        </div>
+
+        <h3 id="itertools-accumulate">10.6. <code>accumulate</code> — cumulative reduce</h3>
+
+        <div class="code-wrap">
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> accumulate
+<span class="tok-kw">import</span> operator
+
+<span class="tok-fn">list</span>(<span class="tok-fn">accumulate</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>]))
+<span class="tok-com"># [1, 3, 6, 10]    ← prefix sum (mặc định toán tử +)</span>
+
+<span class="tok-fn">list</span>(<span class="tok-fn">accumulate</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>], operator.mul))
+<span class="tok-com"># [1, 2, 6, 24]    ← prefix product (factorial-like)</span>
+
+<span class="tok-fn">list</span>(<span class="tok-fn">accumulate</span>([<span class="tok-num">5</span>, <span class="tok-num">2</span>, <span class="tok-num">8</span>, <span class="tok-num">1</span>], <span class="tok-fn">max</span>))
+<span class="tok-com"># [5, 5, 8, 8]     ← running max</span>
+
+<span class="tok-com"># Có thể truyền initial (Py 3.8+)</span>
+<span class="tok-fn">list</span>(<span class="tok-fn">accumulate</span>([<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>], initial=<span class="tok-num">100</span>))
+<span class="tok-com"># [100, 101, 103, 106]</span></code></pre>
+        </div>
+
+        <h3 id="itertools-pipeline">10.7. Compose pipeline</h3>
 
         <p>
-          Quy tắc kinh nghiệm: type hint <em>nơi tạo giá trị contract</em>, không phải mọi dòng.
+          Vẻ đẹp thật sự của itertools là <em>khả năng compose</em>: nối nhiều iterator lại như đường ống.
         </p>
 
         <div class="code-wrap">
           <div class="code-meta">
-            <span>❌ Over-typing</span>
+            <span>Pipeline streaming — không materialize trung gian</span>
             <button class="copy-btn">Copy</button>
           </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">process</span>(items: <span class="tok-type">list</span>[<span class="tok-type">int</span>]) -&gt; <span class="tok-type">int</span>:
-    total: <span class="tok-type">int</span> = <span class="tok-num">0</span>                       <span class="tok-com"># noise — mypy đã biết total: int</span>
-    i: <span class="tok-type">int</span> = <span class="tok-num">0</span>                            <span class="tok-com"># noise</span>
-    n: <span class="tok-type">int</span> = <span class="tok-fn">len</span>(items)                   <span class="tok-com"># noise</span>
-    <span class="tok-kw">while</span> i &lt; n:
-        x: <span class="tok-type">int</span> = items[i]                  <span class="tok-com"># noise</span>
-        squared: <span class="tok-type">int</span> = x * x                <span class="tok-com"># noise</span>
-        total = total + squared
-        i = i + <span class="tok-num">1</span>
-    <span class="tok-kw">return</span> total</code></pre>
-        </div>
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> count, islice, takewhile
 
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>✅ Type hint vừa đủ</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">process</span>(items: <span class="tok-type">list</span>[<span class="tok-type">int</span>]) -&gt; <span class="tok-type">int</span>:
-    total = <span class="tok-num">0</span>
-    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> items:
-        total += x * x
-    <span class="tok-kw">return</span> total</code></pre>
-        </div>
+<span class="tok-com"># Lấy 5 số chẵn đầu &gt; 100</span>
+result = <span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(
+    (x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">count</span>(<span class="tok-num">100</span>) <span class="tok-kw">if</span> x % <span class="tok-num">2</span> == <span class="tok-num">0</span>),
+    <span class="tok-num">5</span>
+))
+<span class="tok-com"># [100, 102, 104, 106, 108]</span>
 
-        <p>Nơi <em>nên</em> annotate:</p>
-
-        <ul>
-          <li><strong>Function signature</strong>: parameter và return type. Đây là contract — caller cần biết.</li>
-          <li><strong>Class attribute</strong>: <code>name: str</code> trên class body, hoặc <code>self.x: int = 0</code>.</li>
-          <li><strong>Module-level constant</strong>: <code>MAX_RETRIES: Final = 3</code>.</li>
-          <li><strong>Biến local <em>không có khởi tạo</em></strong>: <code>result: list[int] = []</code> (mypy không suy được từ <code>[]</code> trống).</li>
-          <li><strong>Biến local có type phức tạp</strong> mà tool suy nhầm — annotate để bắt rõ.</li>
-        </ul>
-
-        <p>Nơi <em>không cần</em> annotate:</p>
-
-        <ul>
-          <li>Biến local có giá trị literal rõ ràng: <code>total = 0</code>, <code>name = "An"</code>.</li>
-          <li>Variable trong loop (<code>for x in items</code>) — mypy biết x từ items type.</li>
-          <li>Comprehension intermediates.</li>
-          <li>Return type nếu function trả về <em>literal</em> (<code>return 0</code>) — mypy infer được. Nhưng nếu là public API, vẫn nên annotate return type rõ ràng.</li>
-        </ul>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Triết lý Python: explicit but not pedantic</div>
-          <p>
-            Zen of Python: <em>"Explicit is better than implicit"</em> — nhưng cũng <em>"Readability counts"</em>. Type
-            hint phải phục vụ người đọc. Nếu một dòng <code>total = 0</code> đã rõ rành rành thì thêm <code>: int</code>
-            chỉ tốn không gian, không thêm thông tin.
-          </p>
-          <p>
-            So với TypeScript: TS cộng đồng đẩy mạnh inference (đừng annotate cái mà compiler đoán được). Python theo
-            quan điểm tương tự — type hint là <strong>tài liệu + contract</strong>, không phải <em>nghi lễ</em>.
-          </p>
+<span class="tok-com"># takewhile — lấy đến khi false (KHÁC filter ở chỗ dừng hẳn)</span>
+result = <span class="tok-fn">list</span>(<span class="tok-fn">takewhile</span>(<span class="tok-kw">lambda</span> x: x &lt; <span class="tok-num">50</span>, <span class="tok-fn">count</span>(<span class="tok-num">40</span>, <span class="tok-num">2</span>)))
+<span class="tok-com"># [40, 42, 44, 46, 48]</span></code></pre>
         </div>
 
         <h2 id="bai-tap">Bài tập</h2>
@@ -1021,72 +977,80 @@ reportMissingTypeStubs = <span class="tok-kw">true</span></code></pre>
         <div class="exercises">
 
           <div class="exercise">
-            <h4>Bài 1 — Type hint đầy đủ một file, fix tới 0 lỗi mypy</h4>
+            <h4>Bài 1 — <code>class Countdown</code> với <code>__iter__</code>/<code>__next__</code></h4>
             <div class="exercise-body">
-              <p>
-                Lấy một file <code>.py</code> bạn đã viết ở chương 1-8 (vd: module chương 8 dùng asyncio). Mục tiêu:
-                <code>mypy --strict file.py</code> trả về 0 error.
-              </p>
-              <ol>
-                <li>Chạy <code>mypy --strict file.py</code> lần đầu → đếm error.</li>
-                <li>Thêm annotation cho mỗi function signature (parameter + return).</li>
-                <li>Annotate attribute class, constant module-level.</li>
-                <li>Fix Optional: chỗ nào có thể return <code>None</code> phải annotate <code>T | None</code>.</li>
-                <li>Loại bỏ implicit <code>Any</code> — nếu lib không có stub, thêm vào config <code>ignore_missing_imports = true</code>.</li>
-                <li>Mục tiêu cuối: 0 error.</li>
-              </ol>
+              <p>Viết class <code>Countdown</code>:</p>
+              <ul>
+                <li><code>Countdown(n)</code> tạo iterator đếm ngược từ <code>n</code> xuống <code>0</code>.</li>
+                <li>Implement <code>__iter__</code> và <code>__next__</code>.</li>
+                <li>Hỗ trợ <code>for x in Countdown(5):</code> in 5, 4, 3, 2, 1, 0.</li>
+                <li>Tự reset mỗi khi gọi <code>iter()</code> lại (cách tách iterable / iterator).</li>
+              </ul>
               <details class="exercise-hint">
-                <summary>Gợi ý chiến thuật</summary>
+                <summary>Đáp án</summary>
                 <div class="hint-content">
-                  <ul>
-                    <li>Bắt đầu từ entry point (function <code>main</code>) — đi vào trong dần.</li>
-                    <li>Khi mypy phàn nàn về biến container rỗng (<code>items = []</code>), annotate: <code>items: list[int] = []</code>.</li>
-                    <li>Khi gặp <code>**kwargs</code> hoặc decorator phức tạp — tạm thời <code># type: ignore[code]</code> ngắn gọn, fix sau.</li>
-                    <li>Dùng <code>show_error_codes = true</code> để biết error code (vd <code>[arg-type]</code>) — tra tài liệu mypy nhanh hơn.</li>
-                  </ul>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Countdown</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(self, n: <span class="tok-type">int</span>):
+        self.n = n
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__iter__</span>(self):
+        <span class="tok-kw">return</span> <span class="tok-cls">_CountdownIter</span>(self.n)
+
+
+<span class="tok-kw">class</span> <span class="tok-cls">_CountdownIter</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(self, n):
+        self.current = n
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__iter__</span>(self):
+        <span class="tok-kw">return</span> self
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__next__</span>(self):
+        <span class="tok-kw">if</span> self.current &lt; <span class="tok-num">0</span>:
+            <span class="tok-kw">raise</span> <span class="tok-cls">StopIteration</span>
+        v = self.current
+        self.current -= <span class="tok-num">1</span>
+        <span class="tok-kw">return</span> v
+
+
+c = <span class="tok-cls">Countdown</span>(<span class="tok-num">3</span>)
+<span class="tok-fn">list</span>(c)    <span class="tok-com"># [3, 2, 1, 0]</span>
+<span class="tok-fn">list</span>(c)    <span class="tok-com"># [3, 2, 1, 0]   reset OK</span></code></pre>
+                  <p>Cách generator-based gọn hơn nhiều — chỉ 4 dòng:</p>
+<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Countdown</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(self, n): self.n = n
+    <span class="tok-kw">def</span> <span class="tok-fn">__iter__</span>(self):
+        <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(self.n, -<span class="tok-num">1</span>, -<span class="tok-num">1</span>):
+            <span class="tok-kw">yield</span> i</code></pre>
+                  <p>Đây là pattern điển hình — <strong>để generator tự lo state machine</strong>.</p>
                 </div>
               </details>
             </div>
           </div>
 
           <div class="exercise">
-            <h4>Bài 2 — TypedDict cho response API</h4>
+            <h4>Bài 2 — Fibonacci vô hạn + 10 số đầu</h4>
             <div class="exercise-body">
-              <p>
-                Định nghĩa <code>TypedDict</code> cho User và viết function nhận JSON response, validate shape, trả về
-                User typed.
-              </p>
-              <ul>
-                <li>User có: <code>name: str</code>, <code>age: int</code>, <code>tags: list[str]</code>, <code>email: str | None</code>.</li>
-                <li>Function <code>parse_user(raw: dict) -&gt; User</code> raise <code>ValueError</code> nếu shape sai.</li>
-                <li>Test với 1 dict đúng, 1 dict thiếu key, 1 dict sai type.</li>
-              </ul>
+              <p>Viết generator <code>fibonacci()</code> sinh dãy Fibonacci vô hạn. Sau đó dùng <code>itertools.islice</code> lấy 10 số đầu.</p>
+              <p>Test:</p>
+<pre><code><span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">fibonacci</span>(), <span class="tok-num">10</span>))
+<span class="tok-com"># [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]</span></code></pre>
               <details class="exercise-hint">
                 <summary>Đáp án</summary>
                 <div class="hint-content">
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypedDict, <span class="tok-fn">cast</span>
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> islice
 
-<span class="tok-kw">class</span> <span class="tok-cls">User</span>(TypedDict):
-    name: <span class="tok-type">str</span>
-    age: <span class="tok-type">int</span>
-    tags: <span class="tok-type">list</span>[<span class="tok-type">str</span>]
-    email: <span class="tok-type">str</span> | <span class="tok-kw">None</span>
+<span class="tok-kw">def</span> <span class="tok-fn">fibonacci</span>():
+    a, b = <span class="tok-num">0</span>, <span class="tok-num">1</span>
+    <span class="tok-kw">while</span> <span class="tok-kw">True</span>:
+        <span class="tok-kw">yield</span> a
+        a, b = b, a + b
 
-<span class="tok-kw">def</span> <span class="tok-fn">parse_user</span>(raw: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">object</span>]) -&gt; User:
-    <span class="tok-kw">if</span> <span class="tok-kw">not</span> <span class="tok-fn">isinstance</span>(raw.<span class="tok-fn">get</span>(<span class="tok-str">"name"</span>), <span class="tok-type">str</span>):
-        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"name phải là str"</span>)
-    <span class="tok-kw">if</span> <span class="tok-kw">not</span> <span class="tok-fn">isinstance</span>(raw.<span class="tok-fn">get</span>(<span class="tok-str">"age"</span>), <span class="tok-type">int</span>):
-        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"age phải là int"</span>)
-    tags = raw.<span class="tok-fn">get</span>(<span class="tok-str">"tags"</span>)
-    <span class="tok-kw">if</span> <span class="tok-kw">not</span> (<span class="tok-fn">isinstance</span>(tags, <span class="tok-type">list</span>) <span class="tok-kw">and</span> <span class="tok-fn">all</span>(<span class="tok-fn">isinstance</span>(t, <span class="tok-type">str</span>) <span class="tok-kw">for</span> t <span class="tok-kw">in</span> tags)):
-        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"tags phải là list[str]"</span>)
-    email = raw.<span class="tok-fn">get</span>(<span class="tok-str">"email"</span>)
-    <span class="tok-kw">if</span> email <span class="tok-kw">is</span> <span class="tok-kw">not</span> <span class="tok-kw">None</span> <span class="tok-kw">and</span> <span class="tok-kw">not</span> <span class="tok-fn">isinstance</span>(email, <span class="tok-type">str</span>):
-        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"email phải là str|None"</span>)
-    <span class="tok-kw">return</span> <span class="tok-fn">cast</span>(User, raw)</code></pre>
+<span class="tok-fn">list</span>(<span class="tok-fn">islice</span>(<span class="tok-fn">fibonacci</span>(), <span class="tok-num">10</span>))
+<span class="tok-com"># [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]</span></code></pre>
                   <p>
-                    Trong production, đa số dev không tự viết — dùng <code>pydantic</code> để generate validation
-                    tự động từ TypedDict/BaseModel. Bài này luyện hiểu cơ chế.
+                    Vì sao không hỏng máy? <em>Lazy</em>. <code>yield a</code> pause cho đến khi <code>islice</code>
+                    hỏi giá trị tiếp theo. Sau 10 lần, <code>islice</code> không hỏi nữa — generator chỉ đơn giản
+                    nằm đó cho đến khi bị GC.
                   </p>
                 </div>
               </details>
@@ -1094,131 +1058,111 @@ reportMissingTypeStubs = <span class="tok-kw">true</span></code></pre>
           </div>
 
           <div class="exercise">
-            <h4>Bài 3 — Generic <code>Repository[T]</code></h4>
+            <h4>Bài 3 — Đọc file lazy bằng generator</h4>
             <div class="exercise-body">
               <p>
-                Implement generic class <code>Repository[T]</code> có:
+                Viết <code>read_lines(path)</code> trả generator các dòng đã <code>strip()</code> bỏ ký tự xuống dòng.
+                Yêu cầu: <strong>không</strong> load cả file vào RAM (file có thể 10GB).
+              </p>
+              <p>Bonus: chain với generator khác để đếm số dòng chứa từ khoá <code>'ERROR'</code>.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">read_lines</span>(path: <span class="tok-type">str</span>):
+    <span class="tok-kw">with</span> <span class="tok-fn">open</span>(path, encoding=<span class="tok-str">'utf-8'</span>) <span class="tok-kw">as</span> f:
+        <span class="tok-kw">for</span> line <span class="tok-kw">in</span> f:
+            <span class="tok-kw">yield</span> line.<span class="tok-fn">rstrip</span>(<span class="tok-str">'\n'</span>)
+
+<span class="tok-com"># Đếm dòng ERROR — pipeline streaming</span>
+err_count = <span class="tok-fn">sum</span>(<span class="tok-num">1</span> <span class="tok-kw">for</span> line <span class="tok-kw">in</span> <span class="tok-fn">read_lines</span>(<span class="tok-str">'app.log'</span>)
+                <span class="tok-kw">if</span> <span class="tok-str">'ERROR'</span> <span class="tok-kw">in</span> line)</code></pre>
+                  <p>Cách viết thanh lịch hơn dùng <code>yield from</code>:</p>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">read_lines</span>(path):
+    <span class="tok-kw">with</span> <span class="tok-fn">open</span>(path, encoding=<span class="tok-str">'utf-8'</span>) <span class="tok-kw">as</span> f:
+        <span class="tok-kw">yield</span> <span class="tok-kw">from</span> (line.<span class="tok-fn">rstrip</span>(<span class="tok-str">'\n'</span>) <span class="tok-kw">for</span> line <span class="tok-kw">in</span> f)</code></pre>
+                  <p>
+                    File object Python đã <em>là</em> iterator over lines — không cần <code>readlines()</code> (eager,
+                    load hết). Pattern này là idiomatic Python.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 4 — Producer-consumer với generator</h4>
+            <div class="exercise-body">
+              <p>
+                Viết 2 generator:
               </p>
               <ul>
-                <li><code>find_by_id(id: int) -&gt; T | None</code></li>
-                <li><code>save(item: T) -&gt; None</code></li>
-                <li><code>all() -&gt; list[T]</code></li>
+                <li><code>produce(n)</code> sinh ra <code>n</code> số ngẫu nhiên từ 1-100.</li>
+                <li><code>moving_average(stream, window=3)</code> nhận một iterator số, trả generator của trung bình cộng <code>window</code> phần tử gần nhất.</li>
               </ul>
-              <p>
-                Lưu trữ trong memory dict. Test với <code>Repository[User]</code> và
-                <code>Repository[Product]</code> — mypy phải hiểu return type khác nhau.
-              </p>
+              <p>Test: <code>list(moving_average(produce(7), 3))</code> trả 5 giá trị (đợi đủ 3 phần tử mới có output đầu tiên).</p>
               <details class="exercise-hint">
                 <summary>Đáp án</summary>
                 <div class="hint-content">
-<pre><code><span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass
+<pre><code><span class="tok-kw">import</span> random
+<span class="tok-kw">from</span> collections <span class="tok-kw">import</span> deque
 
-@dataclass
-<span class="tok-kw">class</span> <span class="tok-cls">User</span>:
-    id: <span class="tok-type">int</span>
-    name: <span class="tok-type">str</span>
+<span class="tok-kw">def</span> <span class="tok-fn">produce</span>(n: <span class="tok-type">int</span>):
+    <span class="tok-kw">for</span> _ <span class="tok-kw">in</span> <span class="tok-fn">range</span>(n):
+        <span class="tok-kw">yield</span> random.<span class="tok-fn">randint</span>(<span class="tok-num">1</span>, <span class="tok-num">100</span>)
 
-@dataclass
-<span class="tok-kw">class</span> <span class="tok-cls">Product</span>:
-    id: <span class="tok-type">int</span>
-    title: <span class="tok-type">str</span>
+<span class="tok-kw">def</span> <span class="tok-fn">moving_average</span>(stream, window: <span class="tok-type">int</span> = <span class="tok-num">3</span>):
+    buf = <span class="tok-fn">deque</span>(maxlen=window)
+    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> stream:
+        buf.<span class="tok-fn">append</span>(x)
+        <span class="tok-kw">if</span> <span class="tok-fn">len</span>(buf) == window:
+            <span class="tok-kw">yield</span> <span class="tok-fn">sum</span>(buf) / window
 
-<span class="tok-com"># Yêu cầu T có thuộc tính id: int → dùng Protocol</span>
-<span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Protocol
-
-<span class="tok-kw">class</span> <span class="tok-cls">HasId</span>(Protocol):
-    id: <span class="tok-type">int</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">Repository</span>[T: <span class="tok-cls">HasId</span>]:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>._store: <span class="tok-type">dict</span>[<span class="tok-type">int</span>, T] = {}
-
-    <span class="tok-kw">def</span> <span class="tok-fn">find_by_id</span>(<span class="tok-kw">self</span>, id: <span class="tok-type">int</span>) -&gt; T | <span class="tok-kw">None</span>:
-        <span class="tok-kw">return</span> <span class="tok-kw">self</span>._store.<span class="tok-fn">get</span>(id)
-
-    <span class="tok-kw">def</span> <span class="tok-fn">save</span>(<span class="tok-kw">self</span>, item: T) -&gt; <span class="tok-kw">None</span>:
-        <span class="tok-kw">self</span>._store[item.id] = item
-
-    <span class="tok-kw">def</span> <span class="tok-fn">all</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">list</span>[T]:
-        <span class="tok-kw">return</span> <span class="tok-fn">list</span>(<span class="tok-kw">self</span>._store.<span class="tok-fn">values</span>())
-
-users: <span class="tok-cls">Repository</span>[<span class="tok-cls">User</span>] = <span class="tok-cls">Repository</span>()
-users.<span class="tok-fn">save</span>(<span class="tok-cls">User</span>(<span class="tok-num">1</span>, <span class="tok-str">"An"</span>))
-u = users.<span class="tok-fn">find_by_id</span>(<span class="tok-num">1</span>)         <span class="tok-com"># u: User | None</span>
-
-products: <span class="tok-cls">Repository</span>[<span class="tok-cls">Product</span>] = <span class="tok-cls">Repository</span>()
-products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<span class="tok-num">1</span>, <span class="tok-str">"Bút"</span>))</code></pre>
-                </div>
-              </details>
-            </div>
-          </div>
-
-          <div class="exercise">
-            <h4>Bài 4 — Protocol <code>Comparable</code> và <code>min_of</code></h4>
-            <div class="exercise-body">
-              <p>
-                Viết Protocol <code>Comparable</code> có <code>__lt__</code>. Function
-                <code>min_of(items: list[T]) -&gt; T</code> với T constraint là Comparable. Test với <code>int</code>,
-                <code>str</code>, và một class custom có <code>__lt__</code>.
-              </p>
-              <details class="exercise-hint">
-                <summary>Đáp án</summary>
-                <div class="hint-content">
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> Protocol
-
-<span class="tok-kw">class</span> <span class="tok-cls">Comparable</span>(Protocol):
-    <span class="tok-kw">def</span> <span class="tok-fn">__lt__</span>(<span class="tok-kw">self</span>, other: <span class="tok-kw">object</span>, /) -&gt; <span class="tok-type">bool</span>: ...
-
-<span class="tok-kw">def</span> <span class="tok-fn">min_of</span>[T: <span class="tok-cls">Comparable</span>](items: <span class="tok-type">list</span>[T]) -&gt; T:
-    <span class="tok-kw">if</span> <span class="tok-kw">not</span> items:
-        <span class="tok-kw">raise</span> <span class="tok-cls">ValueError</span>(<span class="tok-str">"list rỗng"</span>)
-    best = items[<span class="tok-num">0</span>]
-    <span class="tok-kw">for</span> x <span class="tok-kw">in</span> items[<span class="tok-num">1</span>:]:
-        <span class="tok-kw">if</span> x &lt; best:
-            best = x
-    <span class="tok-kw">return</span> best
-
-<span class="tok-fn">print</span>(<span class="tok-fn">min_of</span>([<span class="tok-num">3</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>]))           <span class="tok-com"># 1</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">min_of</span>([<span class="tok-str">"banh"</span>, <span class="tok-str">"an"</span>, <span class="tok-str">"chao"</span>])) <span class="tok-com"># "an"</span>
-
-<span class="tok-kw">class</span> <span class="tok-cls">Score</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, n: <span class="tok-type">int</span>) -&gt; <span class="tok-kw">None</span>: <span class="tok-kw">self</span>.n = n
-    <span class="tok-kw">def</span> <span class="tok-fn">__lt__</span>(<span class="tok-kw">self</span>, other: <span class="tok-kw">object</span>, /) -&gt; <span class="tok-type">bool</span>:
-        <span class="tok-kw">return</span> <span class="tok-fn">isinstance</span>(other, <span class="tok-cls">Score</span>) <span class="tok-kw">and</span> <span class="tok-kw">self</span>.n &lt; other.n
-    <span class="tok-kw">def</span> <span class="tok-fn">__repr__</span>(<span class="tok-kw">self</span>) -&gt; <span class="tok-type">str</span>: <span class="tok-kw">return</span> <span class="tok-str">f"Score(</span>{<span class="tok-kw">self</span>.n}<span class="tok-str">)"</span>
-
-<span class="tok-fn">print</span>(<span class="tok-fn">min_of</span>([<span class="tok-cls">Score</span>(<span class="tok-num">5</span>), <span class="tok-cls">Score</span>(<span class="tok-num">2</span>), <span class="tok-cls">Score</span>(<span class="tok-num">8</span>)]))   <span class="tok-com"># Score(2)</span></code></pre>
-                </div>
-              </details>
-            </div>
-          </div>
-
-          <div class="exercise">
-            <h4>Bài 5 — TypeGuard <code>is_str_list</code></h4>
-            <div class="exercise-body">
-              <p>
-                Viết <code>def is_str_list(x: list[object]) -&gt; TypeGuard[list[str]]</code> — check tất cả phần tử
-                là <code>str</code>. Dùng nó để narrow trong function khác.
-              </p>
-              <details class="exercise-hint">
-                <summary>Đáp án</summary>
-                <div class="hint-content">
-<pre><code><span class="tok-kw">from</span> typing <span class="tok-kw">import</span> TypeGuard
-
-<span class="tok-kw">def</span> <span class="tok-fn">is_str_list</span>(x: <span class="tok-type">list</span>[<span class="tok-type">object</span>]) -&gt; TypeGuard[<span class="tok-type">list</span>[<span class="tok-type">str</span>]]:
-    <span class="tok-kw">return</span> <span class="tok-fn">all</span>(<span class="tok-fn">isinstance</span>(item, <span class="tok-type">str</span>) <span class="tok-kw">for</span> item <span class="tok-kw">in</span> x)
-
-<span class="tok-kw">def</span> <span class="tok-fn">join_uppercase</span>(items: <span class="tok-type">list</span>[<span class="tok-type">object</span>]) -&gt; <span class="tok-type">str</span>:
-    <span class="tok-kw">if</span> <span class="tok-fn">is_str_list</span>(items):
-        <span class="tok-kw">return</span> <span class="tok-str">", "</span>.<span class="tok-fn">join</span>(s.<span class="tok-fn">upper</span>() <span class="tok-kw">for</span> s <span class="tok-kw">in</span> items)
-    <span class="tok-kw">raise</span> <span class="tok-cls">TypeError</span>(<span class="tok-str">"không phải list[str]"</span>)
-
-<span class="tok-fn">print</span>(<span class="tok-fn">join_uppercase</span>([<span class="tok-str">"a"</span>, <span class="tok-str">"b"</span>]))   <span class="tok-com"># "A, B"</span>
-<span class="tok-fn">print</span>(<span class="tok-fn">join_uppercase</span>([<span class="tok-str">"a"</span>, <span class="tok-num">1</span>]))     <span class="tok-com"># TypeError</span></code></pre>
+<span class="tok-fn">list</span>(<span class="tok-fn">moving_average</span>(<span class="tok-fn">produce</span>(<span class="tok-num">7</span>), <span class="tok-num">3</span>))
+<span class="tok-com"># [v1, v2, v3, v4, v5]   — 7 input → 5 output</span></code></pre>
                   <p>
-                    Lưu ý: <code>TypeGuard[T]</code> narrow trong branch <code>True</code> nhưng <em>không narrow
-                    ngược lại</em> trong branch <code>False</code>. Nếu cần narrow cả 2 branch, dùng
-                    <code>TypeIs[T]</code> (Python 3.13+).
+                    Đây là pattern <em>streaming</em>: producer và consumer pause/resume đan xen, không bao giờ tồn tại
+                    cả dataset đầy đủ trong RAM. Cùng cách Python hỗ trợ <code>asyncio</code> queue ở chương 11.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bài 5 — <code>groupby</code> log theo ngày</h4>
+            <div class="exercise-body">
+              <p>Cho list log entries:</p>
+<pre><code>logs = [
+    {<span class="tok-str">'time'</span>: <span class="tok-str">'2026-01-15 10:00'</span>, <span class="tok-str">'level'</span>: <span class="tok-str">'INFO'</span>,  <span class="tok-str">'msg'</span>: <span class="tok-str">'a'</span>},
+    {<span class="tok-str">'time'</span>: <span class="tok-str">'2026-01-16 08:12'</span>, <span class="tok-str">'level'</span>: <span class="tok-str">'ERROR'</span>, <span class="tok-str">'msg'</span>: <span class="tok-str">'b'</span>},
+    {<span class="tok-str">'time'</span>: <span class="tok-str">'2026-01-15 14:30'</span>, <span class="tok-str">'level'</span>: <span class="tok-str">'INFO'</span>,  <span class="tok-str">'msg'</span>: <span class="tok-str">'c'</span>},
+    {<span class="tok-str">'time'</span>: <span class="tok-str">'2026-01-16 09:00'</span>, <span class="tok-str">'level'</span>: <span class="tok-str">'WARN'</span>,  <span class="tok-str">'msg'</span>: <span class="tok-str">'d'</span>},
+    {<span class="tok-str">'time'</span>: <span class="tok-str">'2026-01-15 09:00'</span>, <span class="tok-str">'level'</span>: <span class="tok-str">'INFO'</span>,  <span class="tok-str">'msg'</span>: <span class="tok-str">'e'</span>},
+]</code></pre>
+              <p>Group theo ngày (10 ký tự đầu của <code>'time'</code>) bằng <code>itertools.groupby</code>. Mỗi nhóm in ngày và số message.</p>
+              <details class="exercise-hint">
+                <summary>Đáp án</summary>
+                <div class="hint-content">
+<pre><code><span class="tok-kw">from</span> itertools <span class="tok-kw">import</span> groupby
+
+date_of = <span class="tok-kw">lambda</span> log: log[<span class="tok-str">'time'</span>][:<span class="tok-num">10</span>]
+
+<span class="tok-com"># BẮT BUỘC sort trước theo cùng key</span>
+logs.<span class="tok-fn">sort</span>(key=date_of)
+
+<span class="tok-kw">for</span> day, entries <span class="tok-kw">in</span> <span class="tok-fn">groupby</span>(logs, key=date_of):
+    entries = <span class="tok-fn">list</span>(entries)   <span class="tok-com"># materialize để dùng nhiều lần</span>
+    <span class="tok-fn">print</span>(<span class="tok-fn">f</span><span class="tok-str">'{day}: {len(entries)} entries'</span>)
+    <span class="tok-kw">for</span> e <span class="tok-kw">in</span> entries:
+        <span class="tok-fn">print</span>(<span class="tok-fn">f</span><span class="tok-str">'  [{e["level"]}] {e["msg"]}'</span>)
+
+<span class="tok-com"># 2026-01-15: 3 entries</span>
+<span class="tok-com">#   [INFO] a / [INFO] c / [INFO] e</span>
+<span class="tok-com"># 2026-01-16: 2 entries</span>
+<span class="tok-com">#   [ERROR] b / [WARN] d</span></code></pre>
+                  <p>
+                    Quên <code>sort</code> sẽ ra nhiều group nhỏ thay vì 2 group lớn. <em>Group bằng dict</em>
+                    (<code>collections.defaultdict(list)</code>) là cách thay thế phổ biến khi không cần adjacent.
                   </p>
                 </div>
               </details>
@@ -1232,25 +1176,20 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q1</span>
-            <div class="quiz-q-text"><p>Type hints có ảnh hưởng runtime không?</p></div>
+            <div class="quiz-q-text"><p><code>range(10)</code> là <em>iterable</em> hay <em>iterator</em>?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Không.</strong> Python interpreter <em>thấy</em> annotation (lưu trong
-                <code>__annotations__</code>) nhưng không kiểm tra. Gán <code>x: int = "hello"</code> chạy bình
-                thường, không AttributeError.
+                <strong>Iterable</strong>. Có <code>__iter__</code> trả về một iterator mới mỗi lần gọi, nhưng
+                <em>không có</em> <code>__next__</code>. Vì vậy <code>r = range(10)</code> rồi <code>list(r)</code>
+                hai lần đều ra <code>[0..9]</code> — mỗi <code>iter(r)</code> tạo iterator mới.
               </p>
               <p>
-                <strong>Trừ khi</strong>: bạn chủ động dùng thư viện runtime validate như <code>pydantic</code> (cực
-                phổ biến cho API), <code>beartype</code>, <code>typeguard</code>. Các thư viện này đọc annotation và
-                tự generate validation code.
-              </p>
-              <p>
-                Ngoài ra, runtime vẫn truy cập được annotation qua <code>typing.get_type_hints()</code> — hữu ích khi
-                viết framework tự sinh code (vd FastAPI tự đọc signature để parse request body).
+                Đối lập, <code>g = (x for x in range(10))</code> là <em>iterator</em> (cũng là iterable nhưng <code>__iter__</code>
+                trả chính nó) — consume xong là cạn.
               </p>
             </div>
           </details>
@@ -1259,24 +1198,20 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q2</span>
-            <div class="quiz-q-text"><p>Khác nhau giữa <code>def f(x: list)</code> và <code>def f(x: list[int])</code> với mypy?</p></div>
+            <div class="quiz-q-text"><p>Generator object có <em>hash được</em> không?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>list</code> không có type parameter — mypy hiểu là <code>list[Any]</code>. Mọi list đều pass.
-                <code>list[int]</code> chặt hơn: chỉ chấp nhận list mà mỗi phần tử là <code>int</code>.
+                <strong>Có</strong> — generator là object Python, có <code>id()</code> và mặc định hash theo identity.
+                Tuy nhiên <em>hiếm khi nên</em> dùng generator làm key dict / set vì 2 generator object khác nhau
+                (dù cùng "định nghĩa") sẽ có hash khác — không có ý nghĩa logic.
               </p>
               <p>
-                Truy cập <code>x[0]</code>: ở <code>list</code> trả <code>Any</code> (mất type), ở <code>list[int]</code>
-                trả <code>int</code> (giữ type).
-              </p>
-              <p>
-                Với <code>strict = true</code> hoặc <code>disallow_any_generics = true</code>, mypy sẽ <em>cấm</em>
-                viết <code>list</code> không có parameter — buộc phải <code>list[int]</code> hoặc <code>list[Any]</code>
-                tường minh.
+                Trong thực tế, nếu muốn dùng "sequence" làm key, hãy <code>tuple(gen)</code> để có giá trị immutable
+                định danh được.
               </p>
             </div>
           </details>
@@ -1285,20 +1220,24 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q3</span>
-            <div class="quiz-q-text"><p><code>Optional[int]</code> và <code>int | None</code> khác gì?</p></div>
+            <div class="quiz-q-text">
+              <p>Cho <code>gen = (x*2 for x in range(5))</code>. So sánh:</p>
+<pre><code>[x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> gen]
+<span class="tok-fn">list</span>(gen)</code></pre>
+              <p>Kết quả khác hay giống?</p>
+            </div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Hoàn toàn tương đương</strong>. <code>Optional[T]</code> chỉ là alias cho <code>Union[T, None]</code>
-                — mà <code>Union[T, None]</code> giờ viết được là <code>T | None</code> (PEP 604, Python 3.10+).
+                <strong>Giống về kết quả</strong> (đều ra <code>[0, 2, 4, 6, 8]</code>) — và đều <em>consume</em> generator.
+                Cả hai cú pháp đều "drain" generator hết, nên nếu chạy <code>list(gen)</code> sau đó sẽ ra <code>[]</code>.
               </p>
               <p>
-                Khuyến nghị dùng <code>T | None</code>: ngắn hơn, không cần import, đọc tự nhiên hơn. <code>Optional</code>
-                là tên dễ gây hiểu lầm: nó <em>không</em> có nghĩa "parameter optional" (có default), mà chỉ là "có thể
-                là None".
+                Khác nhau ở <em>style</em>: <code>list(gen)</code> ngắn, idiomatic. <code>[x for x in gen]</code> dài
+                hơn nhưng dễ thêm filter/map: <code>[x*3 for x in gen if x &gt; 2]</code>.
               </p>
             </div>
           </details>
@@ -1307,25 +1246,22 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q4</span>
-            <div class="quiz-q-text"><p><code>Any</code> và <code>object</code> khác gì?</p></div>
+            <div class="quiz-q-text"><p>Generator có thể <em>reuse</em> (lặp lại nhiều lần) không?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>Any</code> <strong>tắt type check</strong> — gọi mọi method, gán đi đâu cũng được, không cần
-                narrow. Backdoor.
+                <strong>Không.</strong> Một khi consume xong, mọi <code>next()</code> tiếp theo đều raise
+                <code>StopIteration</code>. Sai lầm phổ biến:
               </p>
+<pre><code>data = (x <span class="tok-kw">for</span> x <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>))
+<span class="tok-fn">print</span>(<span class="tok-fn">sum</span>(data))    <span class="tok-com"># 10</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">max</span>(data))    <span class="tok-com"># ValueError — sequence rỗng</span></code></pre>
               <p>
-                <code>object</code> là <strong>supertype của mọi type</strong> — mọi thứ đều assign được vào
-                <code>object</code>. Nhưng từ <code>object</code> chỉ gọi được method của <code>object</code> (
-                <code>__str__</code>, <code>__repr__</code>, <code>__eq__</code>, <code>__hash__</code>). Muốn dùng
-                method khác phải <em>narrow</em> bằng <code>isinstance</code>.
-              </p>
-              <p>
-                <code>object</code> là pattern thay <code>unknown</code> của TS trong Python: an toàn nhưng vẫn phải
-                xử lý. Quy tắc: thấy <code>Any</code> → thử thay bằng <code>object</code> hoặc Protocol cụ thể.
+                Fix: ép sang <code>list</code> (<code>data = list(...)</code>), hoặc viết lại như function trả generator
+                mới mỗi lần gọi (<code>def make(): yield from range(5)</code>).
               </p>
             </div>
           </details>
@@ -1334,27 +1270,32 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q5</span>
-            <div class="quiz-q-text"><p><code>Protocol</code> khác <code>ABC</code> ở điểm nào?</p></div>
+            <div class="quiz-q-text">
+              <p>So sánh:</p>
+<pre><code><span class="tok-kw">yield</span> <span class="tok-kw">from</span> sub
+
+<span class="tok-kw">for</span> x <span class="tok-kw">in</span> sub:
+    <span class="tok-kw">yield</span> x</code></pre>
+              <p>Hai cái khác nhau ở chỗ nào?</p>
+            </div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Protocol = structural typing</strong>: class match nếu có <em>shape</em> đúng (method đúng tên,
-                signature đúng). Không cần kế thừa.
+                <strong>Giống về output</strong> nếu consumer chỉ <code>next()</code>/iter. Nhưng <code>yield from</code>
+                còn <strong>forward</strong>:
               </p>
+              <ul>
+                <li><code>send(value)</code> — gửi value vào sub-generator đang pause.</li>
+                <li><code>throw(exc)</code> — inject exception vào sub-generator.</li>
+                <li><code>return value</code> bên trong sub — trở thành giá trị của biểu thức <code>yield from</code>.</li>
+              </ul>
               <p>
-                <strong>ABC = nominal typing</strong>: class phải <em>kế thừa</em> tường minh từ ABC mới được coi là
-                subtype.
-              </p>
-              <p>
-                Protocol Pythonic hơn vì giữ tinh thần duck typing: "nếu nó kêu quack thì nó là vịt" — không quan tâm
-                cha mẹ là ai. ABC giống Java/C# truyền thống: class hierarchy quan trọng.
-              </p>
-              <p>
-                Quy tắc thực dụng: <strong>Protocol</strong> cho interface "input của function" (linh hoạt cao).
-                <strong>ABC</strong> khi cần share code chung qua kế thừa (mixin pattern).
+                Cách viết dài <code>for x in sub: yield x</code> không truyền được những thứ này — sub-generator
+                không nhận được send/throw, return value bị mất. Vì vậy với coroutine cũ và compose generator,
+                <code>yield from</code> là cách <em>chuẩn</em>.
               </p>
             </div>
           </details>
@@ -1363,23 +1304,25 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q6</span>
-            <div class="quiz-q-text"><p>Cú pháp <code>TypeVar</code> cũ và <code>def f[T]</code> PEP 695 khác gì?</p></div>
+            <div class="quiz-q-text">
+              <p><code>list(groupby([1, 1, 2, 2, 1, 1]))</code> với <code>list()</code> mỗi group, kết quả?</p>
+            </div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Hoàn toàn tương đương</strong> về mặt ngữ nghĩa. PEP 695 (Python 3.12+) thêm cú pháp ngắn hơn.
+                <strong>3 group</strong>: <code>(1, [1, 1])</code>, <code>(2, [2, 2])</code>, <code>(1, [1, 1])</code>.
+                <code>groupby</code> chỉ gộp phần tử <em>kề nhau</em> cùng key, không tổng hợp toàn cục như SQL.
               </p>
-              <ul>
-                <li>Cũ: <code>T = TypeVar("T")</code> module-level, dùng trong nhiều function — nếu T xuất hiện 2 chỗ độc lập dễ nhầm "cùng T".</li>
-                <li>Mới: <code>def f[T](...)</code> — T scope local trong function, không lẫn lộn.</li>
-                <li>Class: <code>class Stack[T]</code> thay <code>class Stack(Generic[T])</code> — không cần kế thừa Generic.</li>
-              </ul>
+              <p>Muốn 2 group tổng (mọi "1" gộp với nhau), phải sort trước:</p>
+<pre><code>data = [<span class="tok-num">1</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">2</span>, <span class="tok-num">1</span>, <span class="tok-num">1</span>]
+<span class="tok-fn">sorted_data</span> = <span class="tok-fn">sorted</span>(data)
+[(k, <span class="tok-fn">list</span>(g)) <span class="tok-kw">for</span> k, g <span class="tok-kw">in</span> <span class="tok-fn">groupby</span>(sorted_data)]
+<span class="tok-com"># [(1, [1, 1, 1, 1]), (2, [2, 2])]</span></code></pre>
               <p>
-                Khuyến nghị: project mới (Python 3.12+) dùng PEP 695 ngay. Code cũ duy trì TypeVar không cần migrate
-                gấp — cả 2 cú pháp được hỗ trợ song song lâu dài.
+                Đây là gotcha nổi tiếng nhất của <code>itertools.groupby</code>. Quy luật: <em>sort trước, group sau</em>.
               </p>
             </div>
           </details>
@@ -1388,28 +1331,25 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q7</span>
-            <div class="quiz-q-text"><p>Mypy <code>--strict</code> bật những flag chính nào?</p></div>
+            <div class="quiz-q-text">
+              <p>Generator nhanh hơn list, đúng hay sai?</p>
+            </div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>--strict</code> là alias bật 10+ cờ cùng lúc:
+                <strong>Phụ thuộc tình huống.</strong>
               </p>
               <ul>
-                <li><code>--disallow-untyped-defs</code>: cấm function không annotate.</li>
-                <li><code>--disallow-incomplete-defs</code>: cấm annotate nửa vời (chỉ parameter, thiếu return).</li>
-                <li><code>--disallow-any-explicit</code> (gián tiếp): hạn chế dùng <code>Any</code>.</li>
-                <li><code>--no-implicit-optional</code>: <code>def f(x: int = None)</code> không tự thành <code>int | None</code>.</li>
-                <li><code>--warn-return-any</code>: cảnh báo khi function trả <code>Any</code> dù annotate return type khác.</li>
-                <li><code>--warn-unused-ignores</code>: cảnh báo <code># type: ignore</code> không cần thiết.</li>
-                <li><code>--check-untyped-defs</code>: vẫn kiểm tra body của function chưa annotate.</li>
-                <li><code>--strict-equality</code>: cấm so sánh <code>==</code> giữa 2 type không overlap.</li>
-                <li><code>--warn-redundant-casts</code>, <code>--warn-unreachable</code>, …</li>
+                <li><strong>Sinh 1 lần</strong>, hoặc chỉ cần phần đầu (<code>any</code>, <code>next</code>, <code>break</code> sớm): generator nhanh hơn — không tốn thời gian build cả list, không tốn RAM.</li>
+                <li><strong>Đọc nhiều lần / random access / cần length</strong>: list nhanh hơn — đã cache sẵn, không phải tính lại. Generator phải regenerate (hoặc cạn).</li>
+                <li><strong>Sequence rất lớn / vô hạn / streaming</strong>: generator là <em>lựa chọn duy nhất</em> — list không khả thi.</li>
               </ul>
               <p>
-                Bật <code>strict</code> = hành xử như TypeScript <code>strict</code>. Khuyến nghị mọi project mới.
+                Quy tắc thực tế: <em>start with list comp; switch to gen expr khi gặp vấn đề memory hoặc khi pipe vào hàm
+                chỉ duyệt một lần</em> (<code>sum</code>, <code>max</code>, <code>any</code>, <code>"".join</code>).
               </p>
             </div>
           </details>
@@ -1419,41 +1359,35 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
 
         <p>Sau chương 9, bạn nên đã master:</p>
         <ul>
-          <li><strong>Type hints</strong> là compile-time metadata, runtime bỏ qua — trừ khi dùng pydantic/beartype.</li>
-          <li><strong>Container generic</strong>: <code>list[T]</code>, <code>dict[K, V]</code>, <code>tuple[T, ...]</code> — dùng built-in từ 3.9+.</li>
-          <li><strong>Optional và Union</strong>: <code>T | None</code> thay <code>Optional[T]</code>, <code>A | B</code> thay <code>Union[A, B]</code> (3.10+).</li>
-          <li><strong>4 type đặc biệt</strong>: <code>Any</code> (tắt check, tránh), <code>object</code> (an toàn, phải narrow), <code>Never</code> (no return), <code>Literal</code> (giá trị cụ thể).</li>
-          <li><strong><code>Final</code></strong>: chặn reassign tên biến (compile-time only).</li>
-          <li><strong>TypeAlias</strong>: đặt tên type. PEP 695 dùng keyword <code>type</code>.</li>
-          <li><strong>TypedDict</strong>: dict có shape. Khác dataclass (object) và pydantic (runtime validate).</li>
-          <li><strong>Protocol</strong>: structural typing — duck typing có type check. Khác ABC ở chỗ không cần inherit.</li>
-          <li><strong>Generic PEP 695</strong>: <code>def f[T]</code>, <code>class Stack[T]</code> — ngắn gọn, scope rõ.</li>
-          <li><strong>Narrowing</strong>: <code>isinstance</code>, <code>is None</code>, <code>assert</code>, <code>TypeGuard</code>.</li>
-          <li><strong>Mypy + Pyright</strong>: cài, config qua <code>pyproject.toml</code>, chạy <code>--strict</code>.</li>
-          <li><strong>Tránh over-typing</strong>: annotate function signature + attribute, không annotate biến local literal.</li>
+          <li><strong>Iterable vs Iterator</strong>: 2 protocol tách bạch — <code>__iter__</code> mở phiên, <code>__next__</code> bước.</li>
+          <li><strong>iter() / next()</strong>: built-in để điều khiển tay; <code>for</code> là syntactic sugar.</li>
+          <li><strong>Custom iterable bằng class</strong>: 2 pattern — class kiêm iterator (1 lần) vs tách iterable / iterator (lặp lại).</li>
+          <li><strong>Generator function</strong>: <code>yield</code> — pause/resume, state machine tự động.</li>
+          <li><strong>Generator expression</strong>: <code>()</code> thay <code>[]</code>; lazy, O(1) memory.</li>
+          <li><strong>Lazy vs eager</strong>: chọn theo memory/CPU/lặp lại/length/random access.</li>
+          <li><strong>Sequence vô hạn</strong>: <code>while True: yield</code> + <code>islice</code>/<code>break</code>.</li>
+          <li><strong>yield from</strong>: delegate, forward send/throw/return.</li>
+          <li><strong>send / throw / close</strong>: generator 2 chiều — nền tảng coroutine cũ.</li>
+          <li><strong>itertools</strong>: <code>chain</code>, <code>count</code>, <code>cycle</code>, <code>repeat</code>, <code>islice</code>, <code>groupby</code> (adjacent!), <code>combinations</code>, <code>permutations</code>, <code>product</code>, <code>accumulate</code>, <code>takewhile</code>, <code>pairwise</code>.</li>
         </ul>
 
         <h2 id="ket-noi">Kết nối</h2>
         <ul>
-          <li><strong>Chương 5 (OOP in Python)</strong> — Protocol vs ABC: nhánh OOP đối chiếu typing.</li>
-          <li><strong>Chương 6 (Iterators &amp; Generators)</strong> — <code>Iterator[T]</code>, <code>Generator[Yield, Send, Return]</code> dùng generic.</li>
-          <li><strong>Chương 7 (Decorators)</strong> — typing decorator nâng cao với <code>ParamSpec</code>, <code>Concatenate</code>.</li>
-          <li><strong>Chương 8 (Async)</strong> — <code>Coroutine[Any, Any, T]</code>, <code>Awaitable[T]</code>, <code>AsyncIterator[T]</code>.</li>
-          <li><strong>Chương 10 (Testing &amp; Tooling)</strong> — chạy mypy + ruff trong CI, <code>pytest</code> với type hint cho fixture.</li>
-          <li><strong>JavaScript Chương 9 (TypeScript Foundations)</strong> — đối chiếu: <code>any</code>↔<code>Any</code>, <code>unknown</code>↔<code>object</code>, <code>never</code>↔<code>Never</code>, type predicate↔TypeGuard.</li>
-          <li><strong>JavaScript Chương 10 (Generics &amp; Utility Types)</strong> — generic function/class TS vs PEP 695.</li>
-          <li><strong>JavaScript Chương 11 (Advanced Types)</strong> — mapped, conditional — Python ít trực tiếp tương ứng, một số có ở <code>typing.Protocol</code> nâng cao.</li>
-          <li><strong>Dart Chương 2</strong> — sound null safety: runtime check, khác hẳn Python <code>T | None</code> chỉ compile-time.</li>
+          <li><strong>Chương 10 (Decorators &amp; Context Managers)</strong> — <code>@contextmanager</code> dùng generator để biến function thành context manager; nhiều decorator pattern (cache, retry) wrap generator function.</li>
+          <li><strong>Chương 11 (Asyncio &amp; Async)</strong> — <code>async def</code> + <code>yield</code> = async generator; <code>async for</code> mở rộng iterator protocol cho coroutine.</li>
+          <li><strong>Chương 13 (pytest &amp; Testing)</strong> — pytest fixture với <code>yield</code> chính là generator: code trước <code>yield</code> = setup, code sau = teardown.</li>
+          <li><strong>JavaScript Chương 5</strong> — đối chiếu <code>function*</code>/<code>yield</code> của JS; iterator protocol JS dùng <code>{ value, done }</code> object thay vì <code>StopIteration</code> exception như Python.</li>
+          <li><strong>Dart Chương 6</strong> — <code>sync*</code>/<code>yield</code> Dart; <code>Iterable</code> Dart cũng lazy như generator Python.</li>
         </ul>
 
         <nav class="chapter-nav">
           <a href="chuong8.html" class="prev">
             <div class="dir">← Chương 8</div>
-            <div class="label">Async Python</div>
+            <div class="label">OOP in Python</div>
           </a>
           <a href="chuong10.html" class="next">
             <div class="dir">Chương 10 →</div>
-            <div class="label">Testing, Packaging &amp; Tooling</div>
+            <div class="label">Decorators &amp; Context Managers</div>
           </a>
         </nav>
 
@@ -1462,23 +1396,23 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
       <aside class="toc">
         <div class="toc-label">Trong chương này</div>
         <ul>
-          <li><a href="#recap">1. Type hints recap</a></li>
-          <li><a href="#container">2. Container types</a></li>
-          <li><a href="#optional">3. Optional &amp; T | None</a></li>
-          <li><a href="#union">4. Union &amp; A | B</a></li>
-          <li><a href="#any">5. Any</a></li>
-          <li><a href="#never">6. Never</a></li>
-          <li><a href="#literal">7. Literal</a></li>
-          <li><a href="#final">8. Final</a></li>
-          <li><a href="#typealias">9. TypeAlias</a></li>
-          <li><a href="#typeddict">10. TypedDict</a></li>
-          <li><a href="#protocol">11. Protocol</a></li>
-          <li><a href="#generic-fn">12. Generic function (PEP 695)</a></li>
-          <li><a href="#generic-class">13. Generic class</a></li>
-          <li><a href="#narrowing">14. Narrowing</a></li>
-          <li><a href="#mypy">15. mypy setup</a></li>
-          <li><a href="#pyright">16. Pyright &amp; Pylance</a></li>
-          <li><a href="#anti-pattern">17. Anti-pattern over-typing</a></li>
+          <li><a href="#iterable-vs-iterator">1. Iterable vs Iterator</a></li>
+          <li><a href="#iter-next">2. iter() &amp; next()</a></li>
+          <li><a href="#custom-iterable">3. Custom iterable class</a></li>
+          <li><a href="#generator-function">4. Generator function (yield)</a></li>
+          <li><a href="#gen-expr">5. Generator expression</a></li>
+          <li><a href="#lazy-vs-eager">6. Lazy vs eager</a></li>
+          <li><a href="#infinite">7. Generator vô hạn</a></li>
+          <li><a href="#yield-from">8. yield from</a></li>
+          <li><a href="#send-throw-close">9. send / throw / close</a></li>
+          <li><a href="#itertools-overview">10. itertools</a></li>
+          <li class="level-3"><a href="#itertools-chain">10.1. chain</a></li>
+          <li class="level-3"><a href="#itertools-infinite">10.2. count / cycle / repeat</a></li>
+          <li class="level-3"><a href="#itertools-islice">10.3. islice</a></li>
+          <li class="level-3"><a href="#itertools-groupby">10.4. groupby</a></li>
+          <li class="level-3"><a href="#itertools-combinatoric">10.5. combinations / permutations / product</a></li>
+          <li class="level-3"><a href="#itertools-accumulate">10.6. accumulate</a></li>
+          <li class="level-3"><a href="#itertools-pipeline">10.7. Pipeline</a></li>
           <li><a href="#bai-tap">Bài tập</a></li>
           <li><a href="#quiz">Quiz</a></li>
           <li><a href="#tong-ket">Tổng kết</a></li>
@@ -1492,7 +1426,7 @@ products.<span class="tok-fn">save</span>(<span class="tok-cls">Product</span>(<
   <footer class="site-footer">
     <div class="container">
       <p>
-        Chương 9 — Typing &amp; Static Analysis · Python sub-pillar · Pillar 9 IT Basic<br/>
+        Chương 9 — Iterators, Generators &amp; Itertools · Python sub-pillar · Pillar 9 IT Basic<br/>
         <a href="chuong8.html">← Chương 8</a> · <a href="../index.html">Python TOC</a> · <a href="chuong10.html">Chương 10 →</a>
       </p>
     </div>

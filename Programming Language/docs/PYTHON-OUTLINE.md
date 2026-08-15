@@ -1,10 +1,55 @@
 # Python Curriculum — Outline chi tiết 10 chương (Core Python)
 
 **Sub-pillar:** Python (thuộc Programming Language pillar — trụ cột 9 của IT Basic)
-**Số chương:** 10 (Core Python — không bao gồm framework như Django/FastAPI hay data science)
+**Số chương:** 14 (Core Python — không bao gồm framework như Django/FastAPI hay data science)
 **Phiên bản target:** Python 3.12+ (PEP 695 generic syntax, exception groups, match statement đã ổn định)
 **Started:** 2026-05-20
-**Status:** Outline phase — chờ user approve trước khi viết HTML content
+**Mở rộng:** 2026-08-14 — từ 10 lên 14 chương
+**Status:** ✅ Hoàn thành — 14 chương / ~20.800 dòng HTML
+
+---
+
+## ⚠️ Lưu ý về đánh số chương (cập nhật 2026-08-14)
+
+Curriculum ban đầu 10 chương thiếu năm mảng nền tảng: xử lý ngoại lệ, module & package, xử lý tệp
+tin, biểu thức chính quy, và dự án thực chiến. Bốn chương mới đã được chèn vào và các chương cũ được
+đánh số lại:
+
+| Chương mới | Nội dung | Tương ứng chương cũ |
+|---|---|---|
+| 1 | Hello Python | 1 *(bổ sung mục 4.1 — Chú thích & docstring)* |
+| 2 | Variables, Types & Operators | 2 *(bổ sung mục 6 — Nhập/Xuất, mục 11 — Bảng toán tử đầy đủ)* |
+| 3 | Data Structures | 3 |
+| 4 | Control Flow & Functions | 4 |
+| **5** | **Exceptions & Error Handling** | 🆕 mới |
+| **6** | **Modules & Packages** | 🆕 mới |
+| **7** | **File I/O & Regex** | 🆕 mới |
+| 8 | OOP in Python | 5 *(bổ sung mục 8 — Đóng gói & name mangling)* |
+| 9 | Iterators, Generators & Itertools | 6 |
+| 10 | Decorators & Context Managers | 7 |
+| 11 | Async Python | 8 |
+| 12 | Typing & Static Analysis | 9 |
+| 13 | Testing, Packaging & Tooling | 10 |
+| **14** | **Dự án thực chiến** | 🆕 mới |
+
+**Bốn chương mới:**
+
+- **Chương 5 — Exceptions & Error Handling** (~1.522 dòng): cơ chế gỡ ngăn xếp, cây phân cấp
+  exception, bộ tứ `try`/`except`/`else`/`finally`, `raise ... from ...`, custom exception mang dữ
+  liệu, EAFP vs LBYL và TOCTOU, đọc traceback, năm anti-pattern, `ExceptionGroup`/`except*` (3.11+),
+  `assert`/`warnings`/`log.exception`.
+- **Chương 6 — Modules & Packages** (~1.359 dòng): module = một file, bốn dạng `import`, cơ chế
+  import bốn bước và `sys.modules` cache, `__name__ == "__main__"` và ba lý do bắt buộc,
+  `__init__.py`/`__all__`/`__main__.py`, absolute vs relative import, `sys.path` và bẫy shadowing,
+  `python -m`, src layout, circular import với bốn cách gỡ, bản đồ stdlib.
+- **Chương 7 — File I/O & Regex** (~1.551 dòng): bảng chế độ mở tệp đầy đủ, `with`, bốn cách đọc,
+  encoding và BOM, `pathlib`, JSON (`ensure_ascii=False`), CSV (`newline=""`, `utf-8-sig`), toàn bộ
+  module `re` (cú pháp, tham lam vs lười, nhóm có tên, bảy hàm, cờ, `VERBOSE`), khi nào không dùng
+  regex và rủi ro ReDoS.
+- **Chương 14 — Dự án thực chiến** (~1.409 dòng): ranh giới script/sản phẩm, `argparse` với
+  sub-command, mẫu "lập kế hoạch / thực thi" cho `--dry-run` miễn phí, thu thập dữ liệu web đúng mực
+  (`robots.txt`, rate limit), REST API với retry đúng loại lỗi, `sqlite3` và chống SQL injection,
+  cron với bốn cái bẫy môi trường, checklist chất lượng 12 mục.
 
 ## Mục đích của file này
 

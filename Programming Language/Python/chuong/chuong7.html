@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chương 7 — Decorators &amp; Context Managers · Python Sub-pillar</title>
-  <meta name="description" content="Decorator pattern, @functools.wraps, decorator factory, lru_cache. Context manager với with, __enter__/__exit__, contextlib.contextmanager, ExitStack, suppress." />
+  <title>Chương 7 — File I/O &amp; Regex · Python Sub-pillar</title>
+  <meta name="description" content="open() và các chế độ mở tệp, with statement, encoding UTF-8, pathlib.Path, đọc/ghi JSON và CSV, file nhị phân, và toàn bộ module re: pattern, group, sub, findall, flag, lookaround." />
   <meta name="theme-color" content="#306998" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,9 +26,9 @@
         <ul class="site-nav">
           <li><a href="../../../index.html">IT Basic</a></li>
           <li><a href="../../index.html">Pillar 9</a></li>
-          <li><a href="../../Dart/index.html">Dart</a></li>
-          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
           <li><a href="../index.html" class="active">Python</a></li>
+          <li><a href="../../JavaScript/index.html">JavaScript</a></li>
+          <li><a href="../../Dart/index.html">Dart</a></li>
         </ul>
       </nav>
     </div>
@@ -42,19 +42,19 @@
         <a href="../index.html">Python</a><span class="sep">/</span>
         <span>Chương 7</span>
       </div>
-      <div class="chapter-num">Chương 07 · Decorators &amp; Context Managers</div>
+      <div class="chapter-num">Chương 07 · File I/O &amp; Regex</div>
       <h1 style="font-family: var(--font-display); font-size: 2.6rem; margin: 0 0 12px; color: var(--ink); letter-spacing: -0.02em;">
-        Decorator và Context Manager — hai metaprogramming tool Pythonic
+        Xử lý tệp tin và biểu thức chính quy
       </h1>
       <p class="lead">
-        Decorator (<code><span class="tok-dec">@dec</span></code>) là syntax sugar cho "function nhận function, trả function" — dùng để
-        <strong>wrap behavior</strong> mà không phải sửa function gốc. Context manager (<code>with</code>) là
-        <strong>RAII của Python</strong> — đảm bảo cleanup chạy ngay cả khi có exception. Hai feature này xuất hiện khắp
-        stdlib (<code><span class="tok-dec">@dataclass</span></code>, <code><span class="tok-dec">@property</span></code>,
-        <code>with open()</code>) và là dấu hiệu code "Pythonic".
+        Phần lớn công việc thực tế của một script Python là <strong>đọc dữ liệu từ đâu đó, biến đổi nó, rồi ghi ra
+        chỗ khác</strong>. Chương này trang bị đủ cho việc đó: mở tệp đúng chế độ, không bao giờ quên đóng, hiểu
+        encoding để không gặp <code>UnicodeDecodeError</code> lúc nửa đêm, dùng <code>pathlib</code> thay cho chuỗi
+        đường dẫn nối bằng dấu <code>/</code>, và đọc/ghi hai định dạng phổ biến nhất là JSON và CSV. Nửa sau chương
+        là <strong>biểu thức chính quy</strong> — công cụ tìm kiếm theo mẫu mạnh nhất, và cũng dễ bị lạm dụng nhất.
       </p>
       <div class="chapter-meta">
-        <span class="item"><strong>Độ dài:</strong> ~1000 dòng</span>
+        <span class="item"><strong>Độ dài:</strong> ~1500 dòng</span>
         <span class="item"><strong>Bài tập:</strong> 5</span>
         <span class="item"><strong>Quiz:</strong> 8</span>
         <span class="item"><strong>Prerequisites:</strong> Chương 1-6</span>
@@ -68,1041 +68,1138 @@
         <div class="callout callout-goal">
           <div class="callout-label">🎯 Mục tiêu chương</div>
           <ul>
-            <li>Hiểu decorator là "function nhận function, trả function". Giải mã syntax <code><span class="tok-dec">@dec</span> def f(): ...</code> = <code>f = dec(f)</code>.</li>
-            <li>Viết được decorator đơn giản (logging, timing) và decorator có argument (decorator factory).</li>
-            <li>Hiểu vì sao cần <code><span class="tok-dec">@functools.wraps</span></code> — bảo toàn metadata của function gốc.</li>
-            <li>Hiểu thứ tự apply khi stack nhiều decorator: <strong>bottom-up</strong>.</li>
-            <li>Dùng <code><span class="tok-dec">@functools.cache</span></code> / <code><span class="tok-dec">@lru_cache</span></code> để memoize, đặc biệt cho recursion.</li>
-            <li>Hiểu context manager protocol: <code>__enter__</code> và <code>__exit__</code>. Khi nào nên suppress exception.</li>
-            <li>Viết context manager bằng 2 cách: class với <code>__enter__</code>/<code>__exit__</code> hoặc generator với <code><span class="tok-dec">@contextlib.contextmanager</span></code>.</li>
-            <li>Quản lý nhiều resource: nested <code>with</code>, <code>ExitStack</code> cho số resource động, <code>suppress</code> để bỏ qua exception cụ thể.</li>
+            <li>Dùng <code>open()</code> với đúng <strong>chế độ mở tệp</strong>: <code>r</code>, <code>w</code>, <code>a</code>, <code>x</code>, <code>b</code>, <code>+</code>.</li>
+            <li>Luôn dùng <code>with</code> — hiểu vì sao nó an toàn hơn <code>try/finally</code> thủ công.</li>
+            <li>Đọc tệp theo 4 cách và biết khi nào dùng cách nào (đặc biệt: tệp lớn hơn RAM).</li>
+            <li>Hiểu <strong>encoding</strong>: vì sao luôn ghi <code>encoding="utf-8"</code>, và cách gỡ <code>UnicodeDecodeError</code>.</li>
+            <li>Thành thạo <code>pathlib.Path</code> — chuẩn hiện đại thay cho <code>os.path</code>.</li>
+            <li>Đọc/ghi <strong>JSON</strong> và <strong>CSV</strong> bằng stdlib, kể cả trường hợp có tiếng Việt.</li>
+            <li>Nắm cú pháp <strong>regex</strong>: ký tự đại diện, lượng từ, nhóm, nhóm có tên, lớp ký tự.</li>
+            <li>Dùng đúng <code>search</code> / <code>match</code> / <code>fullmatch</code> / <code>findall</code> / <code>finditer</code> / <code>sub</code> / <code>split</code>.</li>
+            <li>Biết <strong>khi nào KHÔNG nên dùng regex</strong> — và dùng gì thay thế.</li>
           </ul>
-        </div>
-
-        <h2 id="decorator-mental-model">1. Decorator — mental model</h2>
-
-        <p>
-          Decorator trong Python <strong>không phải</strong> "Decorator pattern" của Gang of Four. Tên trùng nhau nhưng
-          khác concept. Decorator của Python là một <strong>callable</strong> (thường là function) <strong>nhận một
-          callable</strong> và <strong>trả về một callable</strong>. Mục đích: bọc thêm hành vi (logging, timing, retry,
-          caching, validation) <em>mà không phải sửa code function gốc</em>.
-        </p>
-
-        <p>
-          Syntax <code><span class="tok-dec">@decorator</span></code> ở trên dòng <code>def</code> chỉ là <strong>syntax
-          sugar</strong>:
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Decorator = syntax sugar</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-com"># Đây:</span>
-<span class="tok-dec">@decorator</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
-    <span class="tok-kw">pass</span>
-
-<span class="tok-com"># Tương đương:</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
-    <span class="tok-kw">pass</span>
-f = decorator(f)  <span class="tok-com"># gán đè biến f bằng kết quả decorator(f)</span></code></pre>
-        </div>
-
-        <p>
-          Nói cách khác, sau khi <code>def f</code> evaluate xong, Python lập tức gọi <code>decorator(f)</code> và gán
-          <strong>kết quả</strong> vào tên <code>f</code>. Kết quả thường là một function khác (gọi là
-          <em>wrapper</em>) bao quanh function gốc.
-        </p>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Mental model — "Người gói quà"</div>
-          <p>
-            Hình dung function gốc là <strong>cái quà</strong>. Decorator là <strong>người gói quà</strong>: nhận quà,
-            bọc giấy, dán nơ, trả ra một <strong>gói quà đã đóng gói</strong>. Bạn (caller) cầm gói quà gọi như cầm
-            chính món quà — bên trong nó tự mở ra, làm thêm gì đó (logging, timing), rồi mới đưa cho function thật.
-          </p>
-          <p style="margin-top: 10px;">
-            Bạn vẫn dùng <code>f(x)</code> như cũ, nhưng <code>f</code> bây giờ là wrapper, không phải function gốc nữa.
-            Function gốc bị "ẩn" bên trong wrapper qua closure.
-          </p>
-        </div>
-
-        <p>Quan trọng — decorator chạy <strong>tại thời điểm <code>def</code> được evaluate</strong>, không phải khi gọi <code>f()</code>:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Decorator chạy lúc nào</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">noisy</span>(fn):
-    <span class="tok-fn">print</span>(<span class="tok-str">f"decorator đang wrap </span>{fn.__name__}<span class="tok-str">"</span>)
-    <span class="tok-kw">return</span> fn
-
-<span class="tok-dec">@noisy</span>
-<span class="tok-kw">def</span> <span class="tok-fn">hello</span>():
-    <span class="tok-fn">print</span>(<span class="tok-str">"hello"</span>)
-
-<span class="tok-com"># Đã in ra "decorator đang wrap hello" — NGAY KHI def evaluate</span>
-<span class="tok-com"># Chưa hề gọi hello()</span>
-
-hello()  <span class="tok-com"># Bây giờ in "hello"</span></code></pre>
-        </div>
-
-        <h2 id="decorator-simple">2. Viết decorator đơn giản</h2>
-
-        <p>
-          Decorator điển hình có 2 lớp: outer (nhận <code>fn</code>) và inner (wrapper thực sự được gọi). Inner phải
-          chấp nhận mọi argument bằng <code>*args, **kwargs</code> để wrap được mọi signature.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Decorator @trace</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">trace</span>(fn):
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
-        <span class="tok-fn">print</span>(<span class="tok-str">f"→ calling </span>{fn.__name__}<span class="tok-str">(</span>{args}<span class="tok-str">, </span>{kwargs}<span class="tok-str">)"</span>)
-        result = fn(*args, **kwargs)
-        <span class="tok-fn">print</span>(<span class="tok-str">f"← </span>{fn.__name__}<span class="tok-str"> trả về </span>{result!r}<span class="tok-str">"</span>)
-        <span class="tok-kw">return</span> result
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@trace</span>
-<span class="tok-kw">def</span> <span class="tok-fn">add</span>(a, b):
-    <span class="tok-kw">return</span> a + b
-
-add(<span class="tok-num">2</span>, <span class="tok-num">3</span>)
-<span class="tok-com"># → calling add((2, 3), {})</span>
-<span class="tok-com"># ← add trả về 5</span></code></pre>
-        </div>
-
-        <p>Phân tích từng dòng:</p>
-
-        <ul>
-          <li><code>def trace(fn)</code> — outer function, nhận function được wrap.</li>
-          <li><code>def wrapper(*args, **kwargs)</code> — inner function, sẽ thay <code>add</code>. Signature linh hoạt để wrap mọi function.</li>
-          <li><code>fn(*args, **kwargs)</code> — gọi function gốc với đúng args caller truyền vào.</li>
-          <li><code>return wrapper</code> — outer trả về wrapper. <code><span class="tok-dec">@trace</span></code> khiến <code>add = trace(add) = wrapper</code>.</li>
-        </ul>
-
-        <p>Vì <code>wrapper</code> capture biến <code>fn</code> qua closure (xem Chương 3), function gốc không bị mất.</p>
-
-        <div class="py-feature">
-          <h4>Tại sao <code>*args, **kwargs</code>?</h4>
-          <p>
-            Nếu bạn viết <code>def wrapper(a, b)</code>, decorator chỉ wrap được function có đúng signature <code>(a, b)</code>.
-            Dùng <code>*args, **kwargs</code> để wrapper "trong suốt" — nhận mọi argument, chuyển hết xuống function gốc.
-          </p>
-        </div>
-
-        <h2 id="functools-wraps">3. <code>functools.wraps</code> — bảo toàn metadata</h2>
-
-        <p>
-          Có một vấn đề tinh tế với decorator. Sau khi wrap, <code>add</code> không còn trỏ vào function gốc nữa, mà trỏ
-          vào <code>wrapper</code>. Hệ quả: metadata như <code>__name__</code>, <code>__doc__</code>, <code>__module__</code>,
-          <code>__annotations__</code> của <code>add</code> bị thay bằng của <code>wrapper</code>:
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Metadata bị mất</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">trace</span>(fn):
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
-        <span class="tok-kw">return</span> fn(*args, **kwargs)
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@trace</span>
-<span class="tok-kw">def</span> <span class="tok-fn">add</span>(a, b):
-    <span class="tok-str">"""Cộng 2 số."""</span>
-    <span class="tok-kw">return</span> a + b
-
-<span class="tok-fn">print</span>(add.__name__)  <span class="tok-com"># 'wrapper' 🔥 (đáng lẽ 'add')</span>
-<span class="tok-fn">print</span>(add.__doc__)   <span class="tok-com"># None       🔥 (mất docstring)</span>
-help(add)            <span class="tok-com"># Help on function wrapper... 🔥</span></code></pre>
-        </div>
-
-        <p>
-          Điều này phá vỡ <code>help()</code>, debugger, profiler, tài liệu tự sinh (Sphinx). Fix bằng
-          <code><span class="tok-dec">@functools.wraps(fn)</span></code> trên <code>wrapper</code> — copy metadata từ
-          <code>fn</code> sang <code>wrapper</code>:
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Fix với functools.wraps</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">import</span> functools
-
-<span class="tok-kw">def</span> <span class="tok-fn">trace</span>(fn):
-    <span class="tok-dec">@functools.wraps(fn)</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
-        <span class="tok-kw">return</span> fn(*args, **kwargs)
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@trace</span>
-<span class="tok-kw">def</span> <span class="tok-fn">add</span>(a, b):
-    <span class="tok-str">"""Cộng 2 số."""</span>
-    <span class="tok-kw">return</span> a + b
-
-<span class="tok-fn">print</span>(add.__name__)      <span class="tok-com"># 'add'         ✓</span>
-<span class="tok-fn">print</span>(add.__doc__)       <span class="tok-com"># 'Cộng 2 số.'  ✓</span>
-<span class="tok-fn">print</span>(add.__wrapped__)   <span class="tok-com"># &lt;function add&gt; ← reference function gốc</span></code></pre>
-        </div>
-
-        <p>
-          <code>functools.wraps</code> copy: <code>__module__</code>, <code>__name__</code>, <code>__qualname__</code>,
-          <code>__annotations__</code>, <code>__doc__</code>, và set <code>__wrapped__</code> trỏ về <code>fn</code> gốc.
-          Cái <code>__wrapped__</code> hữu ích khi cần "unwrap" decorator để introspect function gốc (vd:
-          <code>inspect.signature</code> dùng nó).
-        </p>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Quy tắc</div>
-          <p>
-            <strong>Mọi decorator nên dùng <code><span class="tok-dec">@functools.wraps(fn)</span></code></strong> trên wrapper.
-            Không có ngoại lệ trừ khi bạn cố ý không muốn (rất hiếm).
-          </p>
-        </div>
-
-        <h2 id="decorator-factory">4. Decorator có argument — decorator factory</h2>
-
-        <p>
-          Đôi khi bạn cần decorator nhận tham số: <code><span class="tok-dec">@repeat(3)</span></code>,
-          <code><span class="tok-dec">@retry(times=3)</span></code>, <code><span class="tok-dec">@route('/users')</span></code>.
-          Cần thêm <strong>1 lớp ngoài</strong>: decorator factory nhận argument, trả về decorator thật.
-        </p>
-
-        <p>Phân tích chuyển hoá:</p>
-
-        <div class="code-wrap">
-<pre><code><span class="tok-dec">@repeat(3)</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>():
-    <span class="tok-fn">print</span>(<span class="tok-str">"hi"</span>)
-
-<span class="tok-com"># Tương đương:</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>():
-    <span class="tok-fn">print</span>(<span class="tok-str">"hi"</span>)
-greet = repeat(<span class="tok-num">3</span>)(greet)
-<span class="tok-com">#        ↑ gọi factory   ↑ gọi decorator trả về</span></code></pre>
-        </div>
-
-        <p>Vậy <code>repeat(3)</code> phải trả về một decorator (function nhận function trả function). Cấu trúc 3 tầng:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Decorator factory @repeat(n)</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">import</span> functools
-
-<span class="tok-kw">def</span> <span class="tok-fn">repeat</span>(n):                       <span class="tok-com"># Tầng 1: factory, nhận args</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">decorator</span>(fn):               <span class="tok-com"># Tầng 2: decorator thật, nhận fn</span>
-        <span class="tok-dec">@functools.wraps(fn)</span>
-        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs): <span class="tok-com"># Tầng 3: wrapper, replace fn</span>
-            result = <span class="tok-kw">None</span>
-            <span class="tok-kw">for</span> _ <span class="tok-kw">in</span> <span class="tok-fn">range</span>(n):
-                result = fn(*args, **kwargs)
-            <span class="tok-kw">return</span> result
-        <span class="tok-kw">return</span> wrapper
-    <span class="tok-kw">return</span> decorator
-
-<span class="tok-dec">@repeat(3)</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name):
-    <span class="tok-fn">print</span>(<span class="tok-str">f"hi </span>{name}<span class="tok-str">"</span>)
-
-greet(<span class="tok-str">"An"</span>)
-<span class="tok-com"># hi An</span>
-<span class="tok-com"># hi An</span>
-<span class="tok-com"># hi An</span></code></pre>
-        </div>
-
-        <div class="callout callout-gotcha">
-          <div class="callout-label">🔥 Gotcha — quên dấu ngoặc</div>
-          <p>
-            <code><span class="tok-dec">@repeat</span></code> (không ngoặc) và <code><span class="tok-dec">@repeat(3)</span></code> (có ngoặc)
-            là 2 chuyện khác nhau:
-          </p>
-<pre><code><span class="tok-dec">@repeat</span>          <span class="tok-com"># f = repeat(f) — repeat nhận function!</span>
-<span class="tok-dec">@repeat()</span>        <span class="tok-com"># f = repeat()(f) — repeat nhận () rồi mới wrap</span>
-<span class="tok-dec">@repeat(3)</span>       <span class="tok-com"># f = repeat(3)(f)</span></code></pre>
-          <p>
-            Nếu bạn viết decorator factory mà không truyền arg, sẽ ra lỗi rất khó hiểu:
-            <code>TypeError: 'function' object is not callable</code> hoặc tương tự — vì <code>repeat</code> nhận <code>f</code>
-            tưởng đó là số <code>n</code>.
-          </p>
-        </div>
-
-        <h2 id="decorator-stack">5. Stack decorator — thứ tự apply</h2>
-
-        <p>
-          Bạn có thể chồng nhiều decorator lên 1 function. Thứ tự apply là <strong>bottom-up</strong> (từ dưới lên):
-          decorator gần <code>def</code> nhất apply trước.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Decorator stack</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-dec">@a</span>
-<span class="tok-dec">@b</span>
-<span class="tok-dec">@c</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
-    <span class="tok-kw">pass</span>
-
-<span class="tok-com"># Tương đương:</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
-    <span class="tok-kw">pass</span>
-f = a(b(c(f)))
-<span class="tok-com">#     ↑ c apply trước (gần def nhất)</span>
-<span class="tok-com">#   ↑ rồi b</span>
-<span class="tok-com"># ↑ rồi a (ngoài cùng)</span></code></pre>
-        </div>
-
-        <p>
-          Khi gọi <code>f(x)</code>, control flow là <strong>top-down</strong>: <code>a</code> chạy trước, gọi <code>b</code>,
-          rồi <code>b</code> gọi <code>c</code>, rồi <code>c</code> gọi function gốc. Trả về thì reverse.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Demo thứ tự</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">make_dec</span>(label):
-    <span class="tok-kw">def</span> <span class="tok-fn">dec</span>(fn):
-        <span class="tok-dec">@functools.wraps(fn)</span>
-        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
-            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{label}<span class="tok-str"> trước"</span>)
-            result = fn(*args, **kw)
-            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{label}<span class="tok-str"> sau"</span>)
-            <span class="tok-kw">return</span> result
-        <span class="tok-kw">return</span> wrapper
-    <span class="tok-kw">return</span> dec
-
-<span class="tok-dec">@make_dec("A")</span>
-<span class="tok-dec">@make_dec("B")</span>
-<span class="tok-dec">@make_dec("C")</span>
-<span class="tok-kw">def</span> <span class="tok-fn">f</span>():
-    <span class="tok-fn">print</span>(<span class="tok-str">"  f"</span>)
-
-f()
-<span class="tok-com"># A trước</span>
-<span class="tok-com"># B trước</span>
-<span class="tok-com"># C trước</span>
-<span class="tok-com">#   f</span>
-<span class="tok-com"># C sau</span>
-<span class="tok-com"># B sau</span>
-<span class="tok-com"># A sau</span></code></pre>
-        </div>
-
-        <p>
-          <strong>Order matters!</strong> Vd: <code><span class="tok-dec">@cache</span></code> ngoài <code><span class="tok-dec">@trace</span></code>
-          vs <code><span class="tok-dec">@trace</span></code> ngoài <code><span class="tok-dec">@cache</span></code> — kết quả khác:
-        </p>
-
-        <ul>
-          <li><code><span class="tok-dec">@cache</span></code> trên cùng → cache hit không in trace (vì cache trả ngay, không gọi xuống).</li>
-          <li><code><span class="tok-dec">@trace</span></code> trên cùng → mỗi call đều log, kể cả cache hit.</li>
-        </ul>
-
-        <h2 id="cache-lru">6. <code>functools.cache</code> / <code>lru_cache</code> — memoization</h2>
-
-        <p>
-          Memoization là tối ưu kinh điển: lưu kết quả function theo argument, lần sau cùng args trả ngay từ cache.
-          Python có sẵn 2 decorator:
-        </p>
-
-        <ul>
-          <li><code><span class="tok-dec">@functools.cache</span></code> — Python 3.9+. Cache <strong>không giới hạn</strong>.</li>
-          <li><code><span class="tok-dec">@functools.lru_cache(maxsize=128)</span></code> — Có giới hạn (LRU eviction). Default 128.</li>
-        </ul>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Fibonacci không cache vs có cache</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">import</span> functools
-<span class="tok-kw">import</span> time
-
-<span class="tok-com"># Không cache: exponential O(2^n)</span>
-<span class="tok-kw">def</span> <span class="tok-fn">fib_slow</span>(n):
-    <span class="tok-kw">if</span> n &lt; <span class="tok-num">2</span>:
-        <span class="tok-kw">return</span> n
-    <span class="tok-kw">return</span> fib_slow(n - <span class="tok-num">1</span>) + fib_slow(n - <span class="tok-num">2</span>)
-
-t = time.perf_counter()
-fib_slow(<span class="tok-num">35</span>)               <span class="tok-com"># ~2-3 giây</span>
-<span class="tok-fn">print</span>(time.perf_counter() - t)
-
-<span class="tok-com"># Có cache: linear O(n) (sau khi memoize)</span>
-<span class="tok-dec">@functools.cache</span>
-<span class="tok-kw">def</span> <span class="tok-fn">fib_fast</span>(n):
-    <span class="tok-kw">if</span> n &lt; <span class="tok-num">2</span>:
-        <span class="tok-kw">return</span> n
-    <span class="tok-kw">return</span> fib_fast(n - <span class="tok-num">1</span>) + fib_fast(n - <span class="tok-num">2</span>)
-
-t = time.perf_counter()
-fib_fast(<span class="tok-num">500</span>)              <span class="tok-com"># vài microseconds</span>
-<span class="tok-fn">print</span>(time.perf_counter() - t)
-<span class="tok-fn">print</span>(fib_fast.cache_info())  <span class="tok-com"># CacheInfo(hits=..., misses=..., ...)</span></code></pre>
-        </div>
-
-        <p>Hai biến thể có signature cache giống nhau, chỉ khác policy eviction:</p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>—</th><th><code><span class="tok-dec">@cache</span></code></th><th><code><span class="tok-dec">@lru_cache(maxsize=N)</span></code></th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Python version</td><td>3.9+</td><td>3.2+</td></tr>
-              <tr><td>Giới hạn</td><td>Không giới hạn</td><td>Có, LRU eviction</td></tr>
-              <tr><td>Phù hợp khi</td><td>Pure function, args ít</td><td>Args nhiều, sợ leak memory</td></tr>
-              <tr><td>API</td><td><code>f.cache_clear()</code>, <code>f.cache_info()</code></td><td>Giống <code>cache</code></td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout callout-gotcha">
-          <div class="callout-label">🔥 Constraint — args phải hashable</div>
-          <p>
-            <code>cache</code>/<code>lru_cache</code> lưu kết quả vào dict, key là <code>(args, kwargs)</code> tuple. Argument phải
-            <strong>hashable</strong> — int, str, tuple, frozenset OK. <code>list</code>, <code>dict</code>, <code>set</code> sẽ
-            throw <code>TypeError: unhashable type</code>.
-          </p>
-          <p>Workaround: convert sang tuple trước khi gọi, hoặc dùng <code>frozenset</code>.</p>
-        </div>
-
-        <h2 id="class-decorator">7. Class-based decorator</h2>
-
-        <p>
-          Decorator không nhất thiết là function. Bất cứ object nào <strong>callable</strong> đều dùng được. Một class
-          với <code>__call__</code> là decorator hợp lệ. Hữu ích khi cần <strong>giữ state</strong> giữa các lần gọi.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Class-based @CountCalls</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">import</span> functools
-
-<span class="tok-kw">class</span> <span class="tok-cls">CountCalls</span>:
-    <span class="tok-kw">def</span> __init__(self, fn):
-        functools.update_wrapper(self, fn)  <span class="tok-com"># thay cho @wraps</span>
-        self.fn = fn
-        self.count = <span class="tok-num">0</span>
-
-    <span class="tok-kw">def</span> __call__(self, *args, **kwargs):
-        self.count += <span class="tok-num">1</span>
-        <span class="tok-fn">print</span>(<span class="tok-str">f"Call #</span>{self.count}<span class="tok-str"> to </span>{self.fn.__name__}<span class="tok-str">"</span>)
-        <span class="tok-kw">return</span> self.fn(*args, **kwargs)
-
-<span class="tok-dec">@CountCalls</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name):
-    <span class="tok-fn">print</span>(<span class="tok-str">f"Hi </span>{name}<span class="tok-str">"</span>)
-
-greet(<span class="tok-str">"An"</span>)   <span class="tok-com"># Call #1 to greet</span>
-greet(<span class="tok-str">"Bình"</span>) <span class="tok-com"># Call #2 to greet</span>
-<span class="tok-fn">print</span>(greet.count)  <span class="tok-com"># 2 — truy cập state qua attribute</span></code></pre>
-        </div>
-
-        <p>
-          Khi <code><span class="tok-dec">@CountCalls</span></code> apply, Python gọi <code>CountCalls(greet)</code> → tạo instance,
-          gán vào <code>greet</code>. Mỗi <code>greet(...)</code> thực ra là <code>instance(...)</code> → trigger
-          <code>__call__</code>.
-        </p>
-
-        <p>Class-based decorator có argument (decorator factory) khác chút:</p>
-
-        <div class="code-wrap">
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">Retry</span>:
-    <span class="tok-kw">def</span> __init__(self, times):
-        self.times = times
-
-    <span class="tok-kw">def</span> __call__(self, fn):
-        <span class="tok-dec">@functools.wraps(fn)</span>
-        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
-            <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(self.times):
-                <span class="tok-kw">try</span>:
-                    <span class="tok-kw">return</span> fn(*args, **kw)
-                <span class="tok-kw">except</span> <span class="tok-cls">Exception</span>:
-                    <span class="tok-kw">if</span> i == self.times - <span class="tok-num">1</span>: <span class="tok-kw">raise</span>
-        <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@Retry(times=3)</span>
-<span class="tok-kw">def</span> <span class="tok-fn">flaky</span>():
-    ...</code></pre>
-        </div>
-
-        <h2 id="decorator-stdlib">8. Decorator phổ biến trong stdlib và lib</h2>
-
-        <p>Decorator có mặt khắp Python ecosystem. Một số tiêu biểu bạn sẽ gặp hằng ngày:</p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Decorator</th><th>Module</th><th>Dùng làm gì</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code><span class="tok-dec">@dataclass</span></code></td><td><code>dataclasses</code></td><td>Tự sinh <code>__init__</code>, <code>__repr__</code>, <code>__eq__</code> (Chương 5)</td></tr>
-              <tr><td><code><span class="tok-dec">@property</span></code></td><td>builtin</td><td>Method → property getter (Chương 5)</td></tr>
-              <tr><td><code><span class="tok-dec">@classmethod</span></code></td><td>builtin</td><td>Method nhận <code>cls</code> thay <code>self</code></td></tr>
-              <tr><td><code><span class="tok-dec">@staticmethod</span></code></td><td>builtin</td><td>Method không nhận <code>self</code>/<code>cls</code></td></tr>
-              <tr><td><code><span class="tok-dec">@functools.cache</span></code></td><td><code>functools</code></td><td>Memoization (mục 6)</td></tr>
-              <tr><td><code><span class="tok-dec">@app.route('/users')</span></code></td><td>Flask</td><td>Đăng ký URL handler</td></tr>
-              <tr><td><code><span class="tok-dec">@app.get('/users')</span></code></td><td>FastAPI</td><td>Đăng ký GET endpoint</td></tr>
-              <tr><td><code><span class="tok-dec">@pytest.fixture</span></code></td><td>pytest</td><td>Khai báo fixture cho test (Chương 10)</td></tr>
-              <tr><td><code><span class="tok-dec">@pytest.mark.parametrize(...)</span></code></td><td>pytest</td><td>Chạy test với nhiều input</td></tr>
-              <tr><td><code><span class="tok-dec">@contextmanager</span></code></td><td><code>contextlib</code></td><td>Generator → context manager (mục 11)</td></tr>
-              <tr><td><code><span class="tok-dec">@asynccontextmanager</span></code></td><td><code>contextlib</code></td><td>Async context manager (Chương 8)</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>
-          Khi đọc framework code thấy <code><span class="tok-dec">@something</span></code>, hỏi 3 câu: (1) nó wrap function thành cái
-          gì khác? (2) chạy lúc nào — at-import hay at-call? (3) thêm state/side-effect gì? Nắm 3 câu là hiểu được
-          decorator bất kỳ.
-        </p>
-
-        <h2 id="context-manager-with">9. Context manager với <code>with</code> statement</h2>
-
-        <p>
-          Context manager giải quyết bài toán: <strong>"luôn cleanup resource khi xong, kể cả khi exception"</strong>.
-          Resource có thể là file, socket, lock, database connection, transaction, temp directory.
-        </p>
-
-        <p>Cách viết "thủ công" với <code>try/finally</code>:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Mở file kiểu cũ</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code>f = <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>)
-<span class="tok-kw">try</span>:
-    content = f.read()
-    process(content)        <span class="tok-com"># nếu cái này throw...</span>
-<span class="tok-kw">finally</span>:
-    f.close()               <span class="tok-com"># file vẫn được close. Tốt nhưng verbose.</span></code></pre>
-        </div>
-
-        <p>Cách Pythonic với <code>with</code>:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Mở file Pythonic</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>) <span class="tok-kw">as</span> f:
-    content = f.read()
-    process(content)
-<span class="tok-com"># f.close() được gọi tự động khi ra khỏi with, kể cả khi exception</span></code></pre>
-        </div>
-
-        <p>Cú pháp:</p>
-
-        <ul>
-          <li><code>with EXPR as VAR:</code> — <code>EXPR</code> là biểu thức trả về context manager. <code>VAR</code> binding kết quả <code>__enter__</code>.</li>
-          <li>Phần <code>as VAR</code> là <strong>optional</strong>. Có context manager không cần bind (vd lock).</li>
-          <li>Khi block kết thúc (bình thường hoặc do exception), <code>__exit__</code> được gọi.</li>
-        </ul>
-
-        <p>Các use case phổ biến:</p>
-
-        <div class="code-wrap">
-<pre><code><span class="tok-kw">import</span> threading
-
-<span class="tok-com"># File — close tự động</span>
-<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"a.txt"</span>, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> f:
-    f.write(<span class="tok-str">"hi"</span>)
-
-<span class="tok-com"># Lock — release tự động</span>
-lock = threading.Lock()
-<span class="tok-kw">with</span> lock:
-    shared_state += <span class="tok-num">1</span>
-
-<span class="tok-com"># Database connection (SQLite) — commit/rollback + close</span>
-<span class="tok-kw">import</span> sqlite3
-<span class="tok-kw">with</span> sqlite3.connect(<span class="tok-str">"db.sqlite"</span>) <span class="tok-kw">as</span> conn:
-    conn.execute(<span class="tok-str">"INSERT INTO ..."</span>)
-    <span class="tok-com"># commit khi không exception, rollback nếu có</span></code></pre>
-        </div>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Mental model — RAII của Python</div>
-          <p>
-            Nếu bạn quen C++, context manager chính là <strong>RAII</strong> (Resource Acquisition Is Initialization).
-            Khi vào block <code>with</code>: acquire resource. Khi ra block: release. Khác C++ destructor (gọi khi out of
-            scope), Python gọi <code>__exit__</code> tại đúng điểm cuối <code>with</code> — deterministic, không phụ
-            thuộc GC.
-          </p>
-          <p style="margin-top: 10px;">
-            Khác JS: JS không có cấu trúc tương đương. Bạn phải dùng <code>try/finally</code> hoặc disposable pattern
-            (TC39 explicit resource management đang propose). Đây là một ưu điểm của Python.
-          </p>
-        </div>
-
-        <h2 id="cm-class">10. Viết context manager dạng class</h2>
-
-        <p>Để một object dùng được trong <code>with</code>, nó phải implement <strong>context manager protocol</strong> — 2 dunder method:</p>
-
-        <ul>
-          <li><code>__enter__(self)</code> — chạy khi vào block. Return value được bind vào <code>as VAR</code>.</li>
-          <li><code>__exit__(self, exc_type, exc_val, exc_tb)</code> — chạy khi ra block. Nhận info về exception (nếu có).</li>
-        </ul>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Class context manager — Timer</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">import</span> time
-
-<span class="tok-kw">class</span> <span class="tok-cls">Timer</span>:
-    <span class="tok-kw">def</span> __init__(self, label=<span class="tok-str">"block"</span>):
-        self.label = label
-
-    <span class="tok-kw">def</span> __enter__(self):
-        self.start = time.perf_counter()
-        <span class="tok-kw">return</span> self                <span class="tok-com"># bind vào `as t`</span>
-
-    <span class="tok-kw">def</span> __exit__(self, exc_type, exc_val, exc_tb):
-        elapsed = time.perf_counter() - self.start
-        <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{self.label}<span class="tok-str">: </span>{elapsed:.3f}<span class="tok-str">s"</span>)
-        <span class="tok-com"># không return gì = return None = không suppress exception</span>
-
-<span class="tok-kw">with</span> <span class="tok-cls">Timer</span>(<span class="tok-str">"loop"</span>) <span class="tok-kw">as</span> t:
-    total = <span class="tok-fn">sum</span>(<span class="tok-fn">range</span>(<span class="tok-num">10_000_000</span>))
-
-<span class="tok-com"># loop: 0.142s</span></code></pre>
-        </div>
-
-        <p><code>__exit__</code> arguments khi <strong>không</strong> có exception: cả 3 đều <code>None</code>.</p>
-        <p><code>__exit__</code> arguments khi <strong>có</strong> exception trong block: <code>exc_type</code> = class exception (vd <code>ValueError</code>), <code>exc_val</code> = instance exception, <code>exc_tb</code> = traceback object.</p>
-
-        <div class="callout callout-gotcha">
-          <div class="callout-label">🔥 Return value của <code>__exit__</code></div>
-          <p>
-            Nếu <code>__exit__</code> return <strong><code>True</code></strong> (truthy), Python <strong>nuốt exception</strong> — không
-            re-raise. Nếu return <code>None</code>/<code>False</code> (default), exception <strong>propagate</strong> ra ngoài.
-          </p>
-          <p>
-            <strong>Cẩn thận:</strong> chỉ suppress khi có lý do rõ (vd cleanup riêng cho lỗi này). Nuốt bừa exception
-            là anti-pattern.
-          </p>
-        </div>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Suppress exception trong __exit__</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">class</span> <span class="tok-cls">IgnoreKeyError</span>:
-    <span class="tok-kw">def</span> __enter__(self): <span class="tok-kw">return</span> self
-    <span class="tok-kw">def</span> __exit__(self, exc_type, exc_val, exc_tb):
-        <span class="tok-kw">if</span> exc_type <span class="tok-kw">is</span> <span class="tok-cls">KeyError</span>:
-            <span class="tok-fn">print</span>(<span class="tok-str">"Bỏ qua KeyError"</span>)
-            <span class="tok-kw">return</span> <span class="tok-kw">True</span>      <span class="tok-com"># suppress chỉ KeyError</span>
-        <span class="tok-com"># return None ngầm cho exception khác → re-raise</span>
-
-<span class="tok-kw">with</span> <span class="tok-cls">IgnoreKeyError</span>():
-    {}[<span class="tok-str">"missing"</span>]    <span class="tok-com"># raise KeyError, nhưng bị nuốt</span>
-<span class="tok-fn">print</span>(<span class="tok-str">"vẫn chạy tiếp"</span>)</code></pre>
-        </div>
-
-        <h2 id="contextmanager-decorator">11. <code>@contextlib.contextmanager</code> — generator thành context manager</h2>
-
-        <p>
-          Viết class với <code>__enter__</code>/<code>__exit__</code> đôi khi dài dòng cho case đơn giản. <code>contextlib</code>
-          cung cấp một decorator biến <strong>generator function</strong> (yield đúng 1 lần) thành context manager. Cấu
-          trúc <code>try / yield / finally</code>:
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>@contextmanager — Timer phiên bản generator</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> contextmanager
-<span class="tok-kw">import</span> time
-
-<span class="tok-dec">@contextmanager</span>
-<span class="tok-kw">def</span> <span class="tok-fn">timer</span>(label=<span class="tok-str">"block"</span>):
-    start = time.perf_counter()
-    <span class="tok-kw">try</span>:
-        <span class="tok-kw">yield</span> start          <span class="tok-com"># value bind vào `as`</span>
-    <span class="tok-kw">finally</span>:
-        elapsed = time.perf_counter() - start
-        <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{label}<span class="tok-str">: </span>{elapsed:.3f}<span class="tok-str">s"</span>)
-
-<span class="tok-kw">with</span> <span class="tok-fn">timer</span>(<span class="tok-str">"loop"</span>):
-    total = <span class="tok-fn">sum</span>(<span class="tok-fn">range</span>(<span class="tok-num">10_000_000</span>))
-<span class="tok-com"># loop: 0.142s</span></code></pre>
-        </div>
-
-        <p>Map ngữ nghĩa:</p>
-
-        <ul>
-          <li>Code <strong>trước <code>yield</code></strong> = <code>__enter__</code> (setup).</li>
-          <li>Giá trị <strong><code>yield</code></strong> = giá trị trả về <code>__enter__</code>, bind vào <code>as</code>.</li>
-          <li>Code <strong>trong <code>finally</code></strong> = <code>__exit__</code> (cleanup, luôn chạy).</li>
-          <li>Code trong <code>except</code> (nếu có) = xử lý exception. Re-raise hoặc nuốt qua không re-raise.</li>
-        </ul>
-
-        <p>Phiên bản đầy đủ với handle exception:</p>
-
-        <div class="code-wrap">
-<pre><code><span class="tok-dec">@contextmanager</span>
-<span class="tok-kw">def</span> <span class="tok-fn">managed_resource</span>(name):
-    <span class="tok-fn">print</span>(<span class="tok-str">f"acquire </span>{name}<span class="tok-str">"</span>)
-    res = acquire(name)
-    <span class="tok-kw">try</span>:
-        <span class="tok-kw">yield</span> res
-    <span class="tok-kw">except</span> <span class="tok-cls">ValueError</span> <span class="tok-kw">as</span> e:
-        <span class="tok-fn">print</span>(<span class="tok-str">f"ValueError bị nuốt: </span>{e}<span class="tok-str">"</span>)
-        <span class="tok-com"># không re-raise = suppress exception</span>
-    <span class="tok-kw">finally</span>:
-        <span class="tok-fn">print</span>(<span class="tok-str">f"release </span>{name}<span class="tok-str">"</span>)
-        release(res)</code></pre>
-        </div>
-
-        <div class="callout callout-tip">
-          <div class="callout-label">💡 Class hay generator?</div>
-          <ul>
-            <li>Generator (<code>@contextmanager</code>) — ngắn, đẹp cho case đơn giản, không có state phức tạp.</li>
-            <li>Class — khi có nhiều method/attribute, hoặc khi context manager là một thực thể có ý nghĩa riêng (vd <code>Connection</code> class).</li>
-            <li>Cả 2 đều correct, chọn theo độ phức tạp.</li>
-          </ul>
-        </div>
-
-        <h2 id="nested-with">12. Nested <code>with</code> — nhiều context manager trong 1 dòng</h2>
-
-        <p>Khi cần nhiều resource cùng lúc, viết liền nhau cách bởi dấu phẩy. Tránh nested deep indent:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Multiple context manager</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-com"># Cách viết phổ biến (Python 3.1+)</span>
-<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"in.txt"</span>) <span class="tok-kw">as</span> fin, <span class="tok-fn">open</span>(<span class="tok-str">"out.txt"</span>, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> fout:
-    fout.write(fin.read().upper())
-
-<span class="tok-com"># Python 3.10+ cho phép parentheses để xuống dòng:</span>
-<span class="tok-kw">with</span> (
-    <span class="tok-fn">open</span>(<span class="tok-str">"in.txt"</span>) <span class="tok-kw">as</span> fin,
-    <span class="tok-fn">open</span>(<span class="tok-str">"out.txt"</span>, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> fout,
-    lock,
-):
-    ...</code></pre>
-        </div>
-
-        <p>
-          Thứ tự: cm bên trái được <code>__enter__</code> trước, cm bên phải sau. Khi exit: ngược lại (phải trước, trái
-          sau) — đối xứng nested.
-        </p>
-
-        <div class="callout callout-mental">
-          <div class="callout-label">🧠 Cleanup đúng cả khi acquire fail</div>
-          <p>
-            Câu hỏi quan trọng: <code>with open(a) as f1, open(b) as f2:</code> — nếu <code>open(b)</code> lỗi, <code>f1</code>
-            có được close không?
-          </p>
-          <p style="margin-top: 10px;">
-            <strong>Có.</strong> Python đã <code>__enter__</code> cm1 thành công, rồi <code>__enter__</code> cm2 fail. Exception
-            bắt đầu propagate, Python trigger <code>__exit__</code> của cm1 (đã enter rồi) → f1 close. Đây là behavior
-            đối xứng của <code>with</code>, không cần bạn làm gì.
-          </p>
-        </div>
-
-        <h2 id="exitstack">13. <code>contextlib.ExitStack</code> — số resource động</h2>
-
-        <p>
-          Khi số lượng resource chỉ biết tại runtime (vd: mở N file theo input), không thể viết tĩnh
-          <code>with open(a), open(b), ...</code>. Dùng <code>ExitStack</code> — collection-style context manager.
-        </p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>Mở nhiều file động</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> ExitStack
-
-paths = [<span class="tok-str">"a.txt"</span>, <span class="tok-str">"b.txt"</span>, <span class="tok-str">"c.txt"</span>]   <span class="tok-com"># động, chỉ biết runtime</span>
-
-<span class="tok-kw">with</span> ExitStack() <span class="tok-kw">as</span> stack:
-    files = [stack.enter_context(<span class="tok-fn">open</span>(p)) <span class="tok-kw">for</span> p <span class="tok-kw">in</span> paths]
-    <span class="tok-com"># tất cả file mở, cleanup khi ra block</span>
-    <span class="tok-kw">for</span> f <span class="tok-kw">in</span> files:
-        process(f)
-<span class="tok-com"># Tất cả file được close, kể cả nếu giữa chừng có lỗi</span></code></pre>
-        </div>
-
-        <p>API chính của <code>ExitStack</code>:</p>
-
-        <ul>
-          <li><code>enter_context(cm)</code> — push 1 context manager vào stack, gọi <code>__enter__</code>, trả value.</li>
-          <li><code>callback(fn, *args, **kwargs)</code> — đăng ký 1 function gọi khi cleanup (giống <code>defer</code> của Go).</li>
-          <li><code>push(cm)</code> — push một cm đã enter từ trước.</li>
-          <li><code>pop_all()</code> — chuyển ownership cleanup sang ExitStack mới (advanced).</li>
-        </ul>
-
-        <p>Ví dụ <code>callback</code> như <code>defer</code>:</p>
-
-        <div class="code-wrap">
-<pre><code><span class="tok-kw">with</span> ExitStack() <span class="tok-kw">as</span> stack:
-    conn = db.connect()
-    stack.callback(conn.close)        <span class="tok-com"># defer close</span>
-
-    tmp = create_temp_file()
-    stack.callback(os.remove, tmp)    <span class="tok-com"># defer remove</span>
-
-    do_work(conn, tmp)
-<span class="tok-com"># Cleanup chạy theo LIFO: remove tmp trước, rồi close conn</span></code></pre>
-        </div>
-
-        <h2 id="suppress">14. <code>contextlib.suppress</code> — bỏ qua exception cụ thể</h2>
-
-        <p>
-          Idiom "thử làm gì đó, nếu lỗi loại X thì bỏ qua, lỗi khác thì re-raise" rất phổ biến. Cách "thủ công":
-        </p>
-
-        <div class="code-wrap">
-<pre><code><span class="tok-kw">import</span> os
-<span class="tok-kw">try</span>:
-    os.remove(<span class="tok-str">"temp.txt"</span>)
-<span class="tok-kw">except</span> <span class="tok-cls">FileNotFoundError</span>:
-    <span class="tok-kw">pass</span></code></pre>
-        </div>
-
-        <p>Cách Pythonic ngắn hơn với <code>suppress</code>:</p>
-
-        <div class="code-wrap">
-          <div class="code-meta">
-            <span>contextlib.suppress</span>
-            <button class="copy-btn">Copy</button>
-          </div>
-<pre><code><span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> suppress
-<span class="tok-kw">import</span> os
-
-<span class="tok-kw">with</span> suppress(<span class="tok-cls">FileNotFoundError</span>):
-    os.remove(<span class="tok-str">"temp.txt"</span>)
-
-<span class="tok-com"># Nhiều exception type cùng lúc:</span>
-<span class="tok-kw">with</span> suppress(<span class="tok-cls">FileNotFoundError</span>, <span class="tok-cls">PermissionError</span>):
-    os.remove(<span class="tok-str">"sensitive.log"</span>)</code></pre>
-        </div>
-
-        <p>
-          <code>suppress</code> chỉ "nuốt" đúng exception thuộc tuple đã chỉ định. Exception khác vẫn propagate bình
-          thường — không phải catch-all <code>except Exception</code> (đó là anti-pattern).
-        </p>
-
-        <p>Vài utility khác trong <code>contextlib</code> hay dùng:</p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Tool</th><th>Dùng làm gì</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>contextmanager</code></td><td>Generator → cm (mục 11)</td></tr>
-              <tr><td><code>ExitStack</code></td><td>Số cm động (mục 13)</td></tr>
-              <tr><td><code>suppress</code></td><td>Bỏ qua exception cụ thể (mục 14)</td></tr>
-              <tr><td><code>closing(obj)</code></td><td>Wrap object có <code>.close()</code> nhưng không phải cm, biến thành cm</td></tr>
-              <tr><td><code>redirect_stdout(file)</code></td><td>Tạm chuyển <code>sys.stdout</code> sang file/io.StringIO</td></tr>
-              <tr><td><code>redirect_stderr(file)</code></td><td>Tương tự cho stderr</td></tr>
-              <tr><td><code>nullcontext(value)</code></td><td>cm "rỗng" — return <code>value</code>, không cleanup gì. Hữu ích cho code conditional</td></tr>
-              <tr><td><code>asynccontextmanager</code></td><td>Async version (Chương 8)</td></tr>
-            </tbody>
-          </table>
         </div>
 
         <div class="zen-quote">
-          Beautiful is better than ugly. Errors should never pass silently. Unless explicitly silenced.
+          Simple is better than complex.<br/>
+          Complex is better than complicated.
+        </div>
+
+        <h2 id="open">1. <code>open()</code> — cánh cửa vào tệp tin</h2>
+
+        <p>
+          Hàm built-in <code>open()</code> trả về một <strong>đối tượng tệp</strong> (file object) — thứ bạn đọc, ghi,
+          và cuối cùng phải đóng. Ba tham số quan trọng nhất:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>chu_ky_open.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-fn">open</span>(
+    file,                    <span class="tok-com"># đường dẫn (str hoặc Path)</span>
+    mode=<span class="tok-str">"r"</span>,               <span class="tok-com"># chế độ mở — xem bảng bên dưới</span>
+    encoding=<span class="tok-kw">None</span>,          <span class="tok-com"># ⚠️ LUÔN đặt "utf-8" cho tệp văn bản</span>
+    newline=<span class="tok-kw">None</span>,           <span class="tok-com"># cách xử lý ký tự xuống dòng</span>
+    errors=<span class="tok-kw">None</span>,             <span class="tok-com"># hành vi khi giải mã lỗi</span>
+)</code></pre>
+        </div>
+
+        <h3 id="che-do">1.1. Chế độ mở tệp — bảng đầy đủ</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Chế độ</th><th>Tên</th><th>Tệp chưa tồn tại</th><th>Tệp đã tồn tại</th><th>Vị trí con trỏ</th><th>Đọc</th><th>Ghi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>"r"</code></td><td>read (mặc định)</td><td><code>FileNotFoundError</code></td><td>Giữ nguyên</td><td>Đầu tệp</td><td>✅</td><td>❌</td></tr>
+              <tr><td><code>"w"</code></td><td>write</td><td>Tạo mới</td><td><strong>Xoá sạch nội dung!</strong></td><td>Đầu tệp</td><td>❌</td><td>✅</td></tr>
+              <tr><td><code>"a"</code></td><td>append</td><td>Tạo mới</td><td>Giữ nguyên</td><td><strong>Cuối tệp</strong></td><td>❌</td><td>✅</td></tr>
+              <tr><td><code>"x"</code></td><td>exclusive create</td><td>Tạo mới</td><td><code>FileExistsError</code></td><td>Đầu tệp</td><td>❌</td><td>✅</td></tr>
+              <tr><td><code>"r+"</code></td><td>read + write</td><td><code>FileNotFoundError</code></td><td>Giữ nguyên</td><td>Đầu tệp</td><td>✅</td><td>✅</td></tr>
+              <tr><td><code>"w+"</code></td><td>write + read</td><td>Tạo mới</td><td><strong>Xoá sạch!</strong></td><td>Đầu tệp</td><td>✅</td><td>✅</td></tr>
+              <tr><td><code>"a+"</code></td><td>append + read</td><td>Tạo mới</td><td>Giữ nguyên</td><td>Cuối tệp</td><td>✅</td><td>✅</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <p>
-          Triết lý của <code>suppress</code> chính là dòng "<em>unless explicitly silenced</em>" trong Zen of Python:
-          không catch bừa, nhưng cho phép tắt rõ ràng khi cần.
+          Thêm hậu tố <code>b</code> vào bất kỳ chế độ nào để làm việc ở dạng <strong>nhị phân</strong>:
+          <code>"rb"</code>, <code>"wb"</code>, <code>"ab"</code>, <code>"rb+"</code>. Ở chế độ nhị phân, bạn đọc/ghi
+          <code>bytes</code> thay vì <code>str</code>, và <em>không</em> được truyền <code>encoding</code>.
         </p>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ <code>"w"</code> xoá sạch tệp ngay lúc mở</div>
+          <p>
+            Không phải lúc ghi — mà <strong>ngay khoảnh khắc <code>open(path, "w")</code> chạy</strong>. Kể cả khi
+            chương trình sập ngay dòng sau, tệp cũ đã mất. Đây là cách phá dữ liệu phổ biến nhất của người mới. Ba
+            cách phòng:
+          </p>
+          <ul>
+            <li>Dùng <code>"x"</code> khi bạn <em>biết</em> tệp phải chưa tồn tại — Python sẽ chặn thay vì ghi đè.</li>
+            <li>Dùng <code>"a"</code> khi chỉ muốn thêm vào.</li>
+            <li>Ghi ra tệp tạm rồi <code>Path.replace()</code> — thao tác nguyên tử, không bao giờ để lại tệp ghi dở.</li>
+          </ul>
+        </div>
+
+        <h2 id="with">2. <code>with</code> — luôn luôn dùng</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ba_cach.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># ❌ TỆ — quên đóng, hoặc lỗi giữa chừng thì không bao giờ đóng</span>
+f = <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>)
+noi_dung = f.<span class="tok-fn">read</span>()
+f.<span class="tok-fn">close</span>()
+
+<span class="tok-com"># ⚠️ TẠM ĐƯỢC — đúng nhưng dài dòng</span>
+f = <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>)
+<span class="tok-kw">try</span>:
+    noi_dung = f.<span class="tok-fn">read</span>()
+<span class="tok-kw">finally</span>:
+    f.<span class="tok-fn">close</span>()
+
+<span class="tok-com"># ✅ ĐÚNG — with tự đóng, kể cả khi có exception</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    noi_dung = f.<span class="tok-fn">read</span>()
+<span class="tok-com"># ra khỏi khối → f.close() đã được gọi</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao quên <code>close()</code> lại nguy hiểm</div>
+          <ul>
+            <li><strong>Dữ liệu chưa được ghi xuống đĩa.</strong> Python đệm nội dung trong bộ nhớ; <code>close()</code> mới xả (flush) xuống. Chương trình sập trước đó → mất dữ liệu.</li>
+            <li><strong>Cạn file descriptor.</strong> Hệ điều hành giới hạn số tệp mở đồng thời (thường 256-1024). Vòng lặp mở 10.000 tệp mà không đóng → <code>OSError: Too many open files</code>.</li>
+            <li><strong>Khoá tệp trên Windows.</strong> Tệp đang mở không xoá/đổi tên được.</li>
+          </ul>
+          <p style="margin-top: 8px;">
+            CPython có bộ đếm tham chiếu nên thường tự đóng tệp khi biến ra khỏi phạm vi — nhưng đó là
+            <em>chi tiết cài đặt của CPython</em>, không phải cam kết của ngôn ngữ. PyPy hay các bản cài đặt khác
+            không đảm bảo điều đó. Luôn dùng <code>with</code>.
+          </p>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>nhieu_file.py — mở nhiều tệp trong một with</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Nối hai tệp thành một</span>
+<span class="tok-kw">with</span> (
+    <span class="tok-fn">open</span>(<span class="tok-str">"a.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f1,
+    <span class="tok-fn">open</span>(<span class="tok-str">"b.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f2,
+    <span class="tok-fn">open</span>(<span class="tok-str">"gop.txt"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> out,
+):
+    out.<span class="tok-fn">write</span>(f1.<span class="tok-fn">read</span>())
+    out.<span class="tok-fn">write</span>(f2.<span class="tok-fn">read</span>())
+<span class="tok-com"># Cả 3 tệp đều được đóng, kể cả nếu open("b.txt") ném lỗi</span></code></pre>
+        </div>
+
+        <p>
+          Cú pháp ngoặc tròn bao nhiều context manager là tính năng của Python 3.10+ (PEP 617), cho phép xuống dòng
+          gọn gàng. Bản cũ hơn viết trên một dòng: <code>with open(a) as f1, open(b) as f2:</code>. Cơ chế bên trong
+          của <code>with</code> — <code>__enter__</code>/<code>__exit__</code> — sẽ được mổ xẻ ở
+          <a href="chuong10.html">Chương 10</a>.
+        </p>
+
+        <h2 id="doc-file">3. Bốn cách đọc tệp</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Cách</th><th>Trả về</th><th>Bộ nhớ</th><th>Dùng khi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>f.read()</code></td><td><code>str</code> toàn bộ tệp</td><td>Bằng cỡ tệp</td><td>Tệp nhỏ, cần xử lý cả khối</td></tr>
+              <tr><td><code>f.read(n)</code></td><td><code>str</code> tối đa n ký tự</td><td>n ký tự</td><td>Đọc theo khối cố định</td></tr>
+              <tr><td><code>f.readline()</code></td><td>Một dòng (kèm <code>\n</code>)</td><td>Một dòng</td><td>Cần kiểm soát thủ công từng dòng</td></tr>
+              <tr><td><code>f.readlines()</code></td><td><code>list[str]</code> mọi dòng</td><td>Bằng cỡ tệp <strong>+ overhead list</strong></td><td>Hiếm khi cần — thường có cách tốt hơn</td></tr>
+              <tr><td><code>for line in f</code> ⭐</td><td>Lặp lười từng dòng</td><td><strong>Một dòng</strong></td><td><strong>Mặc định</strong> — mọi kích thước tệp</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>doc_file.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># ① Đọc toàn bộ — tệp nhỏ</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"config.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    noi_dung = f.<span class="tok-fn">read</span>()
+
+<span class="tok-com"># ② Lặp từng dòng — CÁCH MẶC ĐỊNH, chạy được với tệp 100 GB</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"nhat_ky.log"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    <span class="tok-kw">for</span> so_dong, dong <span class="tok-kw">in</span> <span class="tok-fn">enumerate</span>(f, start=<span class="tok-num">1</span>):
+        <span class="tok-kw">if</span> <span class="tok-str">"ERROR"</span> <span class="tok-kw">in</span> dong:
+            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{so_dong}<span class="tok-str">: </span>{dong.<span class="tok-fn">rstrip</span>()}<span class="tok-str">"</span>)   <span class="tok-com"># rstrip bỏ \n cuối dòng</span>
+
+<span class="tok-com"># ③ Đọc theo khối — tệp nhị phân lớn, tính checksum...</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"video.mp4"</span>, <span class="tok-str">"rb"</span>) <span class="tok-kw">as</span> f:
+    <span class="tok-kw">while</span> khoi := f.<span class="tok-fn">read</span>(<span class="tok-num">8192</span>):    <span class="tok-com"># walrus := gán và kiểm tra cùng lúc</span>
+        <span class="tok-fn">xu_ly</span>(khoi)
+
+<span class="tok-com"># ④ Danh sách dòng đã làm sạch (chỉ khi tệp nhỏ)</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ten.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    ten = [d.<span class="tok-fn">strip</span>() <span class="tok-kw">for</span> d <span class="tok-kw">in</span> f <span class="tok-kw">if</span> d.<span class="tok-fn">strip</span>()]   <span class="tok-com"># bỏ dòng trống</span></code></pre>
+        </div>
+
+        <div class="py-feature">
+          <h4>Đối tượng tệp <em>là</em> một iterator</h4>
+          <p>
+            <code>for dong in f</code> không phải phép màu — đối tượng tệp cài đặt giao thức iterator, mỗi lần
+            <code>next()</code> đọc thêm đúng một dòng từ đĩa. Nhờ vậy bạn xử lý được tệp lớn hơn RAM mà không cần
+            nghĩ gì. Hệ quả cần nhớ: <strong>iterator dùng một lần</strong> — đọc hết rồi thì vòng
+            <code>for</code> thứ hai không thấy gì nữa, phải <code>f.seek(0)</code> để tua về đầu.
+            <a href="chuong9.html">Chương 9</a> sẽ mổ xẻ giao thức này.
+          </p>
+        </div>
+
+        <h2 id="ghi-file">4. Ghi tệp</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>ghi_file.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># ① write() — KHÔNG tự thêm \n</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ra.txt"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    f.<span class="tok-fn">write</span>(<span class="tok-str">"Dòng một\n"</span>)
+    f.<span class="tok-fn">write</span>(<span class="tok-str">"Dòng hai\n"</span>)
+    f.<span class="tok-fn">write</span>(<span class="tok-str">f"Kết quả: </span>{<span class="tok-num">42</span>}<span class="tok-str">\n"</span>)
+
+<span class="tok-com"># ② writelines() — cũng KHÔNG tự thêm \n (tên gây hiểu lầm!)</span>
+dong = [<span class="tok-str">"a\n"</span>, <span class="tok-str">"b\n"</span>, <span class="tok-str">"c\n"</span>]
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ra.txt"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    f.<span class="tok-fn">writelines</span>(dong)
+
+<span class="tok-com"># ③ Cách Pythonic khi có sẵn list không có \n</span>
+ten = [<span class="tok-str">"An"</span>, <span class="tok-str">"Bình"</span>, <span class="tok-str">"Chi"</span>]
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ten.txt"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    f.<span class="tok-fn">write</span>(<span class="tok-str">"\n"</span>.<span class="tok-fn">join</span>(ten))
+
+<span class="tok-com"># ④ print() ghi thẳng vào tệp — tiện vì tự thêm \n</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"bao_cao.txt"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    <span class="tok-fn">print</span>(<span class="tok-str">"=== BÁO CÁO ==="</span>, file=f)
+    <span class="tok-kw">for</span> t <span class="tok-kw">in</span> ten:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"- </span>{t}<span class="tok-str">"</span>, file=f)
+
+<span class="tok-com"># ⑤ Thêm vào cuối, không ghi đè</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"nhat_ky.log"</span>, <span class="tok-str">"a"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    f.<span class="tok-fn">write</span>(<span class="tok-str">"[INFO] khởi động\n"</span>)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Ghi an toàn — mẫu "ghi tạm rồi thay thế"</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>ghi_an_toan.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+<span class="tok-kw">def</span> <span class="tok-fn">ghi_an_toan</span>(duong_dan: Path, noi_dung: <span class="tok-type">str</span>) -&gt; <span class="tok-kw">None</span>:
+    <span class="tok-str">"""Ghi nguyên tử: hoặc tệp cũ nguyên vẹn, hoặc tệp mới hoàn chỉnh."""</span>
+    tam = duong_dan.<span class="tok-fn">with_suffix</span>(duong_dan.suffix + <span class="tok-str">".tmp"</span>)
+    tam.<span class="tok-fn">write_text</span>(noi_dung, encoding=<span class="tok-str">"utf-8"</span>)
+    tam.<span class="tok-fn">replace</span>(duong_dan)      <span class="tok-com"># thao tác nguyên tử ở tầng hệ điều hành</span></code></pre>
+          </div>
+          <p>
+            Nếu chương trình sập giữa lúc ghi, tệp gốc vẫn nguyên vẹn — chỉ còn lại một tệp <code>.tmp</code> dở dang
+            vô hại. Mẫu này bắt buộc với tệp cấu hình và dữ liệu quan trọng.
+          </p>
+        </div>
+
+        <h2 id="encoding">5. Encoding — nguồn gốc của mọi lỗi tiếng Việt</h2>
+
+        <p>
+          Trên đĩa, tệp chỉ là dãy <strong>byte</strong>. Chuỗi Python là dãy <strong>ký tự Unicode</strong>.
+          <em>Encoding</em> là quy tắc chuyển đổi giữa hai thứ đó. Chọn sai quy tắc → chữ biến thành ký tự lạ, hoặc
+          chương trình sập.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>encoding_demo.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code>s = <span class="tok-str">"Xin chào"</span>
+
+<span class="tok-fn">print</span>(<span class="tok-fn">len</span>(s))                        <span class="tok-com"># 8 — tám KÝ TỰ</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">len</span>(s.<span class="tok-fn">encode</span>(<span class="tok-str">"utf-8"</span>)))        <span class="tok-com"># 10 — mười BYTE (à và o có dấu tốn 2 byte)</span>
+<span class="tok-fn">print</span>(s.<span class="tok-fn">encode</span>(<span class="tok-str">"utf-8"</span>))             <span class="tok-com"># b'Xin ch\xc3\xa0o'</span>
+
+<span class="tok-com"># Giải mã sai bảng mã → chữ rác (mojibake)</span>
+byte_utf8 = s.<span class="tok-fn">encode</span>(<span class="tok-str">"utf-8"</span>)
+<span class="tok-fn">print</span>(byte_utf8.<span class="tok-fn">decode</span>(<span class="tok-str">"latin-1"</span>))    <span class="tok-com"># 'Xin chÃ o' — sai nhưng KHÔNG báo lỗi!</span>
+
+<span class="tok-com"># Bảng mã không biểu diễn được → lỗi</span>
+s.<span class="tok-fn">encode</span>(<span class="tok-str">"ascii"</span>)
+<span class="tok-com"># UnicodeEncodeError: 'ascii' codec can't encode character '\xe0'</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Luôn ghi <code>encoding="utf-8"</code> — mọi lúc</div>
+          <p>
+            Không truyền <code>encoding</code> thì Python dùng <em>bảng mã mặc định của hệ thống</em>
+            (<code>locale.getpreferredencoding()</code>). Trên macOS/Linux thường là UTF-8 — có vẻ ổn. Nhưng trên
+            Windows tiếng Việt, mặc định có thể là <strong>cp1258</strong>. Kết quả: code chạy hoàn hảo trên máy bạn,
+            sập trên máy đồng nghiệp, hoặc tệ hơn — chạy được nhưng lưu ra chữ rác.
+          </p>
+          <div class="code-wrap">
+            <div class="code-meta"><span>luon_utf8.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># ❌ phụ thuộc hệ thống</span>
+<span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>)
+
+<span class="tok-com"># ✅ tường minh, giống nhau trên mọi máy</span>
+<span class="tok-fn">open</span>(<span class="tok-str">"data.txt"</span>, encoding=<span class="tok-str">"utf-8"</span>)</code></pre>
+          </div>
+          <p>
+            Python 3.15 sẽ đổi mặc định thành UTF-8 (PEP 686), nhưng đến lúc đó vẫn nên viết tường minh —
+            code của bạn phải chạy được trên cả bản cũ. Bật cảnh báo bằng <code>python -X warn_default_encoding</code>
+            để tìm những chỗ còn thiếu.
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th><code>errors=</code></th><th>Hành vi khi gặp byte không giải mã được</th><th>Dùng khi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>"strict"</code> (mặc định)</td><td>Ném <code>UnicodeDecodeError</code></td><td>Mặc định — bạn <em>muốn</em> biết dữ liệu hỏng</td></tr>
+              <tr><td><code>"ignore"</code></td><td>Bỏ qua byte lỗi</td><td>Chấp nhận mất dữ liệu để chương trình chạy tiếp</td></tr>
+              <tr><td><code>"replace"</code></td><td>Thay bằng <code>�</code> (U+FFFD)</td><td>Hiển thị cho người xem, thấy rõ chỗ hỏng</td></tr>
+              <tr><td><code>"surrogateescape"</code></td><td>Giữ byte lỗi ở dạng đặc biệt, khôi phục được khi ghi lại</td><td>Đọc-sửa-ghi tệp có byte lạ mà không phá phần còn lại</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>go_loi_encoding.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># Gặp UnicodeDecodeError? Ba bước chẩn đoán:</span>
+
+<span class="tok-com"># 1. Xem vài byte đầu để đoán bảng mã</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"bi_an.txt"</span>, <span class="tok-str">"rb"</span>) <span class="tok-kw">as</span> f:
+    <span class="tok-fn">print</span>(f.<span class="tok-fn">read</span>(<span class="tok-num">50</span>))
+<span class="tok-com"># b'\xef\xbb\xbfXin ch\xc3\xa0o'  ← \xef\xbb\xbf là BOM của UTF-8</span>
+
+<span class="tok-com"># 2. Có BOM → dùng utf-8-sig để Python tự bỏ BOM</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"bi_an.txt"</span>, encoding=<span class="tok-str">"utf-8-sig"</span>) <span class="tok-kw">as</span> f:
+    <span class="tok-fn">print</span>(f.<span class="tok-fn">read</span>())
+
+<span class="tok-com"># 3. Không rõ bảng mã → thử lần lượt</span>
+<span class="tok-kw">for</span> ma <span class="tok-kw">in</span> (<span class="tok-str">"utf-8"</span>, <span class="tok-str">"utf-8-sig"</span>, <span class="tok-str">"cp1258"</span>, <span class="tok-str">"latin-1"</span>):
+    <span class="tok-kw">try</span>:
+        <span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"bi_an.txt"</span>, encoding=ma) <span class="tok-kw">as</span> f:
+            <span class="tok-fn">print</span>(ma, <span class="tok-str">"→"</span>, f.<span class="tok-fn">read</span>(<span class="tok-num">80</span>))
+    <span class="tok-kw">except</span> <span class="tok-cls">UnicodeDecodeError</span> <span class="tok-kw">as</span> e:
+        <span class="tok-fn">print</span>(ma, <span class="tok-str">"→ hỏng ở byte"</span>, e.start)</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 BOM là gì?</div>
+          <p>
+            <strong>Byte Order Mark</strong> — ba byte <code>EF BB BF</code> mà một số công cụ Windows (Notepad,
+            Excel) chèn vào đầu tệp UTF-8 để đánh dấu. Đọc bằng <code>"utf-8"</code> thì ký tự đầu tiên của bạn sẽ là
+            <code>'\ufeff'</code> vô hình — gây lỗi kiểu <code>KeyError: '\ufeffTên'</code> khi đọc CSV. Dùng
+            <code>encoding="utf-8-sig"</code> để Python tự bỏ nó. Khi <em>ghi</em> CSV cho Excel mở đúng tiếng Việt,
+            ngược lại bạn <em>cần</em> ghi bằng <code>"utf-8-sig"</code>.
+          </p>
+        </div>
+
+        <h2 id="pathlib">6. <code>pathlib</code> — cách hiện đại làm việc với đường dẫn</h2>
+
+        <p>
+          Trước Python 3.4, đường dẫn là chuỗi và bạn dùng module <code>os.path</code> với hàng chục hàm rời rạc.
+          <code>pathlib</code> gói tất cả vào một class <code>Path</code> — hướng đối tượng, gọn, và tự lo khác biệt
+          giữa Windows (<code>\</code>) và Unix (<code>/</code>).
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Việc cần làm</th><th><code>os.path</code> (cũ)</th><th><code>pathlib</code> (nên dùng)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Nối đường dẫn</td><td><code>os.path.join(a, b, c)</code></td><td><code>Path(a) / b / c</code></td></tr>
+              <tr><td>Tệp có tồn tại</td><td><code>os.path.exists(p)</code></td><td><code>p.exists()</code></td></tr>
+              <tr><td>Lấy tên tệp</td><td><code>os.path.basename(p)</code></td><td><code>p.name</code></td></tr>
+              <tr><td>Lấy thư mục cha</td><td><code>os.path.dirname(p)</code></td><td><code>p.parent</code></td></tr>
+              <tr><td>Lấy phần mở rộng</td><td><code>os.path.splitext(p)[1]</code></td><td><code>p.suffix</code></td></tr>
+              <tr><td>Tên không có đuôi</td><td><code>os.path.splitext(os.path.basename(p))[0]</code></td><td><code>p.stem</code></td></tr>
+              <tr><td>Đường dẫn tuyệt đối</td><td><code>os.path.abspath(p)</code></td><td><code>p.resolve()</code></td></tr>
+              <tr><td>Tạo thư mục lồng nhau</td><td><code>os.makedirs(p, exist_ok=True)</code></td><td><code>p.mkdir(parents=True, exist_ok=True)</code></td></tr>
+              <tr><td>Liệt kê tệp <code>.txt</code></td><td><code>glob.glob(os.path.join(p, "*.txt"))</code></td><td><code>p.glob("*.txt")</code></td></tr>
+              <tr><td>Đọc cả tệp</td><td><code>open(p).read()</code></td><td><code>p.read_text(encoding="utf-8")</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pathlib_co_ban.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+p = <span class="tok-fn">Path</span>(<span class="tok-str">"/home/anh/du_an/bao_cao.thang_5.csv"</span>)
+
+<span class="tok-fn">print</span>(p.name)        <span class="tok-com"># 'bao_cao.thang_5.csv'  — tên đầy đủ</span>
+<span class="tok-fn">print</span>(p.stem)        <span class="tok-com"># 'bao_cao.thang_5'      — bỏ đuôi CUỐI CÙNG</span>
+<span class="tok-fn">print</span>(p.suffix)      <span class="tok-com"># '.csv'</span>
+<span class="tok-fn">print</span>(p.suffixes)    <span class="tok-com"># ['.thang_5', '.csv']   — mọi đuôi</span>
+<span class="tok-fn">print</span>(p.parent)      <span class="tok-com"># Path('/home/anh/du_an')</span>
+<span class="tok-fn">print</span>(p.parents[<span class="tok-num">1</span>])  <span class="tok-com"># Path('/home/anh')      — ông nội</span>
+<span class="tok-fn">print</span>(p.parts)       <span class="tok-com"># ('/', 'home', 'anh', 'du_an', 'bao_cao.thang_5.csv')</span>
+
+<span class="tok-com"># Toán tử / để nối — đọc rất tự nhiên</span>
+goc = <span class="tok-fn">Path</span>(<span class="tok-str">"/du_lieu"</span>)
+dich = goc / <span class="tok-str">"2026"</span> / <span class="tok-str">"thang_08"</span> / <span class="tok-str">"ban_hang.csv"</span>
+<span class="tok-fn">print</span>(dich)          <span class="tok-com"># /du_lieu/2026/thang_08/ban_hang.csv</span>
+
+<span class="tok-com"># Đổi tên/đuôi mà không cắt chuỗi thủ công</span>
+<span class="tok-fn">print</span>(p.<span class="tok-fn">with_suffix</span>(<span class="tok-str">".json"</span>))       <span class="tok-com"># .../bao_cao.thang_5.json</span>
+<span class="tok-fn">print</span>(p.<span class="tok-fn">with_name</span>(<span class="tok-str">"tong_hop.csv"</span>))  <span class="tok-com"># .../tong_hop.csv</span></code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>pathlib_thao_tac.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+thu_muc = <span class="tok-fn">Path</span>(<span class="tok-str">"du_lieu"</span>)
+
+<span class="tok-com"># --- Kiểm tra ---</span>
+thu_muc.<span class="tok-fn">exists</span>()          <span class="tok-com"># tồn tại?</span>
+thu_muc.<span class="tok-fn">is_file</span>()         <span class="tok-com"># là tệp?</span>
+thu_muc.<span class="tok-fn">is_dir</span>()          <span class="tok-com"># là thư mục?</span>
+
+<span class="tok-com"># --- Tạo / xoá ---</span>
+thu_muc.<span class="tok-fn">mkdir</span>(parents=<span class="tok-kw">True</span>, exist_ok=<span class="tok-kw">True</span>)   <span class="tok-com"># tạo cả cây, không lỗi nếu đã có</span>
+(thu_muc / <span class="tok-str">"tam.txt"</span>).<span class="tok-fn">unlink</span>(missing_ok=<span class="tok-kw">True</span>)   <span class="tok-com"># xoá tệp</span>
+thu_muc.<span class="tok-fn">rmdir</span>()                                <span class="tok-com"># xoá thư mục RỖNG</span>
+
+<span class="tok-com"># --- Đọc / ghi một phát ---</span>
+(thu_muc / <span class="tok-str">"ghi_chu.txt"</span>).<span class="tok-fn">write_text</span>(<span class="tok-str">"Xin chào"</span>, encoding=<span class="tok-str">"utf-8"</span>)
+noi_dung = (thu_muc / <span class="tok-str">"ghi_chu.txt"</span>).<span class="tok-fn">read_text</span>(encoding=<span class="tok-str">"utf-8"</span>)
+byte_du_lieu = (thu_muc / <span class="tok-str">"anh.png"</span>).<span class="tok-fn">read_bytes</span>()
+
+<span class="tok-com"># --- Duyệt ---</span>
+<span class="tok-kw">for</span> f <span class="tok-kw">in</span> thu_muc.<span class="tok-fn">iterdir</span>():          <span class="tok-com"># mọi mục con, 1 cấp</span>
+    <span class="tok-fn">print</span>(f)
+
+<span class="tok-kw">for</span> f <span class="tok-kw">in</span> thu_muc.<span class="tok-fn">glob</span>(<span class="tok-str">"*.csv"</span>):        <span class="tok-com"># theo mẫu, 1 cấp</span>
+    <span class="tok-fn">print</span>(f)
+
+<span class="tok-kw">for</span> f <span class="tok-kw">in</span> thu_muc.<span class="tok-fn">rglob</span>(<span class="tok-str">"*.py"</span>):        <span class="tok-com"># ĐỆ QUY mọi cấp (r = recursive)</span>
+    <span class="tok-fn">print</span>(f)
+
+<span class="tok-com"># --- Thông tin ---</span>
+p = thu_muc / <span class="tok-str">"ghi_chu.txt"</span>
+<span class="tok-fn">print</span>(p.<span class="tok-fn">stat</span>().st_size)         <span class="tok-com"># kích thước (byte)</span>
+<span class="tok-fn">print</span>(p.<span class="tok-fn">stat</span>().st_mtime)        <span class="tok-com"># thời điểm sửa cuối (timestamp)</span>
+
+<span class="tok-com"># --- Đường dẫn hữu ích ---</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">Path</span>.<span class="tok-fn">cwd</span>())                <span class="tok-com"># thư mục làm việc hiện tại</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">Path</span>.<span class="tok-fn">home</span>())               <span class="tok-com"># thư mục home của người dùng</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">Path</span>(__file__).<span class="tok-fn">resolve</span>().parent)   <span class="tok-com"># thư mục chứa CHÍNH FILE NÀY</span></code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Mẫu vàng: định vị tệp dữ liệu cạnh mã nguồn</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>dinh_vi.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+<span class="tok-com"># ❌ SAI — phụ thuộc thư mục người dùng đang đứng khi chạy</span>
+cau_hinh = <span class="tok-fn">Path</span>(<span class="tok-str">"config.json"</span>)
+
+<span class="tok-com"># ✅ ĐÚNG — luôn trỏ đúng, chạy từ đâu cũng được</span>
+THU_MUC_NAY = <span class="tok-fn">Path</span>(__file__).<span class="tok-fn">resolve</span>().parent
+cau_hinh = THU_MUC_NAY / <span class="tok-str">"config.json"</span>
+du_lieu  = THU_MUC_NAY.parent / <span class="tok-str">"data"</span> / <span class="tok-str">"input.csv"</span></code></pre>
+          </div>
+          <p>
+            <code>Path("config.json")</code> là đường dẫn <em>tương đối</em> — nó phụ thuộc
+            <code>Path.cwd()</code>, tức nơi người dùng gõ lệnh. Chạy <code>python src/app.py</code> từ thư mục gốc
+            sẽ tìm <code>./config.json</code> chứ không phải <code>./src/config.json</code>. Dùng
+            <code>__file__</code> là cách duy nhất chắc chắn.
+          </p>
+        </div>
+
+        <h2 id="json">7. JSON — định dạng trao đổi dữ liệu phổ biến nhất</h2>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>json_co_ban.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> json
+<span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+du_lieu = {
+    <span class="tok-str">"ten"</span>: <span class="tok-str">"Nguyễn Việt Anh"</span>,
+    <span class="tok-str">"tuoi"</span>: <span class="tok-num">22</span>,
+    <span class="tok-str">"ky_nang"</span>: [<span class="tok-str">"Python"</span>, <span class="tok-str">"TypeScript"</span>],
+    <span class="tok-str">"dang_hoc"</span>: <span class="tok-kw">True</span>,
+    <span class="tok-str">"diem_gpa"</span>: <span class="tok-kw">None</span>,
+}
+
+<span class="tok-com"># --- Ghi ra tệp: dump (có chữ s = string, không s = file) ---</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ho_so.json"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    json.<span class="tok-fn">dump</span>(du_lieu, f,
+              ensure_ascii=<span class="tok-kw">False</span>,   <span class="tok-com"># ⚠️ BẮT BUỘC cho tiếng Việt</span>
+              indent=<span class="tok-num">2</span>)             <span class="tok-com"># xuống dòng cho người đọc</span>
+
+<span class="tok-com"># --- Đọc từ tệp ---</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ho_so.json"</span>, encoding=<span class="tok-str">"utf-8"</span>) <span class="tok-kw">as</span> f:
+    doc_lai = json.<span class="tok-fn">load</span>(f)
+
+<span class="tok-com"># --- Chuỗi ↔ object (dumps / loads) ---</span>
+chuoi = json.<span class="tok-fn">dumps</span>(du_lieu, ensure_ascii=<span class="tok-kw">False</span>)
+lai = json.<span class="tok-fn">loads</span>(chuoi)
+
+<span class="tok-com"># --- Ngắn gọn nhất với pathlib ---</span>
+<span class="tok-fn">Path</span>(<span class="tok-str">"ho_so.json"</span>).<span class="tok-fn">write_text</span>(
+    json.<span class="tok-fn">dumps</span>(du_lieu, ensure_ascii=<span class="tok-kw">False</span>, indent=<span class="tok-num">2</span>), encoding=<span class="tok-str">"utf-8"</span>
+)
+doc_lai = json.<span class="tok-fn">loads</span>(<span class="tok-fn">Path</span>(<span class="tok-str">"ho_so.json"</span>).<span class="tok-fn">read_text</span>(encoding=<span class="tok-str">"utf-8"</span>))</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ <code>ensure_ascii=True</code> là mặc định — và nó phá tiếng Việt</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>tieng_viet.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-fn">print</span>(json.<span class="tok-fn">dumps</span>({<span class="tok-str">"ten"</span>: <span class="tok-str">"Việt Anh"</span>}))
+<span class="tok-com"># {"ten": "Vi\u1ec7t Anh"}          ← đúng về kỹ thuật, không ai đọc nổi</span>
+
+<span class="tok-fn">print</span>(json.<span class="tok-fn">dumps</span>({<span class="tok-str">"ten"</span>: <span class="tok-str">"Việt Anh"</span>}, ensure_ascii=<span class="tok-kw">False</span>))
+<span class="tok-com"># {"ten": "Việt Anh"}               ← ✅</span></code></pre>
+          </div>
+          <p>
+            Mặc định này có từ thời JSON hay bị truyền qua kênh chỉ chấp nhận ASCII. Ngày nay mọi thứ đều UTF-8, nên
+            hãy luôn đặt <code>ensure_ascii=False</code> — trừ khi bạn thực sự cần tương thích hệ thống cũ.
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>JSON</th><th>Python</th><th>Ghi chú chiều ngược lại</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>object</code></td><td><code>dict</code></td><td>Key JSON <strong>luôn</strong> là chuỗi — <code>{1: "a"}</code> ghi ra thành <code>{"1": "a"}</code></td></tr>
+              <tr><td><code>array</code></td><td><code>list</code></td><td><code>tuple</code> cũng ghi thành array, nhưng đọc lại ra <code>list</code></td></tr>
+              <tr><td><code>string</code></td><td><code>str</code></td><td></td></tr>
+              <tr><td><code>number</code> (int)</td><td><code>int</code></td><td></td></tr>
+              <tr><td><code>number</code> (real)</td><td><code>float</code></td><td><code>Decimal</code> <strong>không</strong> ghi được — phải tự chuyển</td></tr>
+              <tr><td><code>true</code> / <code>false</code></td><td><code>True</code> / <code>False</code></td><td></td></tr>
+              <tr><td><code>null</code></td><td><code>None</code></td><td></td></tr>
+              <tr><td>—</td><td><code>set</code>, <code>datetime</code>, <code>Path</code>, class tự viết</td><td><strong>Ném <code>TypeError</code></strong> — cần <code>default=</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>json_nang_cao.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> json
+<span class="tok-kw">from</span> datetime <span class="tok-kw">import</span> datetime
+<span class="tok-kw">from</span> dataclasses <span class="tok-kw">import</span> dataclass, asdict
+<span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+<span class="tok-dec">@dataclass</span>
+<span class="tok-kw">class</span> <span class="tok-cls">SuKien</span>:
+    ten: <span class="tok-type">str</span>
+    luc: datetime
+
+<span class="tok-kw">def</span> <span class="tok-fn">ma_hoa</span>(o: <span class="tok-type">object</span>):
+    <span class="tok-str">"""Được gọi cho MỌI object json không biết cách xử lý."""</span>
+    <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(o, datetime):
+        <span class="tok-kw">return</span> o.<span class="tok-fn">isoformat</span>()
+    <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(o, <span class="tok-fn">set</span>):
+        <span class="tok-kw">return</span> <span class="tok-fn">sorted</span>(o)
+    <span class="tok-kw">if</span> <span class="tok-fn">isinstance</span>(o, Path):
+        <span class="tok-kw">return</span> <span class="tok-fn">str</span>(o)
+    <span class="tok-kw">raise</span> <span class="tok-cls">TypeError</span>(<span class="tok-str">f"Không serialize được </span>{<span class="tok-fn">type</span>(o).__name__}<span class="tok-str">"</span>)
+
+sk = <span class="tok-fn">SuKien</span>(<span class="tok-str">"Họp nhóm"</span>, <span class="tok-fn">datetime</span>(<span class="tok-num">2026</span>, <span class="tok-num">8</span>, <span class="tok-num">14</span>, <span class="tok-num">9</span>, <span class="tok-num">30</span>))
+<span class="tok-fn">print</span>(json.<span class="tok-fn">dumps</span>(<span class="tok-fn">asdict</span>(sk), default=<span class="tok-fn">ma_hoa</span>, ensure_ascii=<span class="tok-kw">False</span>))
+<span class="tok-com"># {"ten": "Họp nhóm", "luc": "2026-08-14T09:30:00"}</span>
+
+<span class="tok-com"># Bắt lỗi cú pháp JSON đúng cách</span>
+<span class="tok-kw">try</span>:
+    json.<span class="tok-fn">loads</span>(<span class="tok-str">'{"a": 1,}'</span>)          <span class="tok-com"># JSON không cho dấu phẩy thừa</span>
+<span class="tok-kw">except</span> json.<span class="tok-cls">JSONDecodeError</span> <span class="tok-kw">as</span> e:
+    <span class="tok-fn">print</span>(<span class="tok-str">f"Sai cú pháp tại dòng </span>{e.lineno}<span class="tok-str">, cột </span>{e.colno}<span class="tok-str">: </span>{e.msg}<span class="tok-str">"</span>)</code></pre>
+        </div>
+
+        <h2 id="csv">8. CSV — bảng dữ liệu dạng văn bản</h2>
+
+        <p>
+          CSV trông đơn giản đến mức nhiều người tự tách bằng <code>line.split(",")</code>. Đừng làm thế: một ô chứa
+          dấu phẩy (<code>"Hà Nội, Việt Nam"</code>), chứa dấu nháy kép, hay chứa xuống dòng sẽ phá tan cách làm đó.
+          Module <code>csv</code> xử lý đủ mọi trường hợp biên.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>csv_co_ban.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> csv
+
+<span class="tok-com"># --- ĐỌC bằng DictReader (khuyên dùng — truy cập theo tên cột) ---</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"sinh_vien.csv"</span>, encoding=<span class="tok-str">"utf-8"</span>, newline=<span class="tok-str">""</span>) <span class="tok-kw">as</span> f:
+    <span class="tok-kw">for</span> hang <span class="tok-kw">in</span> csv.<span class="tok-fn">DictReader</span>(f):
+        <span class="tok-fn">print</span>(hang[<span class="tok-str">"ho_ten"</span>], hang[<span class="tok-str">"diem"</span>])   <span class="tok-com"># hang là dict, GIÁ TRỊ LUÔN LÀ str</span>
+
+<span class="tok-com"># --- ĐỌC bằng reader (theo chỉ số) ---</span>
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"sinh_vien.csv"</span>, encoding=<span class="tok-str">"utf-8"</span>, newline=<span class="tok-str">""</span>) <span class="tok-kw">as</span> f:
+    doc = csv.<span class="tok-fn">reader</span>(f)
+    tieu_de = <span class="tok-fn">next</span>(doc)                <span class="tok-com"># bỏ qua dòng tiêu đề</span>
+    <span class="tok-kw">for</span> hang <span class="tok-kw">in</span> doc:
+        <span class="tok-fn">print</span>(hang[<span class="tok-num">0</span>], hang[<span class="tok-num">2</span>])          <span class="tok-com"># hang là list[str]</span>
+
+<span class="tok-com"># --- GHI bằng DictWriter ---</span>
+sinh_vien = [
+    {<span class="tok-str">"ho_ten"</span>: <span class="tok-str">"Nguyễn Việt Anh"</span>, <span class="tok-str">"lop"</span>: <span class="tok-str">"CNTT-K18"</span>, <span class="tok-str">"diem"</span>: <span class="tok-num">8.5</span>},
+    {<span class="tok-str">"ho_ten"</span>: <span class="tok-str">"Trần Thị Bình"</span>,   <span class="tok-str">"lop"</span>: <span class="tok-str">"CNTT-K18"</span>, <span class="tok-str">"diem"</span>: <span class="tok-num">9.0</span>},
+]
+<span class="tok-kw">with</span> <span class="tok-fn">open</span>(<span class="tok-str">"ket_qua.csv"</span>, <span class="tok-str">"w"</span>, encoding=<span class="tok-str">"utf-8-sig"</span>, newline=<span class="tok-str">""</span>) <span class="tok-kw">as</span> f:
+    ghi = csv.<span class="tok-fn">DictWriter</span>(f, fieldnames=[<span class="tok-str">"ho_ten"</span>, <span class="tok-str">"lop"</span>, <span class="tok-str">"diem"</span>])
+    ghi.<span class="tok-fn">writeheader</span>()
+    ghi.<span class="tok-fn">writerows</span>(sinh_vien)</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ Ba cái bẫy của module <code>csv</code></div>
+          <ol>
+            <li>
+              <strong><code>newline=""</code> là bắt buộc.</strong> Không có nó, trên Windows tệp ghi ra sẽ có dòng
+              trống xen kẽ (vì cả module <code>csv</code> lẫn tầng văn bản đều dịch ký tự xuống dòng). Đây là yêu cầu
+              nêu rõ trong tài liệu Python, không phải mẹo.
+            </li>
+            <li>
+              <strong>Mọi giá trị đọc ra đều là <code>str</code>.</strong> <code>hang["diem"]</code> trả
+              <code>"8.5"</code> chứ không phải <code>8.5</code>. Phải tự chuyển: <code>float(hang["diem"])</code>.
+              Cột rỗng cho <code>""</code>, không phải <code>None</code>.
+            </li>
+            <li>
+              <strong>Excel và tiếng Việt.</strong> Ghi bằng <code>encoding="utf-8"</code> thuần thì Excel mở lên
+              thấy chữ rác. Dùng <code>"utf-8-sig"</code> (có BOM) để Excel nhận đúng.
+            </li>
+          </ol>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>csv_thuc_te.py — đọc, lọc, tổng hợp</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> csv
+<span class="tok-kw">from</span> collections <span class="tok-kw">import</span> defaultdict
+<span class="tok-kw">from</span> pathlib <span class="tok-kw">import</span> Path
+
+<span class="tok-kw">def</span> <span class="tok-fn">diem_trung_binh_theo_lop</span>(duong_dan: Path) -&gt; <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">float</span>]:
+    tong: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">float</span>] = <span class="tok-fn">defaultdict</span>(<span class="tok-type">float</span>)
+    dem: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-type">int</span>]   = <span class="tok-fn">defaultdict</span>(<span class="tok-type">int</span>)
+
+    <span class="tok-kw">with</span> duong_dan.<span class="tok-fn">open</span>(encoding=<span class="tok-str">"utf-8-sig"</span>, newline=<span class="tok-str">""</span>) <span class="tok-kw">as</span> f:
+        <span class="tok-kw">for</span> so_dong, hang <span class="tok-kw">in</span> <span class="tok-fn">enumerate</span>(csv.<span class="tok-fn">DictReader</span>(f), start=<span class="tok-num">2</span>):
+            <span class="tok-kw">try</span>:
+                diem = <span class="tok-type">float</span>(hang[<span class="tok-str">"diem"</span>])
+            <span class="tok-kw">except</span> (<span class="tok-cls">ValueError</span>, <span class="tok-cls">KeyError</span>) <span class="tok-kw">as</span> e:
+                <span class="tok-fn">print</span>(<span class="tok-str">f"⚠️ Bỏ qua dòng </span>{so_dong}<span class="tok-str">: </span>{e}<span class="tok-str">"</span>)
+                <span class="tok-kw">continue</span>
+            lop = hang[<span class="tok-str">"lop"</span>].<span class="tok-fn">strip</span>()
+            tong[lop] += diem
+            dem[lop]  += <span class="tok-num">1</span>
+
+    <span class="tok-kw">return</span> {lop: <span class="tok-fn">round</span>(tong[lop] / dem[lop], <span class="tok-num">2</span>) <span class="tok-kw">for</span> lop <span class="tok-kw">in</span> tong}
+
+<span class="tok-fn">print</span>(<span class="tok-fn">diem_trung_binh_theo_lop</span>(<span class="tok-fn">Path</span>(<span class="tok-str">"sinh_vien.csv"</span>)))
+<span class="tok-com"># {'CNTT-K18': 8.75, 'CNTT-K19': 7.9}</span></code></pre>
+        </div>
+
+        <p>
+          Lưu ý <code>duong_dan.open(...)</code> — <code>Path</code> có method <code>open</code> riêng, nhận đúng các
+          tham số như hàm built-in. Và <code>enumerate(..., start=2)</code> để số dòng khớp với thứ tự trong Excel
+          (dòng 1 là tiêu đề).
+        </p>
+
+        <h2 id="regex-co-ban">9. Regex — module <code>re</code></h2>
+
+        <p>
+          <strong>Biểu thức chính quy</strong> (regular expression) là một ngôn ngữ nhỏ để mô tả <em>mẫu</em> văn bản.
+          Thay vì hỏi "chuỗi này có bằng <code>abc</code> không", bạn hỏi "chuỗi này có khớp với <em>ba chữ cái theo
+          sau là hai chữ số</em> không".
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>re_dau_tien.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> re
+
+van_ban = <span class="tok-str">"Liên hệ: an@example.com hoặc binh.tran@company.vn"</span>
+
+<span class="tok-com"># r"" = raw string — BẮT BUỘC với regex (xem callout bên dưới)</span>
+mau = <span class="tok-str">r"[\w.]+@[\w.]+\.\w+"</span>
+
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(mau, van_ban))
+<span class="tok-com"># ['an@example.com', 'binh.tran@company.vn']</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Luôn dùng raw string <code>r"..."</code></div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>raw_string.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-com"># Chuỗi thường: Python xử lý \ TRƯỚC, regex nhận được thứ khác</span>
+<span class="tok-fn">print</span>(<span class="tok-str">"\d"</span>)     <span class="tok-com"># SyntaxWarning: invalid escape sequence — may mắn còn cảnh báo</span>
+<span class="tok-fn">print</span>(<span class="tok-str">"\n"</span>)     <span class="tok-com"># thành ký tự xuống dòng thật, regex không thấy \n nữa</span>
+<span class="tok-fn">print</span>(<span class="tok-str">"\\d"</span>)    <span class="tok-com"># phải escape đôi mới ra \d — rối mắt</span>
+
+<span class="tok-com"># Raw string: Python KHÔNG xử lý \, đưa nguyên xi cho regex</span>
+<span class="tok-fn">print</span>(<span class="tok-str">r"\d"</span>)    <span class="tok-com"># \d — đúng thứ regex cần</span>
+<span class="tok-fn">print</span>(<span class="tok-str">r"\n"</span>)    <span class="tok-com"># \n (hai ký tự), regex hiểu là "xuống dòng"</span></code></pre>
+          </div>
+          <p>
+            Quy tắc: <strong>mọi</strong> mẫu regex đều viết trong <code>r"..."</code>, kể cả khi mẫu không có dấu
+            <code>\</code>. Nhất quán quan trọng hơn tiết kiệm một ký tự.
+          </p>
+        </div>
+
+        <h3 id="cu-phap-regex">9.1. Bảng cú pháp regex</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th colspan="3" style="text-align:center;">Ký tự đại diện</th></tr>
+              <tr><th>Mẫu</th><th>Khớp với</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>.</code></td><td>Bất kỳ ký tự nào <em>trừ</em> xuống dòng</td><td><code>a.c</code> → <code>abc</code>, <code>a1c</code></td></tr>
+              <tr><td><code>\d</code></td><td>Chữ số <code>[0-9]</code></td><td><code>\d\d</code> → <code>42</code></td></tr>
+              <tr><td><code>\D</code></td><td>Không phải chữ số</td><td></td></tr>
+              <tr><td><code>\w</code></td><td>Chữ, số, gạch dưới (kể cả tiếng Việt có dấu!)</td><td><code>\w+</code> → <code>Việt_Anh1</code></td></tr>
+              <tr><td><code>\W</code></td><td>Không phải <code>\w</code></td><td></td></tr>
+              <tr><td><code>\s</code></td><td>Khoảng trắng (space, tab, xuống dòng)</td><td></td></tr>
+              <tr><td><code>\S</code></td><td>Không phải khoảng trắng</td><td></td></tr>
+              <tr><td><code>[abc]</code></td><td>Một trong các ký tự liệt kê</td><td><code>[aeiou]</code> → nguyên âm</td></tr>
+              <tr><td><code>[^abc]</code></td><td>Bất kỳ ký tự nào <em>ngoài</em> danh sách</td><td><code>[^0-9]</code></td></tr>
+              <tr><td><code>[a-z]</code></td><td>Khoảng ký tự</td><td><code>[A-Za-z0-9]</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th colspan="3" style="text-align:center;">Lượng từ (quantifier) — "bao nhiêu lần"</th></tr>
+              <tr><th>Mẫu</th><th>Số lần</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>*</code></td><td>0 trở lên</td><td><code>ab*</code> → <code>a</code>, <code>ab</code>, <code>abbb</code></td></tr>
+              <tr><td><code>+</code></td><td>1 trở lên</td><td><code>ab+</code> → <code>ab</code>, <code>abbb</code> (không khớp <code>a</code>)</td></tr>
+              <tr><td><code>?</code></td><td>0 hoặc 1 (tuỳ chọn)</td><td><code>colou?r</code> → <code>color</code>, <code>colour</code></td></tr>
+              <tr><td><code>{n}</code></td><td>Đúng n lần</td><td><code>\d{4}</code> → <code>2026</code></td></tr>
+              <tr><td><code>{n,}</code></td><td>Ít nhất n lần</td><td><code>\d{2,}</code></td></tr>
+              <tr><td><code>{n,m}</code></td><td>Từ n đến m lần</td><td><code>\d{2,4}</code></td></tr>
+              <tr><td><code>*?</code> <code>+?</code> <code>??</code></td><td><strong>Lười</strong> — khớp ít nhất có thể</td><td>xem callout bên dưới</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th colspan="3" style="text-align:center;">Neo (anchor) và nhóm</th></tr>
+              <tr><th>Mẫu</th><th>Ý nghĩa</th><th>Ví dụ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>^</code></td><td>Đầu chuỗi (hoặc đầu dòng với cờ <code>M</code>)</td><td><code>^Xin</code></td></tr>
+              <tr><td><code>$</code></td><td>Cuối chuỗi (hoặc cuối dòng với cờ <code>M</code>)</td><td><code>\.$</code></td></tr>
+              <tr><td><code>\b</code></td><td>Ranh giới từ</td><td><code>\bcat\b</code> khớp <code>cat</code> nhưng không khớp trong <code>category</code></td></tr>
+              <tr><td><code>(...)</code></td><td>Nhóm bắt (capturing group)</td><td><code>(\d{4})-(\d{2})</code></td></tr>
+              <tr><td><code>(?:...)</code></td><td>Nhóm <em>không</em> bắt — chỉ để gom</td><td><code>(?:ab)+</code></td></tr>
+              <tr><td><code>(?P&lt;ten&gt;...)</code></td><td>Nhóm có tên ⭐</td><td><code>(?P&lt;nam&gt;\d{4})</code></td></tr>
+              <tr><td><code>|</code></td><td>Hoặc</td><td><code>mèo|chó</code></td></tr>
+              <tr><td><code>(?=...)</code></td><td>Lookahead khẳng định — "theo sau phải là"</td><td><code>\d+(?=đ)</code></td></tr>
+              <tr><td><code>(?!...)</code></td><td>Lookahead phủ định — "theo sau không được là"</td><td><code>\d+(?!%)</code></td></tr>
+              <tr><td><code>(?&lt;=...)</code></td><td>Lookbehind khẳng định — "phía trước phải là"</td><td><code>(?&lt;=\$)\d+</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Tham lam vs lười — cái bẫy số một của regex</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>tham_lam.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">import</span> re
+html = <span class="tok-str">"&lt;b&gt;đậm&lt;/b&gt; và &lt;i&gt;nghiêng&lt;/i&gt;"</span>
+
+<span class="tok-com"># THAM LAM (mặc định) — .* nuốt càng nhiều càng tốt</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(<span class="tok-str">r"&lt;.*&gt;"</span>, html))
+<span class="tok-com"># ['&lt;b&gt;đậm&lt;/b&gt; và &lt;i&gt;nghiêng&lt;/i&gt;']   ← một kết quả, nuốt cả chuỗi!</span>
+
+<span class="tok-com"># LƯỜI — thêm ? sau lượng từ</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(<span class="tok-str">r"&lt;.*?&gt;"</span>, html))
+<span class="tok-com"># ['&lt;b&gt;', '&lt;/b&gt;', '&lt;i&gt;', '&lt;/i&gt;']      ← ✅ bốn thẻ riêng biệt</span>
+
+<span class="tok-com"># Cách thứ ba, thường tốt nhất: cấm ký tự kết thúc trong lớp</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(<span class="tok-str">r"&lt;[^&gt;]*&gt;"</span>, html))
+<span class="tok-com"># ['&lt;b&gt;', '&lt;/b&gt;', '&lt;i&gt;', '&lt;/i&gt;']      ← ✅ và nhanh hơn .*?</span></code></pre>
+          </div>
+          <p>
+            Mặc định lượng từ <code>*</code>, <code>+</code>, <code>{n,m}</code> đều <strong>tham lam</strong>: chúng
+            khớp dài nhất có thể rồi mới lùi dần. Thêm <code>?</code> để đổi sang <strong>lười</strong>: khớp ngắn
+            nhất rồi mới tiến dần.
+          </p>
+        </div>
+
+        <h3 id="ham-re">9.2. Bảy hàm của module <code>re</code></h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Hàm</th><th>Trả về</th><th>Tìm ở đâu</th><th>Dùng khi</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>re.search(p, s)</code></td><td><code>Match</code> hoặc <code>None</code></td><td>Bất kỳ đâu trong chuỗi</td><td><strong>Mặc định</strong> — tìm lần khớp đầu tiên</td></tr>
+              <tr><td><code>re.match(p, s)</code></td><td><code>Match</code> hoặc <code>None</code></td><td>Chỉ từ <strong>đầu</strong> chuỗi</td><td>Kiểm tra tiền tố</td></tr>
+              <tr><td><code>re.fullmatch(p, s)</code></td><td><code>Match</code> hoặc <code>None</code></td><td>Phải khớp <strong>toàn bộ</strong></td><td><strong>Kiểm tra hợp lệ</strong> (validate)</td></tr>
+              <tr><td><code>re.findall(p, s)</code></td><td><code>list[str]</code> (hoặc list tuple nếu có nhóm)</td><td>Mọi lần khớp</td><td>Lấy nhanh danh sách</td></tr>
+              <tr><td><code>re.finditer(p, s)</code></td><td>Iterator các <code>Match</code></td><td>Mọi lần khớp</td><td>Cần vị trí, nhóm; tệp lớn</td></tr>
+              <tr><td><code>re.sub(p, r, s)</code></td><td><code>str</code> mới</td><td>Mọi lần khớp</td><td>Thay thế</td></tr>
+              <tr><td><code>re.split(p, s)</code></td><td><code>list[str]</code></td><td>Mọi lần khớp</td><td>Tách theo mẫu phức tạp</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>bay_ham.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> re
+
+s = <span class="tok-str">"Đơn DH-2026-0042 ngày 14/08/2026, tổng 1500000đ"</span>
+
+<span class="tok-com"># search — tìm ở bất kỳ đâu</span>
+m = re.<span class="tok-fn">search</span>(<span class="tok-str">r"DH-\d{4}-\d{4}"</span>, s)
+<span class="tok-fn">print</span>(m.<span class="tok-fn">group</span>())        <span class="tok-com"># 'DH-2026-0042'</span>
+<span class="tok-fn">print</span>(m.<span class="tok-fn">start</span>(), m.<span class="tok-fn">end</span>())   <span class="tok-com"># 4 16 — vị trí trong chuỗi</span>
+
+<span class="tok-com"># match — chỉ từ đầu chuỗi → None vì chuỗi bắt đầu bằng "Đơn"</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">match</span>(<span class="tok-str">r"DH-\d+"</span>, s))    <span class="tok-com"># None</span>
+
+<span class="tok-com"># fullmatch — validate: phải khớp TOÀN BỘ</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">fullmatch</span>(<span class="tok-str">r"\d{10}"</span>, <span class="tok-str">"0912345678"</span>))   <span class="tok-com"># khớp</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">fullmatch</span>(<span class="tok-str">r"\d{10}"</span>, <span class="tok-str">"0912345678x"</span>))  <span class="tok-com"># None ✅</span>
+
+<span class="tok-com"># findall — lấy nhanh mọi số</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(<span class="tok-str">r"\d+"</span>, s))
+<span class="tok-com"># ['2026', '0042', '14', '08', '2026', '1500000']</span>
+
+<span class="tok-com"># finditer — khi cần cả vị trí</span>
+<span class="tok-kw">for</span> m <span class="tok-kw">in</span> re.<span class="tok-fn">finditer</span>(<span class="tok-str">r"\d+"</span>, s):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{m.<span class="tok-fn">group</span>()}<span class="tok-str"> tại </span>{m.<span class="tok-fn">start</span>()}<span class="tok-str">"</span>)
+
+<span class="tok-com"># sub — thay thế (che số điện thoại chẳng hạn)</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">sub</span>(<span class="tok-str">r"\d{7,}"</span>, <span class="tok-str">"[ẩn]"</span>, s))
+<span class="tok-com"># 'Đơn DH-2026-0042 ngày 14/08/2026, tổng [ẩn]đ'</span>
+
+<span class="tok-com"># split — tách theo nhiều loại dấu phân cách</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">split</span>(<span class="tok-str">r"[,;|]\s*"</span>, <span class="tok-str">"a, b;c | d"</span>))
+<span class="tok-com"># ['a', 'b', 'c', 'd']</span></code></pre>
+        </div>
+
+        <h3 id="group">9.3. Nhóm và nhóm có tên</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>nhom.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> re
+
+<span class="tok-com"># --- Nhóm đánh số ---</span>
+m = re.<span class="tok-fn">search</span>(<span class="tok-str">r"(\d{2})/(\d{2})/(\d{4})"</span>, <span class="tok-str">"Hạn: 14/08/2026"</span>)
+<span class="tok-fn">print</span>(m.<span class="tok-fn">group</span>(<span class="tok-num">0</span>))     <span class="tok-com"># '14/08/2026'  — nhóm 0 = toàn bộ khớp</span>
+<span class="tok-fn">print</span>(m.<span class="tok-fn">group</span>(<span class="tok-num">1</span>))     <span class="tok-com"># '14'</span>
+<span class="tok-fn">print</span>(m.<span class="tok-fn">groups</span>())      <span class="tok-com"># ('14', '08', '2026')</span>
+
+<span class="tok-com"># --- Nhóm CÓ TÊN — dễ đọc hơn nhiều, dùng cái này ---</span>
+mau = <span class="tok-str">r"(?P&lt;ngay&gt;\d{2})/(?P&lt;thang&gt;\d{2})/(?P&lt;nam&gt;\d{4})"</span>
+m = re.<span class="tok-fn">search</span>(mau, <span class="tok-str">"Hạn: 14/08/2026"</span>)
+<span class="tok-fn">print</span>(m.<span class="tok-fn">group</span>(<span class="tok-str">"nam"</span>))         <span class="tok-com"># '2026'</span>
+<span class="tok-fn">print</span>(m.<span class="tok-fn">groupdict</span>())           <span class="tok-com"># {'ngay': '14', 'thang': '08', 'nam': '2026'}</span>
+
+<span class="tok-com"># --- Tham chiếu nhóm trong chuỗi thay thế ---</span>
+<span class="tok-com"># Đổi dd/mm/yyyy → yyyy-mm-dd</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">sub</span>(mau, <span class="tok-str">r"\g&lt;nam&gt;-\g&lt;thang&gt;-\g&lt;ngay&gt;"</span>, <span class="tok-str">"Hạn: 14/08/2026"</span>))
+<span class="tok-com"># 'Hạn: 2026-08-14'</span>
+
+<span class="tok-com"># --- Nhóm không bắt (?:...) — gom mà không tạo nhóm ---</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(<span class="tok-str">r"(?:https?://)?(\w+\.com)"</span>, <span class="tok-str">"https://a.com và b.com"</span>))
+<span class="tok-com"># ['a.com', 'b.com']  — nếu dùng (...) thay (?:...) sẽ ra list tuple lộn xộn</span>
+
+<span class="tok-com"># --- sub với hàm thay thế: xử lý phức tạp ---</span>
+<span class="tok-kw">def</span> <span class="tok-fn">tang_gia</span>(m: re.<span class="tok-cls">Match</span>) -&gt; <span class="tok-type">str</span>:
+    <span class="tok-kw">return</span> <span class="tok-fn">str</span>(<span class="tok-type">int</span>(m.<span class="tok-fn">group</span>()) * <span class="tok-num">2</span>)
+
+<span class="tok-fn">print</span>(re.<span class="tok-fn">sub</span>(<span class="tok-str">r"\d+"</span>, <span class="tok-fn">tang_gia</span>, <span class="tok-str">"Giá 100 và 250"</span>))
+<span class="tok-com"># 'Giá 200 và 500'</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🕳️ <code>findall</code> đổi kiểu trả về khi có nhóm</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>findall_bay.py</span><button class="copy-btn">Copy</button></div>
+<pre><code>s = <span class="tok-str">"a1 b2 c3"</span>
+
+re.<span class="tok-fn">findall</span>(<span class="tok-str">r"\w\d"</span>, s)        <span class="tok-com"># ['a1', 'b2', 'c3']         — không nhóm → list[str]</span>
+re.<span class="tok-fn">findall</span>(<span class="tok-str">r"(\w)\d"</span>, s)      <span class="tok-com"># ['a', 'b', 'c']            — 1 nhóm → list nội dung nhóm</span>
+re.<span class="tok-fn">findall</span>(<span class="tok-str">r"(\w)(\d)"</span>, s)    <span class="tok-com"># [('a','1'), ('b','2'), ...] — nhiều nhóm → list[tuple]</span></code></pre>
+          </div>
+          <p>
+            Ba mẫu gần giống nhau cho ba kiểu dữ liệu khác nhau — nguồn của rất nhiều <code>TypeError</code> khó
+            hiểu. Khi có nhóm, hãy dùng <code>finditer</code> và tự lấy <code>m.group()</code> để kiểm soát rõ ràng.
+          </p>
+        </div>
+
+        <h3 id="flag-compile">9.4. Cờ và biên dịch trước</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Cờ</th><th>Viết tắt</th><th>Tác dụng</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>re.IGNORECASE</code></td><td><code>re.I</code></td><td>Không phân biệt hoa/thường</td></tr>
+              <tr><td><code>re.MULTILINE</code></td><td><code>re.M</code></td><td><code>^</code>/<code>$</code> khớp đầu/cuối <em>mỗi dòng</em></td></tr>
+              <tr><td><code>re.DOTALL</code></td><td><code>re.S</code></td><td><code>.</code> khớp cả ký tự xuống dòng</td></tr>
+              <tr><td><code>re.VERBOSE</code></td><td><code>re.X</code></td><td>Cho phép khoảng trắng và chú thích trong mẫu ⭐</td></tr>
+              <tr><td><code>re.ASCII</code></td><td><code>re.A</code></td><td><code>\w</code>, <code>\d</code>, <code>\s</code> chỉ khớp ASCII</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>flag_compile.py</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-kw">import</span> re
+
+<span class="tok-com"># --- Biên dịch trước: dùng lại nhiều lần, đọc rõ hơn ---</span>
+MAU_EMAIL = re.<span class="tok-fn">compile</span>(<span class="tok-str">r"[\w.+-]+@[\w-]+\.[\w.]+"</span>, re.IGNORECASE)
+
+<span class="tok-kw">for</span> dong <span class="tok-kw">in</span> danh_sach:
+    <span class="tok-kw">if</span> MAU_EMAIL.<span class="tok-fn">search</span>(dong):        <span class="tok-com"># gọi method trên object đã compile</span>
+        ...
+
+<span class="tok-com"># --- VERBOSE: viết regex phức tạp mà vẫn đọc được ---</span>
+MAU_SDT_VN = re.<span class="tok-fn">compile</span>(<span class="tok-str">r"""
+    ^                    # đầu chuỗi
+    (?:\+84|0)           # mã quốc gia +84 hoặc số 0
+    \s?
+    (3|5|7|8|9)          # đầu số di động Việt Nam hợp lệ
+    \d{8}                # 8 chữ số còn lại
+    $                    # cuối chuỗi
+"""</span>, re.VERBOSE)
+
+<span class="tok-fn">print</span>(<span class="tok-fn">bool</span>(MAU_SDT_VN.<span class="tok-fn">match</span>(<span class="tok-str">"0912345678"</span>)))    <span class="tok-com"># True</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">bool</span>(MAU_SDT_VN.<span class="tok-fn">match</span>(<span class="tok-str">"+84912345678"</span>)))  <span class="tok-com"># True</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">bool</span>(MAU_SDT_VN.<span class="tok-fn">match</span>(<span class="tok-str">"0112345678"</span>)))    <span class="tok-com"># False — đầu số 1 không hợp lệ</span>
+
+<span class="tok-com"># --- MULTILINE ---</span>
+log = <span class="tok-str">"""INFO khởi động
+ERROR không kết nối được
+INFO thử lại"""</span>
+<span class="tok-fn">print</span>(re.<span class="tok-fn">findall</span>(<span class="tok-str">r"^ERROR.*"</span>, log, re.MULTILINE))
+<span class="tok-com"># ['ERROR không kết nối được']</span></code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 <code>\w</code> và tiếng Việt</div>
+          <p>
+            Trong Python 3, mẫu regex trên chuỗi <code>str</code> mặc định hoạt động ở <strong>chế độ
+            Unicode</strong>. Vì vậy <code>\w</code> khớp cả <code>ệ</code>, <code>ữ</code>, <code>Đ</code> — khác với
+            nhiều ngôn ngữ khác. Nếu bạn <em>muốn</em> chỉ ASCII (ví dụ kiểm tra tên biến), thêm cờ
+            <code>re.ASCII</code>. Ngược lại, để kiểm tra "chỉ chữ cái tiếng Việt", dùng
+            <code>[^\W\d_]</code> (là <code>\w</code> trừ chữ số và gạch dưới).
+          </p>
+        </div>
+
+        <h2 id="khi-nao-regex">10. Khi nào <em>không</em> nên dùng regex</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Việc cần làm</th><th>Đừng dùng regex</th><th>Dùng cái này</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Kiểm tra chứa chuỗi con</td><td><code>re.search(r"abc", s)</code></td><td><code>"abc" in s</code></td></tr>
+              <tr><td>Kiểm tra tiền tố/hậu tố</td><td><code>re.match(r"^http", s)</code></td><td><code>s.startswith("http")</code></td></tr>
+              <tr><td>Tách theo một ký tự</td><td><code>re.split(r",", s)</code></td><td><code>s.split(",")</code></td></tr>
+              <tr><td>Thay thế chuỗi cố định</td><td><code>re.sub(r"a", "b", s)</code></td><td><code>s.replace("a", "b")</code></td></tr>
+              <tr><td>Phân tích HTML</td><td>Bất kỳ regex nào</td><td><code>BeautifulSoup</code>, <code>lxml</code></td></tr>
+              <tr><td>Phân tích JSON/XML/CSV</td><td>Bất kỳ regex nào</td><td><code>json</code>, <code>xml</code>, <code>csv</code></td></tr>
+              <tr><td>Phân tích URL</td><td>Regex tự chế</td><td><code>urllib.parse.urlparse</code></td></tr>
+              <tr><td>Kiểm tra email chuẩn RFC</td><td>Regex 300 ký tự trên mạng</td><td>Kiểm tra thô + <strong>gửi email xác thực</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ ReDoS — regex có thể treo chương trình</div>
+          <div class="code-wrap">
+            <div class="code-meta"><span>redos.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">import</span> re
+<span class="tok-com"># Mẫu có lượng từ lồng nhau — "catastrophic backtracking"</span>
+re.<span class="tok-fn">match</span>(<span class="tok-str">r"(a+)+$"</span>, <span class="tok-str">"a"</span> * <span class="tok-num">30</span> + <span class="tok-str">"b"</span>)
+<span class="tok-com"># Treo vài phút đến vài giờ — engine thử 2^30 tổ hợp</span></code></pre>
+          </div>
+          <p>
+            Bộ máy regex của Python dùng thuật toán quay lui (backtracking). Mẫu có lượng từ lồng nhau
+            (<code>(a+)+</code>, <code>(a|a)*</code>, <code>(.*)*</code>) trên chuỗi không khớp sẽ khiến số bước tăng
+            theo hàm mũ. Nếu mẫu regex đến từ người dùng, đây là lỗ hổng từ chối dịch vụ thật.
+            <strong>Phòng tránh:</strong> tránh lượng từ lồng nhau; ưu tiên lớp ký tự phủ định
+            (<code>[^"]*</code> thay <code>.*?</code>); với dữ liệu không tin cậy, cân nhắc thư viện
+            <code>regex</code> có tham số <code>timeout</code>.
+          </p>
+        </div>
+
+        <h2 id="cheat-sheet">11. Cheat sheet chương 7</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tình huống</th><th>Cách viết</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Đọc cả tệp văn bản</td><td><code>Path(p).read_text(encoding="utf-8")</code></td></tr>
+              <tr><td>Ghi cả tệp văn bản</td><td><code>Path(p).write_text(s, encoding="utf-8")</code></td></tr>
+              <tr><td>Đọc tệp lớn</td><td><code>with open(p, encoding="utf-8") as f: for dong in f:</code></td></tr>
+              <tr><td>Thêm vào cuối tệp</td><td><code>open(p, "a", encoding="utf-8")</code></td></tr>
+              <tr><td>Tạo tệp, lỗi nếu đã có</td><td><code>open(p, "x", encoding="utf-8")</code></td></tr>
+              <tr><td>Tệp nhị phân</td><td><code>open(p, "rb")</code> / <code>Path(p).read_bytes()</code></td></tr>
+              <tr><td>Ghi an toàn</td><td>Ghi <code>.tmp</code> rồi <code>tmp.replace(dich)</code></td></tr>
+              <tr><td>Nối đường dẫn</td><td><code>Path(a) / b / c</code></td></tr>
+              <tr><td>Thư mục chứa file hiện tại</td><td><code>Path(__file__).resolve().parent</code></td></tr>
+              <tr><td>Tìm tệp đệ quy</td><td><code>Path(p).rglob("*.py")</code></td></tr>
+              <tr><td>Tạo cây thư mục</td><td><code>p.mkdir(parents=True, exist_ok=True)</code></td></tr>
+              <tr><td>JSON có tiếng Việt</td><td><code>json.dump(d, f, ensure_ascii=False, indent=2)</code></td></tr>
+              <tr><td>CSV đọc theo tên cột</td><td><code>csv.DictReader(f)</code> + <code>newline=""</code></td></tr>
+              <tr><td>CSV cho Excel tiếng Việt</td><td><code>encoding="utf-8-sig"</code></td></tr>
+              <tr><td>Regex — kiểm tra hợp lệ</td><td><code>re.fullmatch(r"...", s)</code></td></tr>
+              <tr><td>Regex — tìm tất cả kèm vị trí</td><td><code>re.finditer(r"...", s)</code></td></tr>
+              <tr><td>Regex — mẫu phức tạp</td><td><code>re.compile(r"""...""", re.VERBOSE)</code></td></tr>
+              <tr><td>Regex — khớp ngắn nhất</td><td>Thêm <code>?</code>: <code>.*?</code> — hoặc tốt hơn: <code>[^x]*</code></td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <h2 id="bai-tap">Bài tập</h2>
 
         <div class="exercises">
 
           <div class="exercise">
-            <h4>Bài 1 — <code><span class="tok-dec">@measure_time</span></code></h4>
+            <h4>Công cụ phân tích tệp nhật ký</h4>
             <div class="exercise-body">
-              <p>Viết decorator <code>measure_time</code> log thời gian function chạy (giây, 4 chữ số thập phân).</p>
+              <p>Cho tệp <code>app.log</code> với định dạng mỗi dòng:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>app.log</span><button class="copy-btn">Copy</button></div>
+<pre><code>2026-08-14 09:15:32 INFO  [api] Khởi động thành công
+2026-08-14 09:15:45 ERROR [db] Kết nối thất bại sau 3000ms
+2026-08-14 09:16:02 WARN  [api] Phản hồi chậm: 1520ms</code></pre>
+              </div>
+              <p>Viết <code>phan_tich(duong_dan: Path) -&gt; dict</code> trả về:</p>
               <ul>
-                <li>Phải hoạt động với mọi signature (<code>*args, **kwargs</code>).</li>
-                <li>Phải bảo toàn metadata bằng <code><span class="tok-dec">@functools.wraps</span></code>.</li>
-                <li>In ra dạng <code>"&lt;name&gt;: 0.1234s"</code>.</li>
+                <li>Số dòng theo từng cấp độ (<code>{"INFO": 12, "ERROR": 3, ...}</code>) — dùng <code>Counter</code>.</li>
+                <li>Danh sách <code>(thoi_gian, module, thong_diep)</code> của mọi dòng <code>ERROR</code>.</li>
+                <li>Thời gian phản hồi trung bình, lấy từ mọi con số có hậu tố <code>ms</code>.</li>
               </ul>
+              <p>Yêu cầu: một regex duy nhất có <strong>nhóm có tên</strong>; đọc lười từng dòng để chạy được với tệp 5 GB.</p>
               <details class="exercise-hint">
-                <summary>Đáp án</summary>
+                <summary>Gợi ý</summary>
                 <div class="hint-content">
-<pre><code><span class="tok-kw">import</span> functools, time
-
-<span class="tok-kw">def</span> <span class="tok-fn">measure_time</span>(fn):
-    <span class="tok-dec">@functools.wraps(fn)</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
-        start = time.perf_counter()
-        <span class="tok-kw">try</span>:
-            <span class="tok-kw">return</span> fn(*args, **kwargs)
-        <span class="tok-kw">finally</span>:
-            elapsed = time.perf_counter() - start
-            <span class="tok-fn">print</span>(<span class="tok-str">f"</span>{fn.__name__}<span class="tok-str">: </span>{elapsed:.4f}<span class="tok-str">s"</span>)
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@measure_time</span>
-<span class="tok-kw">def</span> <span class="tok-fn">slow_sum</span>(n):
-    <span class="tok-kw">return</span> <span class="tok-fn">sum</span>(<span class="tok-fn">range</span>(n))
-
-slow_sum(<span class="tok-num">10_000_000</span>)  <span class="tok-com"># slow_sum: 0.1421s</span></code></pre>
-                  <p>Lưu ý: dùng <code>try/finally</code> để log thời gian kể cả khi function throw — vẫn báo cáo thời gian đã chạy.</p>
+                  <p>
+                    Khung mẫu: <code>r"(?P&lt;ts&gt;\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(?P&lt;cap&gt;\w+)\s+\[(?P&lt;mod&gt;\w+)\]\s+(?P&lt;msg&gt;.*)"</code>.
+                    Nhớ <code>re.compile</code> ngoài vòng lặp. Dòng không khớp mẫu (log nhiều dòng, traceback) phải
+                    được xử lý — <code>m</code> sẽ là <code>None</code>, đừng để nổ <code>AttributeError</code>.
+                    Lấy số ms bằng regex thứ hai <code>r"(\d+)ms"</code> trên nhóm <code>msg</code>.
+                  </p>
                 </div>
               </details>
             </div>
           </div>
 
           <div class="exercise">
-            <h4>Bài 2 — Decorator factory <code><span class="tok-dec">@retry</span></code></h4>
+            <h4>Chuyển đổi CSV ↔ JSON hai chiều</h4>
             <div class="exercise-body">
-              <p>Viết <code><span class="tok-dec">@retry(times=3, exceptions=(IOError,))</span></code> retry function khi gặp exception thuộc tuple <code>exceptions</code>.</p>
-              <ul>
-                <li>Default <code>times=3</code>, <code>exceptions=(Exception,)</code>.</li>
-                <li>Sleep <code>0.1 * attempt</code> giây giữa các lần retry (exponential-ish).</li>
-                <li>Sau khi hết retry vẫn lỗi → re-raise exception cuối.</li>
-                <li>Exception <strong>không thuộc</strong> tuple → re-raise ngay, không retry.</li>
-              </ul>
+              <p>Viết hai hàm và một CLI nhỏ:</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>chuyen_doi.py</span><button class="copy-btn">Copy</button></div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">csv_sang_json</span>(nguon: Path, dich: Path, kieu: <span class="tok-type">dict</span>[<span class="tok-type">str</span>, <span class="tok-fn">type</span>] | <span class="tok-kw">None</span> = <span class="tok-kw">None</span>) -&gt; <span class="tok-type">int</span>: ...
+<span class="tok-kw">def</span> <span class="tok-fn">json_sang_csv</span>(nguon: Path, dich: Path) -&gt; <span class="tok-type">int</span>: ...
+<span class="tok-com"># Cả hai trả về số bản ghi đã xử lý</span>
+
+<span class="tok-com"># Ví dụ: ép kiểu cột khi đọc CSV</span>
+<span class="tok-fn">csv_sang_json</span>(<span class="tok-fn">Path</span>(<span class="tok-str">"sv.csv"</span>), <span class="tok-fn">Path</span>(<span class="tok-str">"sv.json"</span>),
+              kieu={<span class="tok-str">"diem"</span>: <span class="tok-type">float</span>, <span class="tok-str">"tuoi"</span>: <span class="tok-type">int</span>})</code></pre>
+              </div>
+              <p>Yêu cầu: tiếng Việt hiển thị đúng ở cả hai chiều; Excel mở được tệp CSV sinh ra; dòng CSV hỏng thì báo số dòng và bỏ qua thay vì dừng.</p>
               <details class="exercise-hint">
-                <summary>Đáp án</summary>
+                <summary>Gợi ý</summary>
                 <div class="hint-content">
-<pre><code><span class="tok-kw">import</span> functools, time
-
-<span class="tok-kw">def</span> <span class="tok-fn">retry</span>(times=<span class="tok-num">3</span>, exceptions=(<span class="tok-cls">Exception</span>,)):
-    <span class="tok-kw">def</span> <span class="tok-fn">decorator</span>(fn):
-        <span class="tok-dec">@functools.wraps(fn)</span>
-        <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
-            last_exc = <span class="tok-kw">None</span>
-            <span class="tok-kw">for</span> attempt <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">1</span>, times + <span class="tok-num">1</span>):
-                <span class="tok-kw">try</span>:
-                    <span class="tok-kw">return</span> fn(*args, **kw)
-                <span class="tok-kw">except</span> exceptions <span class="tok-kw">as</span> e:
-                    last_exc = e
-                    <span class="tok-fn">print</span>(<span class="tok-str">f"attempt </span>{attempt}<span class="tok-str"> failed: </span>{e}<span class="tok-str">"</span>)
-                    <span class="tok-kw">if</span> attempt &lt; times:
-                        time.sleep(<span class="tok-num">0.1</span> * attempt)
-            <span class="tok-kw">raise</span> last_exc
-        <span class="tok-kw">return</span> wrapper
-    <span class="tok-kw">return</span> decorator
-
-<span class="tok-dec">@retry(times=3, exceptions=(IOError,))</span>
-<span class="tok-kw">def</span> <span class="tok-fn">flaky</span>():
-    <span class="tok-kw">import</span> random
-    <span class="tok-kw">if</span> random.random() &lt; <span class="tok-num">0.8</span>: <span class="tok-kw">raise</span> <span class="tok-cls">IOError</span>(<span class="tok-str">"network"</span>)
-    <span class="tok-kw">return</span> <span class="tok-str">"ok"</span></code></pre>
-                  <p>Exception ngoài tuple (vd <code>ValueError</code>) sẽ <strong>không</strong> bị bắt bởi <code>except exceptions</code> → propagate ngay, không retry.</p>
+                  <p>
+                    Ba điểm quyết định: <code>ensure_ascii=False</code> khi ghi JSON;
+                    <code>encoding="utf-8-sig"</code> khi ghi CSV (cho Excel); <code>newline=""</code> cho mọi tệp CSV.
+                    Với <code>json_sang_csv</code>, lấy <code>fieldnames</code> từ union các khóa của mọi bản ghi
+                    (không phải chỉ bản ghi đầu) để không mất cột.
+                  </p>
                 </div>
               </details>
             </div>
           </div>
 
           <div class="exercise">
-            <h4>Bài 3 — Context manager <code>temp_file()</code></h4>
-            <div class="exercise-body">
-              <p>Viết context manager <code>temp_file(suffix=".txt")</code>:</p>
-              <ul>
-                <li>Tạo file tạm với suffix cho trước (gợi ý: <code>tempfile.mkstemp</code>).</li>
-                <li><code>yield</code> đường dẫn file ra cho block.</li>
-                <li>Khi exit (dù bình thường hay exception) → xoá file, kể cả khi đã không còn tồn tại (dùng <code>suppress</code>).</li>
-              </ul>
-              <p>Yêu cầu: viết bằng <code><span class="tok-dec">@contextmanager</span></code> (generator).</p>
-              <details class="exercise-hint">
-                <summary>Đáp án</summary>
-                <div class="hint-content">
-<pre><code><span class="tok-kw">import</span> os, tempfile
-<span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> contextmanager, suppress
-
-<span class="tok-dec">@contextmanager</span>
-<span class="tok-kw">def</span> <span class="tok-fn">temp_file</span>(suffix=<span class="tok-str">".txt"</span>):
-    fd, path = tempfile.mkstemp(suffix=suffix)
-    os.close(fd)             <span class="tok-com"># mkstemp mở sẵn, close để user tự open lại</span>
-    <span class="tok-kw">try</span>:
-        <span class="tok-kw">yield</span> path
-    <span class="tok-kw">finally</span>:
-        <span class="tok-kw">with</span> suppress(<span class="tok-cls">FileNotFoundError</span>):
-            os.remove(path)
-
-<span class="tok-kw">with</span> <span class="tok-fn">temp_file</span>() <span class="tok-kw">as</span> p:
-    <span class="tok-kw">with</span> <span class="tok-fn">open</span>(p, <span class="tok-str">"w"</span>) <span class="tok-kw">as</span> f:
-        f.write(<span class="tok-str">"hello"</span>)
-    <span class="tok-fn">print</span>(<span class="tok-fn">open</span>(p).read())
-<span class="tok-com"># File đã bị xoá sau block</span>
-<span class="tok-kw">assert</span> <span class="tok-kw">not</span> os.path.exists(p)</code></pre>
-                  <p>Phiên bản class cũng OK (<code>__enter__</code> tạo file, <code>__exit__</code> xoá). Generator gọn hơn cho case này.</p>
-                </div>
-              </details>
-            </div>
-          </div>
-
-          <div class="exercise">
-            <h4>Bài 4 — <code><span class="tok-dec">@validate_types</span></code></h4>
+            <h4>Đổi tên hàng loạt bằng <code>pathlib</code></h4>
             <div class="exercise-body">
               <p>
-                Viết decorator <code>validate_types</code> đọc type hints của function, raise <code>TypeError</code> nếu
-                argument truyền vào không match hint.
+                Viết <code>doi_ten(thu_muc: Path, khuon: str, khô_chạy: bool = True)</code> đổi tên mọi tệp ảnh
+                (<code>.jpg</code>, <code>.jpeg</code>, <code>.png</code>) trong thư mục theo khuôn mẫu, ví dụ
+                <code>"anh_{i:03d}{ext}"</code> → <code>anh_001.jpg</code>, <code>anh_002.png</code>…
               </p>
               <ul>
-                <li>Gợi ý: <code>typing.get_type_hints(fn)</code> trả dict <code>{param_name: type}</code>.</li>
-                <li>Gợi ý: <code>inspect.signature(fn).bind(*args, **kwargs)</code> để map args đến param name.</li>
-                <li>Check bằng <code>isinstance(value, expected_type)</code>.</li>
-                <li>Bỏ qua key <code>'return'</code> trong type hints.</li>
+                <li>Sắp xếp theo thời gian sửa đổi (<code>stat().st_mtime</code>) trước khi đánh số.</li>
+                <li><code>khô_chạy=True</code> chỉ <em>in ra</em> sẽ đổi gì, không động vào đĩa — mặc định an toàn.</li>
+                <li>Xử lý xung đột: tên đích đã tồn tại thì không được ghi đè.</li>
+                <li>Có tuỳ chọn đệ quy vào thư mục con.</li>
               </ul>
               <details class="exercise-hint">
-                <summary>Đáp án</summary>
+                <summary>Gợi ý</summary>
                 <div class="hint-content">
-<pre><code><span class="tok-kw">import</span> functools, inspect, typing
-
-<span class="tok-kw">def</span> <span class="tok-fn">validate_types</span>(fn):
-    hints = typing.get_type_hints(fn)
-    sig = inspect.signature(fn)
-
-    <span class="tok-dec">@functools.wraps(fn)</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kwargs):
-        bound = sig.bind(*args, **kwargs)
-        bound.apply_defaults()
-        <span class="tok-kw">for</span> name, value <span class="tok-kw">in</span> bound.arguments.items():
-            expected = hints.get(name)
-            <span class="tok-kw">if</span> expected <span class="tok-kw">is</span> <span class="tok-kw">None</span>: <span class="tok-kw">continue</span>
-            <span class="tok-kw">if</span> <span class="tok-kw">not</span> <span class="tok-fn">isinstance</span>(value, expected):
-                <span class="tok-kw">raise</span> <span class="tok-cls">TypeError</span>(
-                    <span class="tok-str">f"</span>{name}<span class="tok-str">=</span>{value!r}<span class="tok-str"> không match </span>{expected}<span class="tok-str">"</span>
-                )
-        <span class="tok-kw">return</span> fn(*args, **kwargs)
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@validate_types</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name: <span class="tok-cls">str</span>, age: <span class="tok-cls">int</span>) -&gt; <span class="tok-cls">str</span>:
-    <span class="tok-kw">return</span> <span class="tok-str">f"</span>{name}<span class="tok-str"> </span>{age}<span class="tok-str">"</span>
-
-greet(<span class="tok-str">"An"</span>, <span class="tok-num">25</span>)        <span class="tok-com"># OK</span>
-greet(<span class="tok-str">"An"</span>, <span class="tok-str">"25"</span>)      <span class="tok-com"># TypeError: age='25' không match &lt;class 'int'&gt;</span></code></pre>
                   <p>
-                    Lưu ý: phiên bản đơn giản này không xử lý generic (vd <code>list[int]</code>, <code>Optional[X]</code>).
-                    Lib <code>typeguard</code> hoặc <code>pydantic</code> xử lý đầy đủ. Chương 9 (Type hints) sẽ đào sâu.
+                    Dùng <code>p.rename(dich)</code> hoặc <code>p.replace(dich)</code> — khác nhau: <code>rename</code>
+                    lỗi nếu đích tồn tại trên Windows, <code>replace</code> luôn ghi đè. Ở đây bạn muốn
+                    <em>không</em> ghi đè nên kiểm tra <code>dich.exists()</code> trước.<br/>
+                    Bẫy tinh vi: đổi <code>a.jpg → b.jpg</code> rồi <code>b.jpg → c.jpg</code> có thể giẫm lên nhau.
+                    Cách chắc chắn: đổi qua tên tạm ở lượt một, rồi đổi sang tên cuối ở lượt hai.
                   </p>
                 </div>
               </details>
@@ -1110,47 +1207,57 @@ greet(<span class="tok-str">"An"</span>, <span class="tok-str">"25"</span>)     
           </div>
 
           <div class="exercise">
-            <h4>Bài 5 — Tìm bug: decorator mất docstring</h4>
+            <h4>Bộ kiểm tra hợp lệ bằng regex</h4>
             <div class="exercise-body">
-              <p>Code dưới có bug — <code>help(divide)</code> không in ra docstring "Chia a cho b". Tìm và fix.</p>
-<pre><code><span class="tok-kw">def</span> <span class="tok-fn">safe</span>(fn):
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
-        <span class="tok-kw">try</span>:
-            <span class="tok-kw">return</span> fn(*args, **kw)
-        <span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span>:
-            <span class="tok-kw">return</span> <span class="tok-kw">None</span>
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-dec">@safe</span>
-<span class="tok-kw">def</span> <span class="tok-fn">divide</span>(a, b):
-    <span class="tok-str">"""Chia a cho b. Trả None nếu chia 0."""</span>
-    <span class="tok-kw">return</span> a / b
-
-help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
-<span class="tok-fn">print</span>(divide.__name__)  <span class="tok-com"># 'wrapper' ← BUG</span></code></pre>
+              <p>Viết các hàm trả về <code>bool</code>, dùng <code>re.compile</code> ở cấp module và <code>re.fullmatch</code>:</p>
+              <ul>
+                <li><code>la_sdt_vn(s)</code> — <code>0912345678</code> hoặc <code>+84912345678</code>; đầu số hợp lệ 3/5/7/8/9.</li>
+                <li><code>la_email(s)</code> — kiểm tra thô, hợp lý (đừng cố theo RFC 5322).</li>
+                <li><code>la_mat_khau_manh(s)</code> — ≥8 ký tự, có chữ hoa, chữ thường, số, ký tự đặc biệt. Dùng <strong>lookahead</strong>.</li>
+                <li><code>la_ma_so_thue(s)</code> — 10 chữ số, hoặc 10 chữ số + <code>-</code> + 3 chữ số.</li>
+                <li><code>la_ngay_iso(s)</code> — <code>YYYY-MM-DD</code>, tháng 01-12, ngày 01-31.</li>
+              </ul>
+              <p>Viết bảng test cho mỗi hàm: ít nhất 3 giá trị hợp lệ và 3 giá trị không hợp lệ.</p>
               <details class="exercise-hint">
-                <summary>Bug + Fix</summary>
+                <summary>Gợi ý</summary>
                 <div class="hint-content">
                   <p>
-                    <strong>Bug:</strong> wrapper không copy metadata của <code>divide</code>. Sau khi
-                    <code><span class="tok-dec">@safe</span></code> apply, <code>divide</code> trỏ vào <code>wrapper</code> — nên
-                    <code>__name__</code> = <code>'wrapper'</code>, <code>__doc__</code> = <code>None</code>.
+                    Mật khẩu mạnh là bài tập lookahead kinh điển:
+                    <code>r"(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&amp;*]).{8,}"</code> — mỗi
+                    <code>(?=...)</code> kiểm tra một điều kiện mà <em>không</em> tiêu thụ ký tự nào, nên bốn điều
+                    kiện cùng áp lên một chuỗi.<br/>
+                    Câu hỏi suy ngẫm cho <code>la_ngay_iso</code>: regex kiểm tra được ngày 31/02 không? Không —
+                    đó là lúc bạn nên dùng <code>datetime.strptime</code> thay vì regex.
                   </p>
-                  <p><strong>Fix:</strong> dùng <code><span class="tok-dec">@functools.wraps(fn)</span></code> trên <code>wrapper</code>.</p>
-<pre><code><span class="tok-kw">import</span> functools
+                </div>
+              </details>
+            </div>
+          </div>
 
-<span class="tok-kw">def</span> <span class="tok-fn">safe</span>(fn):
-    <span class="tok-dec">@functools.wraps(fn)</span>      <span class="tok-com"># ← thêm dòng này</span>
-    <span class="tok-kw">def</span> <span class="tok-fn">wrapper</span>(*args, **kw):
-        <span class="tok-kw">try</span>:
-            <span class="tok-kw">return</span> fn(*args, **kw)
-        <span class="tok-kw">except</span> <span class="tok-cls">ZeroDivisionError</span>:
-            <span class="tok-kw">return</span> <span class="tok-kw">None</span>
-    <span class="tok-kw">return</span> wrapper
-
-<span class="tok-com"># Bây giờ:</span>
-<span class="tok-fn">print</span>(divide.__name__)  <span class="tok-com"># 'divide'</span>
-<span class="tok-fn">print</span>(divide.__doc__)   <span class="tok-com"># 'Chia a cho b. Trả None nếu chia 0.'</span></code></pre>
+          <div class="exercise">
+            <h4>Che thông tin nhạy cảm trong tệp nhật ký</h4>
+            <div class="exercise-body">
+              <p>
+                Viết <code>che_du_lieu(nguon: Path, dich: Path) -&gt; dict[str, int]</code> đọc tệp log và ghi ra bản
+                đã che, trả về số lần che theo từng loại:
+              </p>
+              <ul>
+                <li>Email → <code>a***@example.com</code> (giữ ký tự đầu và tên miền)</li>
+                <li>Số điện thoại → <code>091****678</code> (giữ 3 đầu, 3 cuối)</li>
+                <li>Số thẻ 16 chữ số → <code>****-****-****-1234</code></li>
+                <li><code>"password": "..."</code> trong JSON → <code>"password": "[ẨN]"</code></li>
+              </ul>
+              <p>Dùng <code>re.sub</code> với <strong>hàm thay thế</strong> cho các trường hợp cần giữ một phần.</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Hàm thay thế nhận một <code>re.Match</code> và trả về chuỗi:
+                    <code>re.sub(MAU_EMAIL, lambda m: m.group(1)[0] + "***@" + m.group(2), s)</code>.
+                    Xử lý theo thứ tự từ mẫu <em>cụ thể nhất</em> đến <em>chung nhất</em> — nếu che số điện thoại
+                    trước, mẫu số thẻ 16 chữ số có thể không còn khớp. Đếm số lần che bằng
+                    <code>re.subn</code> (trả về tuple <code>(chuoi_moi, so_lan)</code>).
+                  </p>
                 </div>
               </details>
             </div>
@@ -1163,16 +1270,20 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q1</span>
-            <div class="quiz-q-text"><p><code><span class="tok-dec">@dec</span> def f(): ...</code> — decorator <code>dec</code> chạy khi nào?</p></div>
+            <div class="quiz-q-text"><p>Chế độ <code>"w"</code> và <code>"a"</code> khác nhau thế nào? Chuyện gì xảy ra với tệp đã tồn tại?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Tại thời điểm <code>def f</code> được evaluate</strong> (thường là lúc import module hoặc class
-                được parse), không phải khi gọi <code>f()</code>. Decorator gọi <code>dec(f)</code> ngay, kết quả gán vào
-                tên <code>f</code>. Đó là lý do mọi side-effect ngay trong outer của decorator chạy at-import-time.
+                <code>"w"</code> <strong>xoá sạch nội dung tệp ngay khoảnh khắc <code>open()</code> chạy</strong> —
+                không phải lúc bạn gọi <code>write()</code>. Kể cả chương trình sập ngay dòng sau, dữ liệu cũ đã mất.
+                Con trỏ đặt ở đầu tệp.<br/>
+                <code>"a"</code> giữ nguyên nội dung cũ và đặt con trỏ ở <strong>cuối tệp</strong>; mọi lần
+                <code>write()</code> đều nối thêm vào cuối, kể cả sau khi bạn gọi <code>seek(0)</code>.<br/>
+                Cả hai đều tạo tệp mới nếu chưa tồn tại. Muốn được bảo vệ khỏi ghi đè, dùng <code>"x"</code> —
+                nó ném <code>FileExistsError</code> nếu tệp đã có.
               </p>
             </div>
           </details>
@@ -1181,16 +1292,21 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q2</span>
-            <div class="quiz-q-text"><p>Decorator stack <code><span class="tok-dec">@a</span> <span class="tok-dec">@b</span> def f(): ...</code> apply theo thứ tự nào?</p></div>
+            <div class="quiz-q-text"><p>Vì sao phải dùng <code>with open(...)</code> thay vì <code>open()</code> rồi <code>close()</code>?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Bottom-up</strong>: <code>b</code> apply trước (gần <code>def</code> nhất), <code>a</code> apply sau. Cuối cùng:
-                <code>f = a(b(f))</code>. Khi gọi <code>f()</code> control flow ngược lại: <code>a</code>'s wrapper chạy trước,
-                gọi <code>b</code>'s wrapper, mới đến function gốc.
+                Vì <code>with</code> đảm bảo <code>close()</code> chạy <strong>kể cả khi có exception</strong> giữa
+                chừng. Với cách thủ công, một lỗi trước dòng <code>close()</code> sẽ khiến tệp không bao giờ được
+                đóng. Ba hậu quả: (1) dữ liệu còn trong bộ đệm không được xả xuống đĩa → mất dữ liệu; (2) cạn file
+                descriptor → <code>OSError: Too many open files</code>; (3) trên Windows tệp bị khoá, không xoá/đổi
+                tên được.<br/>
+                CPython thường tự đóng nhờ bộ đếm tham chiếu, nhưng đó là <em>chi tiết cài đặt của CPython</em>,
+                không phải cam kết của ngôn ngữ — PyPy không đảm bảo điều đó. <code>with</code> còn ngắn hơn
+                <code>try/finally</code> và không thể quên.
               </p>
             </div>
           </details>
@@ -1199,18 +1315,21 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q3</span>
-            <div class="quiz-q-text"><p><code>functools.wraps</code> làm gì?</p></div>
+            <div class="quiz-q-text"><p>Vì sao luôn phải truyền <code>encoding="utf-8"</code>?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Copy metadata từ function gốc sang wrapper: <code>__name__</code>, <code>__qualname__</code>,
-                <code>__module__</code>, <code>__doc__</code>, <code>__annotations__</code>. Cũng set
-                <code>wrapper.__wrapped__ = fn</code> để introspection tool có thể "unwrap".
+                Không truyền thì Python dùng bảng mã mặc định của hệ thống
+                (<code>locale.getpreferredencoding()</code>) — thứ <strong>khác nhau giữa các máy</strong>. macOS và
+                Linux hiện đại thường là UTF-8, nhưng Windows tiếng Việt có thể là cp1258. Hệ quả: code chạy hoàn hảo
+                trên máy bạn nhưng ném <code>UnicodeDecodeError</code> trên máy đồng nghiệp, hoặc tệ hơn — chạy được
+                nhưng ghi ra chữ rác mà không ai phát hiện cho tới khi quá muộn.<br/>
+                Python 3.15 sẽ đổi mặc định thành UTF-8 (PEP 686), nhưng viết tường minh vẫn đúng vì code phải chạy
+                được trên bản cũ. Tìm chỗ còn thiếu bằng <code>python -X warn_default_encoding</code>.
               </p>
-              <p>Không có nó, decorator phá <code>help()</code>, debugger và Sphinx docs.</p>
             </div>
           </details>
         </div>
@@ -1218,19 +1337,23 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q4</span>
-            <div class="quiz-q-text"><p><code>__exit__</code> return <code>True</code> có ý nghĩa gì?</p></div>
+            <div class="quiz-q-text"><p><code>pathlib.Path</code> hơn <code>os.path</code> ở điểm nào?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Suppress exception</strong> — Python không re-raise exception ra khỏi <code>with</code> block.
-                Default (return <code>None</code> hoặc <code>False</code>) thì exception propagate bình thường.
-              </p>
-              <p>
-                Suppress chỉ nên dùng khi có lý do rõ ràng (vd: cleanup chỉ áp dụng cho lỗi cụ thể này). Nuốt bừa
-                exception là anti-pattern — debug khó kinh khủng.
+                Bốn điểm: <strong>(1) Hướng đối tượng</strong> — <code>p.exists()</code>, <code>p.parent</code>,
+                <code>p.suffix</code> thay vì gọi hàm rời rạc <code>os.path.exists(p)</code>.
+                <strong>(2) Toán tử <code>/</code></strong> — <code>Path("a") / "b" / "c"</code> đọc tự nhiên hơn
+                <code>os.path.join</code> lồng nhau. <strong>(3) Đa nền tảng</strong> — tự dùng đúng dấu phân cách
+                cho Windows và Unix. <strong>(4) Nối chuỗi thao tác</strong> —
+                <code>Path(__file__).resolve().parent / "data" / "x.csv"</code> viết một hơi, còn với
+                <code>os.path</code> phải lồng ba lớp hàm.<br/>
+                Ngoài ra <code>Path</code> có sẵn <code>read_text</code>, <code>write_text</code>,
+                <code>read_bytes</code>, <code>glob</code>, <code>rglob</code>, <code>mkdir(parents=True)</code> —
+                gộp việc của nhiều module (<code>os</code>, <code>glob</code>, <code>shutil</code>) vào một chỗ.
               </p>
             </div>
           </details>
@@ -1239,18 +1362,21 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q5</span>
-            <div class="quiz-q-text"><p><code>with open(a) as f1, open(b) as f2:</code> — nếu <code>open(b)</code> lỗi, <code>f1</code> có được close?</p></div>
+            <div class="quiz-q-text"><p>Vì sao mở tệp CSV phải truyền <code>newline=""</code>?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Có.</strong> Python đã <code>__enter__</code> cm1 thành công (mở <code>a</code>). Khi
-                <code>open(b)</code> throw exception, exception bắt đầu propagate. Vì cm1 đã enter, Python lập tức trigger
-                <code>__exit__</code> của cm1 với info exception — <code>f1.close()</code> được gọi.
+                Vì có <strong>hai tầng</strong> cùng xử lý ký tự xuống dòng: tầng văn bản của <code>open()</code>
+                (dịch <code>\n</code> ↔ <code>\r\n</code> theo hệ điều hành) và module <code>csv</code> (tự quản lý
+                ký tự kết thúc bản ghi). Khi cả hai cùng làm việc, trên Windows tệp ghi ra sẽ có <code>\r\r\n</code>
+                → mở lên thấy dòng trống xen kẽ giữa mọi dòng dữ liệu.<br/>
+                <code>newline=""</code> tắt tầng dịch của <code>open()</code>, giao toàn quyền cho module
+                <code>csv</code>. Đây là yêu cầu nêu rõ trong tài liệu Python, áp dụng cho <em>cả đọc và ghi</em>.
+                Khi đọc, nó còn giúp xử lý đúng ô có chứa ký tự xuống dòng bên trong dấu nháy kép.
               </p>
-              <p>Đây là behavior đối xứng của multiple <code>with</code> — đảm bảo cleanup đúng cả khi acquire sau fail.</p>
             </div>
           </details>
         </div>
@@ -1258,22 +1384,27 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q6</span>
-            <div class="quiz-q-text"><p><code><span class="tok-dec">@functools.cache</span></code> và <code><span class="tok-dec">@functools.lru_cache</span></code> khác nhau thế nào?</p></div>
+            <div class="quiz-q-text"><p><code>re.match</code>, <code>re.search</code>, <code>re.fullmatch</code> khác nhau ra sao?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <code>cache</code> (Python 3.9+) — cache <strong>không giới hạn</strong>, đơn giản hơn, có thể leak memory nếu
-                function chạy nhiều args khác nhau.<br/>
-                <code>lru_cache(maxsize=128)</code> — có giới hạn (LRU eviction), default 128, an toàn hơn cho long-running
-                process.
+                <code>re.search</code> tìm lần khớp đầu tiên <strong>ở bất kỳ đâu</strong> trong chuỗi — đây là hàm
+                bạn muốn trong hầu hết trường hợp.<br/>
+                <code>re.match</code> chỉ khớp <strong>từ đầu chuỗi</strong>, nhưng <em>không</em> bắt buộc khớp hết:
+                <code>re.match(r"\d+", "123abc")</code> vẫn khớp <code>"123"</code>. Tên hàm gây hiểu lầm nhất module.<br/>
+                <code>re.fullmatch</code> bắt buộc khớp <strong>toàn bộ chuỗi</strong> — đây mới là hàm dùng để
+                <em>kiểm tra hợp lệ</em>.
               </p>
-              <p>
-                Cả 2 yêu cầu arguments <strong>hashable</strong> (int/str/tuple/frozenset OK; list/dict/set không OK). Cả
-                2 có <code>fn.cache_info()</code> và <code>fn.cache_clear()</code>.
-              </p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>so_sanh.py</span><button class="copy-btn">Copy</button></div>
+<pre><code>re.<span class="tok-fn">search</span>(<span class="tok-str">r"\d+"</span>, <span class="tok-str">"abc123"</span>)      <span class="tok-com"># khớp '123'</span>
+re.<span class="tok-fn">match</span>(<span class="tok-str">r"\d+"</span>, <span class="tok-str">"abc123"</span>)       <span class="tok-com"># None</span>
+re.<span class="tok-fn">match</span>(<span class="tok-str">r"\d+"</span>, <span class="tok-str">"123abc"</span>)       <span class="tok-com"># khớp '123'  ⚠️ vẫn khớp!</span>
+re.<span class="tok-fn">fullmatch</span>(<span class="tok-str">r"\d+"</span>, <span class="tok-str">"123abc"</span>)   <span class="tok-com"># None        ✅ đúng cho validate</span></code></pre>
+              </div>
             </div>
           </details>
         </div>
@@ -1281,18 +1412,28 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q7</span>
-            <div class="quiz-q-text"><p>Class có <code>__call__</code> có thể dùng làm decorator không?</p></div>
+            <div class="quiz-q-text"><p><code>.*</code> và <code>.*?</code> khác nhau thế nào? Cho ví dụ hậu quả.</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                <strong>Có.</strong> Decorator chỉ cần là callable (có thể gọi như function). Class với <code>__call__</code>
-                là callable hợp lệ. <code><span class="tok-dec">@MyClass</span></code> tương đương <code>f = MyClass(f)</code> — tạo instance,
-                gán đè <code>f</code>. Mỗi <code>f(...)</code> sau đó trigger <code>__call__</code>.
+                <code>.*</code> <strong>tham lam</strong> — khớp dài nhất có thể rồi mới lùi dần cho tới khi phần
+                còn lại của mẫu khớp được. <code>.*?</code> <strong>lười</strong> — khớp ngắn nhất rồi mới nới dần.
               </p>
-              <p>Hữu ích khi cần giữ state (counter, registry) giữa các call mà không dùng global.</p>
+              <div class="code-wrap">
+                <div class="code-meta"><span>hau_qua.py</span><button class="copy-btn">Copy</button></div>
+<pre><code>html = <span class="tok-str">"&lt;b&gt;đậm&lt;/b&gt; và &lt;i&gt;nghiêng&lt;/i&gt;"</span>
+re.<span class="tok-fn">findall</span>(<span class="tok-str">r"&lt;.*&gt;"</span>, html)    <span class="tok-com"># ['&lt;b&gt;đậm&lt;/b&gt; và &lt;i&gt;nghiêng&lt;/i&gt;'] ❌ nuốt hết</span>
+re.<span class="tok-fn">findall</span>(<span class="tok-str">r"&lt;.*?&gt;"</span>, html)   <span class="tok-com"># ['&lt;b&gt;', '&lt;/b&gt;', '&lt;i&gt;', '&lt;/i&gt;']    ✅</span>
+re.<span class="tok-fn">findall</span>(<span class="tok-str">r"&lt;[^&gt;]*&gt;"</span>, html) <span class="tok-com"># ['&lt;b&gt;', '&lt;/b&gt;', '&lt;i&gt;', '&lt;/i&gt;']    ✅ và nhanh hơn</span></code></pre>
+              </div>
+              <p>
+                Cách thứ ba — dùng lớp ký tự phủ định <code>[^&gt;]*</code> — thường là tốt nhất: nó diễn đạt ý định
+                rõ ràng hơn ("mọi ký tự trừ dấu đóng") và không cần quay lui, nên nhanh hơn và tránh được rủi ro
+                ReDoS.
+              </p>
             </div>
           </details>
         </div>
@@ -1300,26 +1441,25 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
         <div class="quiz">
           <div class="quiz-question">
             <span class="quiz-num">Q8</span>
-            <div class="quiz-q-text"><p><code>with</code> và <code>try/finally</code> khác nhau gì? Thực ra <code>with</code> có làm gì "magic" không?</p></div>
+            <div class="quiz-q-text"><p>Khi nào <strong>không</strong> nên dùng regex?</p></div>
           </div>
           <details>
             <summary>Xem đáp án</summary>
             <div class="quiz-answer">
               <span class="answer-label">✓ Đáp án</span>
               <p>
-                Về <strong>semantics</strong> không khác nhiều — <code>with</code> behind the scenes đúng là một
-                <code>try/finally</code> gọi <code>__enter__</code>/<code>__exit__</code>. Khác chủ yếu về <strong>syntax</strong> và
-                <strong>encapsulation</strong>:
-              </p>
-              <ul>
-                <li><code>with</code> ngắn hơn, ít boilerplate.</li>
-                <li>Logic acquire/release đóng gói trong context manager — caller không cần biết chi tiết.</li>
-                <li>Dễ stack nhiều resource trên 1 dòng.</li>
-                <li>Reusable — viết cm 1 lần, dùng nhiều nơi. Khó quên cleanup hơn.</li>
-              </ul>
-              <p>
-                Bonus: <code>__exit__</code> nhận thông tin exception (<code>exc_type</code>, <code>exc_val</code>) → có thể
-                phân biệt "exit bình thường" vs "exit do lỗi". <code>try/finally</code> thuần phải dùng biến cờ riêng.
+                Ba nhóm tình huống:<br/>
+                <strong>(1) Khi method chuỗi đủ dùng</strong> — <code>"abc" in s</code>,
+                <code>s.startswith(...)</code>, <code>s.replace(...)</code>, <code>s.split(",")</code> đều nhanh hơn
+                và dễ đọc hơn regex tương đương.<br/>
+                <strong>(2) Khi dữ liệu có cấu trúc lồng nhau</strong> — HTML, XML, JSON, CSV. Regex là ngôn ngữ
+                chính quy, về mặt lý thuyết <em>không thể</em> phân tích đúng cấu trúc lồng nhau tuỳ ý. Dùng
+                <code>BeautifulSoup</code>, <code>json</code>, <code>csv</code>, <code>urllib.parse</code>.<br/>
+                <strong>(3) Khi mẫu đến từ người dùng</strong> — rủi ro <strong>ReDoS</strong>: mẫu có lượng từ lồng
+                nhau như <code>(a+)+$</code> khiến engine thử số tổ hợp tăng theo hàm mũ, treo cả tiến trình. Nếu bắt
+                buộc, dùng thư viện <code>regex</code> có tham số <code>timeout</code>.<br/>
+                Quy tắc thực dụng: nếu regex của bạn dài quá một dòng, hãy viết lại bằng
+                <code>re.VERBOSE</code> kèm chú thích — hoặc cân nhắc rằng có thể nó không nên là regex.
               </p>
             </div>
           </details>
@@ -1327,41 +1467,41 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
 
         <h2 id="tong-ket">Tổng kết</h2>
 
-        <p>Sau Chương 7 bạn nên đã master:</p>
+        <p>Sau chương 7, bạn đã master:</p>
         <ul>
-          <li><strong>Decorator</strong> = function nhận function trả function. <code><span class="tok-dec">@dec</span> def f</code> = <code>f = dec(f)</code>. Chạy at-import-time.</li>
-          <li><strong>Mọi decorator nên dùng <code><span class="tok-dec">@functools.wraps(fn)</span></code></strong> trên wrapper — bảo toàn metadata.</li>
-          <li><strong>Decorator có argument</strong> = factory: 3 tầng (factory → decorator → wrapper).</li>
-          <li><strong>Stack decorator</strong>: bottom-up apply, top-down execute. <code><span class="tok-dec">@a</span> <span class="tok-dec">@b</span> def f</code> = <code>a(b(f))</code>.</li>
-          <li><strong>Memoization</strong> với <code><span class="tok-dec">@cache</span></code> / <code><span class="tok-dec">@lru_cache</span></code> — đặc biệt cho recursion. Args phải hashable.</li>
-          <li><strong>Class-based decorator</strong>: class + <code>__call__</code>. Tiện cho stateful decorator.</li>
-          <li><strong>Decorator stdlib/lib</strong>: <code><span class="tok-dec">@dataclass</span></code>, <code><span class="tok-dec">@property</span></code>, <code><span class="tok-dec">@route</span></code>, <code><span class="tok-dec">@fixture</span></code>… đâu cũng thấy.</li>
-          <li><strong>Context manager</strong> với <code>with</code> — RAII của Python, đảm bảo cleanup cả khi exception.</li>
-          <li><strong>2 cách viết cm</strong>: class với <code>__enter__</code>/<code>__exit__</code>, hoặc generator với <code><span class="tok-dec">@contextmanager</span></code>.</li>
-          <li><strong><code>__exit__</code> return <code>True</code></strong> = suppress exception. Default = re-raise.</li>
-          <li><strong>Nhiều cm</strong>: viết liền dấu phẩy, hoặc <code>ExitStack</code> cho số động.</li>
-          <li><strong><code>suppress(ExceptionType)</code></strong> = idiom Pythonic cho "try / except / pass".</li>
+          <li><strong>Chế độ mở tệp</strong>: <code>r</code>/<code>w</code>/<code>a</code>/<code>x</code> + <code>b</code>/<code>+</code>; <code>"w"</code> xoá tệp ngay lúc mở.</li>
+          <li><strong><code>with</code></strong> là bắt buộc — đảm bảo đóng tệp kể cả khi có exception.</li>
+          <li><strong>Đọc tệp</strong>: <code>for dong in f</code> là mặc định, chạy được với tệp lớn hơn RAM.</li>
+          <li><strong>Ghi tệp</strong>: <code>write</code> không tự thêm <code>\n</code>; mẫu ghi nguyên tử qua tệp tạm + <code>replace</code>.</li>
+          <li><strong>Encoding</strong>: luôn <code>encoding="utf-8"</code>; hiểu BOM và <code>utf-8-sig</code>; các chế độ <code>errors=</code>.</li>
+          <li><strong><code>pathlib</code></strong>: <code>/</code> để nối, <code>read_text</code>/<code>write_text</code>, <code>glob</code>/<code>rglob</code>, <code>Path(__file__).resolve().parent</code>.</li>
+          <li><strong>JSON</strong>: <code>ensure_ascii=False</code> cho tiếng Việt; <code>default=</code> cho kiểu tự định nghĩa.</li>
+          <li><strong>CSV</strong>: <code>DictReader</code>/<code>DictWriter</code>, <code>newline=""</code>, <code>utf-8-sig</code> cho Excel, mọi giá trị đọc ra là <code>str</code>.</li>
+          <li><strong>Regex</strong>: raw string, bảng cú pháp, tham lam vs lười, nhóm có tên, 7 hàm của <code>re</code>, cờ và <code>compile</code>.</li>
+          <li><strong>Giới hạn của regex</strong>: khi nào dùng method chuỗi hoặc parser chuyên dụng; rủi ro ReDoS.</li>
         </ul>
 
         <h2 id="ket-noi">Kết nối</h2>
-
         <ul>
-          <li><strong>Chương 3 (Functions &amp; Closures)</strong> — wrapper trong decorator chính là closure capture <code>fn</code>. Hiểu closure giúp hiểu decorator.</li>
-          <li><strong>Chương 5 (OOP)</strong> — <code><span class="tok-dec">@property</span></code>, <code><span class="tok-dec">@classmethod</span></code>, <code><span class="tok-dec">@staticmethod</span></code>, <code><span class="tok-dec">@dataclass</span></code> đều là decorator. Nay bạn hiểu chúng vận hành thế nào.</li>
-          <li><strong>Chương 6 (Iterators &amp; Generators)</strong> — <code><span class="tok-dec">@contextmanager</span></code> biến generator (yield 1 lần) thành cm. Đây chính là use case quan trọng của generator ngoài lazy iteration.</li>
-          <li><strong>Chương 8 (Async Python)</strong> — Async có <code><span class="tok-dec">@asynccontextmanager</span></code> và <code>async with</code>. Concept giống hệt, chỉ là async version.</li>
-          <li><strong>Chương 10 (Testing với pytest)</strong> — <code><span class="tok-dec">@pytest.fixture</span></code>, <code><span class="tok-dec">@pytest.mark.parametrize</span></code> là decorator. pytest fixture cũng dùng generator + yield giống <code><span class="tok-dec">@contextmanager</span></code>.</li>
-          <li><strong>JS Chương 7 (HOC/closures)</strong> — JS không có decorator syntax (TC39 stage-3 đang chờ), nhưng pattern HOC <code>withLogging(fn)</code> tương đương Python decorator.</li>
+          <li><strong>Chương 3 (Data Structures)</strong> — <code>Counter</code>, <code>defaultdict</code> dùng liên tục khi tổng hợp dữ liệu từ tệp.</li>
+          <li><strong>Chương 5 (Exceptions)</strong> — <code>FileNotFoundError</code>, <code>PermissionError</code>, <code>UnicodeDecodeError</code>, <code>JSONDecodeError</code>; EAFP tránh TOCTOU khi thao tác tệp.</li>
+          <li><strong>Chương 6 (Modules)</strong> — <code>pathlib</code>, <code>json</code>, <code>csv</code>, <code>re</code> đều là stdlib; <code>Path(__file__)</code> để định vị tài nguyên trong package.</li>
+          <li><strong>Chương 9 (Iterators &amp; Generators)</strong> — đối tượng tệp <em>là</em> iterator; viết generator đọc tệp lười để dựng pipeline xử lý dữ liệu.</li>
+          <li><strong>Chương 10 (Context Managers)</strong> — cơ chế <code>__enter__</code>/<code>__exit__</code> đứng sau <code>with</code>; tự viết context manager cho tài nguyên của bạn.</li>
+          <li><strong>Chương 11 (Async Python)</strong> — I/O tệp là thao tác chặn; dùng <code>asyncio.to_thread</code> hoặc <code>aiofiles</code> trong code async.</li>
+          <li><strong>Chương 14 (Dự án)</strong> — ghép tất cả: đọc CSV, gọi API, ghi JSON, sinh báo cáo.</li>
+          <li><strong>JavaScript Chương 8</strong> — đối chiếu <code>fs/promises</code>: Node bắt buộc bất đồng bộ, Python mặc định đồng bộ.</li>
+          <li><strong>CLI pillar</strong> — <code>grep</code>, <code>sed</code>, <code>awk</code> dùng chung ngôn ngữ regex (phương ngữ POSIX/PCRE, khác Python vài chi tiết nhỏ).</li>
         </ul>
 
         <nav class="chapter-nav">
           <a href="chuong6.html" class="prev">
             <div class="dir">← Chương 6</div>
-            <div class="label">Iterators &amp; Generators</div>
+            <div class="label">Modules &amp; Packages</div>
           </a>
           <a href="chuong8.html" class="next">
             <div class="dir">Chương 8 →</div>
-            <div class="label">Async Python</div>
+            <div class="label">OOP in Python</div>
           </a>
         </nav>
 
@@ -1370,20 +1510,22 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
       <aside class="toc">
         <div class="toc-label">Trong chương này</div>
         <ul>
-          <li><a href="#decorator-mental-model">1. Decorator — mental model</a></li>
-          <li><a href="#decorator-simple">2. Decorator đơn giản</a></li>
-          <li><a href="#functools-wraps">3. functools.wraps</a></li>
-          <li><a href="#decorator-factory">4. Decorator có argument</a></li>
-          <li><a href="#decorator-stack">5. Stack decorator</a></li>
-          <li><a href="#cache-lru">6. cache / lru_cache</a></li>
-          <li><a href="#class-decorator">7. Class-based decorator</a></li>
-          <li><a href="#decorator-stdlib">8. Decorator trong stdlib</a></li>
-          <li><a href="#context-manager-with">9. Context manager với <code>with</code></a></li>
-          <li><a href="#cm-class">10. Context manager dạng class</a></li>
-          <li><a href="#contextmanager-decorator">11. @contextmanager</a></li>
-          <li><a href="#nested-with">12. Nested with</a></li>
-          <li><a href="#exitstack">13. ExitStack</a></li>
-          <li><a href="#suppress">14. suppress</a></li>
+          <li><a href="#open">1. <code>open()</code></a></li>
+          <li class="level-3"><a href="#che-do">1.1. Chế độ mở tệp</a></li>
+          <li><a href="#with">2. <code>with</code> statement</a></li>
+          <li><a href="#doc-file">3. Bốn cách đọc tệp</a></li>
+          <li><a href="#ghi-file">4. Ghi tệp</a></li>
+          <li><a href="#encoding">5. Encoding</a></li>
+          <li><a href="#pathlib">6. <code>pathlib</code></a></li>
+          <li><a href="#json">7. JSON</a></li>
+          <li><a href="#csv">8. CSV</a></li>
+          <li><a href="#regex-co-ban">9. Regex — module <code>re</code></a></li>
+          <li class="level-3"><a href="#cu-phap-regex">9.1. Bảng cú pháp</a></li>
+          <li class="level-3"><a href="#ham-re">9.2. Bảy hàm của <code>re</code></a></li>
+          <li class="level-3"><a href="#group">9.3. Nhóm có tên</a></li>
+          <li class="level-3"><a href="#flag-compile">9.4. Cờ &amp; <code>compile</code></a></li>
+          <li><a href="#khi-nao-regex">10. Khi nào không dùng regex</a></li>
+          <li><a href="#cheat-sheet">11. Cheat sheet</a></li>
           <li><a href="#bai-tap">Bài tập</a></li>
           <li><a href="#quiz">Quiz</a></li>
           <li><a href="#tong-ket">Tổng kết</a></li>
@@ -1397,7 +1539,7 @@ help(divide)  <span class="tok-com"># Help on function wrapper... ← BUG</span>
   <footer class="site-footer">
     <div class="container">
       <p>
-        Chương 7 — Decorators &amp; Context Managers · Python sub-pillar · Pillar 9 IT Basic<br/>
+        Chương 7 — File I/O &amp; Regex · Python sub-pillar · Pillar 9 IT Basic<br/>
         <a href="chuong6.html">← Chương 6</a> · <a href="../index.html">Python TOC</a> · <a href="chuong8.html">Chương 8 →</a>
       </p>
     </div>
