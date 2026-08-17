@@ -1,6 +1,5 @@
 # Programming Language Pillar — Curriculum tổng
 
-**Owner:** vietanh142004 (huyqh95@gmail.com)
 **Started:** 2026-05-19
 **Status:** ✅ **HOÀN THÀNH 100% — 45/45 chương, 4 sub-pillar đã ship (2026-05-20)**
 - ✅ **Dart 8/8** (~7,745 dòng)

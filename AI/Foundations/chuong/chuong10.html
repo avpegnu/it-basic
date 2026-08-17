@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 10 — Transformer: kiến trúc chạy mọi LLM · Nền tảng AI</title>
+  <meta name="description" content="Self-attention với Q/K/V tính tay từng bước, vì sao chia căn d, multi-head, masked attention, mã hoá vị trí và RoPE, khối Transformer đầy đủ, ba biến thể encoder/decoder, và hệ quả của độ phức tạp O(n²)." />
+  <meta name="theme-color" content="#8a6a3f" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Ma trận số dùng cho ví dụ tính tay */
+    .matrix-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+      justify-content: center;
+    }
+    .matrix {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      border-left: 2px solid var(--text-muted);
+      border-right: 2px solid var(--text-muted);
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border-radius: 3px;
+    }
+    .matrix .mrow { white-space: pre; line-height: 1.75; }
+    .matrix-label {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--accent);
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 5px;
+    }
+    .mop { font-family: var(--font-mono); font-size: 1.1rem; color: var(--text-muted); }
+
+    /* Heatmap attention */
+    .attn-wrap { overflow-x: auto; }
+    .attn-table {
+      border-collapse: separate;
+      border-spacing: 2px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      margin: 0 auto;
+    }
+    .attn-table th {
+      background: none;
+      border: none;
+      padding: 4px 6px;
+      color: var(--text-muted);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .attn-table th.qh { text-align: right; }
+    .attn-table td {
+      width: 52px;
+      height: 34px;
+      text-align: center;
+      border: none;
+      border-radius: 4px;
+      color: #2b2733;
+      cursor: default;
+      transition: outline 0.1s;
+      padding: 0;
+    }
+    .attn-table td.masked { background: repeating-linear-gradient(45deg, #ece7dc, #ece7dc 4px, #e2dbcc 4px, #e2dbcc 8px) !important; color: #a9a496; }
+    .attn-table tr.hl td { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .attn-table tr:hover td { outline: 2px solid var(--accent-deep); outline-offset: -2px; }
+    .attn-note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: var(--bg-alt);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    /* Khối Transformer */
+    .tblock {
+      max-width: 400px;
+      margin: 22px auto;
+      border: 2px solid var(--accent);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      background: var(--bg-card);
+    }
+    .tblock .tb-title {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .tb-item {
+      padding: 10px 13px;
+      border-radius: 7px;
+      text-align: center;
+      font-size: 0.88rem;
+      margin-bottom: 7px;
+    }
+    .tb-item.attn { background: rgba(91,75,138,0.14); color: #3f3363; font-weight: 600; }
+    .tb-item.norm { background: rgba(47,111,106,0.13); color: #23544f; }
+    .tb-item.ffn  { background: rgba(163,90,42,0.13); color: #7c421c; font-weight: 600; }
+    .tb-item.add  { background: var(--bg-alt); color: var(--text-soft); font-size: 0.82rem; }
+    .tb-arrow { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin: 2px 0 5px; }
+    .tblock .tb-repeat {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+
+    /* Bảng O(n²) */
+    .cost-bar {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin-bottom: 7px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+    .cost-bar .cb-k { flex: 0 0 96px; color: var(--text-soft); }
+    .cost-bar .cb-track { flex: 1; height: 18px; background: var(--bg-sunken); border-radius: 4px; overflow: hidden; }
+    .cost-bar .cb-fill { height: 100%; background: var(--rust); border-radius: 4px; min-width: 2px; }
+    .cost-bar .cb-v { flex: 0 0 118px; text-align: right; color: var(--ink); font-weight: 600; }
+
+    /* Bảng ba biến thể */
+    .variant-table td:first-child { font-weight: 600; color: var(--ink); }
+
+    @media (max-width: 640px) {
+      .matrix { font-size: 0.74rem; padding: 6px 8px; }
+      .attn-table td { width: 40px; height: 30px; font-size: 0.66rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark">10.1</span>
+        Nền tảng AI · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Trụ cột 10</a></li>
+          <li><a href="../index.html" class="active">Nền tảng</a></li>
+          <li><a href="../../LLM/index.html">LLM</a></li>
+          <li><a href="../../RAG/index.html">RAG</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Trụ cột 10</a><span class="sep">/</span>
+        <a href="../index.html">Nền tảng AI</a><span class="sep">/</span>
+        <span>Chương 10</span>
+      </div>
+      <div class="chapter-num">Chương 10 · Transformer</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; margin: 0 0 14px; color: var(--ink); line-height: 1.15;">
+        Transformer: kiến trúc chạy mọi LLM
+      </h1>
+      <p class="lead">
+        Đây là chương quan trọng nhất của sub-pillar, và là cầu nối sang toàn bộ phần còn lại của
+        trụ cột. Không hiểu attention thì mọi thứ ở sub-pillar LLM chỉ là học vẹt API — bạn sẽ
+        không giải thích được vì sao có cửa sổ ngữ cảnh, vì sao token đầu ra đắt hơn token đầu vào,
+        hay vì sao ngữ cảnh dài lại tốn kém đến vậy. Chúng ta sẽ <strong>tính tay một lượt
+        self-attention đầy đủ</strong> để mọi thứ trở nên cụ thể.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1.500 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Cần trước:</strong> Chương 2, 7, 9</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Giải thích được vai trò của <strong>Query, Key, Value</strong> bằng lời.</li>
+            <li><strong>Tính tay</strong> một lượt self-attention với số cụ thể.</li>
+            <li>Giải thích vì sao công thức chia cho <strong>√d</strong> — và điều gì xảy ra nếu không chia.</li>
+            <li>Hiểu vì sao <strong>mã hoá vị trí</strong> là bắt buộc, và RoPE là gì.</li>
+            <li>Hiểu <strong>multi-head</strong> và <strong>masked attention</strong>.</li>
+            <li>Vẽ được một khối Transformer đầy đủ và nói được vai trò từng thành phần.</li>
+            <li>Phân biệt ba biến thể encoder-only / decoder-only / encoder-decoder và biết cái nào dùng cho việc gì.</li>
+            <li>Hiểu hệ quả thực tế của độ phức tạp <strong>O(n²)</strong> — nền của mọi vấn đề chi phí ở các sub-pillar sau.</li>
+          </ul>
+        </div>
+
+        <h2 id="boi-canh">1. Bối cảnh: bỏ hẳn đệ quy</h2>
+
+        <p>
+          Chương 9 kết thúc bằng câu hỏi: <em>nếu attention hữu ích đến thế, sao không bỏ hẳn RNN
+          và chỉ giữ attention?</em>
+        </p>
+
+        <p>
+          Năm 2017, bài báo <strong>"Attention Is All You Need"</strong> trả lời: được, và kết quả
+          tốt hơn hẳn. Kiến trúc mới có tên <strong>Transformer</strong>, và tính tới 2026 nó vẫn
+          là nền của gần như mọi mô hình ngôn ngữ lớn — cũng như của mô hình sinh ảnh, mô hình
+          giọng nói, và mô hình đa phương thức.
+        </p>
+
+        <p>
+          Ý tưởng cốt lõi có thể phát biểu trong một câu:
+          <strong>thay vì truyền thông tin tuần tự qua từng bước, hãy cho mọi vị trí nhìn thấy
+          mọi vị trí khác cùng một lúc.</strong>
+        </p>
+
+        <h2 id="embedding">2. Từ token tới vector</h2>
+
+        <p>
+          Trước khi vào attention, cần một bước chuẩn bị. Mô hình không xử lý được chữ, nên văn
+          bản đi qua ba bước:
+        </p>
+
+        <div class="pipeline-flow">
+          <div class="stages">
+            <div class="stage">
+              <div class="stage-title">1. Tokenize</div>
+              <div class="stage-content">"Con mèo" → <code>[1234, 5678]</code></div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">2. Tra bảng</div>
+              <div class="stage-content">ID → vector d chiều từ ma trận embedding</div>
+            </div>
+            <div class="stage hl">
+              <div class="stage-title">3. Cộng vị trí</div>
+              <div class="stage-content">Thêm thông tin "token này ở vị trí nào"</div>
+            </div>
+          </div>
+          <div class="caption">
+            Ma trận embedding là <strong>tham số học được</strong> — kích thước
+            <code>(số_từ_vựng × d)</code>. Với từ vựng 100.000 và d = 4.096, riêng bảng này đã
+            hơn 400 triệu tham số.
+          </div>
+        </div>
+
+        <h2 id="positional">3. Mã hoá vị trí — vì sao bắt buộc phải có</h2>
+
+        <p>
+          Đây là hệ quả trực tiếp và khó chịu của việc bỏ đệ quy. Self-attention xử lý mọi vị trí
+          <em>đồng thời và như nhau</em>. Nó không có khái niệm "trước" và "sau".
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Không có mã hoá vị trí, hai câu này giống hệt nhau</div>
+          <div class="compare-pair" style="margin-top: 12px;">
+            <div class="side">
+              <div class="side-label" style="color: var(--text-soft);">Câu A</div>
+              <p style="margin: 0;">Chó cắn người</p>
+            </div>
+            <div class="side">
+              <div class="side-label" style="color: var(--text-soft);">Câu B</div>
+              <p style="margin: 0;">Người cắn chó</p>
+            </div>
+          </div>
+          <p style="margin-top: 12px;">
+            Cùng tập token, chỉ khác thứ tự. Với self-attention thuần, tập đầu vào là như nhau,
+            nên đầu ra cũng như nhau. Mô hình <em>không có cách nào</em> phân biệt được — trừ khi
+            ta nhét thông tin vị trí vào chính các vector.
+          </p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 20%;">Cách</th><th>Cơ chế</th><th style="width: 28%;">Nhận xét</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Sinusoidal</strong></td>
+                <td>Cộng vào embedding một mẫu hình sin/cos với tần số khác nhau theo từng chiều</td>
+                <td>Cách gốc năm 2017. Không cần học, ngoại suy được ra độ dài chưa từng thấy</td>
+              </tr>
+              <tr>
+                <td><strong>Learned</strong></td>
+                <td>Một bảng embedding riêng cho từng vị trí, học như mọi tham số khác</td>
+                <td>Đơn giản, hiệu quả, nhưng ⚠️ <em>không</em> ngoại suy được quá độ dài đã huấn luyện</td>
+              </tr>
+              <tr>
+                <td><strong>RoPE</strong><br/><small>Rotary</small></td>
+                <td><strong>Xoay</strong> vector Q và K một góc tỉ lệ với vị trí, thay vì cộng thêm</td>
+                <td><strong>Chuẩn của hầu hết LLM hiện đại.</strong> Mã hoá được vị trí <em>tương đối</em> một cách tự nhiên</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Vì sao RoPE thắng — và vì sao điều đó quan trọng với bạn</div>
+          <p>
+            Điều mô hình thực sự cần biết thường không phải "token này ở vị trí tuyệt đối 47", mà
+            là "<em>token này cách token kia bao xa</em>". RoPE mã hoá đúng thứ đó: vì phép xoay
+            được áp lên cả Q và K, tích vô hướng giữa chúng chỉ phụ thuộc vào
+            <strong>hiệu</strong> hai vị trí.
+          </p>
+          <p style="margin-top: 10px;">
+            Hệ quả thực tế bạn sẽ gặp ở <strong>10.2 chương 2</strong>: RoPE cho phép
+            <em>mở rộng cửa sổ ngữ cảnh sau khi đã huấn luyện</em> bằng cách nội suy góc xoay.
+            Đó là lý do kỹ thuật khiến cửa sổ ngữ cảnh của các mô hình tăng nhanh trong vài năm
+            qua mà không phải huấn luyện lại từ đầu.
+          </p>
+        </div>
+
+        <h2 id="self-attention">4. Self-attention</h2>
+
+        <p>
+          Trái tim của toàn bộ kiến trúc. Ta sẽ đi từ trực giác tới công thức, rồi tính tay.
+        </p>
+
+        <h3 id="qkv">4.1. Query, Key, Value</h3>
+
+        <p>
+          Với <em>mỗi</em> token, mô hình tạo ra ba vector bằng ba phép biến đổi tuyến tính học
+          được:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 16%;">Vector</th><th style="width: 30%;">Trả lời câu hỏi</th><th>Vai trò</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Query</strong> (Q)</td>
+                <td><em>"Tôi đang tìm thông tin gì?"</em></td>
+                <td>Đại diện cho nhu cầu của token hiện tại</td>
+              </tr>
+              <tr>
+                <td><strong>Key</strong> (K)</td>
+                <td><em>"Tôi cung cấp thông tin gì?"</em></td>
+                <td>Nhãn dán để các token khác so khớp</td>
+              </tr>
+              <tr>
+                <td><strong>Value</strong> (V)</td>
+                <td><em>"Nội dung tôi đóng góp là gì?"</em></td>
+                <td>Thông tin thực sự được truyền đi khi được chú ý</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Ẩn dụ: tra từ điển mềm</div>
+          <p>
+            Tra một từ điển thông thường: bạn có một <em>khoá tra</em> (query), so khớp chính xác
+            với một <em>mục từ</em> (key), và nhận về <em>nghĩa</em> (value). Khớp hoặc không khớp —
+            nhị phân.
+          </p>
+          <p style="margin-top: 10px;">
+            Attention là phiên bản <strong>mềm</strong>: query so khớp với <em>mọi</em> key và
+            nhận về điểm số liên quan; kết quả là <strong>trung bình có trọng số</strong> của tất
+            cả các value, với trọng số là mức độ khớp.
+          </p>
+          <p style="margin-top: 10px;">
+            Ví dụ cụ thể: token <code>"là"</code> phát ra một query đại loại "tôi cần biết chủ ngữ
+            để chia động từ". Token <code>"gái"</code> có key khớp mạnh với query đó. Nên
+            <code>"là"</code> nhận phần lớn value từ <code>"gái"</code> — <em>bất kể chúng cách
+            nhau bao xa</em>. Đó chính là thứ RNN không làm được.
+          </p>
+        </div>
+
+        <h3 id="cong-thuc">4.2. Công thức</h3>
+
+        <div class="formula" style="margin: 22px 0; padding: 22px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-align: center;">
+          <span style="font-family: var(--font-mono); font-size: 1.32rem; color: var(--ink);">
+            Attention(Q, K, V) = softmax(QKᵀ / √d<sub>k</sub>) · V
+          </span>
+        </div>
+
+        <p>Bốn thành phần, mỗi cái có một lý do tồn tại rõ ràng:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 18%;">Thành phần</th><th>Làm gì</th><th style="width: 28%;">Vì sao cần</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>QKᵀ</code></td>
+                <td>Tích vô hướng giữa <em>mọi</em> cặp query–key</td>
+                <td>Đo mức độ khớp (chương 2, mục 2)</td>
+              </tr>
+              <tr>
+                <td><code>/ √d<sub>k</sub></code></td>
+                <td>Chia cho căn bậc hai của số chiều</td>
+                <td>Giữ softmax không bão hoà — xem mục 4.4</td>
+              </tr>
+              <tr>
+                <td><code>softmax</code></td>
+                <td>Biến điểm số thành phân phối xác suất</td>
+                <td>Trọng số phải dương và tổng bằng 1 (chương 2, mục 6)</td>
+              </tr>
+              <tr>
+                <td><code>· V</code></td>
+                <td>Trung bình có trọng số các value</td>
+                <td>Lấy ra thông tin thực sự cần</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="tinh-tay">4.3. Tính tay một lượt đầy đủ</h3>
+
+        <p>
+          Ba token, <code>d<sub>k</sub> = 2</code>. Để đơn giản, ta lấy Q, K, V trùng nhau (trong
+          mô hình thật chúng là ba phép chiếu khác nhau của cùng một đầu vào).
+        </p>
+
+        <div class="matrix-row">
+          <div>
+            <div class="matrix-label">Q = K = V</div>
+            <div class="matrix">
+              <div class="mrow">1  0</div>
+              <div class="mrow">0  1</div>
+              <div class="mrow">1  1</div>
+            </div>
+          </div>
+        </div>
+
+        <p><strong>Bước 1 — tính <code>QKᵀ</code>:</strong> tích vô hướng giữa mọi cặp.</p>
+
+        <div class="matrix-row">
+          <div>
+            <div class="matrix-label">QKᵀ</div>
+            <div class="matrix">
+              <div class="mrow">1  0  1</div>
+              <div class="mrow">0  1  1</div>
+              <div class="mrow">1  1  2</div>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size: 0.92rem; color: var(--text-soft);">
+          Kiểm chứng ô [3][3]: <code>q₃·k₃ = (1)(1) + (1)(1) = 2</code> — token 3 khớp với chính
+          nó mạnh nhất, điều hợp lý.
+        </p>
+
+        <p><strong>Bước 2 — chia cho <code>√d<sub>k</sub> = √2 ≈ 1,4142</code>:</strong></p>
+
+        <div class="matrix-row">
+          <div>
+            <div class="matrix-label">QKᵀ / √2</div>
+            <div class="matrix">
+              <div class="mrow">0,707  0      0,707</div>
+              <div class="mrow">0      0,707  0,707</div>
+              <div class="mrow">0,707  0,707  1,414</div>
+            </div>
+          </div>
+        </div>
+
+        <p><strong>Bước 3 — softmax theo từng hàng</strong> (mỗi hàng là một query):</p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>tính hàng 1</span><button class="copy-btn">Sao chép</button></div>
+<pre><code>exp(0,707) = 2,028
+exp(0)     = 1,000
+exp(0,707) = 2,028
+tổng       = 5,056
+
+→ [2,028/5,056 ·  1,000/5,056 ·  2,028/5,056]
+→ [0,401 · 0,198 · 0,401]      ← tổng = 1 ✓</code></pre>
+        </div>
+
+        <div class="matrix-row">
+          <div>
+            <div class="matrix-label">Trọng số attention</div>
+            <div class="matrix">
+              <div class="mrow">0,401  0,198  0,401</div>
+              <div class="mrow">0,198  0,401  0,401</div>
+              <div class="mrow">0,248  0,248  0,504</div>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size: 0.92rem; color: var(--text-soft);">
+          Đọc hàng 3: token 3 dành 50,4% chú ý cho chính nó, và chia đều 24,8% cho hai token còn
+          lại. Mỗi hàng tổng bằng 1 — đó là bảo đảm của softmax.
+        </p>
+
+        <p><strong>Bước 4 — nhân với V:</strong></p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>tính hàng 1</span><button class="copy-btn">Sao chép</button></div>
+<pre><code>out₁ = 0,401·[1,0] + 0,198·[0,1] + 0,401·[1,1]
+     = [0,401 + 0 + 0,401 ·  0 + 0,198 + 0,401]
+     = [0,802 · 0,599]</code></pre>
+        </div>
+
+        <div class="matrix-row">
+          <div>
+            <div class="matrix-label">Đầu ra</div>
+            <div class="matrix">
+              <div class="mrow">0,802  0,599</div>
+              <div class="mrow">0,599  0,802</div>
+              <div class="mrow">0,752  0,752</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Điều vừa xảy ra</div>
+          <p>
+            Mỗi token đi vào là một vector; mỗi token đi ra cũng là một vector cùng số chiều.
+            Nhưng vector đi ra <strong>đã trộn thông tin từ mọi token khác</strong>, theo tỉ lệ do
+            chính mô hình quyết định.
+          </p>
+          <p style="margin-top: 10px;">
+            Đó là toàn bộ self-attention. Xếp chồng nhiều lớp như vậy, mỗi lớp trộn thêm một
+            vòng, và bạn có một mô hình mà mỗi token cuối cùng mang thông tin ngữ cảnh của toàn bộ
+            câu.
+          </p>
+        </div>
+
+        <h3 id="vi-sao-can-d">4.4. Vì sao chia cho √d</h3>
+
+        <p>
+          Đây là chi tiết được hỏi nhiều trong phỏng vấn, và câu trả lời rất cụ thể.
+        </p>
+
+        <p>
+          Tích vô hướng của hai vector <code>d</code> chiều là tổng của <code>d</code> số hạng.
+          Nếu các thành phần là độc lập với phương sai đơn vị, thì <strong>phương sai của tích vô
+          hướng tỉ lệ với <code>d</code></strong>, nên độ lớn điển hình của nó tỉ lệ với
+          <code>√d</code>.
+        </p>
+
+        <p>
+          Với <code>d = 64</code>, các điểm số trước softmax có thể dễ dàng nằm trong khoảng
+          ±8 hoặc hơn. Softmax của những số như vậy gần như là one-hot: một token nhận ~99,9% chú
+          ý, phần còn lại gần 0.
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Hậu quả nếu không chia</div>
+          <p>
+            Softmax bão hoà nghĩa là <strong>gradient gần bằng 0</strong> — quay lại đúng vấn đề
+            gradient tiêu biến ở chương 7. Mô hình gần như không học được cách điều chỉnh phân bố
+            chú ý, vì mọi thay đổi nhỏ ở đầu vào không làm đầu ra nhúc nhích.
+          </p>
+          <p style="margin-top: 10px;">
+            Chia cho <code>√d<sub>k</sub></code> đưa phương sai của điểm số về khoảng 1, giữ
+            softmax trong vùng nhạy nơi gradient còn hữu ích. Một phép chia, giải quyết một vấn đề
+            có thể làm hỏng cả kiến trúc.
+          </p>
+        </div>
+
+        <h2 id="multi-head">5. Multi-head attention</h2>
+
+        <p>
+          Một lượt attention học được <em>một</em> kiểu quan hệ. Nhưng ngôn ngữ có nhiều loại quan
+          hệ cùng lúc: cú pháp, đồng tham chiếu, ngữ nghĩa, vị trí.
+        </p>
+
+        <p>
+          Giải pháp: chạy <strong>nhiều lượt attention song song</strong>, mỗi lượt gọi là một
+          <em>đầu</em> (head), với bộ trọng số Q/K/V riêng. Rồi nối kết quả lại và chiếu qua một
+          ma trận nữa.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Mỗi đầu làm việc trên một phần của số chiều, không phải toàn bộ.</span>
+<span class="tok-com"># d_model = 512, số đầu = 8  →  mỗi đầu có d_k = 64</span>
+
+dau_ra = []
+<span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-fn">range</span>(so_dau):
+    Qi = X @ W_Q[i]          <span class="tok-com"># (n, 64)</span>
+    Ki = X @ W_K[i]
+    Vi = X @ W_V[i]
+    dau_ra.<span class="tok-fn">append</span>(<span class="tok-fn">attention</span>(Qi, Ki, Vi))
+
+ket_qua = np.<span class="tok-fn">concatenate</span>(dau_ra, axis=-<span class="tok-num">1</span>) @ W_O   <span class="tok-com"># (n, 512)</span>
+
+<span class="tok-com"># Chi phí tính toán gần như không đổi so với một đầu 512 chiều,</span>
+<span class="tok-com"># nhưng mô hình học được 8 kiểu quan hệ khác nhau thay vì 1.</span></code></pre>
+        </div>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Thử: ma trận attention</span>
+            <label style="display: flex; align-items: center; gap: 7px; font-size: 0.85rem; color: var(--text-soft); cursor: pointer;">
+              <input type="checkbox" id="attn-mask" checked style="accent-color: var(--accent);">
+              Che token tương lai
+            </label>
+          </div>
+          <div class="ia-body">
+            <div class="ia-controls" style="margin-bottom: 16px;">
+              <div class="ia-field">
+                <label for="attn-head">Đầu attention</label>
+                <select id="attn-head" style="min-width: 230px;">
+                  <option value="0">Đầu 1 — quan hệ cú pháp</option>
+                  <option value="1">Đầu 2 — token liền kề</option>
+                  <option value="2">Đầu 3 — neo về đầu câu</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="attn-wrap">
+              <table class="attn-table" id="attn-table"></table>
+            </div>
+
+            <div class="attn-note" id="attn-note"></div>
+          </div>
+          <div class="ia-note">
+            Mỗi <strong>hàng</strong> là một query (token đang hỏi), mỗi <strong>cột</strong> là
+            một key (token được hỏi). Ô càng đậm, chú ý càng nhiều. Mỗi hàng tổng bằng 1.
+            Bỏ tick "che token tương lai" để thấy khác biệt giữa mô hình <em>hiểu</em> và mô hình
+            <em>sinh</em> văn bản.
+          </div>
+        </div>
+
+        <p>
+          Các đầu trong mô hình thật không được gán nhãn — chúng tự phân hoá trong quá trình huấn
+          luyện. Khi phân tích mô hình đã huấn luyện, người ta tìm thấy những mẫu hình khá ổn định:
+          có đầu chuyên chú ý token liền trước, có đầu bám theo quan hệ chủ ngữ–động từ, có đầu
+          gần như luôn neo về token đầu chuỗi (thường gọi là <em>attention sink</em>).
+        </p>
+
+        <h2 id="masked">6. Masked attention — vì sao mô hình sinh văn bản cần nó</h2>
+
+        <p>
+          Mô hình ngôn ngữ được huấn luyện bằng cách dự đoán token kế tiếp. Nếu ở vị trí 5 nó được
+          nhìn thấy token 6, bài toán trở nên vô nghĩa — <strong>đáp án nằm ngay trong đầu vào</strong>.
+        </p>
+
+        <p>
+          Giải pháp: trước softmax, đặt các ô ứng với token tương lai thành <code>−∞</code>.
+          Sau softmax, chúng thành đúng 0.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> torch
+
+n = <span class="tok-num">5</span>
+mat_na = torch.<span class="tok-fn">triu</span>(torch.<span class="tok-fn">ones</span>(n, n), diagonal=<span class="tok-num">1</span>).<span class="tok-fn">bool</span>()
+<span class="tok-com"># True ở phần tam giác TRÊN — đó là các vị trí tương lai</span>
+
+diem = diem.<span class="tok-fn">masked_fill</span>(mat_na, <span class="tok-fn">float</span>(<span class="tok-str">"-inf"</span>))
+trong_so = torch.<span class="tok-fn">softmax</span>(diem, dim=-<span class="tok-num">1</span>)
+<span class="tok-com"># exp(-inf) = 0 → token tương lai nhận đúng 0% chú ý</span></code></pre>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Vì sao chi tiết này quan trọng với bạn</div>
+          <p>
+            Mặt nạ nhân quả là lý do kỹ thuật khiến LLM <strong>sinh từng token một</strong> chứ
+            không sinh cả câu cùng lúc. Mỗi token mới chỉ nhìn được những gì đứng trước nó.
+          </p>
+          <p style="margin-top: 10px;">
+            Và đó lại là gốc rễ của ba thứ bạn sẽ gặp liên tục ở các sub-pillar sau:
+            <strong>token đầu ra đắt hơn token đầu vào</strong> (đầu vào xử lý song song một lần,
+            đầu ra phải tuần tự), sự tồn tại của <strong>KV cache</strong>, và lý do
+            <strong>streaming</strong> khả thi. Chi tiết ở <strong>10.2 chương 1</strong>.
+          </p>
+        </div>
+
+        <h2 id="khoi">7. Khối Transformer đầy đủ</h2>
+
+        <div class="tblock">
+          <div class="tb-title">Một khối Transformer</div>
+          <div class="tb-item norm">LayerNorm</div>
+          <div class="tb-arrow">↓</div>
+          <div class="tb-item attn">Multi-Head Attention</div>
+          <div class="tb-arrow">↓</div>
+          <div class="tb-item add">+ đầu vào (residual)</div>
+          <div class="tb-arrow">↓</div>
+          <div class="tb-item norm">LayerNorm</div>
+          <div class="tb-arrow">↓</div>
+          <div class="tb-item ffn">Feed-Forward (2 lớp, GELU)</div>
+          <div class="tb-arrow">↓</div>
+          <div class="tb-item add">+ đầu vào (residual)</div>
+          <div class="tb-repeat">Xếp chồng N khối · N từ 12 tới hơn 100</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 24%;">Thành phần</th><th>Vai trò</th><th style="width: 26%;">Đã học ở</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Multi-Head Attention</strong></td>
+                <td>Trộn thông tin <em>giữa các token</em></td>
+                <td>Mục 4, 5 của chương này</td>
+              </tr>
+              <tr>
+                <td><strong>Feed-Forward</strong></td>
+                <td>Xử lý <em>từng token độc lập</em> — mở rộng ra 4× số chiều rồi thu lại. Đây là nơi chứa phần lớn tham số của mô hình</td>
+                <td>Chương 7 — chính là MLP</td>
+              </tr>
+              <tr>
+                <td><strong>Residual</strong> (+)</td>
+                <td>Cho gradient một đường đi thẳng, không bị nhân qua các lớp</td>
+                <td>Chương 7, mục 4.1 — chống gradient tiêu biến</td>
+              </tr>
+              <tr>
+                <td><strong>LayerNorm</strong></td>
+                <td>Giữ độ lớn kích hoạt ổn định qua nhiều lớp</td>
+                <td>Chương 7, mục 7.2</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Cách hiểu gọn nhất về một khối</div>
+          <p>
+            Mỗi khối làm đúng hai việc, xen kẽ:
+          </p>
+          <ul style="margin-top: 8px;">
+            <li><strong>Attention</strong> — "các token trao đổi thông tin với nhau"</li>
+            <li><strong>Feed-forward</strong> — "mỗi token tự suy nghĩ về những gì vừa nhận được"</li>
+          </ul>
+          <p style="margin-top: 10px;">
+            Lặp lại chu trình đó vài chục lần, và mô hình xây dựng được biểu diễn ngày càng trừu
+            tượng: lớp đầu nắm cú pháp và hình thái từ, lớp giữa nắm quan hệ ngữ nghĩa, lớp cuối
+            nắm những gì cần để dự đoán token tiếp theo.
+          </p>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Pre-LN và Post-LN</div>
+          <p>
+            Bài báo gốc đặt LayerNorm <em>sau</em> khối (post-LN). Thực tế cho thấy cách đó khó
+            huấn luyện ở mô hình sâu — cần warmup rất cẩn thận, và vẫn dễ phân kỳ.
+          </p>
+          <p style="margin-top: 10px;">
+            Gần như mọi mô hình hiện đại dùng <strong>pre-LN</strong> (chuẩn hoá <em>trước</em> khi
+            vào attention và feed-forward, như sơ đồ ở trên) vì nó ổn định hơn nhiều. Đây là một
+            ví dụ điển hình cho việc kiến trúc gốc đã được tinh chỉnh nhiều lần trong thực tế.
+          </p>
+        </div>
+
+        <h2 id="ba-bien-the">8. Ba biến thể</h2>
+
+        <div class="table-wrap variant-table">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 17%;">Biến thể</th>
+                <th style="width: 20%;">Attention</th>
+                <th>Làm được gì</th>
+                <th style="width: 22%;">Dùng trong trụ cột này ở</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Encoder-only</strong></td>
+                <td>Hai chiều — mỗi token nhìn thấy cả trước lẫn sau</td>
+                <td>Hiểu văn bản: phân loại, trích xuất, <strong>tạo embedding</strong></td>
+                <td><strong>10.3 chương 2</strong> — mô hình embedding cho RAG</td>
+              </tr>
+              <tr>
+                <td><strong>Decoder-only</strong></td>
+                <td>Nhân quả — chỉ nhìn về trước</td>
+                <td><strong>Sinh văn bản.</strong> Dạng thống trị hiện nay</td>
+                <td><strong>10.2</strong> — mọi LLM bạn gọi qua API</td>
+              </tr>
+              <tr>
+                <td><strong>Encoder-decoder</strong></td>
+                <td>Encoder hai chiều + decoder nhân quả + cross-attention</td>
+                <td>Biến đổi chuỗi sang chuỗi: dịch, tóm tắt</td>
+                <td>Ít gặp hơn — decoder-only đã làm tốt các việc này</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Vì sao decoder-only thắng thế</div>
+          <p>
+            Ban đầu người ta nghĩ mỗi loại nhiệm vụ cần một kiến trúc riêng. Hoá ra không: nếu mô
+            hình đủ lớn và được huấn luyện đủ nhiều, <strong>gần như mọi nhiệm vụ đều diễn đạt
+            được dưới dạng "sinh văn bản tiếp theo"</strong>.
+          </p>
+          <p style="margin-top: 10px;">
+            Phân loại → sinh ra nhãn. Dịch → sinh ra bản dịch. Tóm tắt → sinh ra bản tóm tắt.
+            Trả lời câu hỏi → sinh ra câu trả lời. Một kiến trúc duy nhất, một cách huấn luyện duy
+            nhất, dùng cho tất cả.
+          </p>
+          <p style="margin-top: 10px;">
+            Encoder-only vẫn giữ vị trí riêng ở một chỗ quan trọng: <strong>tạo embedding</strong>.
+            Attention hai chiều cho biểu diễn tốt hơn cho việc so khớp ngữ nghĩa — đó là lý do
+            bạn sẽ gặp lại nó ở sub-pillar RAG.
+          </p>
+        </div>
+
+        <h2 id="vi-sao-thang">9. Vì sao Transformer thắng</h2>
+
+        <p>
+          Quay lại ba giới hạn của RNN ở chương 9, mục 6 — và đối chiếu:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 34%;">Giới hạn của RNN</th><th>Transformer</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Không song song hoá được theo thời gian</td>
+                <td><strong>Toàn bộ chuỗi xử lý cùng lúc</strong> khi huấn luyện — một phép nhân ma trận lớn. Đây là lý do quan trọng nhất: nó cho phép huấn luyện ở quy mô mà RNN không bao giờ với tới.</td>
+              </tr>
+              <tr>
+                <td>Đường đi giữa hai token là O(n)</td>
+                <td><strong>O(1)</strong> — attention nối trực tiếp mọi cặp token, bất kể khoảng cách.</td>
+              </tr>
+              <tr>
+                <td>Nút thắt trạng thái ẩn cố định</td>
+                <td><strong>Không có nút thắt</strong> — mọi token giữ nguyên biểu diễn riêng xuyên suốt.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Cộng thêm một tính chất không có trong danh sách trên nhưng hoá ra lại quyết định:
+          <strong>Transformer scale rất tốt</strong>. Tăng số tham số, tăng dữ liệu, tăng tính
+          toán — chất lượng tiếp tục cải thiện theo một quy luật khá đều đặn. Chính tính chất này
+          biến "làm mô hình lớn hơn" thành một chiến lược có thể lập kế hoạch được, và mở đường
+          cho toàn bộ kỷ nguyên mô hình nền tảng.
+        </p>
+
+        <h2 id="o-n2">10. Cái giá: O(n²)</h2>
+
+        <p>
+          Mọi thứ đều có giá, và giá của Transformer nằm ở đây. Attention tính điểm số giữa
+          <em>mọi cặp</em> token. Với chuỗi <code>n</code> token, đó là <code>n²</code> phép so
+          sánh.
+        </p>
+
+        <div style="margin: 22px 0;">
+          <div class="cost-bar">
+            <span class="cb-k">1.000 token</span>
+            <span class="cb-track"><span class="cb-fill" style="width: 0.01%;"></span></span>
+            <span class="cb-v">10⁶ phép</span>
+          </div>
+          <div class="cost-bar">
+            <span class="cb-k">10.000 token</span>
+            <span class="cb-track"><span class="cb-fill" style="width: 1%;"></span></span>
+            <span class="cb-v">10⁸ phép</span>
+          </div>
+          <div class="cost-bar">
+            <span class="cb-k">100.000 token</span>
+            <span class="cb-track"><span class="cb-fill" style="width: 100%;"></span></span>
+            <span class="cb-v">10¹⁰ phép</span>
+          </div>
+        </div>
+
+        <p>
+          Tăng độ dài <strong>10 lần</strong> làm chi phí attention tăng <strong>100 lần</strong>.
+          Bộ nhớ cũng vậy — ma trận attention có <code>n²</code> phần tử.
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Đây là gốc rễ của gần như mọi vấn đề chi phí bạn sẽ gặp</div>
+          <p>
+            Ghi nhớ mục này. Nó giải thích trực tiếp:
+          </p>
+          <ul style="margin-top: 8px;">
+            <li>
+              <strong>Vì sao có giới hạn cửa sổ ngữ cảnh</strong> — không phải quy định tuỳ tiện
+              của nhà cung cấp, mà là ràng buộc tính toán thật.
+            </li>
+            <li>
+              <strong>Vì sao prompt dài đắt hơn nhiều so với tỉ lệ độ dài</strong> —
+              <em>10.2 chương 10</em>.
+            </li>
+            <li>
+              <strong>Vì sao có KV cache và mọi kỹ thuật tối ưu quanh nó</strong> —
+              <em>10.5 chương 6</em>.
+            </li>
+            <li>
+              <strong>Vì sao RAG tồn tại</strong> — thay vì nhét cả kho tài liệu vào ngữ cảnh
+              (không khả thi vì n²), hãy chỉ lấy vài đoạn liên quan. <em>10.3 chương 1</em>.
+            </li>
+            <li>
+              <strong>Vì sao "cửa sổ ngữ cảnh lớn" không xoá bỏ nhu cầu RAG</strong> — khả thi về
+              mặt kỹ thuật không có nghĩa là hợp lý về mặt kinh tế.
+            </li>
+          </ul>
+          <p style="margin-top: 12px;">
+            Có nhiều kỹ thuật giảm nhẹ — FlashAttention tối ưu việc dùng bộ nhớ, các biến thể
+            attention thưa giảm số cặp phải tính, GQA/MQA giảm kích thước KV cache. Nhưng
+            <strong>bản chất bậc hai vẫn còn đó</strong>, và mọi quyết định thiết kế trong các
+            sub-pillar sau đều xoay quanh nó.
+          </p>
+        </div>
+
+        <h2 id="tu-transformer-toi-llm">11. Từ Transformer tới LLM</h2>
+
+        <p>
+          Transformer là <em>kiến trúc</em>. LLM là thứ bạn được khi huấn luyện kiến trúc đó ở quy
+          mô rất lớn, qua ba giai đoạn:
+        </p>
+
+        <div class="pipeline-flow vertical">
+          <div class="stages">
+            <div class="stage">
+              <div class="stage-title">1. Tiền huấn luyện</div>
+              <div class="stage-content">
+                Dự đoán token kế tiếp trên corpus khổng lồ. Không cần gán nhãn — "đáp án" của mỗi
+                vị trí chính là token thật đứng sau nó. Đây là nơi mô hình học ngôn ngữ và kiến thức.
+              </div>
+            </div>
+            <div class="stage">
+              <div class="stage-title">2. Tinh chỉnh theo chỉ dẫn</div>
+              <div class="stage-content">
+                Huấn luyện thêm trên các cặp (chỉ dẫn, phản hồi tốt) để mô hình biết cách
+                <em>trả lời</em> thay vì chỉ tiếp tục văn bản.
+              </div>
+            </div>
+            <div class="stage hl">
+              <div class="stage-title">3. Căn chỉnh</div>
+              <div class="stage-content">
+                RLHF / DPO / GRPO — dạy mô hình phân biệt phản hồi tốt hơn và tệ hơn, không chỉ
+                bắt chước. Chi tiết ở <strong>10.5 chương 4</strong>.
+              </div>
+            </div>
+          </div>
+          <div class="caption">
+            Giai đoạn 1 tạo ra <em>năng lực</em>. Giai đoạn 2 và 3 tạo ra <em>sự hữu ích và an toàn</em>.
+          </div>
+        </div>
+
+        <p>
+          Bạn đã có đủ nền để hiểu điều gì đang xảy ra bên trong mỗi lời gọi API từ giờ trở đi.
+          Sub-pillar tiếp theo bắt đầu chính xác từ đây.
+        </p>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Tính tay self-attention</h4>
+            <div class="exercise-body">
+              <p>Cho ba token với <code>d<sub>k</sub> = 2</code>:</p>
+              <div class="code-wrap" style="margin: 10px 0;">
+                <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code>Q = [[<span class="tok-num">2</span>, <span class="tok-num">0</span>], [<span class="tok-num">0</span>, <span class="tok-num">2</span>], [<span class="tok-num">1</span>, <span class="tok-num">1</span>]]
+K = [[<span class="tok-num">1</span>, <span class="tok-num">1</span>], [<span class="tok-num">1</span>, <span class="tok-num">0</span>], [<span class="tok-num">0</span>, <span class="tok-num">1</span>]]
+V = [[<span class="tok-num">1</span>, <span class="tok-num">2</span>], [<span class="tok-num">3</span>, <span class="tok-num">0</span>], [<span class="tok-num">0</span>, <span class="tok-num">1</span>]]</code></pre>
+              </div>
+              <p>
+                Tính đầy đủ bốn bước: <code>QKᵀ</code>, chia <code>√2</code>, softmax theo hàng,
+                nhân V. Kiểm chứng mỗi hàng trọng số tổng bằng 1.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Hàng 1 của <code>QKᵀ</code>: <code>q₁·k₁ = 2, q₁·k₂ = 2, q₁·k₃ = 0</code>.
+                    Chia √2: <code>[1,414 · 1,414 · 0]</code>.
+                  </p>
+                  <p>
+                    Softmax: <code>exp(1,414) = 4,113</code> hai lần và <code>exp(0) = 1</code>,
+                    tổng 9,226 → <code>[0,446 · 0,446 · 0,108]</code>.
+                  </p>
+                  <p>
+                    Nhận xét đáng chú ý: token 1 chia gần như đều chú ý cho token 1 và 2, gần như
+                    bỏ qua token 3. Sau khi tính xong, hãy thử <em>không</em> chia √2 và so sánh —
+                    bạn sẽ thấy phân bố nhọn hơn hẳn, đúng như mục 4.4 mô tả.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Vì sao cần mã hoá vị trí</h4>
+            <div class="exercise-body">
+              <p>
+                Chứng minh bằng lập luận (không cần code): với self-attention thuần không có mã
+                hoá vị trí, hai câu "Chó cắn người" và "Người cắn chó" cho ra <em>cùng một tập</em>
+                vector đầu ra, chỉ khác thứ tự.
+              </p>
+              <p>
+                Sau đó giải thích vì sao điều này lại là hệ quả <em>trực tiếp</em> của việc bỏ cấu
+                trúc đệ quy — nghĩa là RNN không gặp vấn đề này.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Điểm mấu chốt: trong công thức <code>softmax(QKᵀ/√d)V</code>, không có chỗ nào
+                    tham chiếu tới <em>chỉ số</em> của token. Mọi phép tính chỉ dựa trên nội dung
+                    các vector. Nếu bạn hoán vị các hàng của đầu vào, các hàng đầu ra cũng chỉ bị
+                    hoán vị theo — tính chất này gọi là <em>tương đẳng hoán vị</em>.
+                  </p>
+                  <p>
+                    RNN không gặp vấn đề vì vị trí được mã hoá <em>ngầm</em> trong chính thứ tự xử
+                    lý: <code>h₃</code> được tính sau <code>h₂</code>, nên thông tin thứ tự nằm
+                    sẵn trong cấu trúc tính toán.
+                  </p>
+                  <p>
+                    Nói cách khác, Transformer đánh đổi: bỏ tính tuần tự để được song song hoá, và
+                    phải trả lại bằng cách thêm thông tin vị trí một cách tường minh.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Vẽ ma trận mặt nạ nhân quả</h4>
+            <div class="exercise-body">
+              <p>
+                Vẽ ma trận mặt nạ 5×5 cho attention nhân quả, đánh dấu ô nào bị chặn. Sau đó tính
+                xem trong ma trận <code>n×n</code>, bao nhiêu phần trăm số ô thực sự được dùng.
+              </p>
+              <p>
+                Câu hỏi tiếp: điều này có nghĩa là attention nhân quả rẻ hơn một nửa không? Vì sao?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Số ô dùng được là <code>n(n+1)/2</code> trên tổng <code>n²</code>, tức khoảng
+                    <strong>50%</strong> khi n lớn.
+                  </p>
+                  <p>
+                    <strong>Nhưng không rẻ hơn một nửa trong cài đặt ngây thơ</strong> — vì thường
+                    người ta vẫn tính cả ma trận <code>n×n</code> rồi mới áp mặt nạ. Chỉ những cài
+                    đặt được tối ưu riêng (như FlashAttention với xử lý theo khối) mới thực sự bỏ
+                    qua được phần tam giác trên.
+                  </p>
+                  <p>
+                    Đây là một bài học chung đáng nhớ: <em>độ phức tạp lý thuyết và chi phí thực
+                    tế không phải lúc nào cũng trùng nhau</em> — cách cài đặt quyết định rất nhiều.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Tính chi phí attention theo độ dài</h4>
+            <div class="exercise-body">
+              <p>
+                Với <code>d = 4.096</code> và 32 lớp, ước tính số phép nhân trong toàn bộ attention
+                cho chuỗi 1.000 · 10.000 · 100.000 token. Cũng tính bộ nhớ cần cho ma trận
+                attention (giả sử <code>float16</code>, một đầu).
+              </p>
+              <p>
+                Nhận xét: ở độ dài nào thì ma trận attention một lớp vượt quá 40 GB VRAM?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Bộ nhớ ma trận attention một đầu: <code>n² × 2 byte</code>.
+                    Với n = 100.000: <code>10¹⁰ × 2 = 20 GB</code> — chỉ cho <em>một đầu, một
+                    lớp</em>.
+                  </p>
+                  <p>
+                    Nhân với số đầu và số lớp thì con số trở nên hoàn toàn bất khả thi. Đây chính
+                    xác là lý do FlashAttention tồn tại: nó <strong>không bao giờ hiện thực hoá cả
+                    ma trận attention trong bộ nhớ</strong>, mà tính theo từng khối và cộng dồn
+                    kết quả.
+                  </p>
+                  <p>
+                    Bài học rút ra: khi ai đó nói "mô hình này hỗ trợ ngữ cảnh 1 triệu token", hãy
+                    hiểu rằng phía sau đó là một chồng kỹ thuật tối ưu, chứ không phải attention
+                    ngây thơ như công thức trong bài.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Cài self-attention bằng NumPy</h4>
+            <div class="exercise-body">
+              <p>
+                Viết hàm <code>self_attention(X, W_q, W_k, W_v, mask=None)</code> bằng NumPy
+                thuần. Kiểm chứng bằng ví dụ tính tay ở mục 4.3.
+              </p>
+              <p>
+                Sau đó mở rộng thành multi-head với 2 đầu và so sánh đầu ra.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Bộ khung tối thiểu:
+                  </p>
+                  <div class="code-wrap" style="margin-top: 8px;">
+                    <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">self_attention</span>(X, Wq, Wk, Wv, mask=<span class="tok-kw">None</span>):
+    Q, K, V = X @ Wq, X @ Wk, X @ Wv
+    d_k = Q.shape[-<span class="tok-num">1</span>]
+    diem = Q @ K.T / np.<span class="tok-fn">sqrt</span>(d_k)
+    <span class="tok-kw">if</span> mask <span class="tok-kw">is</span> <span class="tok-kw">not</span> <span class="tok-kw">None</span>:
+        diem = np.<span class="tok-fn">where</span>(mask, -np.inf, diem)
+    <span class="tok-com"># softmax theo hàng, nhớ trừ max để tránh tràn số (chương 2)</span>
+    e = np.<span class="tok-fn">exp</span>(diem - diem.<span class="tok-fn">max</span>(axis=-<span class="tok-num">1</span>, keepdims=<span class="tok-kw">True</span>))
+    W = e / e.<span class="tok-fn">sum</span>(axis=-<span class="tok-num">1</span>, keepdims=<span class="tok-kw">True</span>)
+    <span class="tok-kw">return</span> W @ V, W</code></pre>
+                  </div>
+                  <p style="margin-top: 10px;">
+                    Chú ý <code>keepdims=True</code> — đúng cái bẫy broadcasting ở chương 3.
+                    Mặt nạ nhân quả: <code>np.triu(np.ones((n, n)), k=1).astype(bool)</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Vì sao công thức attention chia cho <code>√d<sub>k</sub></code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Tích vô hướng của hai vector <code>d</code> chiều là tổng của <code>d</code> số
+                hạng, nên phương sai của nó tỉ lệ với <code>d</code> và độ lớn điển hình tỉ lệ với
+                <code>√d</code>. Với <code>d = 64</code>, điểm số có thể nằm trong khoảng ±8 hoặc hơn.
+              </p>
+              <p style="margin-top: 8px;">
+                Softmax của những số lớn như vậy gần như one-hot, tức <strong>bão hoà</strong>.
+                Khi bão hoà, gradient gần bằng 0 — mô hình không học được cách điều chỉnh phân bố
+                chú ý.
+              </p>
+              <p style="margin-top: 8px;">
+                Chia cho <code>√d<sub>k</sub></code> đưa phương sai điểm số về khoảng 1, giữ
+                softmax trong vùng nhạy nơi gradient còn hữu ích.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Q, K, V khác nhau về vai trò thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ul>
+                <li><strong>Query</strong> — "tôi đang tìm thông tin gì?"; đại diện nhu cầu của token hiện tại.</li>
+                <li><strong>Key</strong> — "tôi cung cấp thông tin gì?"; nhãn dán để token khác so khớp.</li>
+                <li><strong>Value</strong> — "nội dung tôi đóng góp là gì?"; thông tin thực sự được truyền đi.</li>
+              </ul>
+              <p style="margin-top: 8px;">
+                Q và K quyết định <em>chú ý bao nhiêu</em> (qua tích vô hướng), V quyết định
+                <em>truyền đi cái gì</em>. Tách bạch ba vai trò này cho phép mô hình học "cách tìm"
+                độc lập với "nội dung được tìm".
+              </p>
+              <p style="margin-top: 8px;">
+                Cả ba đều là phép chiếu tuyến tính học được từ cùng một đầu vào — đó là lý do gọi
+                là <em>self</em>-attention.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Mã hoá vị trí giải quyết vấn đề gì? Vì sao RNN không cần nó?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Self-attention <strong>tương đẳng hoán vị</strong>: công thức
+                <code>softmax(QKᵀ/√d)V</code> không tham chiếu tới chỉ số của token, chỉ tới nội
+                dung vector. Hoán vị đầu vào chỉ hoán vị đầu ra — nên "Chó cắn người" và
+                "Người cắn chó" không phân biệt được.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>RNN không cần</strong> vì vị trí được mã hoá <em>ngầm</em> trong thứ tự xử
+                lý: <code>h₃</code> tính sau <code>h₂</code>, nên thông tin thứ tự nằm sẵn trong
+                cấu trúc tính toán.
+              </p>
+              <p style="margin-top: 8px;">
+                Đây là đánh đổi trực tiếp: Transformer bỏ tính tuần tự để được song song hoá, và
+                phải trả lại bằng cách thêm thông tin vị trí tường minh.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Masked attention dùng ở đâu và vì sao cần?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Dùng trong <strong>decoder</strong> — tức mọi mô hình sinh văn bản. Cần vì mô hình
+                được huấn luyện để dự đoán token kế tiếp: nếu ở vị trí 5 nó nhìn thấy token 6, đáp
+                án nằm ngay trong đầu vào và bài toán trở nên vô nghĩa.
+              </p>
+              <p style="margin-top: 8px;">
+                Cài đặt: đặt các ô ứng với token tương lai thành <code>−∞</code> trước softmax;
+                sau softmax chúng thành đúng 0.
+              </p>
+              <p style="margin-top: 8px;">
+                Encoder-only (như mô hình embedding) <em>không</em> dùng mặt nạ — nó cần nhìn cả
+                hai chiều để hiểu ngữ cảnh đầy đủ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Multi-head hơn single-head ở chỗ nào? Nó có tốn gấp nhiều lần không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Một đầu học được <em>một</em> kiểu quan hệ. Nhiều đầu cho phép mô hình học đồng
+                thời nhiều loại quan hệ khác nhau: cú pháp, đồng tham chiếu, ngữ nghĩa, vị trí.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Không tốn gấp nhiều lần.</strong> Mỗi đầu làm việc trên một <em>phần</em>
+                của số chiều: <code>d_model = 512</code> với 8 đầu thì mỗi đầu có
+                <code>d_k = 64</code>. Tổng chi phí tính toán gần như bằng một đầu 512 chiều —
+                nhưng thu được 8 góc nhìn thay vì 1.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Residual connection trong khối Transformer để làm gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Cho gradient một <strong>đường đi thẳng</strong> từ lớp sau về lớp trước, không bị
+                nhân qua các phép biến đổi trung gian. Vì đạo hàm của <code>x + f(x)</code> theo
+                <code>x</code> là <code>1 + f′(x)</code>, luôn có thành phần bằng 1 — gradient
+                không thể tiêu biến hoàn toàn.
+              </p>
+              <p style="margin-top: 8px;">
+                Đây chính là vấn đề gradient tiêu biến ở chương 7, và residual là lời giải cho
+                phép xếp chồng hàng chục tới hàng trăm lớp mà vẫn huấn luyện được. Không có
+                residual, Transformer sâu sẽ không huấn luyện nổi.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Encoder-only và decoder-only dùng cho việc gì? Vì sao decoder-only thống trị?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Encoder-only</strong> — attention hai chiều, mỗi token nhìn cả trước lẫn
+                sau. Dùng để <em>hiểu</em> văn bản: phân loại, trích xuất, và quan trọng nhất với
+                trụ cột này là <strong>tạo embedding</strong> cho RAG.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Decoder-only</strong> — attention nhân quả, chỉ nhìn về trước. Dùng để
+                <em>sinh</em> văn bản. Đây là dạng của mọi LLM bạn gọi qua API.
+              </p>
+              <p style="margin-top: 8px;">
+                Decoder-only thống trị vì hoá ra <strong>gần như mọi nhiệm vụ đều diễn đạt được
+                dưới dạng "sinh văn bản tiếp theo"</strong>: phân loại thành sinh ra nhãn, dịch
+                thành sinh ra bản dịch, trả lời câu hỏi thành sinh ra câu trả lời. Một kiến trúc
+                duy nhất cho tất cả.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Độ phức tạp O(n²) gây ra những hệ quả thực tế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Attention tính điểm giữa mọi cặp token, nên chi phí và bộ nhớ tăng theo bình phương
+                độ dài. Tăng độ dài 10 lần → chi phí tăng 100 lần.
+              </p>
+              <p style="margin-top: 8px;">Bốn hệ quả trực tiếp:</p>
+              <ul>
+                <li><strong>Giới hạn cửa sổ ngữ cảnh</strong> là ràng buộc tính toán thật, không phải quy định tuỳ tiện.</li>
+                <li><strong>Prompt dài đắt hơn nhiều so với tỉ lệ độ dài.</strong></li>
+                <li><strong>KV cache và các kỹ thuật tối ưu quanh nó</strong> tồn tại để giảm chi phí này.</li>
+                <li><strong>RAG tồn tại</strong> — thay vì nhét cả kho tài liệu vào ngữ cảnh, chỉ lấy vài đoạn liên quan.</li>
+              </ul>
+              <p style="margin-top: 8px;">
+                Có nhiều kỹ thuật giảm nhẹ (FlashAttention, attention thưa, GQA/MQA), nhưng bản
+                chất bậc hai vẫn còn — và mọi quyết định thiết kế ở các sub-pillar sau đều xoay
+                quanh nó.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 10, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Ý tưởng cốt lõi</strong>: thay vì truyền thông tin tuần tự, cho mọi vị trí nhìn thấy nhau cùng lúc.</li>
+          <li><strong>Q, K, V</strong> — tra từ điển mềm; Q·K quyết định chú ý bao nhiêu, V quyết định truyền đi cái gì.</li>
+          <li><strong>Công thức <code>softmax(QKᵀ/√d)V</code></strong> — và bạn đã tính tay từng bước với số cụ thể.</li>
+          <li><strong>Chia √d</strong> để softmax không bão hoà, giữ gradient hữu ích.</li>
+          <li><strong>Mã hoá vị trí</strong> là bắt buộc vì attention tương đẳng hoán vị; RoPE mã hoá vị trí tương đối và cho phép mở rộng cửa sổ ngữ cảnh sau huấn luyện.</li>
+          <li><strong>Multi-head</strong> cho nhiều góc nhìn với chi phí gần như không đổi.</li>
+          <li><strong>Masked attention</strong> là lý do LLM sinh từng token một — nền của KV cache và của việc token ra đắt hơn token vào.</li>
+          <li><strong>Khối Transformer</strong>: attention (token trao đổi) + feed-forward (token tự suy nghĩ), bọc trong residual và LayerNorm.</li>
+          <li><strong>Ba biến thể</strong>; decoder-only thống trị vì mọi nhiệm vụ đều diễn đạt được thành sinh văn bản.</li>
+          <li><strong>O(n²)</strong> là gốc rễ của giới hạn cửa sổ ngữ cảnh, chi phí prompt dài, KV cache, và cả sự tồn tại của RAG.</li>
+        </ul>
+
+        <div class="callout callout-goal" style="margin-top: 26px;">
+          <div class="callout-label">🎓 Hết sub-pillar 10.1</div>
+          <p>
+            Bạn đã đi từ "AI là gì" tới hiểu cơ chế bên trong mọi LLM. Từ đây, mỗi lời gọi API ở
+            sub-pillar tiếp theo đều có nghĩa cụ thể: bạn biết token là gì, biết vì sao có cửa sổ
+            ngữ cảnh, biết temperature điều khiển cái gì, và biết vì sao chi phí lại phân bổ như vậy.
+          </p>
+          <p style="margin-top: 10px;">
+            <strong>Bước tiếp theo:</strong> <a href="../../LLM/index.html">Sub-pillar 10.2 — LLM
+            &amp; Prompt Engineering</a>, sub-pillar trung tâm của cả trụ cột.
+          </p>
+        </div>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 2</strong> — tích vô hướng, softmax và nhân ma trận là ba thành phần duy nhất của công thức attention.</li>
+          <li><strong>Chương 7</strong> — residual, LayerNorm, GELU trong khối Transformer đều đã được giải thích ở đó.</li>
+          <li><strong>Chương 9</strong> — đọc lại ba giới hạn của RNN ở mục 6; giờ mỗi giới hạn đã có lời giải tương ứng.</li>
+          <li><strong>10.2 chương 1</strong> — tokenization, sampling, KV cache, prefill vs decode: tất cả đều là hệ quả trực tiếp của chương này.</li>
+          <li><strong>10.2 chương 7</strong> — "lost in the middle" và prompt caching liên quan trực tiếp tới cách attention phân bổ chú ý.</li>
+          <li><strong>10.3 chương 2</strong> — mô hình embedding là Transformer encoder-only; giờ bạn biết vì sao attention hai chiều phù hợp hơn cho việc đó.</li>
+          <li><strong>10.5 chương 5–6</strong> — KV cache, PagedAttention, lượng tử hoá đều là các cách đối phó với O(n²) và với kích thước mô hình.</li>
+          <li><strong>Trụ cột 1 — DSA</strong> — phân tích độ phức tạp ở mục 10 là DSA áp dụng trực tiếp vào một bài toán thật.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong9.html" class="prev">
+            <div class="dir">← Chương 9</div>
+            <div class="label">CNN, RNN/LSTM và giới hạn</div>
+          </a>
+          <a href="../../LLM/index.html" class="next">
+            <div class="dir">Sub-pillar 10.2 →</div>
+            <div class="label">LLM &amp; Prompt Engineering</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#boi-canh">1. Bối cảnh</a></li>
+          <li><a href="#embedding">2. Token tới vector</a></li>
+          <li><a href="#positional">3. Mã hoá vị trí</a></li>
+          <li><a href="#self-attention">4. Self-attention</a></li>
+          <li class="level-3"><a href="#qkv">4.1. Q, K, V</a></li>
+          <li class="level-3"><a href="#cong-thuc">4.2. Công thức</a></li>
+          <li class="level-3"><a href="#tinh-tay">4.3. Tính tay</a></li>
+          <li class="level-3"><a href="#vi-sao-can-d">4.4. Vì sao chia √d</a></li>
+          <li><a href="#multi-head">5. Multi-head</a></li>
+          <li><a href="#masked">6. Masked attention</a></li>
+          <li><a href="#khoi">7. Khối Transformer</a></li>
+          <li><a href="#ba-bien-the">8. Ba biến thể</a></li>
+          <li><a href="#vi-sao-thang">9. Vì sao thắng</a></li>
+          <li><a href="#o-n2">10. Cái giá O(n²)</a></li>
+          <li><a href="#tu-transformer-toi-llm">11. Tới LLM</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 10 — Transformer · Nền tảng AI · Trụ cột 10 IT Basic<br/>
+        <a href="../index.html">Mục lục 10.1</a> ·
+        <a href="chuong9.html">← Chương 9</a> ·
+        <a href="../../LLM/index.html">Sub-pillar 10.2 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var TOKENS = ['Cô', 'gái', 'mà', 'tôi', 'gặp', 'hôm qua', 'là', 'bác sĩ'];
+    var N = TOKENS.length;
+
+    /* Ba "đầu" với ba mẫu hình chú ý khác nhau. Điểm số được định nghĩa bằng
+       hàm, rồi cho qua softmax — nên mỗi hàng luôn tổng đúng bằng 1.         */
+    var HEADS = [
+      {
+        name: 'cú pháp',
+        score: function (i, j) {
+          var s = -0.45 * Math.abs(i - j);
+          // "là" (6) tìm chủ ngữ "gái" (1) — phụ thuộc xa
+          if (i === 6 && j === 1) s += 3.4;
+          // "bác sĩ" (7) cũng quy chiếu về "gái" (1)
+          if (i === 7 && j === 1) s += 2.6;
+          // "gặp" (4) tìm chủ ngữ của mệnh đề quan hệ "tôi" (3)
+          if (i === 4 && j === 3) s += 2.2;
+          // "mà" (2) nối về danh từ đứng trước
+          if (i === 2 && j === 1) s += 1.8;
+          return s;
+        },
+        note: 'Đầu này bám <strong>quan hệ cú pháp</strong>. Nhìn hàng <code>là</code>: nó dồn ' +
+              'phần lớn chú ý vào <code>gái</code> — cách đó năm token — để biết chia động từ theo ' +
+              'chủ ngữ nào. <strong>Đây chính xác là thứ RNN không làm được</strong> (chương 9, giới ' +
+              'hạn 2): với attention, khoảng cách đó chỉ là một bước.'
+      },
+      {
+        name: 'liền kề',
+        score: function (i, j) { return -1.9 * Math.abs(i - j); },
+        note: 'Đầu này chỉ chú ý <strong>token ngay trước</strong> — một mẫu hình rất phổ biến ' +
+              'trong mô hình thật. Nó nắm thông tin cục bộ: cụm từ, hình thái, trật tự từ. ' +
+              'Kết hợp với đầu cú pháp ở trên, mô hình có cả góc nhìn gần lẫn góc nhìn xa — ' +
+              'đó là lý do cần multi-head.'
+      },
+      {
+        name: 'neo đầu câu',
+        score: function (i, j) { return j === 0 ? 2.2 : -0.35 * Math.abs(i - j); },
+        note: 'Đầu này gần như luôn neo về <strong>token đầu chuỗi</strong>. Mẫu hình này xuất hiện ' +
+              'rất thường xuyên trong mô hình thật và được gọi là <em>attention sink</em>. ' +
+              'Cách hiểu phổ biến: khi một đầu không có gì đặc biệt để chú ý ở lượt này, nó cần ' +
+              'một chỗ "đổ" xác suất — vì softmax bắt buộc tổng phải bằng 1.'
+      }
+    ];
+
+    var elSel   = document.getElementById('attn-head');
+    var elMask  = document.getElementById('attn-mask');
+    var elTable = document.getElementById('attn-table');
+    var elNote  = document.getElementById('attn-note');
+
+    function computeWeights(head, causal) {
+      var W = [];
+      for (var i = 0; i < N; i++) {
+        var scores = [], maxS = -Infinity;
+        for (var j = 0; j < N; j++) {
+          var s = (causal && j > i) ? -Infinity : head.score(i, j);
+          scores.push(s);
+          if (s > maxS) maxS = s;
+        }
+        var exps = scores.map(function (s) {
+          return s === -Infinity ? 0 : Math.exp(s - maxS);
+        });
+        var sum = exps.reduce(function (a, b) { return a + b; }, 0);
+        W.push(exps.map(function (e) { return sum > 0 ? e / sum : 0; }));
+      }
+      return W;
+    }
+
+    function colorFor(v) {
+      // 0 → nền giấy, 1 → chàm-tím đậm
+      var a = 0.06 + v * 0.82;
+      return 'rgba(91, 75, 138, ' + a.toFixed(3) + ')';
+    }
+
+    function render() {
+      var head = HEADS[parseInt(elSel.value, 10)];
+      var causal = elMask.checked;
+      var W = computeWeights(head, causal);
+
+      var html = '<tr><th></th>';
+      TOKENS.forEach(function (t) { html += '<th>' + t + '</th>'; });
+      html += '</tr>';
+
+      for (var i = 0; i < N; i++) {
+        html += '<tr><th class="qh">' + TOKENS[i] + '</th>';
+        for (var j = 0; j < N; j++) {
+          if (causal && j > i) {
+            html += '<td class="masked">—</td>';
+          } else {
+            var v = W[i][j];
+            var txt = v >= 0.005 ? v.toFixed(2).slice(1).replace('.', ',') : '';
+            var col = v > 0.55 ? '#fff' : '#2b2733';
+            html += '<td style="background:' + colorFor(v) + ';color:' + col + '">' +
+                    (txt ? '0' + txt : '') + '</td>';
+          }
+        }
+        html += '</tr>';
+      }
+
+      elTable.innerHTML = html;
+
+      var extra = causal
+        ? ''
+        : '<br/><br/><strong>Đã bỏ mặt nạ:</strong> giờ mỗi token nhìn được cả token phía sau. ' +
+          'Đây là chế độ của mô hình <em>encoder-only</em> — dùng để hiểu văn bản và tạo embedding ' +
+          '(10.3 chương 2). Mô hình <em>sinh</em> văn bản bắt buộc phải che, nếu không đáp án sẽ ' +
+          'nằm ngay trong đầu vào.';
+
+      elNote.innerHTML = head.note + extra;
+    }
+
+    elSel.addEventListener('change', render);
+    elMask.addEventListener('change', render);
+    render();
+  })();
+  </script>
+</body>
+</html>

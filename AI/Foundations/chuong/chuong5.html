@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 5 — Thuật toán ML kinh điển · Nền tảng AI</title>
+  <meta name="description" content="Hồi quy tuyến tính và logistic, k-NN, cây quyết định, random forest và gradient boosting, SVM, k-means, PCA — với scikit-learn, và bảng chọn thuật toán theo loại bài toán." />
+  <meta name="theme-color" content="#8a6a3f" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    .db-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px;
+    }
+    .db-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-card);
+    }
+    .db-card h4 {
+      margin: 0;
+      padding: 9px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: var(--bg-alt);
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .db-card canvas { display: block; width: 100%; height: auto; }
+    .db-card .db-acc {
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      border-top: 1px solid var(--border-soft);
+      color: var(--text-soft);
+    }
+    .db-card .db-acc b { color: var(--ink); }
+
+    .algo-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .badge-sup   { background: rgba(60,85,112,0.13); color: #3c5570; }
+    .badge-unsup { background: rgba(95,107,69,0.15); color: #5f6b45; }
+
+    .algo-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+    .algo-meta div {
+      padding: 10px 12px;
+      background: var(--bg-alt);
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .algo-meta .k {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .pick-table td:first-child { font-weight: 600; color: var(--ink); }
+    .pick-table code { font-size: 0.82em; }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark">10.1</span>
+        Nền tảng AI · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Trụ cột 10</a></li>
+          <li><a href="../index.html" class="active">Nền tảng</a></li>
+          <li><a href="../../LLM/index.html">LLM</a></li>
+          <li><a href="../../RAG/index.html">RAG</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Trụ cột 10</a><span class="sep">/</span>
+        <a href="../index.html">Nền tảng AI</a><span class="sep">/</span>
+        <span>Chương 5</span>
+      </div>
+      <div class="chapter-num">Chương 05 · Thuật toán</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; margin: 0 0 14px; color: var(--ink); line-height: 1.15;">
+        Thuật toán ML kinh điển
+      </h1>
+      <p class="lead">
+        Câu hỏi hợp lý ngay đầu chương: <em>đã có LLM rồi, học mấy thứ này làm gì?</em>
+        Câu trả lời rất thực dụng — rất nhiều bài toán trong công việc thật (phân loại, xếp hạng,
+        phát hiện bất thường, dự báo) vẫn được giải bằng mô hình cổ điển <strong>rẻ hơn hàng
+        nghìn lần, nhanh hơn hàng trăm lần, và chính xác hơn</strong> LLM. Chương này để bạn
+        không dùng búa tạ đập ruồi — và để trả lời được khi phỏng vấn hỏi tới.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1.300 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Cần trước:</strong> Chương 2, 3, 4</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Biết <strong>tám thuật toán nền</strong>: nguyên lý, khi nào hợp, khi nào không.</li>
+            <li>Giải thích được vì sao <strong>hồi quy logistic</strong> vẫn mang chữ "hồi quy" dù nó phân loại.</li>
+            <li>Thấy được <strong>k-NN chính là vector search</strong> — cầu nối trực tiếp sang sub-pillar RAG.</li>
+            <li>Hiểu vì sao <strong>gradient boosting vẫn thắng deep learning trên dữ liệu bảng</strong>.</li>
+            <li>Dùng được <strong>PCA</strong> để giảm chiều và trực quan hoá.</li>
+            <li>Thạo API thống nhất <code>fit</code>/<code>predict</code>/<code>transform</code> của scikit-learn và <code>Pipeline</code>.</li>
+            <li>Có <strong>bảng chọn thuật toán</strong> dùng được ngay khi gặp bài toán mới.</li>
+            <li>Biết ranh giới quyết định của các thuật toán khác nhau trông thế nào và điều đó nói lên gì.</li>
+          </ul>
+        </div>
+
+        <h2 id="vi-sao-hoc">1. Vì sao vẫn học những thuật toán này</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th style="width: 30%;">Bài toán</th><th>Cách rẻ và tốt</th><th>Vì sao không dùng LLM</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Phân loại 50 triệu giao dịch mỗi ngày là gian lận hay không</td>
+                <td>Gradient boosting</td>
+                <td>Chi phí LLM cho 50 triệu lượt là không tưởng; mô hình cổ điển chạy trong vài mili-giây trên CPU</td>
+              </tr>
+              <tr>
+                <td>Dự báo doanh thu tháng tới từ dữ liệu bảng</td>
+                <td>Gradient boosting hoặc mô hình chuỗi thời gian</td>
+                <td>LLM không giỏi số học và không có cơ chế học từ dữ liệu bảng của riêng bạn</td>
+              </tr>
+              <tr>
+                <td>Tìm 10 tài liệu gần nghĩa nhất trong một triệu tài liệu</td>
+                <td>k-NN xấp xỉ trên vector</td>
+                <td>Đây <em>là</em> một bài toán ML cổ điển, chỉ được đổi tên thành "vector search"</td>
+              </tr>
+              <tr>
+                <td>Phân nhóm khách hàng theo hành vi</td>
+                <td>k-means hoặc phân cụm phân cấp</td>
+                <td>Không có nhãn, và LLM không giải bài toán không giám sát tốt hơn</td>
+              </tr>
+              <tr>
+                <td>Nén embedding 1024 chiều xuống 256 chiều</td>
+                <td>PCA</td>
+                <td>Phép biến đổi tuyến tính tất định, chính xác, gần như miễn phí</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Quy tắc chọn công cụ</div>
+          <p>
+            LLM mạnh ở nơi đầu vào là <strong>ngôn ngữ tự nhiên không cấu trúc</strong> và nhiệm
+            vụ cần <em>hiểu ngữ nghĩa</em>. Mô hình cổ điển mạnh ở nơi đầu vào là
+            <strong>dữ liệu bảng có cấu trúc</strong> và nhiệm vụ cần <em>độ chính xác số</em> ở
+            quy mô lớn với chi phí thấp.
+          </p>
+          <p style="margin-top: 10px;">
+            Nhiều hệ thống thực tế dùng cả hai: LLM trích xuất đặc trưng có cấu trúc từ văn bản,
+            rồi một mô hình cổ điển ra quyết định cuối cùng trên các đặc trưng đó. Kiến trúc lai
+            này thường rẻ hơn và ổn định hơn cả hai phương án thuần.
+          </p>
+        </div>
+
+        <h2 id="hoi-quy-tuyen-tinh">2. Hồi quy tuyến tính <span class="algo-badge badge-sup">có giám sát · hồi quy</span></h2>
+
+        <p>
+          Mô hình đơn giản nhất, và là nền để hiểu mọi thứ còn lại. Giả định: đầu ra là tổ hợp
+          tuyến tính của các đặc trưng.
+        </p>
+
+        <div class="algo-meta">
+          <div><span class="k">Đầu ra</span>Số thực liên tục</div>
+          <div><span class="k">Giải thích được</span>Rất cao</div>
+          <div><span class="k">Tốc độ</span>Rất nhanh</div>
+          <div><span class="k">Điểm yếu</span>Chỉ nắm được quan hệ tuyến tính</div>
+        </div>
+
+        <div class="formula" style="margin: 20px 0; padding: 18px 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-align: center; font-family: var(--font-mono);">
+          ŷ = w₁x₁ + w₂x₂ + … + wₙxₙ + b
+        </div>
+
+        <p>
+          Huấn luyện là tìm bộ <code>w</code> và <code>b</code> làm nhỏ nhất <strong>MSE</strong> —
+          trung bình bình phương sai số. Bài toán này có nghiệm giải tích, nhưng trong thực tế
+          với dữ liệu lớn người ta dùng gradient descent như đã học ở chương 2.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.linear_model <span class="tok-kw">import</span> LinearRegression
+
+model = <span class="tok-fn">LinearRegression</span>()
+model.<span class="tok-fn">fit</span>(X_train, y_train)
+
+<span class="tok-com"># Điểm mạnh lớn nhất: đọc thẳng được hệ số</span>
+<span class="tok-kw">for</span> ten, he_so <span class="tok-kw">in</span> <span class="tok-fn">zip</span>(ten_dac_trung, model.coef_):
+    <span class="tok-fn">print</span>(<span class="tok-str">f"{ten:20s} {he_so:+.2f}"</span>)
+
+<span class="tok-com"># dien_tich            +18.40   → mỗi m² thêm 18,4 triệu</span>
+<span class="tok-com"># so_phong_ngu          +4.20</span>
+<span class="tok-com"># tuoi_nha              -2.10   → nhà cũ hơn thì rẻ hơn</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Diễn giải hệ số: hai cái bẫy</div>
+          <p>
+            <strong>Bẫy 1 — thang đo.</strong> Hệ số chỉ so sánh được với nhau khi các đặc trưng
+            đã được chuẩn hoá về cùng thang. Nếu không, hệ số lớn có thể chỉ vì đơn vị nhỏ
+            (mét vs ki-lô-mét).
+          </p>
+          <p style="margin-top: 10px;">
+            <strong>Bẫy 2 — tương quan không phải nhân quả.</strong> Hệ số dương giữa "số vụ cháy"
+            và "số lính cứu hoả có mặt" không có nghĩa lính cứu hoả gây ra cháy. Mô hình chỉ học
+            được liên hệ thống kê, không học được quan hệ nguyên nhân.
+          </p>
+        </div>
+
+        <h2 id="hoi-quy-logistic">3. Hồi quy logistic <span class="algo-badge badge-sup">có giám sát · phân loại</span></h2>
+
+        <p>
+          Cái tên gây bối rối cho mọi người mới: nó <strong>phân loại</strong> chứ không hồi quy.
+          Lý do nằm ở cơ chế bên trong — nó <em>hồi quy</em> ra một số thực, rồi ép số đó qua một
+          hàm để biến thành xác suất.
+        </p>
+
+        <div class="algo-meta">
+          <div><span class="k">Đầu ra</span>Xác suất ∈ [0, 1]</div>
+          <div><span class="k">Giải thích được</span>Cao</div>
+          <div><span class="k">Tốc độ</span>Rất nhanh</div>
+          <div><span class="k">Điểm yếu</span>Ranh giới quyết định là đường thẳng</div>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> numpy <span class="tok-kw">as</span> np
+
+<span class="tok-kw">def</span> <span class="tok-fn">sigmoid</span>(z):
+    <span class="tok-str">"""Nén một số thực bất kỳ về khoảng (0, 1)."""</span>
+    <span class="tok-kw">return</span> <span class="tok-num">1</span> / (<span class="tok-num">1</span> + np.<span class="tok-fn">exp</span>(-z))
+
+<span class="tok-fn">print</span>(<span class="tok-fn">sigmoid</span>(-<span class="tok-num">4</span>))   <span class="tok-com"># 0.018  → gần như chắc chắn lớp 0</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">sigmoid</span>(<span class="tok-num">0</span>))    <span class="tok-com"># 0.500  → hoàn toàn lưỡng lự</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">sigmoid</span>(<span class="tok-num">4</span>))    <span class="tok-com"># 0.982  → gần như chắc chắn lớp 1</span></code></pre>
+        </div>
+
+        <p>
+          Nói cách khác: <code>z = w·x + b</code> là phần "hồi quy tuyến tính";
+          <code>sigmoid(z)</code> biến nó thành xác suất. Hàm mất mát không phải MSE mà là
+          <strong>cross-entropy</strong> — đúng thứ đã học ở chương 2.
+        </p>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Sigmoid và softmax là họ hàng</div>
+          <p>
+            Sigmoid là trường hợp hai lớp của softmax. Với nhiều lớp, hồi quy logistic dùng softmax
+            thay sigmoid — chính là hàm bạn đã gặp ở chương 2 và sẽ gặp lại ở mọi mô hình ngôn ngữ.
+          </p>
+          <p style="margin-top: 10px;">
+            Đây không phải trùng hợp: <strong>lớp cuối cùng của một LLM về bản chất là một hồi quy
+            logistic đa lớp</strong> trên toàn bộ từ vựng. Mọi thứ trước đó chỉ là để tạo ra
+            biểu diễn tốt cho lớp cuối này.
+          </p>
+        </div>
+
+        <h2 id="knn">4. k-NN <span class="algo-badge badge-sup">có giám sát · cả hai</span></h2>
+
+        <p>
+          Thuật toán kỳ lạ nhất trong danh sách: <strong>nó không huấn luyện gì cả</strong>.
+          "Huấn luyện" chỉ là ghi nhớ toàn bộ dữ liệu. Toàn bộ công việc dồn vào lúc dự đoán:
+          tìm k mẫu gần nhất, rồi bỏ phiếu.
+        </p>
+
+        <div class="algo-meta">
+          <div><span class="k">Huấn luyện</span>O(1) — chỉ lưu dữ liệu</div>
+          <div><span class="k">Dự đoán</span>O(n·d) — tốn kém</div>
+          <div><span class="k">Giải thích được</span>Cao — chỉ ra được láng giềng</div>
+          <div><span class="k">Điểm yếu</span>Chậm khi n lớn; nhạy với thang đo</div>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.neighbors <span class="tok-kw">import</span> KNeighborsClassifier
+
+<span class="tok-com"># BẮT BUỘC chuẩn hoá trước — k-NN dựa trên khoảng cách,</span>
+<span class="tok-com"># nên đặc trưng có thang lớn sẽ áp đảo hoàn toàn</span>
+knn = <span class="tok-fn">Pipeline</span>([
+    (<span class="tok-str">"scaler"</span>, <span class="tok-fn">StandardScaler</span>()),
+    (<span class="tok-str">"knn"</span>, <span class="tok-fn">KNeighborsClassifier</span>(n_neighbors=<span class="tok-num">5</span>)),
+])
+knn.<span class="tok-fn">fit</span>(X_train, y_train)</code></pre>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 k-NN chính là vector search — cầu nối tới sub-pillar RAG</div>
+          <p>
+            Khi bạn tìm tài liệu liên quan trong một hệ RAG, thứ đang chạy là k-NN: nhúng câu hỏi
+            thành vector, tìm k vector gần nhất trong kho, trả về các tài liệu tương ứng.
+          </p>
+          <p style="margin-top: 10px;">
+            Vấn đề: k-NN vét cạn có độ phức tạp O(n·d) cho <em>mỗi</em> truy vấn. Với 10 triệu
+            tài liệu × 768 chiều, đó là hàng tỉ phép tính cho một câu hỏi — không chấp nhận được.
+          </p>
+          <p style="margin-top: 10px;">
+            Lời giải là <strong>k-NN xấp xỉ</strong> (ANN): chấp nhận đôi khi bỏ sót một láng
+            giềng thật để đổi lấy tốc độ nhanh hơn hàng trăm lần. Các cấu trúc chỉ mục như HNSW
+            và IVF-PQ chính là hiện thân của ý tưởng này — chi tiết ở
+            <strong>10.3 chương 3</strong>. Nói cách khác: <em>toàn bộ ngành vector database là
+            k-NN được tối ưu hoá.</em>
+          </p>
+        </div>
+
+        <h2 id="cay-quyet-dinh">5. Cây quyết định <span class="algo-badge badge-sup">có giám sát · cả hai</span></h2>
+
+        <p>
+          Cây quyết định học một chuỗi câu hỏi có/không. Mỗi nút hỏi một điều kiện trên một đặc
+          trưng; đi theo nhánh cho tới lá, ở đó có câu trả lời.
+        </p>
+
+        <div class="algo-meta">
+          <div><span class="k">Ranh giới</span>Bậc thang, song song trục</div>
+          <div><span class="k">Giải thích được</span>Rất cao — vẽ ra được</div>
+          <div><span class="k">Chuẩn hoá</span>Không cần</div>
+          <div><span class="k">Điểm yếu</span>Rất dễ overfit nếu không giới hạn</div>
+        </div>
+
+        <p>
+          Cách cây chọn câu hỏi: thử mọi ngưỡng trên mọi đặc trưng, chọn cái làm dữ liệu sau khi
+          chia trở nên "thuần" nhất. Độ thuần đo bằng <strong>Gini</strong> hoặc
+          <strong>entropy</strong> — entropy chính là đại lượng đã học ở chương 2.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.tree <span class="tok-kw">import</span> DecisionTreeClassifier, export_text
+
+<span class="tok-com"># max_depth là siêu tham số quan trọng nhất — không giới hạn thì cây</span>
+<span class="tok-com"># sẽ chia tới khi mỗi lá chỉ còn một mẫu, tức học thuộc hoàn toàn</span>
+tree = <span class="tok-fn">DecisionTreeClassifier</span>(max_depth=<span class="tok-num">4</span>, random_state=<span class="tok-num">42</span>)
+tree.<span class="tok-fn">fit</span>(X_train, y_train)
+
+<span class="tok-com"># In ra luật dưới dạng chữ — thứ không mô hình nào khác làm được dễ như vậy</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">export_text</span>(tree, feature_names=ten_dac_trung))
+<span class="tok-com"># |--- thu_nhap &lt;= 15.50</span>
+<span class="tok-com"># |   |--- tuoi &lt;= 28.50</span>
+<span class="tok-com"># |   |   |--- class: 0</span>
+<span class="tok-com"># |   |--- tuoi &gt;  28.50</span>
+<span class="tok-com"># |   |   |--- class: 1</span></code></pre>
+        </div>
+
+        <p>
+          Khả năng in ra luật là điểm mạnh không thể thay thế của cây. Trong các lĩnh vực có yêu
+          cầu giải trình — tín dụng, y tế, bảo hiểm — đôi khi người ta chọn cây dù nó kém chính
+          xác hơn, chỉ vì phải giải thích được quyết định cho khách hàng và cơ quan quản lý.
+        </p>
+
+        <h2 id="ensemble">6. Random Forest &amp; Gradient Boosting <span class="algo-badge badge-sup">có giám sát · cả hai</span></h2>
+
+        <p>
+          Một cây thì yếu và dễ overfit. Nhưng <em>nhiều</em> cây kết hợp lại thì rất mạnh. Có hai
+          cách kết hợp, và chúng khác nhau về bản chất:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th style="width: 16%;"></th><th>Random Forest</th><th>Gradient Boosting</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Cách xây</strong></td>
+                <td><strong>Song song</strong> — mỗi cây học độc lập trên một mẫu con ngẫu nhiên</td>
+                <td><strong>Tuần tự</strong> — mỗi cây mới học <em>sửa lỗi</em> của các cây trước</td>
+              </tr>
+              <tr>
+                <td><strong>Kết hợp</strong></td>
+                <td>Bỏ phiếu / lấy trung bình</td>
+                <td>Cộng dồn có trọng số</td>
+              </tr>
+              <tr>
+                <td><strong>Giảm chủ yếu</strong></td>
+                <td>Variance</td>
+                <td>Bias</td>
+              </tr>
+              <tr>
+                <td><strong>Overfit</strong></td>
+                <td>Khó overfit, khá an toàn</td>
+                <td>Dễ overfit hơn — cần tinh chỉnh cẩn thận</td>
+              </tr>
+              <tr>
+                <td><strong>Tinh chỉnh</strong></td>
+                <td>Ít nhạy siêu tham số</td>
+                <td>Nhạy — nhưng khi chỉnh tốt thì mạnh hơn</td>
+              </tr>
+              <tr>
+                <td><strong>Thư viện</strong></td>
+                <td><code>RandomForestClassifier</code></td>
+                <td><strong>XGBoost</strong>, <strong>LightGBM</strong>, <strong>CatBoost</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Vì sao gradient boosting vẫn thắng deep learning trên dữ liệu bảng</div>
+          <p>
+            Đây là câu hỏi phỏng vấn hay gặp, và câu trả lời không phải "vì nó cũ nên quen dùng":
+          </p>
+          <ul>
+            <li>
+              Dữ liệu bảng <strong>không có cấu trúc không gian hay thời gian</strong> để mạng
+              nơ-ron khai thác. Thứ làm CNN mạnh với ảnh (pixel gần nhau thì liên quan) không tồn
+              tại ở dữ liệu bảng — thứ tự các cột là tuỳ ý.
+            </li>
+            <li>
+              Cây xử lý <strong>đặc trưng phân loại và thang đo lệch</strong> một cách tự nhiên,
+              không cần chuẩn hoá hay one-hot.
+            </li>
+            <li>
+              Cây <strong>bền với đặc trưng vô dụng</strong> — nó chỉ đơn giản không chọn chúng.
+              Mạng nơ-ron phải học cách bỏ qua.
+            </li>
+            <li>
+              Boosting hoạt động tốt với <strong>dữ liệu ít</strong> (vài nghìn dòng), nơi mạng
+              nơ-ron thường overfit.
+            </li>
+          </ul>
+          <p style="margin-top: 10px;">
+            Thực tế: với dữ liệu bảng, hãy thử LightGBM hoặc XGBoost <em>trước</em>. Nó thường là
+            baseline rất khó vượt.
+          </p>
+        </div>
+
+        <h2 id="svm">7. SVM <span class="algo-badge badge-sup">có giám sát · phân loại</span></h2>
+
+        <p>
+          Ý tưởng: trong vô số đường có thể tách hai lớp, hãy chọn đường có <strong>lề rộng
+          nhất</strong> — cách xa các điểm gần nhất của cả hai lớp nhất có thể. Trực giác: đường
+          như vậy tổng quát hoá tốt hơn cho dữ liệu mới.
+        </p>
+
+        <p>
+          Điểm hay nhất của SVM là <strong>kernel trick</strong>. Khi dữ liệu không tách được
+          bằng đường thẳng, ta có thể ánh xạ nó lên không gian nhiều chiều hơn, nơi nó tách được.
+          Kernel trick cho phép làm điều này mà <em>không phải thực sự tính toạ độ trong không
+          gian mới</em> — chỉ cần tính tích vô hướng.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.svm <span class="tok-kw">import</span> SVC
+
+<span class="tok-com"># kernel="rbf" xử lý được ranh giới cong — mặc định tốt</span>
+svm = <span class="tok-fn">Pipeline</span>([
+    (<span class="tok-str">"scaler"</span>, <span class="tok-fn">StandardScaler</span>()),      <span class="tok-com"># SVM rất nhạy với thang đo</span>
+    (<span class="tok-str">"svm"</span>, <span class="tok-fn">SVC</span>(kernel=<span class="tok-str">"rbf"</span>, C=<span class="tok-num">1.0</span>, gamma=<span class="tok-str">"scale"</span>)),
+])
+svm.<span class="tok-fn">fit</span>(X_train, y_train)
+
+<span class="tok-com"># C: đánh đổi giữa lề rộng và số lỗi cho phép</span>
+<span class="tok-com">#    C nhỏ  → lề rộng, chấp nhận nhiều lỗi  → ít overfit</span>
+<span class="tok-com">#    C lớn  → lề hẹp, cố phân loại đúng hết → dễ overfit</span></code></pre>
+        </div>
+
+        <p>
+          SVM từng thống trị trước kỷ nguyên deep learning. Ngày nay nó ít được dùng hơn vì chậm
+          khi dữ liệu lớn (độ phức tạp gần bậc hai theo số mẫu), nhưng vẫn rất tốt cho tập dữ liệu
+          nhỏ và nhiều chiều.
+        </p>
+
+        <h2 id="kmeans">8. k-means <span class="algo-badge badge-unsup">không giám sát · phân cụm</span></h2>
+
+        <p>Thuật toán lặp gồm hai bước, lặp cho tới khi ổn định:</p>
+
+        <ol>
+          <li>Gán mỗi điểm vào cụm có tâm gần nhất</li>
+          <li>Dời tâm mỗi cụm về trung bình của các điểm thuộc cụm đó</li>
+        </ol>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.cluster <span class="tok-kw">import</span> KMeans
+
+<span class="tok-com"># Chọn k bằng phương pháp elbow: vẽ inertia theo k, tìm chỗ "gãy khuỷu"</span>
+inertias = []
+<span class="tok-kw">for</span> k <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">2</span>, <span class="tok-num">11</span>):
+    km = <span class="tok-fn">KMeans</span>(n_clusters=k, n_init=<span class="tok-num">10</span>, random_state=<span class="tok-num">42</span>).<span class="tok-fn">fit</span>(X)
+    inertias.<span class="tok-fn">append</span>(km.inertia_)   <span class="tok-com"># tổng bình phương khoảng cách tới tâm</span>
+
+<span class="tok-com"># Hoặc dùng silhouette score — thường đáng tin hơn elbow</span>
+<span class="tok-kw">from</span> sklearn.metrics <span class="tok-kw">import</span> silhouette_score
+<span class="tok-fn">print</span>(<span class="tok-fn">silhouette_score</span>(X, km.labels_))   <span class="tok-com"># càng gần 1 càng tốt</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Bốn hạn chế của k-means cần biết</div>
+          <ul>
+            <li><strong>Phải chọn k trước</strong> — nhưng số cụm thật thường không biết trước.</li>
+            <li><strong>Giả định cụm hình cầu và kích thước tương đương</strong> — hỏng với cụm dài, cụm cong, hoặc cụm chênh lệch kích thước lớn.</li>
+            <li><strong>Nhạy với khởi tạo</strong> — dùng <code>n_init=10</code> để chạy nhiều lần và lấy kết quả tốt nhất.</li>
+            <li><strong>Nhạy với ngoại lai</strong> — một điểm rất xa có thể kéo lệch cả tâm cụm.</li>
+          </ul>
+          <p style="margin-top: 10px;">
+            Khi cụm có hình dạng phức tạp, cân nhắc DBSCAN (dựa trên mật độ, tự tìm ra số cụm) hoặc
+            phân cụm phân cấp.
+          </p>
+        </div>
+
+        <h2 id="pca">9. PCA <span class="algo-badge badge-unsup">không giám sát · giảm chiều</span></h2>
+
+        <p>
+          PCA tìm các hướng mà dữ liệu <strong>biến thiên mạnh nhất</strong>, rồi chiếu dữ liệu
+          lên một số ít hướng đó. Kết quả: ít chiều hơn nhưng giữ được phần lớn thông tin.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.decomposition <span class="tok-kw">import</span> PCA
+
+<span class="tok-com"># Cách 1: chỉ định số chiều muốn giữ</span>
+pca = <span class="tok-fn">PCA</span>(n_components=<span class="tok-num">2</span>)          <span class="tok-com"># để vẽ biểu đồ 2D</span>
+X_2d = pca.<span class="tok-fn">fit_transform</span>(X)
+
+<span class="tok-com"># Cách 2 (thường tốt hơn): chỉ định lượng thông tin muốn giữ</span>
+pca = <span class="tok-fn">PCA</span>(n_components=<span class="tok-num">0.95</span>)       <span class="tok-com"># giữ 95% phương sai</span>
+X_giam = pca.<span class="tok-fn">fit_transform</span>(X)
+<span class="tok-fn">print</span>(<span class="tok-str">f"{X.shape[1]} chiều → {X_giam.shape[1]} chiều"</span>)
+
+<span class="tok-com"># Xem mỗi thành phần giữ được bao nhiêu phần trăm thông tin</span>
+<span class="tok-fn">print</span>(pca.explained_variance_ratio_[:<span class="tok-num">5</span>])
+<span class="tok-com"># [0.41 0.22 0.11 0.07 0.05] → 5 thành phần đầu giữ 86%</span></code></pre>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 PCA trong công việc AI Engineering</div>
+          <ul>
+            <li>
+              <strong>Nén embedding.</strong> Giảm từ 1024 xuống 256 chiều tiết kiệm 75% bộ nhớ
+              vector database và tăng tốc tìm kiếm, thường chỉ mất vài phần trăm chất lượng truy
+              xuất. Chi tiết ở <strong>10.3 chương 2</strong>.
+            </li>
+            <li>
+              <strong>Trực quan hoá embedding.</strong> Chiếu xuống 2D để nhìn thấy các cụm chủ đề
+              — đúng thứ tạo ra biểu đồ tương tác ở 10.3 chương 2. (Với mục đích thuần trực quan
+              hoá, t-SNE và UMAP thường cho hình đẹp hơn, nhưng chúng không đảo ngược được và
+              không dùng để nén được.)
+            </li>
+            <li>
+              <strong>Khử nhiễu.</strong> Bỏ các thành phần cuối thường tương đương bỏ nhiễu.
+            </li>
+          </ul>
+        </div>
+
+        <h2 id="ranh-gioi">10. Ranh giới quyết định trông thế nào</h2>
+
+        <p>
+          Cách hiểu bản chất của một thuật toán phân loại là nhìn <strong>ranh giới quyết định</strong>
+          của nó — vùng nào được gán lớp nào. Dưới đây là cùng một tập dữ liệu, ba thuật toán.
+        </p>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Ba thuật toán, cùng một dữ liệu</span>
+            <span class="text-muted mono" style="font-size: 0.76rem;">dữ liệu kiểu XOR — không tách được bằng đường thẳng</span>
+          </div>
+          <div class="ia-body">
+            <div class="ia-controls" style="margin-bottom: 14px;">
+              <div class="ia-field">
+                <label for="knn-k">k của k-NN: <span class="rangeval" id="knn-k-val">5</span></label>
+                <input type="range" id="knn-k" min="1" max="15" step="2" value="5">
+              </div>
+              <div class="ia-field">
+                <label for="tree-d">Độ sâu cây: <span class="rangeval" id="tree-d-val">3</span></label>
+                <input type="range" id="tree-d" min="1" max="6" step="1" value="3">
+              </div>
+            </div>
+
+            <div class="db-grid">
+              <div class="db-card">
+                <h4>Hồi quy logistic</h4>
+                <canvas id="cv-log" width="240" height="200"></canvas>
+                <div class="db-acc">Đúng: <b id="acc-log">—</b></div>
+              </div>
+              <div class="db-card">
+                <h4>Cây quyết định</h4>
+                <canvas id="cv-tree" width="240" height="200"></canvas>
+                <div class="db-acc">Đúng: <b id="acc-tree">—</b></div>
+              </div>
+              <div class="db-card">
+                <h4>k-NN</h4>
+                <canvas id="cv-knn" width="240" height="200"></canvas>
+                <div class="db-acc">Đúng: <b id="acc-knn">—</b></div>
+              </div>
+            </div>
+          </div>
+          <div class="ia-note">
+            <strong>Hồi quy logistic thất bại hoàn toàn</strong> ở đây — ranh giới của nó buộc
+            phải là một đường thẳng, mà dữ liệu kiểu XOR thì không đường thẳng nào tách được.
+            <strong>Cây</strong> cho ranh giới bậc thang song song trục. <strong>k-NN</strong> cho
+            ranh giới uốn theo dữ liệu — kéo k về 1 để thấy nó bám sát từng điểm (variance cao),
+            kéo lên 15 để thấy nó mượt dần (bias tăng).
+          </div>
+        </div>
+
+        <h2 id="sklearn">11. API của scikit-learn</h2>
+
+        <p>
+          Điểm mạnh lớn nhất của scikit-learn là <strong>mọi thứ đều dùng chung một giao diện</strong>.
+          Học một lần, áp dụng cho tất cả:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 26%;">Phương thức</th><th>Ý nghĩa</th><th>Có ở</th></tr></thead>
+            <tbody>
+              <tr><td><code>.fit(X, y)</code></td><td>Học từ dữ liệu</td><td>Mọi mô hình</td></tr>
+              <tr><td><code>.predict(X)</code></td><td>Dự đoán nhãn / giá trị</td><td>Mô hình có giám sát</td></tr>
+              <tr><td><code>.predict_proba(X)</code></td><td>Dự đoán xác suất từng lớp</td><td>Mô hình phân loại</td></tr>
+              <tr><td><code>.transform(X)</code></td><td>Biến đổi dữ liệu</td><td>Bộ tiền xử lý, PCA</td></tr>
+              <tr><td><code>.fit_transform(X)</code></td><td>Gộp fit rồi transform</td><td>Bộ tiền xử lý — <strong>chỉ dùng trên train</strong></td></tr>
+              <tr><td><code>.score(X, y)</code></td><td>Chỉ số mặc định của mô hình</td><td>Mọi mô hình có giám sát</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.pipeline <span class="tok-kw">import</span> Pipeline
+<span class="tok-kw">from</span> sklearn.compose <span class="tok-kw">import</span> ColumnTransformer
+<span class="tok-kw">from</span> sklearn.preprocessing <span class="tok-kw">import</span> StandardScaler, OneHotEncoder
+<span class="tok-kw">from</span> sklearn.impute <span class="tok-kw">import</span> SimpleImputer
+<span class="tok-kw">from</span> sklearn.model_selection <span class="tok-kw">import</span> GridSearchCV
+
+<span class="tok-com"># Pipeline đầy đủ — mọi bước tiền xử lý nằm bên trong,</span>
+<span class="tok-com"># nên KHÔNG THỂ vô tình gây rò rỉ dữ liệu (chương 4, mục 7)</span>
+tien_xu_ly = <span class="tok-fn">ColumnTransformer</span>([
+    (<span class="tok-str">"so"</span>, <span class="tok-fn">Pipeline</span>([
+        (<span class="tok-str">"dien"</span>, <span class="tok-fn">SimpleImputer</span>(strategy=<span class="tok-str">"median"</span>)),
+        (<span class="tok-str">"chuan_hoa"</span>, <span class="tok-fn">StandardScaler</span>()),
+    ]), cot_so),
+    (<span class="tok-str">"phan_loai"</span>, <span class="tok-fn">OneHotEncoder</span>(handle_unknown=<span class="tok-str">"ignore"</span>), cot_phan_loai),
+])
+
+pipe = <span class="tok-fn">Pipeline</span>([
+    (<span class="tok-str">"tien_xu_ly"</span>, tien_xu_ly),
+    (<span class="tok-str">"model"</span>, <span class="tok-fn">RandomForestClassifier</span>(random_state=<span class="tok-num">42</span>)),
+])
+
+<span class="tok-com"># Tìm siêu tham số tốt nhất bằng cross-validation</span>
+luoi = {
+    <span class="tok-str">"model__n_estimators"</span>: [<span class="tok-num">100</span>, <span class="tok-num">300</span>],
+    <span class="tok-str">"model__max_depth"</span>: [<span class="tok-kw">None</span>, <span class="tok-num">10</span>, <span class="tok-num">20</span>],
+}
+tim = <span class="tok-fn">GridSearchCV</span>(pipe, luoi, cv=<span class="tok-num">5</span>, scoring=<span class="tok-str">"f1"</span>, n_jobs=-<span class="tok-num">1</span>)
+tim.<span class="tok-fn">fit</span>(X_train, y_train)
+
+<span class="tok-fn">print</span>(tim.best_params_)
+<span class="tok-fn">print</span>(<span class="tok-str">f"F1 tốt nhất (CV): {tim.best_score_:.3f}"</span>)</code></pre>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Luôn dùng Pipeline</div>
+          <p>
+            <code>Pipeline</code> không chỉ gọn code. Nó <strong>làm cho rò rỉ dữ liệu trở nên
+            khó xảy ra</strong>: khi bạn gọi <code>GridSearchCV</code> trên một pipeline, mỗi fold
+            cross-validation sẽ fit lại bộ tiền xử lý <em>chỉ trên phần train của fold đó</em>.
+            Làm bằng tay thì gần như chắc chắn sẽ có lúc quên.
+          </p>
+        </div>
+
+        <h2 id="bang-chon">12. Bảng chọn thuật toán</h2>
+
+        <div class="table-wrap pick-table">
+          <table>
+            <thead>
+              <tr><th style="width: 26%;">Tình huống</th><th style="width: 26%;">Thử trước</th><th>Vì sao</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Dữ liệu bảng, phân loại hoặc hồi quy</td>
+                <td><strong>LightGBM / XGBoost</strong></td>
+                <td>Baseline rất mạnh, ít cần chuẩn bị dữ liệu, thường khó vượt</td>
+              </tr>
+              <tr>
+                <td>Cần giải thích được từng quyết định</td>
+                <td><strong>Hồi quy logistic</strong> hoặc <strong>cây nông</strong></td>
+                <td>In ra được hệ số hoặc luật; đáp ứng yêu cầu giải trình</td>
+              </tr>
+              <tr>
+                <td>Dữ liệu rất ít (&lt; 1.000 mẫu)</td>
+                <td><strong>Hồi quy logistic</strong>, <strong>SVM</strong></td>
+                <td>Mô hình phức tạp sẽ overfit ngay</td>
+              </tr>
+              <tr>
+                <td>Rất nhiều chiều, ít mẫu</td>
+                <td><strong>SVM</strong>, <strong>hồi quy có L1</strong></td>
+                <td>Xử lý tốt tình huống này; L1 tự chọn đặc trưng</td>
+              </tr>
+              <tr>
+                <td>Ảnh, âm thanh</td>
+                <td><strong>Mạng nơ-ron</strong> (chương 7, 9)</td>
+                <td>Cấu trúc không gian là thứ cây không khai thác được</td>
+              </tr>
+              <tr>
+                <td>Văn bản — hiểu ngữ nghĩa</td>
+                <td><strong>Embedding + LLM</strong> (10.2, 10.3)</td>
+                <td>Cần hiểu ngôn ngữ, không chỉ đếm từ</td>
+              </tr>
+              <tr>
+                <td>Văn bản — phân loại quy mô lớn, chi phí thấp</td>
+                <td><strong>TF-IDF + hồi quy logistic</strong></td>
+                <td>Rẻ hơn LLM hàng nghìn lần, thường đủ chính xác cho phân loại chủ đề</td>
+              </tr>
+              <tr>
+                <td>Không có nhãn, muốn tìm nhóm</td>
+                <td><strong>k-means</strong>, <strong>DBSCAN</strong></td>
+                <td>Bài toán phân cụm</td>
+              </tr>
+              <tr>
+                <td>Giảm chiều, nén, trực quan hoá</td>
+                <td><strong>PCA</strong> (nén) · <strong>UMAP</strong> (vẽ)</td>
+                <td>PCA đảo ngược được và dùng để nén; UMAP cho hình đẹp hơn</td>
+              </tr>
+              <tr>
+                <td>Tìm mẫu gần nhất trong kho lớn</td>
+                <td><strong>k-NN xấp xỉ</strong> (HNSW)</td>
+                <td>Chính là vector search — xem 10.3 chương 3</td>
+              </tr>
+              <tr>
+                <td>Chuỗi thời gian</td>
+                <td><strong>Gradient boosting với đặc trưng trễ</strong></td>
+                <td>Thường thắng cả mô hình chuỗi thời gian chuyên dụng lẫn mạng nơ-ron</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Diễn giải hệ số hồi quy logistic</h4>
+            <div class="exercise-body">
+              <p>
+                Lấy bộ dữ liệu Titanic (có sẵn qua <code>seaborn.load_dataset("titanic")</code>).
+                Huấn luyện hồi quy logistic dự đoán sống sót, với các đặc trưng đã chuẩn hoá.
+              </p>
+              <p>
+                In hệ số của từng đặc trưng và diễn giải bằng lời: đặc trưng nào làm tăng khả năng
+                sống sót, đặc trưng nào làm giảm, và mức độ ra sao?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Nhớ bọc trong <code>Pipeline</code> với <code>StandardScaler</code> — nếu
+                    không chuẩn hoá, hệ số không so sánh được với nhau.
+                  </p>
+                  <p>
+                    Bạn sẽ thấy giới tính có hệ số lớn nhất. Đây là dịp tốt để nghĩ về đạo đức:
+                    mô hình học được quy luật lịch sử "phụ nữ và trẻ em trước", nhưng nó
+                    <em>mô tả</em> quá khứ chứ không <em>biện minh</em> cho việc dùng giới tính
+                    làm cơ sở quyết định trong hệ thống thật.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>So sánh Random Forest và Gradient Boosting</h4>
+            <div class="exercise-body">
+              <p>
+                Trên cùng một bộ dữ liệu bảng, huấn luyện cả hai với siêu tham số mặc định. So sánh:
+                điểm cross-validation, thời gian huấn luyện, và độ nhạy với siêu tham số (thử 3 cấu
+                hình khác nhau cho mỗi loại).
+              </p>
+              <p>Viết một đoạn kết luận: khi nào bạn sẽ chọn cái nào?</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Dự đoán kết quả: Random Forest cho điểm khá tốt ngay với mặc định và ít thay
+                    đổi khi chỉnh siêu tham số. Gradient boosting mặc định có thể tệ hơn, nhưng
+                    khi chỉnh đúng thì vượt lên.
+                  </p>
+                  <p>
+                    Với LightGBM, ba siêu tham số quan trọng nhất là <code>learning_rate</code>,
+                    <code>n_estimators</code>, và <code>num_leaves</code>. Quy tắc: learning rate
+                    nhỏ hơn thì cần nhiều cây hơn.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Cài k-means bằng NumPy thuần</h4>
+            <div class="exercise-body">
+              <p>
+                Cài thuật toán k-means từ đầu, không dùng scikit-learn. Hai bước lặp: gán điểm vào
+                cụm gần nhất, rồi dời tâm. Dừng khi tâm không đổi nữa hoặc đạt số vòng tối đa.
+              </p>
+              <p>
+                Kiểm chứng kết quả với <code>sklearn.cluster.KMeans</code> trên cùng dữ liệu và
+                cùng khởi tạo.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Bước gán cụm vector hoá được hoàn toàn nhờ broadcasting (chương 3):
+                  </p>
+                  <p>
+                    <code>d = ((X[:, None, :] - tam[None, :, :]) ** 2).sum(axis=2)</code> cho ma
+                    trận khoảng cách shape <code>(n_diem, k)</code>, rồi
+                    <code>nhan = d.argmin(axis=1)</code>.
+                  </p>
+                  <p>
+                    Bước dời tâm: <code>tam[j] = X[nhan == j].mean(axis=0)</code>. Nhớ xử lý ca
+                    một cụm rỗng (không điểm nào được gán) — thường bằng cách giữ nguyên tâm cũ.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>PCA để nén và để vẽ</h4>
+            <div class="exercise-body">
+              <p>
+                Lấy một bộ dữ liệu nhiều chiều (ví dụ <code>load_digits</code> — 64 chiều).
+                Làm hai việc:
+              </p>
+              <ul>
+                <li>Chiếu xuống 2D và vẽ scatter, tô màu theo nhãn. Các lớp có tách ra không?</li>
+                <li>Tìm số chiều tối thiểu để giữ 95% phương sai. Huấn luyện một bộ phân loại trên dữ liệu gốc và trên dữ liệu đã giảm chiều, so sánh độ chính xác và thời gian.</li>
+              </ul>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>np.cumsum(pca.explained_variance_ratio_)</code> cho phương sai tích luỹ;
+                    tìm chỉ số đầu tiên vượt 0,95.
+                  </p>
+                  <p>
+                    Kết quả thường thấy: giảm được đáng kể số chiều mà độ chính xác gần như không
+                    đổi, còn thời gian huấn luyện giảm rõ. Đây chính là lập luận cho việc nén
+                    embedding ở <strong>10.3 chương 2</strong>.
+                  </p>
+                  <p>
+                    ⚠️ Nhớ đặt PCA <em>bên trong</em> Pipeline, nếu không bạn lại gây rò rỉ dữ liệu.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Chọn thuật toán cho năm tình huống</h4>
+            <div class="exercise-body">
+              <p>Với mỗi tình huống, chọn thuật toán và biện luận trong 2–3 câu:</p>
+              <ol>
+                <li>Ngân hàng cần chấm điểm tín dụng và <strong>phải giải thích được</strong> lý do từ chối cho khách hàng.</li>
+                <li>Phân loại 200 nghìn email nội bộ vào 12 phòng ban, ngân sách rất hạn chế.</li>
+                <li>Phát hiện giao dịch bất thường, không có nhãn "bất thường" nào cả.</li>
+                <li>Dự báo lượng đơn hàng ngày mai từ 3 năm dữ liệu bảng.</li>
+                <li>Tìm 20 sản phẩm tương tự nhất với một sản phẩm, trong kho 5 triệu sản phẩm.</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <strong>(1)</strong> Hồi quy logistic hoặc cây nông — yêu cầu giải trình loại
+                    bỏ mô hình hộp đen. <strong>(2)</strong> TF-IDF + hồi quy logistic — rẻ hơn
+                    LLM hàng nghìn lần và đủ tốt cho phân loại chủ đề.
+                    <strong>(3)</strong> Phát hiện bất thường không giám sát (Isolation Forest,
+                    DBSCAN) — không có nhãn nên không dùng được mô hình có giám sát.
+                    <strong>(4)</strong> Gradient boosting với đặc trưng trễ và đặc trưng lịch.
+                    <strong>(5)</strong> k-NN xấp xỉ trên embedding — chính là vector search.
+                  </p>
+                  <p>
+                    Với câu 2, hãy nói rõ khi nào bạn <em>sẽ</em> đổi ý và dùng LLM: nếu cần hiểu
+                    sắc thái, hoặc số nhãn thay đổi liên tục, hoặc không có dữ liệu gán nhãn để
+                    huấn luyện.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Vì sao hồi quy logistic được gọi là "hồi quy" trong khi nó dùng để phân loại?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì bên trong, nó <em>thật sự</em> làm hồi quy tuyến tính: tính
+                <code>z = w·x + b</code>, một số thực bất kỳ. Bước phân loại chỉ đến sau, khi
+                <code>z</code> được ép qua hàm <strong>sigmoid</strong> để thành xác suất trong
+                khoảng (0, 1), rồi so với ngưỡng.
+              </p>
+              <p style="margin-top: 8px;">
+                Nói cách khác: phần "học" là hồi quy, phần "quyết định" mới là phân loại. Với
+                nhiều lớp, sigmoid được thay bằng softmax — và đó chính là cấu trúc lớp cuối cùng
+                của một mô hình ngôn ngữ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>k-NN tốn kém ở đâu, và điều đó liên quan gì tới vector database?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                k-NN <strong>không tốn gì lúc huấn luyện</strong> (chỉ lưu dữ liệu) nhưng
+                <strong>rất tốn lúc dự đoán</strong>: mỗi truy vấn phải tính khoảng cách tới toàn
+                bộ n mẫu, tức O(n·d).
+              </p>
+              <p style="margin-top: 8px;">
+                Đây chính xác là bài toán của vector search trong RAG: 10 triệu tài liệu × 768
+                chiều là hàng tỉ phép tính cho một câu hỏi. Lời giải là <strong>k-NN xấp xỉ</strong>
+                — chấp nhận đôi khi bỏ sót một láng giềng thật để đổi lấy tốc độ nhanh hơn hàng
+                trăm lần. Các chỉ mục HNSW và IVF-PQ ở <strong>10.3 chương 3</strong> là hiện thân
+                của ý tưởng này.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Random Forest và Gradient Boosting khác nhau ở điểm cốt lõi nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Random Forest xây các cây song song và độc lập</strong>, mỗi cây học trên
+                một mẫu con ngẫu nhiên, rồi bỏ phiếu. Mục tiêu là giảm <em>variance</em> — trung
+                bình của nhiều mô hình nhiễu thì ổn định hơn từng cái.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Gradient Boosting xây các cây tuần tự</strong>, mỗi cây mới học để
+                <em>sửa lỗi còn lại</em> của tổ hợp các cây trước. Mục tiêu là giảm <em>bias</em>.
+              </p>
+              <p style="margin-top: 8px;">
+                Hệ quả thực tế: Random Forest an toàn hơn, ít cần chỉnh; Gradient Boosting mạnh
+                hơn khi chỉnh đúng nhưng dễ overfit hơn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Kernel trick của SVM giải quyết vấn đề gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vấn đề: nhiều tập dữ liệu không tách được bằng một siêu phẳng trong không gian gốc.
+                Giải pháp lý thuyết là ánh xạ lên không gian nhiều chiều hơn nơi chúng tách được —
+                nhưng việc tính toạ độ trong không gian đó có thể rất tốn kém, thậm chí vô hạn chiều.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Kernel trick</strong> khai thác một điều: thuật toán SVM chỉ cần
+                <em>tích vô hướng</em> giữa các điểm, không cần toạ độ của chúng. Hàm kernel tính
+                trực tiếp tích vô hướng trong không gian mới mà không bao giờ tính toạ độ. Ta được
+                lợi ích của không gian nhiều chiều với chi phí của không gian gốc.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Nêu ba hạn chế của k-means và cách xử lý từng cái.</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ol>
+                <li>
+                  <strong>Phải chọn k trước.</strong> → Dùng elbow hoặc silhouette score để chọn;
+                  hoặc chuyển sang DBSCAN vốn tự tìm ra số cụm.
+                </li>
+                <li>
+                  <strong>Giả định cụm hình cầu, kích thước tương đương.</strong> → Với cụm dài
+                  hoặc cong, dùng DBSCAN hoặc Gaussian Mixture Model.
+                </li>
+                <li>
+                  <strong>Nhạy với khởi tạo.</strong> → Đặt <code>n_init=10</code> để chạy nhiều
+                  lần với khởi tạo khác nhau và lấy kết quả tốt nhất.
+                </li>
+              </ol>
+              <p style="margin-top: 8px;">
+                Hạn chế thứ tư đáng nhắc: <strong>nhạy với ngoại lai</strong> — một điểm rất xa có
+                thể kéo lệch cả tâm cụm. Nên loại ngoại lai trước khi phân cụm.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>PCA mất gì khi giảm chiều? Vì sao vẫn nên dùng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                PCA mất phần <strong>phương sai nằm trên các hướng bị bỏ đi</strong>. Nếu giữ 95%
+                phương sai thì mất 5% — và phần bị mất thường là nhiễu hoặc chi tiết nhỏ.
+              </p>
+              <p style="margin-top: 8px;">
+                Ngoài ra còn mất <strong>khả năng diễn giải</strong>: các thành phần chính là tổ
+                hợp tuyến tính của mọi đặc trưng gốc, nên "thành phần 1" không tương ứng với một
+                khái niệm có tên gọi nào.
+              </p>
+              <p style="margin-top: 8px;">
+                Vẫn nên dùng vì: giảm mạnh bộ nhớ và thời gian tính, thường giảm overfitting, và
+                cho phép trực quan hoá dữ liệu nhiều chiều. Với embedding, đánh đổi này rất có lợi
+                — chi tiết ở <strong>10.3 chương 2</strong>.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Vì sao cây và ensemble của cây thường thắng mạng nơ-ron trên dữ liệu bảng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ul>
+                <li>
+                  <strong>Không có cấu trúc để mạng khai thác.</strong> Thứ làm CNN mạnh với ảnh
+                  (pixel gần nhau thì liên quan) không tồn tại ở dữ liệu bảng — thứ tự cột là tuỳ ý.
+                </li>
+                <li>
+                  <strong>Cây xử lý tự nhiên</strong> đặc trưng phân loại, thang đo lệch, và giá
+                  trị thiếu — không cần chuẩn hoá hay one-hot.
+                </li>
+                <li>
+                  <strong>Bền với đặc trưng vô dụng</strong> — cây chỉ đơn giản không chọn chúng,
+                  còn mạng nơ-ron phải học cách bỏ qua.
+                </li>
+                <li>
+                  <strong>Hoạt động tốt với dữ liệu ít</strong> — vài nghìn dòng là đủ, trong khi
+                  mạng nơ-ron thường cần nhiều hơn để không overfit.
+                </li>
+              </ul>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Gọi <code>fit_transform()</code> trên tập test sai ở chỗ nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>fit</code> nghĩa là <em>học tham số biến đổi</em> từ dữ liệu — với
+                <code>StandardScaler</code> đó là trung bình và độ lệch chuẩn. Nếu học chúng từ
+                tập test, bạn đã dùng thông tin của tập test, và kết quả đánh giá không còn khách
+                quan. Đây chính là rò rỉ dữ liệu (chương 4, mục 7).
+              </p>
+              <p style="margin-top: 8px;">
+                Đúng: <code>fit_transform()</code> trên train, chỉ <code>transform()</code> trên
+                test. Tốt hơn nữa: bọc mọi bước tiền xử lý vào <code>Pipeline</code> — khi đó
+                scikit-learn tự đảm bảo điều này, kể cả trong từng fold của cross-validation.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 5, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Mô hình cổ điển vẫn cần thiết</strong> — rẻ hơn, nhanh hơn, và thường chính xác hơn LLM trên dữ liệu bảng ở quy mô lớn.</li>
+          <li><strong>Hồi quy logistic</strong> hồi quy ra một số rồi ép qua sigmoid; lớp cuối của LLM về bản chất là phiên bản đa lớp của nó.</li>
+          <li><strong>k-NN chính là vector search</strong> — và chi phí O(n·d) của nó là lý do tồn tại của cả ngành vector database.</li>
+          <li><strong>Cây</strong> giải thích được và không cần chuẩn hoá; <strong>Random Forest</strong> giảm variance (song song), <strong>Gradient Boosting</strong> giảm bias (tuần tự).</li>
+          <li><strong>Gradient boosting thắng deep learning trên dữ liệu bảng</strong> vì dữ liệu bảng không có cấu trúc để mạng khai thác.</li>
+          <li><strong>SVM</strong> tối đa hoá lề; kernel trick cho lợi ích của không gian nhiều chiều với chi phí của không gian gốc.</li>
+          <li><strong>k-means</strong> đơn giản nhưng có bốn hạn chế cần nhớ; <strong>PCA</strong> để nén và trực quan hoá.</li>
+          <li><strong>Ranh giới quyết định</strong> phản ánh bản chất thuật toán: thẳng (logistic), bậc thang (cây), uốn theo dữ liệu (k-NN).</li>
+          <li><strong>Pipeline của scikit-learn</strong> làm cho rò rỉ dữ liệu khó xảy ra — luôn dùng nó.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 4</strong> — overfitting, rò rỉ dữ liệu và cross-validation vừa được áp dụng vào từng thuật toán cụ thể.</li>
+          <li><strong>Chương 6 (Đánh giá mô hình)</strong> — cách chọn chỉ số để so sánh các thuật toán này một cách công bằng.</li>
+          <li><strong>Chương 7 (Deep Learning)</strong> — khi nào mạng nơ-ron thật sự vượt trội so với các thuật toán ở đây.</li>
+          <li><strong>10.3 chương 2 (Embedding)</strong> — PCA để nén embedding và vẽ biểu đồ 2D.</li>
+          <li><strong>10.3 chương 3 (Vector Database)</strong> — k-NN xấp xỉ, HNSW, IVF-PQ: phần tiếp nối trực tiếp của mục 4.</li>
+          <li><strong>10.3 chương 5 (Hybrid retrieval)</strong> — TF-IDF và BM25 là họ hàng của cách tiếp cận cổ điển với văn bản.</li>
+          <li><strong>Trụ cột 1 — DSA</strong> — độ phức tạp O(n·d) của k-NN và cấu trúc cây là kiến thức DSA áp dụng trực tiếp.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong4.html" class="prev">
+            <div class="dir">← Chương 4</div>
+            <div class="label">Machine Learning cơ bản</div>
+          </a>
+          <a href="chuong6.html" class="next">
+            <div class="dir">Chương 6 →</div>
+            <div class="label">Đánh giá mô hình</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#vi-sao-hoc">1. Vì sao vẫn học</a></li>
+          <li><a href="#hoi-quy-tuyen-tinh">2. Hồi quy tuyến tính</a></li>
+          <li><a href="#hoi-quy-logistic">3. Hồi quy logistic</a></li>
+          <li><a href="#knn">4. k-NN</a></li>
+          <li><a href="#cay-quyet-dinh">5. Cây quyết định</a></li>
+          <li><a href="#ensemble">6. Forest &amp; Boosting</a></li>
+          <li><a href="#svm">7. SVM</a></li>
+          <li><a href="#kmeans">8. k-means</a></li>
+          <li><a href="#pca">9. PCA</a></li>
+          <li><a href="#ranh-gioi">10. Ranh giới quyết định</a></li>
+          <li><a href="#sklearn">11. API scikit-learn</a></li>
+          <li><a href="#bang-chon">12. Bảng chọn thuật toán</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 5 — Thuật toán ML kinh điển · Nền tảng AI · Trụ cột 10 IT Basic<br/>
+        <a href="../index.html">Mục lục 10.1</a> ·
+        <a href="chuong4.html">← Chương 4</a> ·
+        <a href="chuong6.html">Chương 6 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    /* Dữ liệu XOR cố định: lớp 1 ở góc dưới-trái và trên-phải,
+       lớp 0 ở góc trên-trái và dưới-phải. Không đường thẳng nào tách được. */
+    var DATA = [];
+    (function build() {
+      var blobs = [
+        [0.25, 0.25, 1], [0.75, 0.75, 1],
+        [0.25, 0.75, 0], [0.75, 0.25, 0]
+      ];
+      // Nhiễu cố định, không dùng Math.random để kết quả tái lập được
+      var jit = [
+        [ 0.00,  0.00], [ 0.08, -0.05], [-0.07,  0.06], [ 0.05,  0.09],
+        [-0.09, -0.04], [ 0.11,  0.03], [-0.04, -0.10], [ 0.03, -0.08],
+        [-0.11,  0.02], [ 0.07,  0.07]
+      ];
+      blobs.forEach(function (b) {
+        jit.forEach(function (j) {
+          DATA.push([
+            Math.min(0.97, Math.max(0.03, b[0] + j[0])),
+            Math.min(0.97, Math.max(0.03, b[1] + j[1])),
+            b[2]
+          ]);
+        });
+      });
+    })();
+
+    /* ---------- Hồi quy logistic (gradient descent) ---------- */
+    function trainLogistic(data, iters, lr) {
+      var w0 = 0, w1 = 0, b = 0;
+      for (var it = 0; it < iters; it++) {
+        var g0 = 0, g1 = 0, gb = 0;
+        data.forEach(function (p) {
+          var z = w0 * p[0] + w1 * p[1] + b;
+          var pred = 1 / (1 + Math.exp(-z));
+          var err = pred - p[2];
+          g0 += err * p[0]; g1 += err * p[1]; gb += err;
+        });
+        var n = data.length;
+        w0 -= lr * g0 / n; w1 -= lr * g1 / n; b -= lr * gb / n;
+      }
+      return function (x, y) { return 1 / (1 + Math.exp(-(w0 * x + w1 * y + b))) >= 0.5 ? 1 : 0; };
+    }
+
+    /* ---------- Cây quyết định (greedy, chia theo Gini) ---------- */
+    function gini(rows) {
+      if (!rows.length) return 0;
+      var p = rows.reduce(function (s, r) { return s + r[2]; }, 0) / rows.length;
+      return 1 - p * p - (1 - p) * (1 - p);
+    }
+
+    function buildTree(rows, depth) {
+      var majority = rows.reduce(function (s, r) { return s + r[2]; }, 0) * 2 >= rows.length ? 1 : 0;
+      if (depth === 0 || rows.length < 4 || gini(rows) === 0) {
+        return { leaf: true, cls: majority };
+      }
+      var best = null;
+      [0, 1].forEach(function (feat) {
+        for (var t = 0.05; t < 1; t += 0.05) {
+          var L = rows.filter(function (r) { return r[feat] <= t; });
+          var R = rows.filter(function (r) { return r[feat] > t; });
+          if (!L.length || !R.length) continue;
+          var score = (L.length * gini(L) + R.length * gini(R)) / rows.length;
+          if (!best || score < best.score) best = { feat: feat, t: t, score: score, L: L, R: R };
+        }
+      });
+      if (!best) return { leaf: true, cls: majority };
+      return {
+        leaf: false, feat: best.feat, t: best.t,
+        left: buildTree(best.L, depth - 1),
+        right: buildTree(best.R, depth - 1)
+      };
+    }
+
+    function treePredict(node, x, y) {
+      while (!node.leaf) {
+        var v = node.feat === 0 ? x : y;
+        node = v <= node.t ? node.left : node.right;
+      }
+      return node.cls;
+    }
+
+    /* ---------- k-NN ---------- */
+    function knnPredict(data, k, x, y) {
+      var d = data.map(function (p) {
+        var dx = p[0] - x, dy = p[1] - y;
+        return { d: dx * dx + dy * dy, c: p[2] };
+      });
+      d.sort(function (a, b) { return a.d - b.d; });
+      var s = 0;
+      for (var i = 0; i < k && i < d.length; i++) s += d[i].c;
+      return s * 2 >= Math.min(k, d.length) ? 1 : 0;
+    }
+
+    /* ---------- Vẽ ---------- */
+    var COL = { 0: '#3c5570', 1: '#a35a2a' };
+    var BG  = { 0: 'rgba(60,85,112,0.16)', 1: 'rgba(163,90,42,0.16)' };
+    var STEP = 5;
+
+    function draw(canvasId, accId, predict) {
+      var cv = document.getElementById(canvasId);
+      var ctx = cv.getContext('2d');
+      var W = cv.width, H = cv.height;
+      ctx.clearRect(0, 0, W, H);
+
+      for (var px = 0; px < W; px += STEP) {
+        for (var py = 0; py < H; py += STEP) {
+          var x = (px + STEP / 2) / W;
+          var y = 1 - (py + STEP / 2) / H;
+          ctx.fillStyle = BG[predict(x, y)];
+          ctx.fillRect(px, py, STEP, STEP);
+        }
+      }
+
+      var dung = 0;
+      DATA.forEach(function (p) {
+        if (predict(p[0], p[1]) === p[2]) dung++;
+        var cx = p[0] * W, cy = (1 - p[1]) * H;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3.6, 0, Math.PI * 2);
+        ctx.fillStyle = COL[p[2]];
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+
+      document.getElementById(accId).textContent =
+        (dung / DATA.length * 100).toFixed(1) + '%';
+    }
+
+    var logisticFn = trainLogistic(DATA, 4000, 0.9);
+
+    function renderAll() {
+      var k = parseInt(document.getElementById('knn-k').value, 10);
+      var depth = parseInt(document.getElementById('tree-d').value, 10);
+      document.getElementById('knn-k-val').textContent = k;
+      document.getElementById('tree-d-val').textContent = depth;
+
+      var tree = buildTree(DATA, depth);
+
+      draw('cv-log', 'acc-log', logisticFn);
+      draw('cv-tree', 'acc-tree', function (x, y) { return treePredict(tree, x, y); });
+      draw('cv-knn', 'acc-knn', function (x, y) { return knnPredict(DATA, k, x, y); });
+    }
+
+    document.getElementById('knn-k').addEventListener('input', renderAll);
+    document.getElementById('tree-d').addEventListener('input', renderAll);
+    renderAll();
+  })();
+  </script>
+</body>
+</html>

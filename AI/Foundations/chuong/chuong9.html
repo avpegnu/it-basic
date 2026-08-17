@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 9 — CNN, RNN/LSTM và giới hạn của chúng · Nền tảng AI</title>
+  <meta name="description" content="Phép tích chập và pooling, học chuyển giao, RNN và trạng thái ẩn, gradient tiêu biến trong chuỗi dài, LSTM/GRU, attention ra đời như bản vá cho RNN, và ba giới hạn chí mạng dẫn tới Transformer." />
+  <meta name="theme-color" content="#8a6a3f" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Trình minh hoạ tích chập */
+    .conv-layout {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+      justify-items: center;
+    }
+    .conv-panel { text-align: center; }
+    .conv-panel canvas {
+      display: block;
+      image-rendering: pixelated;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      width: 100%;
+      max-width: 190px;
+      height: auto;
+    }
+    .conv-panel .cp-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+    .kernel-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 40px);
+      gap: 3px;
+    }
+    .kernel-grid div {
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-alt);
+      border-radius: 5px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .kernel-grid div.pos { background: rgba(95,107,69,0.22); }
+    .kernel-grid div.neg { background: rgba(168,58,58,0.18); }
+    .conv-arrow {
+      font-size: 1.3rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* Sơ đồ trải RNN */
+    .rnn-unroll {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 16px 4px;
+      margin: 20px 0;
+    }
+    .rnn-cell {
+      flex: 0 0 auto;
+      text-align: center;
+      min-width: 76px;
+    }
+    .rnn-box {
+      padding: 11px 8px;
+      background: var(--bg-card);
+      border: 2px solid var(--accent);
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .rnn-tok {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .rnn-link {
+      flex: 0 0 auto;
+      color: var(--rust);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    /* Bảng suy giảm gradient */
+    .decay-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+    .decay-bar .db-k { flex: 0 0 86px; color: var(--text-muted); }
+    .decay-bar .db-track { flex: 1; height: 16px; background: var(--bg-sunken); border-radius: 4px; overflow: hidden; }
+    .decay-bar .db-fill { height: 100%; background: var(--rust); border-radius: 4px; }
+    .decay-bar .db-v { flex: 0 0 92px; text-align: right; color: var(--ink); font-weight: 600; }
+
+    /* Ba giới hạn */
+    .limit-card {
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--crimson);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      background: var(--bg-card);
+      margin-bottom: 12px;
+    }
+    .limit-card h4 {
+      margin: 0 0 8px;
+      font-size: 1.02rem;
+      color: var(--crimson);
+    }
+    .limit-card p { margin: 0 0 8px; font-size: 0.92rem; }
+    .limit-card p:last-child { margin-bottom: 0; }
+    .limit-card .fix {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      font-size: 0.87rem;
+      color: var(--olive);
+    }
+    .limit-card .fix strong { color: var(--olive); }
+
+    @media (max-width: 720px) {
+      .conv-layout { grid-template-columns: 1fr; }
+      .conv-arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark">10.1</span>
+        Nền tảng AI · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Trụ cột 10</a></li>
+          <li><a href="../index.html" class="active">Nền tảng</a></li>
+          <li><a href="../../LLM/index.html">LLM</a></li>
+          <li><a href="../../RAG/index.html">RAG</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Trụ cột 10</a><span class="sep">/</span>
+        <a href="../index.html">Nền tảng AI</a><span class="sep">/</span>
+        <span>Chương 9</span>
+      </div>
+      <div class="chapter-num">Chương 09 · Kiến trúc</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; margin: 0 0 14px; color: var(--ink); line-height: 1.15;">
+        CNN, RNN/LSTM và giới hạn của chúng
+      </h1>
+      <p class="lead">
+        Chương này có một mục đích rõ ràng: <strong>hiểu chính xác vì sao RNN thất bại với ngôn
+        ngữ</strong>. Không có bối cảnh đó, Transformer ở chương 10 chỉ là một kiến trúc lạ mắt
+        cần học thuộc. Có bối cảnh đó, mỗi thành phần của Transformer trở thành lời giải cho một
+        vấn đề cụ thể mà bạn đã tự thấy. Ba giới hạn ở mục 8 là phần quan trọng nhất chương.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1.150 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 4</span>
+        <span class="item"><strong>Quiz:</strong> 7</span>
+        <span class="item"><strong>Cần trước:</strong> Chương 7</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu <strong>phép tích chập</strong> và vì sao nó phù hợp với ảnh mà MLP thì không.</li>
+            <li>Nắm <strong>học chuyển giao</strong> — mầm mống của ý tưởng "mô hình nền tảng".</li>
+            <li>Hiểu <strong>RNN</strong> và khái niệm trạng thái ẩn.</li>
+            <li>Giải thích được vì sao RNN <strong>quên đầu câu</strong>, ở mức cơ chế.</li>
+            <li>Biết LSTM/GRU cải thiện được gì và <em>không</em> giải quyết được gì.</li>
+            <li>Biết <strong>attention ra đời năm 2014 như một bản vá cho RNN</strong>, không phải như một kiến trúc mới.</li>
+            <li>Phát biểu được <strong>ba giới hạn chí mạng</strong> dẫn thẳng tới Transformer.</li>
+          </ul>
+        </div>
+
+        <h2 id="cnn">1. CNN — mạng tích chập</h2>
+
+        <p>
+          Thử dùng MLP cho ảnh: một ảnh màu 224×224 có 150.528 giá trị đầu vào. Lớp ẩn đầu tiên
+          với 1.000 nơ-ron cần hơn <strong>150 triệu tham số</strong> — chỉ riêng lớp đầu. Không
+          khả thi.
+        </p>
+
+        <p>
+          Tệ hơn: MLP <em>không biết gì</em> về cấu trúc không gian. Với nó, hai pixel cạnh nhau
+          không liên quan gì hơn hai pixel ở hai góc đối diện. Nhưng ta biết rõ là chúng có liên
+          quan — và một con mèo dịch sang phải 10 pixel vẫn là con mèo đó.
+        </p>
+
+        <h3 id="tich-chap">1.1. Phép tích chập</h3>
+
+        <p>
+          Ý tưởng: thay vì nối mỗi nơ-ron với <em>mọi</em> pixel, hãy dùng một cửa sổ nhỏ
+          (<strong>kernel</strong>, thường 3×3) trượt qua toàn bộ ảnh. Cùng một kernel dùng lại
+          ở mọi vị trí.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 26%;">Tính chất</th><th>Ý nghĩa</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Kết nối cục bộ</strong></td>
+                <td>Mỗi đầu ra chỉ phụ thuộc một vùng nhỏ của đầu vào — phù hợp với thực tế rằng đặc trưng thị giác mang tính cục bộ</td>
+              </tr>
+              <tr>
+                <td><strong>Chia sẻ tham số</strong></td>
+                <td>Cùng một kernel dùng ở mọi vị trí. Một kernel 3×3 chỉ có 9 tham số, thay vì hàng triệu</td>
+              </tr>
+              <tr>
+                <td><strong>Bất biến tịnh tiến</strong></td>
+                <td>Kernel phát hiện cạnh sẽ phát hiện cạnh ở bất cứ đâu trong ảnh — không cần học lại cho từng vị trí</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Thử: kernel tích chập</span>
+          </div>
+          <div class="ia-body">
+            <div class="ia-controls" style="margin-bottom: 18px;">
+              <div class="ia-field">
+                <label for="conv-k">Kernel</label>
+                <select id="conv-k" style="min-width: 200px;">
+                  <option value="identity">Giữ nguyên</option>
+                  <option value="blur">Làm mờ</option>
+                  <option value="edge" selected>Phát hiện cạnh</option>
+                  <option value="sobelx">Cạnh dọc (Sobel X)</option>
+                  <option value="sobely">Cạnh ngang (Sobel Y)</option>
+                  <option value="sharpen">Làm nét</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="conv-layout">
+              <div class="conv-panel">
+                <canvas id="conv-in" width="28" height="28"></canvas>
+                <div class="cp-label">Ảnh vào 28×28</div>
+              </div>
+              <div>
+                <div class="kernel-grid" id="conv-kernel"></div>
+                <div class="cp-label" style="text-align:center;">Kernel 3×3</div>
+              </div>
+              <div class="conv-panel">
+                <canvas id="conv-out" width="26" height="26"></canvas>
+                <div class="cp-label">Feature map 26×26</div>
+              </div>
+            </div>
+
+            <div class="loop-explain" id="conv-note" style="margin-top: 16px; padding: 12px 14px; background: var(--bg-alt); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; font-size: 0.87rem; line-height: 1.6;"></div>
+          </div>
+          <div class="ia-note">
+            Chú ý kích thước: <strong>28×28 vào, 26×26 ra</strong>. Kernel 3×3 không đặt được ở
+            viền, nên mỗi lần tích chập ảnh nhỏ đi 2 pixel mỗi chiều. Đó là lý do có
+            <em>padding</em> — thêm viền số 0 để giữ nguyên kích thước.
+          </div>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Điểm mấu chốt: kernel được <em>học</em>, không được thiết kế</div>
+          <p>
+            Các kernel trong trình mô phỏng trên là kernel cổ điển do con người thiết kế từ thập
+            kỷ trước. Trong một CNN thật, <strong>các số trong kernel là tham số được học bằng
+            gradient descent</strong> — hệt như trọng số của MLP ở chương 7.
+          </p>
+          <p style="margin-top: 10px;">
+            Điều thú vị: khi huấn luyện xong, các kernel ở lớp đầu tiên của một CNN thường
+            <em>tự</em> hội tụ về những thứ rất giống bộ phát hiện cạnh và bộ phát hiện màu — mạng
+            tự khám phá lại những gì các nhà nghiên cứu thị giác đã thiết kế bằng tay. Các lớp sâu
+            hơn thì học những đặc trưng phức tạp hơn: góc, hoạ tiết, rồi tới bộ phận vật thể.
+          </p>
+        </div>
+
+        <h3 id="pooling">1.2. Pooling</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> torch.nn <span class="tok-kw">as</span> nn
+
+cnn = nn.<span class="tok-fn">Sequential</span>(
+    nn.<span class="tok-fn">Conv2d</span>(<span class="tok-num">3</span>, <span class="tok-num">32</span>, kernel_size=<span class="tok-num">3</span>, padding=<span class="tok-num">1</span>),   <span class="tok-com"># 3 kênh màu → 32 feature map</span>
+    nn.<span class="tok-fn">ReLU</span>(),
+    nn.<span class="tok-fn">MaxPool2d</span>(<span class="tok-num">2</span>),                                <span class="tok-com"># giảm một nửa mỗi chiều</span>
+
+    nn.<span class="tok-fn">Conv2d</span>(<span class="tok-num">32</span>, <span class="tok-num">64</span>, kernel_size=<span class="tok-num">3</span>, padding=<span class="tok-num">1</span>),
+    nn.<span class="tok-fn">ReLU</span>(),
+    nn.<span class="tok-fn">MaxPool2d</span>(<span class="tok-num">2</span>),
+
+    nn.<span class="tok-fn">Flatten</span>(),
+    nn.<span class="tok-fn">Linear</span>(<span class="tok-num">64</span> * <span class="tok-num">56</span> * <span class="tok-num">56</span>, <span class="tok-num">10</span>),
+)</code></pre>
+        </div>
+
+        <p>
+          <strong>Max pooling</strong> lấy giá trị lớn nhất trong mỗi ô 2×2, giảm kích thước một
+          nửa mỗi chiều. Ba tác dụng: giảm tính toán, tăng vùng tiếp nhận của các lớp sau, và tạo
+          thêm tính bất biến với dịch chuyển nhỏ.
+        </p>
+
+        <h3 id="transfer">1.3. Học chuyển giao — mầm mống của mô hình nền tảng</h3>
+
+        <p>
+          Trong thực tế, gần như không ai huấn luyện CNN từ đầu. Thay vào đó:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> torchvision.models <span class="tok-kw">as</span> models
+
+<span class="tok-com"># Nạp mô hình đã huấn luyện trên ImageNet (1,2 triệu ảnh, 1.000 lớp)</span>
+model = models.<span class="tok-fn">resnet50</span>(weights=<span class="tok-str">"IMAGENET1K_V2"</span>)
+
+<span class="tok-com"># Đóng băng toàn bộ phần trích xuất đặc trưng</span>
+<span class="tok-kw">for</span> p <span class="tok-kw">in</span> model.<span class="tok-fn">parameters</span>():
+    p.requires_grad = <span class="tok-kw">False</span>
+
+<span class="tok-com"># Thay lớp phân loại cuối bằng lớp của riêng bạn</span>
+model.fc = nn.<span class="tok-fn">Linear</span>(model.fc.in_features, so_lop_cua_ban)
+
+<span class="tok-com"># Giờ chỉ huấn luyện lớp cuối — vài nghìn tham số thay vì 25 triệu</span></code></pre>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Đây chính xác là mô hình kinh doanh của LLM, ra đời sớm hơn nhiều</div>
+          <p>
+            Học chuyển giao trong thị giác máy tính (khoảng 2014) và mô hình nền tảng ngôn ngữ
+            (khoảng 2020) là <strong>cùng một ý tưởng</strong>:
+          </p>
+          <ul style="margin-top: 8px;">
+            <li>Huấn luyện một lần trên dữ liệu khổng lồ, tốn kém, chỉ vài tổ chức làm nổi</li>
+            <li>Mọi người khác <em>dùng lại</em> mô hình đó cho bài toán riêng, với chi phí rất nhỏ</li>
+          </ul>
+          <p style="margin-top: 10px;">
+            Khác biệt về mức độ: với CNN bạn vẫn phải fine-tune một chút. Với LLM, thường chỉ cần
+            viết prompt — <em>không cần huấn luyện gì cả</em>. Đó là bước nhảy mà chương 1 gọi là
+            "chi phí biên giảm gần bằng không".
+          </p>
+        </div>
+
+        <h3 id="cnn-ngay-nay">1.4. CNN ngày nay</h3>
+
+        <p>
+          CNN vẫn rất tốt cho các bài toán thị giác gọn nhẹ: chạy trên thiết bị, độ trễ thấp, dữ
+          liệu ít. Ở quy mô lớn, <strong>Vision Transformer</strong> đã vượt lên — nó áp dụng
+          chính kiến trúc của chương 10 vào ảnh, bằng cách cắt ảnh thành các mảnh nhỏ và coi mỗi
+          mảnh như một "token".
+        </p>
+
+        <p>
+          Điều đó nói lên một xu hướng đáng chú ý: <em>cùng một kiến trúc Transformer giờ xử lý
+          được cả văn bản, ảnh, âm thanh và video</em> — và đó là nền tảng kỹ thuật của các mô
+          hình đa phương thức ở <strong>10.2 chương 8</strong>.
+        </p>
+
+        <h2 id="rnn">2. RNN — mạng hồi quy</h2>
+
+        <p>
+          Ảnh có kích thước cố định. Câu văn thì không: "Xin chào" và một đoạn văn 500 từ đều là
+          đầu vào hợp lệ. MLP cần đầu vào cố định, nên không xử lý được.
+        </p>
+
+        <p>
+          Ý tưởng của RNN: <strong>xử lý từng phần tử một, mang theo một "trạng thái ẩn" tóm tắt
+          những gì đã thấy</strong>.
+        </p>
+
+        <div class="formula" style="margin: 20px 0; padding: 18px 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-align: center; font-family: var(--font-mono);">
+          h<sub>t</sub> = tanh(W<sub>h</sub>·h<sub>t−1</sub> + W<sub>x</sub>·x<sub>t</sub> + b)
+          <span style="display:block; margin-top: 10px; font-family: var(--font-body); font-size: 0.86rem; color: var(--text-muted);">
+            Trạng thái mới = hàm của (trạng thái cũ, đầu vào hiện tại)
+          </span>
+        </div>
+
+        <div class="rnn-unroll">
+          <div class="rnn-cell">
+            <div class="rnn-box">h₀</div>
+            <div class="rnn-tok">khởi tạo</div>
+          </div>
+          <div class="rnn-link">→</div>
+          <div class="rnn-cell">
+            <div class="rnn-box">h₁</div>
+            <div class="rnn-tok">"Con"</div>
+          </div>
+          <div class="rnn-link">→</div>
+          <div class="rnn-cell">
+            <div class="rnn-box">h₂</div>
+            <div class="rnn-tok">"mèo"</div>
+          </div>
+          <div class="rnn-link">→</div>
+          <div class="rnn-cell">
+            <div class="rnn-box">h₃</div>
+            <div class="rnn-tok">"đang"</div>
+          </div>
+          <div class="rnn-link">→</div>
+          <div class="rnn-cell">
+            <div class="rnn-box">h₄</div>
+            <div class="rnn-tok">"ngủ"</div>
+          </div>
+          <div class="rnn-link">→</div>
+          <div class="rnn-cell">
+            <div class="rnn-box" style="border-color: var(--olive);">ŷ</div>
+            <div class="rnn-tok">dự đoán</div>
+          </div>
+        </div>
+
+        <p>
+          Chú ý: <strong>cùng một bộ trọng số</strong> <code>W<sub>h</sub></code> và
+          <code>W<sub>x</sub></code> được dùng ở <em>mọi</em> bước thời gian — giống như CNN chia
+          sẻ kernel ở mọi vị trí không gian. Nhờ vậy RNN xử lý được chuỗi dài bất kỳ với số tham
+          số cố định.
+        </p>
+
+        <h2 id="rnn-quen">3. Vì sao RNN quên đầu câu</h2>
+
+        <p>
+          Đây là mục cốt lõi. Xét câu:
+        </p>
+
+        <blockquote>
+          <strong>Cô gái</strong> mà tôi gặp ở hội thảo tuần trước, người đã trình bày về hệ thống
+          phân tán và sau đó cùng chúng tôi ăn tối, <strong>là</strong> kỹ sư trưởng của dự án đó.
+        </blockquote>
+
+        <p>
+          Để chia đúng động từ "là", mô hình phải nhớ chủ ngữ "Cô gái" — cách đó hơn 25 từ. RNN
+          về lý thuyết làm được. Trong thực tế thì không, và lý do là toán học.
+        </p>
+
+        <p>
+          Ở chương 7 ta đã thấy gradient bị <em>nhân</em> dọc theo các lớp. Với RNN, mỗi
+          <strong>bước thời gian</strong> đóng vai trò như một lớp. Chuỗi 25 từ nghĩa là gradient
+          phải đi qua 25 phép nhân liên tiếp:
+        </p>
+
+        <div style="margin: 20px 0;">
+          <div class="decay-bar">
+            <span class="db-k">5 bước</span>
+            <span class="db-track"><span class="db-fill" style="width: 100%;"></span></span>
+            <span class="db-v">0,9⁵ = 0,590</span>
+          </div>
+          <div class="decay-bar">
+            <span class="db-k">10 bước</span>
+            <span class="db-track"><span class="db-fill" style="width: 59%;"></span></span>
+            <span class="db-v">0,9¹⁰ = 0,349</span>
+          </div>
+          <div class="decay-bar">
+            <span class="db-k">25 bước</span>
+            <span class="db-track"><span class="db-fill" style="width: 12.5%;"></span></span>
+            <span class="db-v">0,9²⁵ = 0,072</span>
+          </div>
+          <div class="decay-bar">
+            <span class="db-k">50 bước</span>
+            <span class="db-track"><span class="db-fill" style="width: 0.9%;"></span></span>
+            <span class="db-v">0,9⁵⁰ = 0,005</span>
+          </div>
+          <div class="decay-bar">
+            <span class="db-k">100 bước</span>
+            <span class="db-track"><span class="db-fill" style="width: 0.05%;"></span></span>
+            <span class="db-v">0,9¹⁰⁰ = 0,000027</span>
+          </div>
+        </div>
+
+        <p style="font-size: 0.9rem; color: var(--text-muted);">
+          Giả định lạc quan: mỗi bước giữ được 90% tín hiệu gradient. Thực tế với tanh thường tệ hơn.
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Hai mặt của cùng một vấn đề</div>
+          <p>
+            <strong>Gradient tiêu biến</strong> (hệ số &lt; 1): tín hiệu học tắt dần, mô hình không
+            học được phụ thuộc xa. Đây là trường hợp phổ biến.
+          </p>
+          <p style="margin-top: 10px;">
+            <strong>Gradient bùng nổ</strong> (hệ số &gt; 1): tín hiệu tăng theo cấp số nhân,
+            trọng số nhảy loạn, loss thành <code>NaN</code>. Ít gặp hơn nhưng dễ nhận ra hơn — và
+            có cách sửa đơn giản: <em>cắt gradient</em> (chương 7, mục 8).
+          </p>
+          <p style="margin-top: 10px;">
+            Bùng nổ có thuốc chữa. Tiêu biến thì không — đó là lý do nó nghiêm trọng hơn nhiều.
+          </p>
+        </div>
+
+        <h2 id="lstm">4. LSTM và GRU</h2>
+
+        <p>
+          LSTM (1997) là nỗ lực nghiêm túc nhất để cứu RNN. Ý tưởng: thêm một
+          <strong>đường truyền trạng thái riêng</strong> đi thẳng qua các bước thời gian với rất
+          ít phép biến đổi, cộng với các <em>cổng</em> học được để kiểm soát thông tin.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 22%;">Cổng</th><th>Quyết định</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Cổng quên</strong></td><td>Bỏ bao nhiêu phần của trạng thái cũ</td></tr>
+              <tr><td><strong>Cổng vào</strong></td><td>Ghi bao nhiêu thông tin mới vào trạng thái</td></tr>
+              <tr><td><strong>Cổng ra</strong></td><td>Đưa bao nhiêu phần trạng thái ra ngoài ở bước này</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Điểm then chốt: đường truyền trạng thái chủ yếu đi qua phép <strong>cộng</strong> chứ
+          không phải phép nhân. Gradient chảy qua phép cộng thì không bị suy giảm theo cấp số
+          nhân — nên LSTM giữ được thông tin qua khoảng cách xa hơn RNN thường rất nhiều.
+        </p>
+
+        <p>
+          <strong>GRU</strong> (2014) là phiên bản đơn giản hơn với hai cổng thay vì ba. Ít tham
+          số hơn, nhanh hơn, chất lượng thường tương đương.
+        </p>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ LSTM cải thiện, nhưng không giải quyết triệt để</div>
+          <p>
+            LSTM đẩy giới hạn từ khoảng vài chục bước lên vài trăm bước. Đó là bước tiến lớn — và
+            LSTM đã thống trị xử lý ngôn ngữ suốt gần hai thập kỷ.
+          </p>
+          <p style="margin-top: 10px;">
+            Nhưng bản chất vấn đề vẫn còn: thông tin vẫn phải <strong>đi tuần tự qua từng
+            bước</strong>. Với tài liệu vài nghìn từ, LSTM vẫn thua. Và quan trọng hơn — nó không
+            hề chạm tới hai giới hạn còn lại ở mục 8.
+          </p>
+        </div>
+
+        <h2 id="attention-ra-doi">5. Attention ra đời — như một bản vá</h2>
+
+        <p>
+          Năm 2014, bài toán dịch máy dùng kiến trúc <strong>seq2seq</strong>: một RNN
+          (<em>encoder</em>) đọc câu nguồn và nén nó thành một vector duy nhất; một RNN khác
+          (<em>decoder</em>) đọc vector đó và sinh câu đích.
+        </p>
+
+        <p>
+          Vấn đề lộ ra ngay: <strong>nút thắt cổ chai</strong>. Toàn bộ một câu 50 từ phải nén vào
+          một vector cố định. Chất lượng dịch tụt thê thảm khi câu dài — và điều đó hợp lý, vì
+          thông tin đơn giản là không đủ chỗ.
+        </p>
+
+        <p>
+          Giải pháp của Bahdanau và cộng sự (2014): thay vì bắt decoder chỉ dùng một vector duy
+          nhất, hãy cho nó <strong>nhìn lại toàn bộ các trạng thái ẩn của encoder</strong>, và ở
+          mỗi bước sinh từ, tự quyết định nên chú ý vào phần nào của câu nguồn.
+        </p>
+
+        <p>
+          Cơ chế đó được đặt tên là <strong>attention</strong>.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Điểm cần nhớ về nguồn gốc của attention</div>
+          <p>
+            Attention <em>không</em> ra đời như một kiến trúc mới. Nó ra đời như một
+            <strong>miếng vá cho RNN</strong> — một cách vòng qua nút thắt cổ chai, trong khi vẫn
+            giữ nguyên RNN làm bộ xương chính.
+          </p>
+          <p style="margin-top: 10px;">
+            Trong ba năm sau đó, người ta dần nhận ra một điều: <em>attention làm gần như toàn bộ
+            công việc nặng, còn RNN chủ yếu gây rắc rối</em> — nó chậm, không song song hoá được,
+            và vẫn quên. Câu hỏi tự nhiên nảy ra, và nó là tiêu đề của mục 9.
+          </p>
+        </div>
+
+        <h2 id="ba-gioi-han">6. Ba giới hạn chí mạng của RNN</h2>
+
+        <p>
+          Đây là phần quan trọng nhất chương. Mỗi giới hạn dưới đây tương ứng chính xác với một
+          đặc điểm thiết kế của Transformer ở chương 10.
+        </p>
+
+        <div class="limit-card">
+          <h4>Giới hạn 1 — Không song song hoá được theo thời gian</h4>
+          <p>
+            Để tính <code>h₅</code>, bắt buộc phải có <code>h₄</code>. Để có <code>h₄</code>, phải
+            có <code>h₃</code>. Đây là phụ thuộc tuần tự <em>không thể phá vỡ</em>.
+          </p>
+          <p>
+            Hệ quả: GPU có hàng nghìn nhân nhưng chỉ dùng được một phần nhỏ, vì các bước thời gian
+            phải chờ nhau. Huấn luyện trên corpus lớn trở nên chậm tới mức bất khả thi — và điều
+            này <strong>đặt trần cứng lên quy mô mô hình</strong>.
+          </p>
+          <div class="fix">
+            <strong>Transformer giải quyết:</strong> mọi vị trí được xử lý <em>đồng thời</em>.
+            Toàn bộ câu đi qua mạng trong một phép nhân ma trận lớn. Đây là lý do quan trọng nhất
+            khiến Transformer thắng — không phải vì nó thông minh hơn, mà vì nó
+            <em>huấn luyện được ở quy mô lớn hơn nhiều</em>.
+          </div>
+        </div>
+
+        <div class="limit-card">
+          <h4>Giới hạn 2 — Đường đi giữa hai token xa nhau là O(n)</h4>
+          <p>
+            Muốn thông tin từ token 1 tới token 50, nó phải đi qua 49 bước biến đổi trung gian.
+            Mỗi bước là một cơ hội để tín hiệu bị pha loãng hoặc mất.
+          </p>
+          <p>
+            LSTM làm chậm quá trình suy giảm này nhưng không xoá bỏ nó. Khoảng cách vẫn tuyến
+            tính theo độ dài chuỗi.
+          </p>
+          <div class="fix">
+            <strong>Transformer giải quyết:</strong> attention nối <em>mọi</em> cặp token trực
+            tiếp. Đường đi giữa token 1 và token 50 là <strong>một bước</strong> — O(1) bất kể
+            khoảng cách. Đây là lý do Transformer nắm được phụ thuộc xa mà RNN không bao giờ nắm được.
+          </div>
+        </div>
+
+        <div class="limit-card">
+          <h4>Giới hạn 3 — Nút thắt cổ chai của trạng thái ẩn</h4>
+          <p>
+            Toàn bộ những gì mô hình biết về quá khứ nằm trong một vector <code>h</code> có kích
+            thước cố định. Câu 5 từ và tài liệu 5.000 từ đều phải nén vào cùng một chỗ.
+          </p>
+          <p>
+            Attention của Bahdanau đã giảm bớt vấn đề này cho decoder, nhưng encoder RNN vẫn phải
+            xử lý tuần tự và vẫn mang nút thắt trong chính nó.
+          </p>
+          <div class="fix">
+            <strong>Transformer giải quyết:</strong> không có trạng thái nén. Mọi token giữ nguyên
+            biểu diễn của mình xuyên suốt, và attention truy cập trực tiếp bất cứ token nào cần.
+            Bộ nhớ tỉ lệ với độ dài chuỗi thay vì bị ép vào kích thước cố định.
+          </div>
+        </div>
+
+        <h2 id="cau-hoi-ket">7. Câu hỏi dẫn tới chương 10</h2>
+
+        <p>
+          Đến năm 2017, tình hình như sau: attention đã chứng minh giá trị của mình. RNN thì mang
+          ba giới hạn ở trên, và không có cách nào sửa được vì chúng nằm ở bản chất của cấu trúc
+          đệ quy.
+        </p>
+
+        <p>
+          Một nhóm nghiên cứu đặt câu hỏi hiển nhiên nhưng táo bạo:
+        </p>
+
+        <blockquote style="font-size: 1.24rem; text-align: center; border-left: none; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 22px 20px; font-family: var(--font-display); font-style: italic; color: var(--accent-deep);">
+          Nếu attention hữu ích đến thế —<br/>
+          sao không bỏ hẳn RNN và <strong>chỉ giữ attention</strong>?
+        </blockquote>
+
+        <p>
+          Bài báo trả lời câu hỏi đó có tựa đề đúng như vậy:
+          <strong>"Attention Is All You Need"</strong>. Kiến trúc mà nó giới thiệu — Transformer —
+          là nội dung của chương 10, và là thứ chạy bên trong mọi LLM bạn sẽ dùng ở năm sub-pillar
+          còn lại của trụ cột này.
+        </p>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Tính tay một phép tích chập</h4>
+            <div class="exercise-body">
+              <p>Cho ma trận đầu vào 5×5 và kernel 3×3:</p>
+              <div class="code-wrap" style="margin: 10px 0;">
+                <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code>anh = [[<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">0</span>, <span class="tok-num">1</span>],
+       [<span class="tok-num">4</span>, <span class="tok-num">5</span>, <span class="tok-num">6</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>],
+       [<span class="tok-num">7</span>, <span class="tok-num">8</span>, <span class="tok-num">9</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>],
+       [<span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>, <span class="tok-num">5</span>],
+       [<span class="tok-num">0</span>, <span class="tok-num">1</span>, <span class="tok-num">2</span>, <span class="tok-num">3</span>, <span class="tok-num">4</span>]]
+
+kernel = [[<span class="tok-num">1</span>, <span class="tok-num">0</span>, -<span class="tok-num">1</span>],
+          [<span class="tok-num">1</span>, <span class="tok-num">0</span>, -<span class="tok-num">1</span>],
+          [<span class="tok-num">1</span>, <span class="tok-num">0</span>, -<span class="tok-num">1</span>]]</code></pre>
+              </div>
+              <p>
+                Tính đầu ra (không padding, stride 1). Kích thước kết quả là bao nhiêu? Kernel này
+                phát hiện loại đặc trưng gì?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Kích thước ra: <code>(5−3+1) × (5−3+1) = 3×3</code>. Công thức tổng quát:
+                    <code>ra = (vào − kernel + 2·padding) / stride + 1</code>.
+                  </p>
+                  <p>
+                    Ô đầu tiên: nhân từng phần tử của kernel với vùng 3×3 góc trên trái rồi cộng
+                    lại — <code>(1·1 + 2·0 + 3·(−1)) + (4·1 + 5·0 + 6·(−1)) + (7·1 + 8·0 + 9·(−1))
+                    = −2 + (−2) + (−2) = −6</code>.
+                  </p>
+                  <p>
+                    Kernel này so sánh cột trái với cột phải, nên nó phát hiện <strong>cạnh
+                    dọc</strong>. Giá trị âm lớn nghĩa là bên phải sáng hơn bên trái.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Đếm tham số: CNN so với MLP</h4>
+            <div class="exercise-body">
+              <p>
+                Với ảnh màu 224×224×3, tính số tham số của:
+              </p>
+              <ul>
+                <li>Một lớp fully-connected nối tới 1.000 nơ-ron</li>
+                <li>Một lớp tích chập với 64 kernel kích thước 3×3</li>
+              </ul>
+              <p>
+                So sánh và giải thích khác biệt đến từ đâu. Lớp tích chập có "mất mát" gì so với
+                fully-connected không?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <strong>FC:</strong> <code>224×224×3 × 1.000 + 1.000 = 150.529.000</code>
+                    tham số.
+                  </p>
+                  <p>
+                    <strong>Conv:</strong> mỗi kernel có <code>3×3×3 = 27</code> trọng số (3 kênh
+                    màu), cộng 1 bias. Với 64 kernel: <code>64 × 28 = 1.792</code> tham số.
+                  </p>
+                  <p>
+                    Chênh lệch khoảng <strong>84.000 lần</strong>. Nguồn gốc: chia sẻ tham số —
+                    cùng một kernel dùng ở mọi vị trí.
+                  </p>
+                  <p>
+                    "Mất mát": lớp tích chập <em>không thể</em> học quan hệ giữa hai pixel ở xa
+                    nhau trong một lớp. Nhưng với ảnh, đó là ràng buộc <strong>đúng</strong> —
+                    nó là kiến thức tiên nghiệm hữu ích, giúp mô hình học nhanh hơn với ít dữ liệu
+                    hơn, chứ không phải hạn chế.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Vẽ đường đi gradient trong RNN</h4>
+            <div class="exercise-body">
+              <p>
+                Vẽ sơ đồ RNN trải ra cho chuỗi 10 bước. Đánh dấu đường đi của gradient từ mất mát
+                ở bước 10 ngược về trọng số ảnh hưởng bước 1.
+              </p>
+              <p>
+                Giả sử mỗi bước giữ được 70% tín hiệu gradient. Tính tín hiệu còn lại ở bước 1.
+                Lặp lại với 95%. Nhận xét về ảnh hưởng của hệ số này.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Với 70%: <code>0,7⁹ ≈ 0,040</code> — còn 4% tín hiệu.<br/>
+                    Với 95%: <code>0,95⁹ ≈ 0,630</code> — còn 63%.
+                  </p>
+                  <p>
+                    Nhận xét quan trọng: chênh lệch giữa 0,7 và 0,95 chỉ là 25 điểm phần trăm ở
+                    <em>mỗi bước</em>, nhưng sau 9 bước nó thành chênh lệch <strong>gấp 16
+                    lần</strong>. Đây là bản chất của suy giảm theo cấp số nhân — và là lý do
+                    LSTM (giữ hệ số gần 1 nhờ đường truyền cộng) tạo ra khác biệt lớn đến vậy.
+                  </p>
+                  <p>
+                    Thử tính tiếp với 100 bước để thấy vì sao ngay cả 0,95 cũng không đủ:
+                    <code>0,95⁹⁹ ≈ 0,006</code>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Phát biểu ba giới hạn bằng lời của bạn</h4>
+            <div class="exercise-body">
+              <p>
+                Không nhìn lại mục 6, viết ba giới hạn của RNN bằng lời của chính bạn. Với mỗi
+                giới hạn, nêu <strong>hậu quả thực tế</strong> (chứ không chỉ mô tả kỹ thuật).
+              </p>
+              <p>
+                Sau đó dự đoán: nếu bạn phải thiết kế một kiến trúc mới để khắc phục cả ba, bạn sẽ
+                bỏ đi thứ gì và thêm vào thứ gì?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Hậu quả thực tế của từng giới hạn: <strong>(1)</strong> không huấn luyện được
+                    mô hình lớn trong thời gian hợp lý → trần cứng về quy mô;
+                    <strong>(2)</strong> không hiểu được văn bản dài, dịch sai đại từ, mất mạch ở
+                    tài liệu; <strong>(3)</strong> chất lượng tụt nhanh theo độ dài đầu vào.
+                  </p>
+                  <p>
+                    Về thiết kế: nếu bạn nghĩ tới "bỏ hẳn cấu trúc tuần tự, cho mọi vị trí nhìn
+                    thấy nhau trực tiếp" — bạn đã tự nghĩ ra ý tưởng cốt lõi của Transformer.
+                  </p>
+                  <p>
+                    Câu hỏi tiếp theo tự nhiên nảy ra: <em>nếu bỏ tính tuần tự, làm sao mô hình
+                    biết từ nào đứng trước từ nào?</em> Chương 10 sẽ trả lời — đó chính là lý do
+                    tồn tại của <em>mã hoá vị trí</em>.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>CNN khai thác tính chất gì của ảnh mà MLP không khai thác được?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>Ba tính chất, và cả ba đều là kiến thức tiên nghiệm đúng về ảnh:</p>
+              <ul>
+                <li><strong>Tính cục bộ</strong> — pixel gần nhau liên quan tới nhau; đặc trưng thị giác nằm trong vùng nhỏ.</li>
+                <li><strong>Chia sẻ tham số</strong> — một bộ phát hiện cạnh hữu ích ở mọi vị trí, không cần học lại cho từng chỗ.</li>
+                <li><strong>Bất biến tịnh tiến</strong> — vật thể dịch chuyển vẫn là vật thể đó.</li>
+              </ul>
+              <p style="margin-top: 8px;">
+                MLP coi mọi pixel như nhau và không có khái niệm "gần nhau", nên phải học lại mọi
+                thứ cho từng vị trí — tốn hàng trăm triệu tham số cho việc mà CNN làm với vài nghìn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Pooling để làm gì? Nêu ba tác dụng.</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ol>
+                <li><strong>Giảm kích thước</strong> → giảm tính toán và bộ nhớ cho các lớp sau.</li>
+                <li><strong>Tăng vùng tiếp nhận</strong> — sau pooling, mỗi kernel 3×3 ở lớp tiếp theo "nhìn thấy" một vùng lớn hơn của ảnh gốc.</li>
+                <li><strong>Thêm tính bất biến</strong> với dịch chuyển nhỏ — max pooling cho cùng kết quả dù đặc trưng lệch một pixel.</li>
+              </ol>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Vì sao RNN quên thông tin ở đầu chuỗi dài?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì <strong>gradient tiêu biến qua các bước thời gian</strong>. Trong RNN, mỗi bước
+                thời gian đóng vai trò như một lớp; gradient được <em>nhân</em> dọc theo chuỗi
+                (quy tắc chuỗi, chương 2).
+              </p>
+              <p style="margin-top: 8px;">
+                Nếu mỗi bước giữ được 90% tín hiệu, sau 50 bước chỉ còn <code>0,9⁵⁰ ≈ 0,005</code>
+                — nửa phần trăm. Trọng số ảnh hưởng các bước đầu gần như không nhận được tín hiệu
+                học, nên mô hình không bao giờ học được phụ thuộc xa.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>LSTM giải quyết gradient tiêu biến bằng cách nào? Nó có giải quyết triệt để không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Bằng một <strong>đường truyền trạng thái riêng</strong> đi thẳng qua các bước thời
+                gian, chủ yếu qua phép <em>cộng</em> thay vì phép nhân. Gradient chảy qua phép cộng
+                không bị suy giảm theo cấp số nhân. Các cổng học được (quên / vào / ra) kiểm soát
+                thông tin nào được giữ, ghi thêm, hay đưa ra.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Không triệt để.</strong> LSTM đẩy giới hạn từ vài chục lên vài trăm bước —
+                một bước tiến lớn, nhưng thông tin vẫn phải đi tuần tự. Và quan trọng hơn: LSTM
+                không hề chạm tới hai giới hạn còn lại (không song song hoá được, và nút thắt
+                trạng thái).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Attention xuất hiện lần đầu để giải quyết vấn đề gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Để giải quyết <strong>nút thắt cổ chai trong dịch máy seq2seq</strong> (2014).
+                Kiến trúc cũ nén toàn bộ câu nguồn vào một vector cố định, khiến chất lượng tụt
+                mạnh với câu dài.
+              </p>
+              <p style="margin-top: 8px;">
+                Attention cho decoder <em>nhìn lại toàn bộ</em> các trạng thái ẩn của encoder, và
+                ở mỗi bước sinh từ, tự quyết định nên chú ý vào phần nào của câu nguồn.
+              </p>
+              <p style="margin-top: 8px;">
+                Điểm quan trọng cần nhớ: attention ra đời như một <strong>bản vá cho RNN</strong>,
+                không phải như một kiến trúc thay thế. Phải mất ba năm để có người đề xuất bỏ hẳn
+                RNN đi.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Vì sao RNN không song song hoá được khi huấn luyện, và hậu quả là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì <code>h<sub>t</sub></code> phụ thuộc vào <code>h<sub>t−1</sub></code> — đây là
+                phụ thuộc tuần tự không thể phá vỡ. Không thể tính bước 5 trước khi có bước 4.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Hậu quả:</strong> GPU có hàng nghìn nhân nhưng chỉ dùng được một phần rất
+                nhỏ. Thời gian huấn luyện tỉ lệ tuyến tính với độ dài chuỗi. Điều này đặt
+                <em>trần cứng</em> lên quy mô mô hình có thể huấn luyện được — và đó là lý do
+                quan trọng nhất khiến Transformer thắng, chứ không phải vì nó "thông minh hơn".
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Học chuyển giao tiết kiệm cái gì, và nó liên quan gì tới mô hình nền tảng?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Tiết kiệm <strong>dữ liệu, thời gian tính toán và tiền</strong>. Thay vì huấn
+                luyện 25 triệu tham số từ đầu trên hàng triệu ảnh, bạn tận dụng phần trích xuất
+                đặc trưng đã học và chỉ huấn luyện lớp cuối trên vài nghìn ảnh của mình.
+              </p>
+              <p style="margin-top: 8px;">
+                Đây <strong>cùng một ý tưởng</strong> với mô hình nền tảng ngôn ngữ, chỉ ra đời
+                sớm hơn: huấn luyện một lần ở quy mô mà rất ít tổ chức làm nổi, rồi mọi người khác
+                dùng lại với chi phí nhỏ.
+              </p>
+              <p style="margin-top: 8px;">
+                Khác biệt về mức độ: với CNN vẫn phải fine-tune; với LLM thường chỉ cần viết prompt
+                — không huấn luyện gì cả. Đó là bước nhảy khiến nghề AI Engineer tồn tại.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 9, bạn đã nắm:</p>
+        <ul>
+          <li><strong>CNN</strong> khai thác tính cục bộ, chia sẻ tham số và bất biến tịnh tiến — giảm số tham số hàng chục nghìn lần so với MLP.</li>
+          <li><strong>Kernel được học, không được thiết kế</strong>; lớp đầu thường tự hội tụ về bộ phát hiện cạnh.</li>
+          <li><strong>Học chuyển giao</strong> là mô hình nền tảng phiên bản thị giác, ra đời trước gần một thập kỷ.</li>
+          <li><strong>RNN</strong> mang trạng thái ẩn qua các bước, dùng chung trọng số ở mọi bước thời gian.</li>
+          <li><strong>Gradient tiêu biến</strong> khiến RNN quên đầu chuỗi — suy giảm theo cấp số nhân theo độ dài.</li>
+          <li><strong>LSTM</strong> dùng đường truyền cộng và các cổng để giữ thông tin xa hơn, nhưng không giải quyết triệt để.</li>
+          <li><strong>Attention (2014)</strong> ra đời như một bản vá cho nút thắt cổ chai của seq2seq, không phải như kiến trúc mới.</li>
+          <li><strong>Ba giới hạn chí mạng</strong>: không song song hoá được · đường đi O(n) giữa các token · nút thắt trạng thái cố định.</li>
+          <li>Và câu hỏi dẫn tới chương 10: <em>sao không bỏ hẳn RNN và chỉ giữ attention?</em></li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 7</strong> — gradient tiêu biến ở đây là cùng hiện tượng với mạng sâu, chỉ khác là theo chiều thời gian thay vì chiều lớp.</li>
+          <li><strong>Chương 10 (Transformer)</strong> — mỗi giới hạn ở mục 6 tương ứng chính xác với một đặc điểm thiết kế của Transformer. Đọc lại mục 6 sau khi học xong chương 10.</li>
+          <li><strong>10.2 chương 1</strong> — cửa sổ ngữ cảnh của LLM là hậu duệ trực tiếp của bài toán "mô hình nhớ được bao xa" ở chương này.</li>
+          <li><strong>10.2 chương 8 (Đa phương thức)</strong> — Vision Transformer áp dụng kiến trúc chương 10 vào ảnh; đó là nền của mô hình đa phương thức.</li>
+          <li><strong>10.5 chương 1</strong> — học chuyển giao là tổ tiên của fine-tuning; cùng một logic "dùng lại phần đã học, chỉ chỉnh phần cuối".</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong8.html" class="prev">
+            <div class="dir">← Chương 8</div>
+            <div class="label">PyTorch thực chiến</div>
+          </a>
+          <a href="chuong10.html" class="next">
+            <div class="dir">Chương 10 →</div>
+            <div class="label">Transformer: kiến trúc chạy mọi LLM</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#cnn">1. CNN</a></li>
+          <li class="level-3"><a href="#tich-chap">1.1. Phép tích chập</a></li>
+          <li class="level-3"><a href="#pooling">1.2. Pooling</a></li>
+          <li class="level-3"><a href="#transfer">1.3. Học chuyển giao</a></li>
+          <li class="level-3"><a href="#cnn-ngay-nay">1.4. CNN ngày nay</a></li>
+          <li><a href="#rnn">2. RNN</a></li>
+          <li><a href="#rnn-quen">3. Vì sao RNN quên</a></li>
+          <li><a href="#lstm">4. LSTM và GRU</a></li>
+          <li><a href="#attention-ra-doi">5. Attention ra đời</a></li>
+          <li><a href="#ba-gioi-han">6. Ba giới hạn chí mạng</a></li>
+          <li><a href="#cau-hoi-ket">7. Câu hỏi dẫn tới ch.10</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 9 — CNN, RNN/LSTM và giới hạn · Nền tảng AI · Trụ cột 10 IT Basic<br/>
+        <a href="../index.html">Mục lục 10.1</a> ·
+        <a href="chuong8.html">← Chương 8</a> ·
+        <a href="chuong10.html">Chương 10 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var N = 28;
+
+    /* Ảnh mẫu 28×28: một hình vuông sáng, một dải chéo, và nền có gradient nhẹ.
+       Sinh tất định — không dùng số ngẫu nhiên.                                */
+    var IMG = (function () {
+      var m = [];
+      for (var y = 0; y < N; y++) {
+        var row = [];
+        for (var x = 0; x < N; x++) {
+          var v = 40 + (x + y) * 1.2;                  // nền chuyển sắc nhẹ
+          if (x >= 4 && x <= 12 && y >= 4 && y <= 12) v = 225;   // hình vuông sáng
+          if (Math.abs((x - 6) - (y - 16)) <= 1 && y >= 15) v = 210;  // dải chéo
+          if (x >= 17 && x <= 24 && y >= 17 && y <= 24) v = 15;  // hình vuông tối
+          row.push(Math.max(0, Math.min(255, v)));
+        }
+        m.push(row);
+      }
+      return m;
+    })();
+
+    var KERNELS = {
+      identity: {
+        k: [[0,0,0],[0,1,0],[0,0,0]],
+        note: 'Kernel <strong>giữ nguyên</strong>: chỉ số 1 ở giữa, còn lại bằng 0. ' +
+              'Mỗi pixel ra bằng đúng pixel vào. Hữu ích để thấy rằng tích chập chỉ là ' +
+              'phép nhân có trọng số trên một cửa sổ trượt.'
+      },
+      blur: {
+        k: [[1,1,1],[1,1,1],[1,1,1]], div: 9,
+        note: 'Kernel <strong>làm mờ</strong>: lấy trung bình 9 pixel lân cận. ' +
+              'Mọi hệ số dương và bằng nhau, tổng bằng 1 sau khi chia — nên độ sáng tổng thể ' +
+              'không đổi, chỉ chi tiết bị làm nhoè.'
+      },
+      edge: {
+        k: [[-1,-1,-1],[-1,8,-1],[-1,-1,-1]], bias: 128,
+        note: 'Kernel <strong>phát hiện cạnh</strong>: so pixel trung tâm với trung bình lân cận. ' +
+              'Ở vùng phẳng, kết quả gần 0 (xám). Ở biên giữa vùng sáng và tối, kết quả lớn — ' +
+              'nên chỉ đường viền hiện ra. Tổng hệ số bằng 0, đặc trưng của mọi kernel phát hiện cạnh.'
+      },
+      sobelx: {
+        k: [[1,0,-1],[2,0,-2],[1,0,-1]], bias: 128,
+        note: 'Kernel <strong>Sobel X</strong>: so cột trái với cột phải, nên nó bắt <strong>cạnh dọc</strong>. ' +
+              'Chú ý hai cạnh dọc của hình vuông hiện rõ còn hai cạnh ngang thì mờ.'
+      },
+      sobely: {
+        k: [[1,2,1],[0,0,0],[-1,-2,-1]], bias: 128,
+        note: 'Kernel <strong>Sobel Y</strong>: so hàng trên với hàng dưới, nên nó bắt <strong>cạnh ngang</strong>. ' +
+              'Đúng ngược lại với Sobel X — đây là minh hoạ trực tiếp cho việc mỗi kernel học ' +
+              'một loại đặc trưng riêng, và vì sao một lớp tích chập cần nhiều kernel.'
+      },
+      sharpen: {
+        k: [[0,-1,0],[-1,5,-1],[0,-1,0]],
+        note: 'Kernel <strong>làm nét</strong>: khuếch đại pixel trung tâm và trừ đi lân cận. ' +
+              'Tổng hệ số bằng 1 nên độ sáng giữ nguyên, nhưng tương phản ở biên tăng lên.'
+      }
+    };
+
+    var cvIn  = document.getElementById('conv-in');
+    var cvOut = document.getElementById('conv-out');
+    var elK   = document.getElementById('conv-kernel');
+    var elSel = document.getElementById('conv-k');
+    var elNote = document.getElementById('conv-note');
+
+    function drawMatrix(canvas, m) {
+      var h = m.length, w = m[0].length;
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      var img = ctx.createImageData(w, h);
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var v = Math.max(0, Math.min(255, Math.round(m[y][x])));
+          var i = (y * w + x) * 4;
+          img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+          img.data[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+
+    function convolve(src, k, div, bias) {
+      div = div || 1;
+      bias = bias || 0;
+      var h = src.length, w = src[0].length;
+      var out = [];
+      for (var y = 1; y < h - 1; y++) {
+        var row = [];
+        for (var x = 1; x < w - 1; x++) {
+          var s = 0;
+          for (var ky = -1; ky <= 1; ky++) {
+            for (var kx = -1; kx <= 1; kx++) {
+              s += src[y + ky][x + kx] * k[ky + 1][kx + 1];
+            }
+          }
+          row.push(s / div + bias);
+        }
+        out.push(row);
+      }
+      return out;
+    }
+
+    function renderKernel(k, div) {
+      elK.innerHTML = k.map(function (row) {
+        return row.map(function (v) {
+          var cls = v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
+          var txt = div && div !== 1 ? v + '/' + div : String(v);
+          return '<div class="' + cls + '">' + txt + '</div>';
+        }).join('');
+      }).join('');
+    }
+
+    function update() {
+      var cfg = KERNELS[elSel.value];
+      renderKernel(cfg.k, cfg.div);
+      drawMatrix(cvIn, IMG);
+      drawMatrix(cvOut, convolve(IMG, cfg.k, cfg.div, cfg.bias));
+      elNote.innerHTML = cfg.note;
+    }
+
+    elSel.addEventListener('change', update);
+    update();
+  })();
+  </script>
+</body>
+</html>

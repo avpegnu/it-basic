@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 2 — Toán cho AI: đúng phần cần dùng · Nền tảng AI</title>
+  <meta name="description" content="Vector và cosine similarity, ma trận, đạo hàm và gradient, xác suất, softmax, thống kê mô tả, entropy và cross-entropy — chỉ phần thực sự dùng trong AI Engineering, mỗi mục đều chỉ ra nó xuất hiện ở chương nào phía sau." />
+  <meta name="theme-color" content="#8a6a3f" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Ô "Dùng ở đâu" — đầu mỗi mục toán */
+    .used-in {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 0 0 18px;
+      padding: 10px 14px;
+      background: var(--accent-soft);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+    .used-in .ui-label {
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 0.71rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-deep);
+      padding-top: 2px;
+    }
+    .used-in .ui-body { color: var(--text-soft); }
+    .used-in .ui-body strong { color: var(--accent-deep); }
+
+    /* Công thức đặt giữa */
+    .formula {
+      margin: 20px 0;
+      padding: 18px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 1.02rem;
+      line-height: 2;
+      overflow-x: auto;
+    }
+    .formula .note {
+      display: block;
+      margin-top: 10px;
+      font-family: var(--font-body);
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .formula .big { font-size: 1.2rem; }
+
+    /* Máy tính cosine tương tác */
+    .vec-inputs {
+      display: grid;
+      grid-template-columns: auto repeat(3, minmax(60px, 90px));
+      gap: 8px 10px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .vec-inputs label {
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .vec-inputs input {
+      width: 100%;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      padding: 6px 9px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      text-align: center;
+    }
+    .vec-inputs input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .cos-out {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .cos-cell {
+      padding: 11px 13px;
+      background: var(--bg-alt);
+      border-radius: 8px;
+      text-align: center;
+    }
+    .cos-cell .k {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .cos-cell .v {
+      font-family: var(--font-mono);
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-top: 3px;
+    }
+    .cos-cell.main .v { color: var(--accent); font-size: 1.32rem; }
+    .cos-verdict {
+      margin-top: 14px;
+      padding: 11px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      background: var(--bg-alt);
+      border-left: 3px solid var(--accent);
+    }
+    .preset-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+    .preset-row button {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      padding: 5px 11px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--bg);
+      color: var(--text-soft);
+      cursor: pointer;
+    }
+    .preset-row button:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Bảng ký hiệu */
+    .symbol-table td:first-child {
+      font-family: var(--font-mono);
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    /* Minh hoạ softmax dạng cột */
+    .softmax-demo {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      height: 150px;
+      padding: 0 4px;
+      margin: 18px 0 8px;
+    }
+    .sm-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+    .sm-bar {
+      width: 100%;
+      background: var(--accent);
+      border-radius: 5px 5px 0 0;
+      transition: height 0.25s;
+      min-height: 2px;
+    }
+    .sm-val {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--accent-deep);
+      margin-bottom: 4px;
+    }
+    .sm-lbl {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    @media (max-width: 640px) {
+      .vec-inputs { grid-template-columns: auto repeat(3, 1fr); gap: 6px; }
+      .formula { font-size: 0.9rem; padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark">10.1</span>
+        Nền tảng AI · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Trụ cột 10</a></li>
+          <li><a href="../index.html" class="active">Nền tảng</a></li>
+          <li><a href="../../LLM/index.html">LLM</a></li>
+          <li><a href="../../RAG/index.html">RAG</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Trụ cột 10</a><span class="sep">/</span>
+        <a href="../index.html">Nền tảng AI</a><span class="sep">/</span>
+        <span>Chương 2</span>
+      </div>
+      <div class="chapter-num">Chương 02 · Toán</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; margin: 0 0 14px; color: var(--ink); line-height: 1.15;">
+        Toán cho AI: đúng phần cần dùng
+      </h1>
+      <p class="lead">
+        Chương này có một ràng buộc tự đặt ra rất chặt: <strong>mỗi mục toán đều phải chỉ ra được
+        nó xuất hiện ở chương nào phía sau.</strong> Không có mục nào tồn tại vì "toán học đẹp".
+        Nếu một khái niệm không được dùng trong bảy chương còn lại của sub-pillar này hay trong
+        năm sub-pillar tiếp theo, nó không có mặt ở đây. Bạn cần khoảng bốn giờ cho chương này,
+        và bạn sẽ không cần quay lại học thêm toán để đọc hết trụ cột.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1.300 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Cần trước:</strong> Toán phổ thông</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Hiểu <strong>vector</strong> là gì trong ngữ cảnh AI, và vì sao so sánh ngữ nghĩa dùng <strong>cosine</strong> chứ không dùng khoảng cách.</li>
+            <li>Đọc được phép nhân ma trận và quy tắc khớp chiều — nguồn gốc của phần lớn lỗi shape khi mới học PyTorch.</li>
+            <li>Giải thích được <strong>gradient</strong> bằng lời và biết quy tắc chuỗi liên quan gì tới mạng nhiều lớp.</li>
+            <li>Nắm xác suất ở mức đủ dùng: phân phối, xác suất có điều kiện, Bayes.</li>
+            <li>Hiểu <strong>softmax</strong> làm gì, và vì sao dùng <code>exp</code> chứ không chia đều.</li>
+            <li>Biết thống kê mô tả và vì sao phải chuẩn hoá dữ liệu.</li>
+            <li>Hiểu <strong>entropy</strong> và <strong>cross-entropy</strong>, và vì sao cross-entropy là hàm mất mát của mô hình ngôn ngữ.</li>
+            <li>Có bảng tra ký hiệu để quay lại bất cứ lúc nào gặp công thức lạ.</li>
+          </ul>
+        </div>
+
+        <h2 id="vector">1. Vector</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>10.3 chương 2</strong> — embedding <em>chính là</em> vector. Mọi thứ trong RAG
+            đều xoay quanh việc so sánh các vector này. Cũng dùng ở <strong>10.1 chương 10</strong>
+            (Transformer biểu diễn mỗi token bằng một vector).
+          </span>
+        </div>
+
+        <p>
+          Một vector là một danh sách số có thứ tự. Trong AI, cách nghĩ hữu ích nhất là:
+          <strong>vector là một điểm trong không gian nhiều chiều, và vị trí của điểm đó mang
+          ý nghĩa.</strong>
+        </p>
+
+        <p>
+          Ví dụ cụ thể nhất: một mô hình embedding nhận vào từ "chó" và trả về một danh sách
+          768 số. Từ "mèo" cũng cho 768 số, và hai danh sách này <em>gần nhau</em>. Từ "ngân hàng"
+          cho 768 số nằm ở vùng khác hẳn. Mô hình đã học được cách sắp xếp toàn bộ ngôn ngữ vào
+          một không gian sao cho khoảng cách phản ánh quan hệ ngữ nghĩa.
+        </p>
+
+        <h3 id="phep-toan-vector">1.1. Ba phép toán cần biết</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> numpy <span class="tok-kw">as</span> np
+
+a = np.array([<span class="tok-num">3</span>, <span class="tok-num">4</span>])
+b = np.array([<span class="tok-num">1</span>, <span class="tok-num">2</span>])
+
+<span class="tok-com"># 1. Cộng vector — cộng từng thành phần</span>
+<span class="tok-fn">print</span>(a + b)          <span class="tok-com"># [4 6]</span>
+
+<span class="tok-com"># 2. Nhân với một số (scalar) — kéo dài/co ngắn, giữ nguyên hướng</span>
+<span class="tok-fn">print</span>(<span class="tok-num">2</span> * a)          <span class="tok-com"># [6 8]  — cùng hướng với a, dài gấp đôi</span>
+
+<span class="tok-com"># 3. Độ dài (norm) — định lý Pythagoras mở rộng ra n chiều</span>
+<span class="tok-fn">print</span>(np.linalg.<span class="tok-fn">norm</span>(a))   <span class="tok-com"># 5.0  vì sqrt(3² + 4²) = 5</span></code></pre>
+        </div>
+
+        <p>
+          Phép thứ hai đáng chú ý: <code>2 * a</code> cho vector <em>cùng hướng</em> nhưng dài
+          gấp đôi. Hãy nhớ điều này — nó là chìa khoá của mục tiếp theo.
+        </p>
+
+        <h2 id="cosine">2. Tích vô hướng &amp; Cosine similarity</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>10.3 chương 2 và 5</strong> — đây là phép toán chạy mỗi lần bạn tìm kiếm
+            trong vector database. Cũng là thành phần cốt lõi của attention ở
+            <strong>10.1 chương 10</strong>.
+          </span>
+        </div>
+
+        <p>
+          <strong>Tích vô hướng</strong> (dot product) của hai vector: nhân từng cặp thành phần
+          rồi cộng lại.
+        </p>
+
+        <div class="formula">
+          a · b = a₁b₁ + a₂b₂ + … + aₙbₙ
+          <span class="note">Với a = [1, 2, 3] và b = [4, 5, 6]: 1×4 + 2×5 + 3×6 = 4 + 10 + 18 = <strong>32</strong></span>
+        </div>
+
+        <p>
+          Tích vô hướng đo mức độ "cùng hướng" của hai vector — nhưng nó có một khuyết điểm lớn:
+          <strong>nó bị ảnh hưởng bởi độ dài</strong>. Một vector dài gấp đôi sẽ cho tích vô hướng
+          gấp đôi, dù hướng không đổi chút nào.
+        </p>
+
+        <p>
+          Đây là vấn đề thật khi so sánh văn bản. Một đoạn văn dài thường cho vector có độ lớn
+          khác một câu ngắn, dù cùng nói về một chủ đề. Nếu dùng tích vô hướng thô, bạn sẽ luôn
+          ưu tiên đoạn dài — không phải vì nó liên quan hơn, mà chỉ vì nó dài hơn.
+        </p>
+
+        <p>
+          Giải pháp: <strong>chia cho độ dài của cả hai vector</strong>. Kết quả là cosine của
+          góc giữa chúng.
+        </p>
+
+        <div class="formula">
+          <span class="big">cos(a, b) = (a · b) / (‖a‖ × ‖b‖)</span>
+          <span class="note">
+            Luôn nằm trong khoảng [−1, 1]. <strong>1</strong> = cùng hướng hoàn toàn ·
+            <strong>0</strong> = vuông góc, không liên quan · <strong>−1</strong> = ngược hướng hoàn toàn
+          </span>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model</div>
+          <p>
+            Tích vô hướng hỏi: <em>"hai vector này cùng hướng tới mức nào, và chúng lớn cỡ nào?"</em><br/>
+            Cosine hỏi: <em>"chỉ xét hướng thôi — chúng cùng hướng tới mức nào?"</em>
+          </p>
+          <p style="margin-top: 10px;">
+            Với embedding văn bản, <strong>hướng mang nghĩa còn độ dài thì không</strong>. Đó là
+            toàn bộ lý do cosine là thước đo mặc định trong tìm kiếm ngữ nghĩa.
+          </p>
+        </div>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Thử: máy tính cosine similarity</span>
+            <button class="ia-btn ghost" type="button" id="cos-reset">Đặt lại</button>
+          </div>
+          <div class="ia-body">
+            <div class="vec-inputs">
+              <label>a =</label>
+              <input type="number" id="a0" value="1" step="0.5">
+              <input type="number" id="a1" value="2" step="0.5">
+              <input type="number" id="a2" value="3" step="0.5">
+              <label>b =</label>
+              <input type="number" id="b0" value="4" step="0.5">
+              <input type="number" id="b1" value="5" step="0.5">
+              <input type="number" id="b2" value="6" step="0.5">
+            </div>
+
+            <div class="cos-out">
+              <div class="cos-cell"><div class="k">a · b</div><div class="v" id="out-dot">—</div></div>
+              <div class="cos-cell"><div class="k">‖a‖</div><div class="v" id="out-na">—</div></div>
+              <div class="cos-cell"><div class="k">‖b‖</div><div class="v" id="out-nb">—</div></div>
+              <div class="cos-cell main"><div class="k">cosine</div><div class="v" id="out-cos">—</div></div>
+              <div class="cos-cell"><div class="k">góc</div><div class="v" id="out-ang">—</div></div>
+            </div>
+
+            <div class="cos-verdict" id="cos-verdict">—</div>
+
+            <div class="preset-row">
+              <button type="button" data-a="1,2,3" data-b="2,4,6">b = 2a (cùng hướng)</button>
+              <button type="button" data-a="1,0,0" data-b="0,1,0">Vuông góc</button>
+              <button type="button" data-a="1,2,3" data-b="-1,-2,-3">Ngược hướng</button>
+              <button type="button" data-a="1,2,3" data-b="1,2,3">Giống hệt</button>
+              <button type="button" data-a="5,1,0" data-b="4,2,1">Gần giống</button>
+            </div>
+          </div>
+          <div class="ia-note">
+            Thử preset <strong>“b = 2a”</strong>: tích vô hướng tăng gấp đôi so với trường hợp
+            b = a, nhưng cosine vẫn đúng bằng 1. Đó chính là tính chất khiến cosine phù hợp cho
+            so sánh ngữ nghĩa.
+          </div>
+        </div>
+
+        <h3 id="chuan-hoa-vector">2.1. Chuẩn hoá vector — mẹo tăng tốc</h3>
+
+        <p>
+          Nếu bạn chuẩn hoá trước mọi vector về độ dài 1 (chia mỗi vector cho norm của nó), thì
+          mẫu số trong công thức cosine luôn bằng 1 × 1 = 1. Khi đó <strong>cosine similarity
+          chính là tích vô hướng</strong> — một phép tính rẻ hơn nhiều.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">normalize</span>(v):
+    <span class="tok-str">"""Đưa vector về độ dài 1, giữ nguyên hướng."""</span>
+    <span class="tok-kw">return</span> v / np.linalg.<span class="tok-fn">norm</span>(v)
+
+a_n, b_n = <span class="tok-fn">normalize</span>(a), <span class="tok-fn">normalize</span>(b)
+
+<span class="tok-com"># Sau khi chuẩn hoá, tích vô hướng = cosine similarity</span>
+<span class="tok-fn">print</span>(np.<span class="tok-fn">dot</span>(a_n, b_n))
+<span class="tok-fn">print</span>(np.<span class="tok-fn">dot</span>(a, b) / (np.linalg.<span class="tok-fn">norm</span>(a) * np.linalg.<span class="tok-fn">norm</span>(b)))
+<span class="tok-com"># Hai dòng trên cho cùng một kết quả</span></code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Vì sao điều này quan trọng trong thực tế</div>
+          <p>
+            Đây là lý do phần lớn vector database lưu vector đã chuẩn hoá sẵn: tìm kiếm trên hàng
+            triệu vector thì tiết kiệm được phép chia và phép căn ở mỗi lần so sánh là đáng kể.
+            Bạn sẽ gặp lại chi tiết này ở <strong>10.3 chương 3</strong>, khi chọn giữa thước đo
+            <code>cosine</code> và <code>dot product</code> lúc tạo chỉ mục.
+          </p>
+        </div>
+
+        <h2 id="ma-tran">3. Ma trận</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>Chương 7 và 8</strong> — mọi lớp của mạng nơ-ron là một phép nhân ma trận.
+            <strong>Chương 10</strong> — attention là ba phép nhân ma trận nối tiếp. Và quy tắc
+            khớp chiều là nguồn gốc của phần lớn lỗi bạn gặp khi mới viết PyTorch.
+          </span>
+        </div>
+
+        <p>
+          Ma trận là một bảng số hai chiều. Kích thước ghi là <code>(số hàng, số cột)</code> —
+          trong code gọi là <strong>shape</strong>.
+        </p>
+
+        <p>
+          Về mặt trực giác, nhân một vector với một ma trận nghĩa là <strong>biến đổi vector đó
+          sang một không gian khác</strong>: xoay, co giãn, và đổi số chiều. Một mạng nơ-ron là
+          một chuỗi các phép biến đổi như vậy, xen kẽ với hàm phi tuyến.
+        </p>
+
+        <h3 id="quy-tac-khop-chieu">3.1. Quy tắc khớp chiều</h3>
+
+        <div class="formula">
+          (m, <strong style="color: var(--rust)">n</strong>) @ (<strong style="color: var(--rust)">n</strong>, p) → (m, p)
+          <span class="note">
+            Hai số ở giữa <strong>phải bằng nhau</strong> và chúng biến mất khỏi kết quả.
+            Hai số ngoài cùng tạo thành shape của kết quả.
+          </span>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code>A = np.random.<span class="tok-fn">randn</span>(<span class="tok-num">3</span>, <span class="tok-num">4</span>)   <span class="tok-com"># 3 hàng, 4 cột</span>
+B = np.random.<span class="tok-fn">randn</span>(<span class="tok-num">4</span>, <span class="tok-num">2</span>)   <span class="tok-com"># 4 hàng, 2 cột</span>
+
+C = A @ B                <span class="tok-com"># @ là toán tử nhân ma trận trong Python</span>
+<span class="tok-fn">print</span>(C.shape)            <span class="tok-com"># (3, 2) — 4 khớp với 4 nên hợp lệ</span>
+
+<span class="tok-com"># Đảo thứ tự thì hỏng: (4,2) @ (3,4) — 2 không khớp 3</span>
+<span class="tok-kw">try</span>:
+    B @ A
+<span class="tok-kw">except</span> <span class="tok-type">ValueError</span> <span class="tok-kw">as</span> e:
+    <span class="tok-fn">print</span>(<span class="tok-str">"Lỗi:"</span>, e)   <span class="tok-com"># matmul: ... size 2 is different from 3</span>
+
+<span class="tok-com"># Chuyển vị (.T) đảo hàng thành cột — cách sửa lỗi shape phổ biến nhất</span>
+<span class="tok-fn">print</span>((B.T @ A.T).shape)   <span class="tok-com"># (2,4) @ (4,3) → (2, 3)</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Sai lầm thường gặp</div>
+          <p>
+            <strong>Nhân ma trận không có tính giao hoán.</strong> <code>A @ B</code> và
+            <code>B @ A</code> thường khác nhau, và rất hay là một trong hai còn không hợp lệ.
+            Điều này khác hẳn với nhân số thường và là bẫy dai dẳng nhất với người mới.
+          </p>
+          <p style="margin-top: 10px;">
+            Mẹo debug thực dụng nhất khi gặp lỗi shape: in ra shape của mọi tensor liên quan ngay
+            trước dòng lỗi. Chín trên mười lần, bạn sẽ thấy ngay hai con số ở giữa không khớp,
+            và cách sửa là thêm <code>.T</code> hoặc <code>.reshape(...)</code> vào đúng chỗ.
+          </p>
+        </div>
+
+        <h2 id="gradient">4. Đạo hàm &amp; gradient</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>Chương 7</strong> — lan truyền ngược chính là quy tắc chuỗi áp dụng lặp lại.
+            <strong>Chương 8</strong> — <code>autograd</code> của PyTorch tự động tính những thứ
+            trong mục này. <strong>10.5 chương 3</strong> — hiểu gradient là điều kiện để hiểu
+            fine-tuning làm gì với trọng số.
+          </span>
+        </div>
+
+        <p>
+          <strong>Đạo hàm</strong> của một hàm tại một điểm là độ dốc của nó tại điểm đó: nếu
+          nhích đầu vào lên một chút, đầu ra thay đổi bao nhiêu và theo chiều nào.
+        </p>
+
+        <ul>
+          <li>Đạo hàm <strong>dương</strong> → tăng x thì f(x) tăng</li>
+          <li>Đạo hàm <strong>âm</strong> → tăng x thì f(x) giảm</li>
+          <li>Đạo hàm <strong>bằng 0</strong> → đang ở đỉnh, đáy, hoặc điểm phẳng</li>
+        </ul>
+
+        <p>
+          <strong>Gradient</strong> là mở rộng cho hàm nhiều biến: thay vì một số, nó là một
+          vector chứa đạo hàm riêng theo từng biến. Vector này chỉ về <em>hướng dốc lên nhanh
+          nhất</em>.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Mental model: đi xuống thung lũng trong sương mù</div>
+          <p>
+            Bạn đứng trên sườn núi, sương mù dày đặc, chỉ nhìn được một mét quanh chân. Bạn muốn
+            xuống đáy thung lũng.
+          </p>
+          <p style="margin-top: 10px;">
+            Cách duy nhất khả thi: cảm nhận độ dốc dưới chân, bước một bước theo hướng
+            <em>dốc xuống nhất</em>, rồi lặp lại. Gradient cho bạn biết hướng dốc lên; bạn đi
+            <strong>ngược</strong> gradient để xuống. Kích thước mỗi bước gọi là
+            <strong>learning rate</strong>.
+          </p>
+          <p style="margin-top: 10px;">
+            Bước quá lớn → nhảy vọt qua đáy, có khi văng lên sườn bên kia cao hơn.
+            Bước quá nhỏ → xuống đúng hướng nhưng mất cả ngày. Đây chính xác là hai chế độ hỏng
+            bạn sẽ thấy ở chương 7 khi đặt learning rate sai.
+          </p>
+        </div>
+
+        <h3 id="gradient-descent">4.1. Gradient descent bằng tay</h3>
+
+        <p>
+          Lấy hàm <code>f(x) = x² + 3x</code>. Đạo hàm là <code>f'(x) = 2x + 3</code>.
+          Ta biết đáy nằm ở chỗ đạo hàm bằng 0, tức <code>x = −1,5</code>. Giờ hãy giả vờ không
+          biết điều đó và để thuật toán tự tìm ra:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">f</span>(x):       <span class="tok-kw">return</span> x**<span class="tok-num">2</span> + <span class="tok-num">3</span>*x
+<span class="tok-kw">def</span> <span class="tok-fn">grad</span>(x):    <span class="tok-kw">return</span> <span class="tok-num">2</span>*x + <span class="tok-num">3</span>
+
+x = <span class="tok-num">2.0</span>          <span class="tok-com"># điểm xuất phát, chọn tuỳ ý</span>
+lr = <span class="tok-num">0.1</span>         <span class="tok-com"># learning rate — kích thước mỗi bước</span>
+
+<span class="tok-kw">for</span> step <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">5</span>):
+    g = <span class="tok-fn">grad</span>(x)
+    x = x - lr * g          <span class="tok-com"># đi NGƯỢC gradient</span>
+    <span class="tok-fn">print</span>(<span class="tok-str">f"bước {step+1}: x = {x:.4f}, f(x) = {f(x):.4f}"</span>)
+
+<span class="tok-com"># bước 1: x = 1.3000, f(x) = 5.5900</span>
+<span class="tok-com"># bước 2: x = 0.7400, f(x) = 2.7676</span>
+<span class="tok-com"># bước 3: x = 0.2920, f(x) = 0.9613</span>
+<span class="tok-com"># bước 4: x = -0.0664, f(x) = -0.1948</span>
+<span class="tok-com"># bước 5: x = -0.3531, f(x) = -0.9346</span>
+<span class="tok-com"># → đang bò dần về phía -1.5, đúng như dự đoán</span></code></pre>
+        </div>
+
+        <p>
+          Đây là toàn bộ ý tưởng huấn luyện mạng nơ-ron, chỉ khác ở quy mô: thay vì một biến
+          <code>x</code>, mô hình có hàng tỉ tham số; thay vì hàm <code>x² + 3x</code>, hàm mất
+          mát phức tạp hơn nhiều. Nhưng vòng lặp thì y hệt: <em>tính gradient, đi ngược lại,
+          lặp lại.</em>
+        </p>
+
+        <h3 id="quy-tac-chuoi">4.2. Quy tắc chuỗi — vì sao mạng sâu học được</h3>
+
+        <p>
+          Khi các hàm lồng vào nhau, đạo hàm của hàm hợp bằng tích các đạo hàm thành phần:
+        </p>
+
+        <div class="formula">
+          Nếu y = f(g(x)) thì dy/dx = f′(g(x)) × g′(x)
+          <span class="note">Đạo hàm của lớp ngoài × đạo hàm của lớp trong</span>
+        </div>
+
+        <p>
+          Một mạng nơ-ron 5 lớp chính là một hàm lồng 5 tầng. Muốn biết trọng số ở
+          <em>lớp đầu tiên</em> ảnh hưởng thế nào tới sai số ở <em>lớp cuối cùng</em>, ta nhân
+          liên tiếp các đạo hàm dọc theo chuỗi đó. Thuật toán làm việc này có tên là
+          <strong>lan truyền ngược</strong> (backpropagation) — chương 7 sẽ đi qua từng bước với
+          số cụ thể.
+        </p>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Một hệ quả đáng nhớ</div>
+          <p>
+            Vì gradient được <em>nhân</em> dọc chuỗi, nếu mỗi thừa số đều nhỏ hơn 1 thì tích của
+            nhiều thừa số sẽ tiến rất nhanh về 0. Đó là hiện tượng <strong>gradient tiêu biến</strong>
+            (vanishing gradient) — lý do mạng rất sâu từng không huấn luyện được, và là động lực
+            cho ReLU, residual connection, LayerNorm. Bạn sẽ gặp lại ở chương 7 và chương 9.
+          </p>
+        </div>
+
+        <h2 id="xac-suat">5. Xác suất</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>10.2 chương 1</strong> — LLM không xuất ra một từ, nó xuất ra một
+            <em>phân phối xác suất</em> trên toàn bộ từ vựng. Toàn bộ khái niệm temperature,
+            top-k, top-p chỉ có nghĩa khi bạn hiểu mục này.
+          </span>
+        </div>
+
+        <p>
+          <strong>Phân phối xác suất</strong> là cách chia 100% khả năng cho các kết quả có thể.
+          Hai tính chất bắt buộc: mọi giá trị nằm trong [0, 1], và tổng bằng đúng 1.
+        </p>
+
+        <p>
+          Khi một LLM chuẩn bị sinh token tiếp theo cho câu <em>"Hà Nội là thủ đô của …"</em>,
+          nó không chọn ngay một từ. Nó tạo ra một phân phối trên toàn bộ từ vựng, đại loại:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Token</th><th>Xác suất</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><code>" Việt"</code></td><td>0.87</td><td>rất có khả năng</td></tr>
+              <tr><td><code>" nước"</code></td><td>0.06</td><td>hợp lý ("nước ta")</td></tr>
+              <tr><td><code>" cả"</code></td><td>0.03</td><td>ít gặp</td></tr>
+              <tr><td>… ~50.000 token còn lại</td><td>0.04</td><td>chia nhau phần rất nhỏ</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Chỉ <em>sau đó</em> mới đến bước chọn — và cách chọn (lấy token xác suất cao nhất, hay
+          bốc thăm theo phân phối) chính là điều mà tham số <code>temperature</code> điều khiển.
+          Chi tiết ở <strong>10.2 chương 1</strong>.
+        </p>
+
+        <h3 id="bayes">5.1. Xác suất có điều kiện &amp; định lý Bayes</h3>
+
+        <p>
+          <code>P(A | B)</code> đọc là "xác suất của A, <em>khi biết rằng</em> B đã xảy ra".
+          Đây là khái niệm nền của mọi mô hình ngôn ngữ: dự đoán token kế tiếp chính là tính
+          <code>P(token tiếp theo | toàn bộ token đứng trước)</code>.
+        </p>
+
+        <div class="formula">
+          P(A | B) = P(B | A) × P(A) / P(B)
+          <span class="note">Định lý Bayes — cho phép đảo ngược chiều của xác suất có điều kiện</span>
+        </div>
+
+        <p>
+          Một ví dụ đủ để nắm ý tưởng — bộ lọc thư rác. Ta muốn biết
+          <code>P(rác | chứa từ "khuyến mãi")</code>, nhưng thứ dễ đo từ dữ liệu lại là chiều
+          ngược lại: trong các thư đã biết là rác, bao nhiêu phần trăm chứa từ đó. Bayes cho phép
+          đổi chiều:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Số liệu thống kê được từ dữ liệu:</span>
+p_rac              = <span class="tok-num">0.30</span>   <span class="tok-com"># 30% thư đến là rác</span>
+p_tu_neu_rac       = <span class="tok-num">0.60</span>   <span class="tok-com"># 60% thư rác chứa từ "khuyến mãi"</span>
+p_tu_neu_khong_rac = <span class="tok-num">0.02</span>   <span class="tok-com"># 2% thư thường chứa từ đó</span>
+
+<span class="tok-com"># P(từ) = P(từ|rác)·P(rác) + P(từ|không rác)·P(không rác)</span>
+p_tu = p_tu_neu_rac * p_rac + p_tu_neu_khong_rac * (<span class="tok-num">1</span> - p_rac)
+
+p_rac_neu_tu = p_tu_neu_rac * p_rac / p_tu
+<span class="tok-fn">print</span>(<span class="tok-str">f"{p_rac_neu_tu:.1%}"</span>)   <span class="tok-com"># 92.8%</span></code></pre>
+        </div>
+
+        <p>
+          Thấy từ "khuyến mãi" đẩy xác suất là thư rác từ 30% lên 92,8%. Đó là cách một bộ lọc
+          thư rác kiểu Naive Bayes hoạt động — nhân dồn bằng chứng từ nhiều từ khác nhau.
+        </p>
+
+        <h2 id="softmax">6. Softmax</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>10.2 chương 1</strong> (biến logits thành xác suất token) và
+            <strong>chương 10</strong> (trái tim của công thức attention). Đây là hàm bạn sẽ gặp
+            nhiều nhất trong toàn bộ trụ cột.
+          </span>
+        </div>
+
+        <p>
+          Mạng nơ-ron xuất ra các số thực bất kỳ — có thể âm, có thể lớn tuỳ ý. Những số thô này
+          gọi là <strong>logits</strong>. Softmax biến chúng thành một phân phối xác suất hợp lệ.
+        </p>
+
+        <div class="formula">
+          softmax(xᵢ) = e<sup>xᵢ</sup> / Σⱼ e<sup>xⱼ</sup>
+          <span class="note">Lấy <code>exp</code> của từng phần tử, rồi chia cho tổng tất cả các <code>exp</code></span>
+        </div>
+
+        <p>Hai câu hỏi tự nhiên nảy ra, và cả hai đều có câu trả lời gọn:</p>
+
+        <ul>
+          <li>
+            <strong>Vì sao dùng <code>exp</code> mà không chia đều theo tỉ lệ?</strong>
+            Vì logits có thể âm, mà xác suất thì không được âm. Hàm <code>exp</code> luôn cho kết
+            quả dương, giải quyết vấn đề này gọn gàng. Ngoài ra <code>exp</code> khuếch đại khoảng
+            cách — chênh lệch nhỏ giữa các logit trở thành chênh lệch rõ rệt về xác suất.
+          </li>
+          <li>
+            <strong>Vì sao tên là "softmax"?</strong> Vì nó là phiên bản "mềm" của phép
+            <code>max</code>. Phép <code>max</code> cứng sẽ chọn dứt khoát một phần tử (100% cho
+            nó, 0% cho phần còn lại). Softmax cũng ưu ái phần tử lớn nhất nhưng vẫn chừa xác
+            suất cho các phần tử khác.
+          </li>
+        </ul>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Thử: softmax và temperature</span>
+          </div>
+          <div class="ia-body">
+            <div class="ia-controls">
+              <div class="ia-field">
+                <label for="sm-logits">Logits (cách nhau bởi dấu phẩy)</label>
+                <input type="text" id="sm-logits" value="2, 1, 0" style="min-width: 180px;">
+              </div>
+              <div class="ia-field">
+                <label for="sm-temp">Temperature: <span class="rangeval" id="sm-temp-val">1.0</span></label>
+                <input type="range" id="sm-temp" min="0.1" max="3" step="0.1" value="1">
+              </div>
+            </div>
+
+            <div class="softmax-demo" id="sm-demo"></div>
+            <div class="cos-verdict" id="sm-note">—</div>
+          </div>
+          <div class="ia-note">
+            Kéo temperature xuống thấp → phân phối nhọn lại, mô hình gần như luôn chọn token có
+            logit cao nhất (đầu ra ổn định, nhàm chán). Kéo lên cao → phân phối phẳng ra, các
+            token yếu cũng có cơ hội (đầu ra đa dạng, dễ lệch). Đây chính xác là ý nghĩa của
+            tham số <code>temperature</code> trong API LLM.
+          </div>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Chi tiết cài đặt: trừ đi giá trị lớn nhất</div>
+          <p>
+            Cài softmax ngây thơ sẽ tràn số: <code>exp(1000)</code> cho <code>inf</code>. Mọi thư
+            viện thật đều trừ đi giá trị lớn nhất trước khi lấy <code>exp</code>. Việc này
+            <strong>không đổi kết quả</strong> (thừa số chung ở tử và mẫu triệt tiêu) nhưng giữ
+            mọi số mũ ≤ 0 nên an toàn:
+          </p>
+          <div class="code-wrap" style="margin-top: 12px;">
+            <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">def</span> <span class="tok-fn">softmax</span>(x, temperature=<span class="tok-num">1.0</span>):
+    x = np.<span class="tok-fn">array</span>(x, dtype=<span class="tok-type">float</span>) / temperature
+    e = np.<span class="tok-fn">exp</span>(x - np.<span class="tok-fn">max</span>(x))   <span class="tok-com"># trừ max để tránh tràn số</span>
+    <span class="tok-kw">return</span> e / e.<span class="tok-fn">sum</span>()
+
+<span class="tok-fn">print</span>(<span class="tok-fn">softmax</span>([<span class="tok-num">2</span>, <span class="tok-num">1</span>, <span class="tok-num">0</span>]))              <span class="tok-com"># [0.665 0.245 0.090]</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">softmax</span>([<span class="tok-num">2</span>, <span class="tok-num">1</span>, <span class="tok-num">0</span>], temperature=<span class="tok-num">0.5</span>))  <span class="tok-com"># [0.867 0.117 0.016] nhọn hơn</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">softmax</span>([<span class="tok-num">2</span>, <span class="tok-num">1</span>, <span class="tok-num">0</span>], temperature=<span class="tok-num">2.0</span>))  <span class="tok-com"># [0.506 0.307 0.186] phẳng hơn</span></code></pre>
+          </div>
+        </div>
+
+        <h2 id="thong-ke">7. Thống kê mô tả</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>Chương 4 và 6</strong> — chuẩn hoá dữ liệu trước khi huấn luyện, và diễn giải
+            kết quả đánh giá. <strong>10.6 chương 2</strong> — biết chênh lệch 2% giữa hai phiên
+            bản là thật hay chỉ là nhiễu.
+          </span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 24%;">Đại lượng</th><th>Ý nghĩa</th><th>Lưu ý khi dùng</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Trung bình</strong> (mean)</td>
+                <td>Giá trị "trung tâm" theo nghĩa cộng dồn rồi chia đều</td>
+                <td>Rất nhạy với ngoại lai — một giá trị cực đoan kéo lệch cả trung bình</td>
+              </tr>
+              <tr>
+                <td><strong>Trung vị</strong> (median)</td>
+                <td>Giá trị nằm chính giữa khi sắp xếp</td>
+                <td>Bền với ngoại lai. Đây là lý do độ trễ được báo bằng p50/p95 chứ không phải trung bình</td>
+              </tr>
+              <tr>
+                <td><strong>Phương sai</strong></td>
+                <td>Trung bình của bình phương độ lệch so với trung bình</td>
+                <td>Đơn vị bị bình phương nên khó diễn giải trực tiếp</td>
+              </tr>
+              <tr>
+                <td><strong>Độ lệch chuẩn</strong></td>
+                <td>Căn bậc hai của phương sai — mức "tản mát" điển hình</td>
+                <td>Cùng đơn vị với dữ liệu gốc nên dễ diễn giải hơn</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="chuan-hoa">7.1. Vì sao phải chuẩn hoá dữ liệu</h3>
+
+        <p>
+          Giả sử bạn huấn luyện mô hình dự đoán giá nhà với hai đặc trưng: diện tích (khoảng
+          20–500 m²) và số phòng ngủ (1–5). Diện tích có thang giá trị lớn gấp trăm lần.
+        </p>
+
+        <p>
+          Hệ quả: gradient theo hướng "diện tích" sẽ lớn hơn hẳn gradient theo hướng "số phòng".
+          Bề mặt hàm mất mát trở thành một thung lũng rất hẹp và dài — gradient descent sẽ chạy
+          zigzag qua lại thay vì đi thẳng xuống đáy, và mất rất nhiều bước để hội tụ.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Chuẩn hoá z-score: đưa mỗi cột về trung bình 0, độ lệch chuẩn 1</span>
+X_norm = (X - X.<span class="tok-fn">mean</span>(axis=<span class="tok-num">0</span>)) / X.<span class="tok-fn">std</span>(axis=<span class="tok-num">0</span>)
+
+<span class="tok-com"># axis=0 nghĩa là "tính theo từng cột" — mỗi đặc trưng được chuẩn hoá riêng</span></code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Bẫy rò rỉ dữ liệu — sẽ gặp lại ở chương 4</div>
+          <p>
+            Phải tính <code>mean</code> và <code>std</code> <strong>chỉ trên tập huấn luyện</strong>,
+            rồi áp cùng giá trị đó cho tập kiểm thử. Nếu bạn chuẩn hoá cả bộ dữ liệu <em>trước
+            khi</em> chia tập, thông tin từ tập kiểm thử đã rò rỉ vào quá trình huấn luyện, và
+            kết quả đánh giá sẽ đẹp một cách giả tạo.
+          </p>
+          <p style="margin-top: 10px;">
+            Trong scikit-learn: dùng <code>fit_transform()</code> trên tập train và chỉ
+            <code>transform()</code> trên tập test. Gọi <code>fit_transform()</code> trên tập test
+            là lỗi kinh điển.
+          </p>
+        </div>
+
+        <h2 id="entropy">8. Entropy &amp; cross-entropy</h2>
+
+        <div class="used-in">
+          <span class="ui-label">Dùng ở đâu</span>
+          <span class="ui-body">
+            <strong>Chương 7</strong> — cross-entropy là hàm mất mát dùng để huấn luyện gần như
+            mọi mô hình phân loại và mọi mô hình ngôn ngữ. <strong>10.5 chương 8</strong> —
+            perplexity là chỉ số đánh giá mô hình sau khi fine-tune.
+          </span>
+        </div>
+
+        <p>
+          <strong>Entropy</strong> đo mức độ "bất ngờ trung bình" của một phân phối. Trực giác:
+          một sự kiện gần như chắc chắn thì không mang mấy thông tin khi nó xảy ra; một sự kiện
+          hiếm thì mang nhiều thông tin.
+        </p>
+
+        <div class="formula">
+          H(p) = − Σ p(x) · log p(x)
+          <span class="note">Đơn vị là <em>bit</em> nếu dùng log cơ số 2, <em>nat</em> nếu dùng log tự nhiên</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tình huống</th><th>Entropy</th><th>Ý nghĩa</th></tr></thead>
+            <tbody>
+              <tr><td>Đồng xu cân đối (50/50)</td><td>1 bit</td><td>Bất định tối đa với 2 khả năng</td></tr>
+              <tr><td>Đồng xu lệch (90/10)</td><td>≈ 0,47 bit</td><td>Ít bất định hơn — thường đoán được</td></tr>
+              <tr><td>Đồng xu hai mặt giống nhau</td><td>0 bit</td><td>Không có bất định nào, kết quả biết trước</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>Cross-entropy</strong> đo khoảng cách giữa hai phân phối: phân phối
+          <em>đúng</em> <code>p</code> và phân phối <em>mô hình dự đoán</em> <code>q</code>.
+          Dự đoán càng lệch so với sự thật thì cross-entropy càng lớn.
+        </p>
+
+        <div class="formula">
+          H(p, q) = − Σ p(x) · log q(x)
+          <span class="note">Đây chính là hàm mất mát được tối thiểu hoá khi huấn luyện</span>
+        </div>
+
+        <p>
+          Trong phân loại, phân phối đúng thường là one-hot — 1 cho nhãn đúng, 0 cho tất cả các
+          nhãn còn lại. Khi đó công thức rút gọn thành một số hạng duy nhất, và ý nghĩa trở nên
+          rất trực quan: <strong>mất mát = −log(xác suất mà mô hình gán cho đáp án đúng)</strong>.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Nhãn đúng là lớp 0 → p = [1, 0, 0]</span>
+
+<span class="tok-com"># Mô hình A khá tự tin và đúng</span>
+q_a = [<span class="tok-num">0.7</span>, <span class="tok-num">0.2</span>, <span class="tok-num">0.1</span>]
+loss_a = -np.<span class="tok-fn">log</span>(q_a[<span class="tok-num">0</span>])     <span class="tok-com"># 0.357</span>
+
+<span class="tok-com"># Mô hình B lưỡng lự</span>
+q_b = [<span class="tok-num">0.4</span>, <span class="tok-num">0.4</span>, <span class="tok-num">0.2</span>]
+loss_b = -np.<span class="tok-fn">log</span>(q_b[<span class="tok-num">0</span>])     <span class="tok-com"># 0.916  ← lớn hơn, tức tệ hơn</span>
+
+<span class="tok-com"># Mô hình C tự tin nhưng SAI</span>
+q_c = [<span class="tok-num">0.05</span>, <span class="tok-num">0.9</span>, <span class="tok-num">0.05</span>]
+loss_c = -np.<span class="tok-fn">log</span>(q_c[<span class="tok-num">0</span>])     <span class="tok-com"># 3.00   ← bị phạt rất nặng</span></code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Vì sao cross-entropy là hàm mất mát tốt</div>
+          <p>
+            Hãy để ý mô hình C: nó tự tin 90% vào một đáp án sai và bị phạt <strong>gấp hơn tám
+            lần</strong> mô hình A. Đó là tính chất then chốt — cross-entropy phạt rất nặng
+            việc <em>tự tin mà sai</em>, trong khi chỉ phạt nhẹ việc <em>lưỡng lự</em>.
+          </p>
+          <p style="margin-top: 10px;">
+            Nói cách khác, nó dạy mô hình một thói quen tốt: khi không chắc thì hãy trải xác suất
+            ra, đừng cược tất cả vào một đáp án. Nếu bạn đọc mục này rồi quay lại
+            <strong>10.2 chương 9</strong> (ảo giác), bạn sẽ thấy một điều đáng suy nghĩ: hàm mất
+            mát dạy mô hình <em>hiệu chỉnh độ tự tin</em>, chứ không dạy nó <em>nói thật</em> —
+            hai thứ này không giống nhau.
+          </p>
+        </div>
+
+        <h3 id="perplexity">8.1. Perplexity</h3>
+
+        <p>
+          Với mô hình ngôn ngữ, cross-entropy thường được báo cáo dưới dạng
+          <strong>perplexity</strong>:
+        </p>
+
+        <div class="formula">
+          Perplexity = e<sup>cross-entropy</sup>
+          <span class="note">Diễn giải: "trung bình mô hình đang phân vân giữa bao nhiêu lựa chọn"</span>
+        </div>
+
+        <p>
+          Perplexity bằng 1 nghĩa là mô hình luôn biết chắc token tiếp theo. Perplexity bằng 50
+          nghĩa là ở mỗi bước, mô hình lưỡng lự như thể đang chọn ngẫu nhiên giữa 50 khả năng.
+          <strong>Thấp hơn là tốt hơn.</strong>
+        </p>
+
+        <p>
+          Cảnh báo quan trọng: perplexity chỉ so sánh được giữa các mô hình dùng <em>cùng bộ từ
+          vựng</em> và đo trên <em>cùng tập dữ liệu</em>. So perplexity của hai mô hình có
+          tokenizer khác nhau là so hai đại lượng không cùng thang đo.
+        </p>
+
+        <h2 id="ky-hieu">9. Bảng tra ký hiệu</h2>
+
+        <p>
+          Giữ bảng này lại. Khi gặp một công thức trong tài liệu AI, gần như chắc chắn nó chỉ
+          dùng các ký hiệu dưới đây.
+        </p>
+
+        <div class="table-wrap">
+          <table class="symbol-table">
+            <thead><tr><th style="width: 12%;">Ký hiệu</th><th style="width: 28%;">Đọc là</th><th>Nghĩa</th></tr></thead>
+            <tbody>
+              <tr><td>Σ</td><td>Sigma — tổng</td><td>Cộng tất cả các số hạng lại. <code>Σᵢ xᵢ</code> = x₁ + x₂ + …</td></tr>
+              <tr><td>Π</td><td>Pi — tích</td><td>Nhân tất cả lại với nhau</td></tr>
+              <tr><td>∇</td><td>Nabla — gradient</td><td>Vector các đạo hàm riêng. <code>∇f</code> chỉ hướng dốc lên nhanh nhất của f</td></tr>
+              <tr><td>‖x‖</td><td>Norm của x</td><td>Độ dài của vector x</td></tr>
+              <tr><td>·</td><td>Tích vô hướng</td><td><code>a · b</code> — nhân từng cặp rồi cộng lại</td></tr>
+              <tr><td>⊙</td><td>Tích Hadamard</td><td>Nhân <em>từng phần tử</em>, khác hẳn nhân ma trận</td></tr>
+              <tr><td>@</td><td>Nhân ma trận</td><td>Toán tử matmul trong Python/NumPy/PyTorch</td></tr>
+              <tr><td>argmax</td><td>Chỉ số của giá trị lớn nhất</td><td>Trả về <em>vị trí</em>, không phải giá trị. <code>argmax([3,9,1]) = 1</code></td></tr>
+              <tr><td>𝔼[X]</td><td>Kỳ vọng của X</td><td>Giá trị trung bình theo nghĩa xác suất</td></tr>
+              <tr><td>P(A\|B)</td><td>Xác suất A khi biết B</td><td>Xác suất có điều kiện</td></tr>
+              <tr><td>θ</td><td>Theta</td><td>Ký hiệu quy ước cho toàn bộ tham số của mô hình</td></tr>
+              <tr><td>η</td><td>Eta</td><td>Ký hiệu quy ước cho learning rate</td></tr>
+              <tr><td>ŷ</td><td>y mũ</td><td>Giá trị mô hình <em>dự đoán</em> (phân biệt với y là giá trị thật)</td></tr>
+              <tr><td>ℒ</td><td>Loss</td><td>Hàm mất mát</td></tr>
+              <tr><td>d</td><td>d</td><td>Số chiều. <code>√d</code> xuất hiện trong công thức attention ở chương 10</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Kiểm tra lại lời hứa đầu chương</div>
+          <p>
+            Chương này mở đầu bằng cam kết: mỗi mục toán phải chỉ ra được nó dùng ở đâu. Đây là
+            bảng đối chiếu để bạn tự kiểm tra:
+          </p>
+          <div class="table-wrap" style="margin-top: 12px;">
+            <table>
+              <thead><tr><th>Khái niệm</th><th>Nơi dùng chính</th></tr></thead>
+              <tbody>
+                <tr><td>Vector, cosine</td><td>10.3 ch.2 (embedding), ch.5 (tìm kiếm)</td></tr>
+                <tr><td>Ma trận, khớp chiều</td><td>10.1 ch.7, ch.8, ch.10</td></tr>
+                <tr><td>Gradient, quy tắc chuỗi</td><td>10.1 ch.7 (backprop), 10.5 ch.3 (LoRA)</td></tr>
+                <tr><td>Xác suất, Bayes</td><td>10.1 ch.5, 10.2 ch.1 (sampling)</td></tr>
+                <tr><td>Softmax</td><td>10.2 ch.1 (temperature), 10.1 ch.10 (attention)</td></tr>
+                <tr><td>Chuẩn hoá, thống kê</td><td>10.1 ch.4, ch.6, 10.6 ch.2</td></tr>
+                <tr><td>Cross-entropy, perplexity</td><td>10.1 ch.7, 10.5 ch.8</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Tính tay rồi kiểm chứng bằng NumPy</h4>
+            <div class="exercise-body">
+              <p>
+                Với ba cặp vector sau, tính <em>bằng tay</em> tích vô hướng, hai norm, và cosine.
+                Sau đó viết code NumPy kiểm chứng.
+              </p>
+              <ul>
+                <li>a = [1, 0], b = [0, 1]</li>
+                <li>a = [3, 4], b = [6, 8]</li>
+                <li>a = [1, 2, 2], b = [2, 4, 4]</li>
+              </ul>
+              <p>Nhận xét: hai cặp cuối có điểm gì chung, và cosine của chúng nói lên điều gì?</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Cặp 1: tích vô hướng = 0 → vuông góc → cosine = 0. Đây là hai vector "không
+                    liên quan gì tới nhau" trong ngôn ngữ embedding.
+                  </p>
+                  <p>
+                    Cặp 2 và 3: trong cả hai trường hợp <code>b = 2a</code>. Norm của b gấp đôi
+                    norm của a, tích vô hướng cũng gấp đôi so với <code>a·a</code> — hai hiệu ứng
+                    triệt tiêu nhau trong công thức cosine, cho kết quả đúng bằng 1.
+                  </p>
+                  <p>
+                    Bài học: <strong>cosine hoàn toàn bỏ qua độ lớn, chỉ nhìn hướng.</strong>
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Vì sao độ dài không quan trọng</h4>
+            <div class="exercise-body">
+              <p>
+                Viết một đoạn giải thích <strong>3–4 câu</strong>, không dùng công thức, trả lời
+                câu hỏi: tại sao khi so sánh ý nghĩa hai đoạn văn, ta chỉ quan tâm hướng của
+                vector chứ không quan tâm độ dài của nó?
+              </p>
+              <p>
+                Viết như thể đang giải thích cho một đồng nghiệp không học toán. Đây là bài tập
+                diễn đạt, và cũng là câu hỏi phỏng vấn thật.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Hướng đi tốt: mỗi chiều của vector tương ứng với một "khía cạnh ngữ nghĩa" mà
+                    mô hình đã học được. Hai văn bản cùng chủ đề sẽ mạnh ở cùng những khía cạnh
+                    đó, tức là chỉ về cùng một hướng — bất kể chúng dài hay ngắn.
+                  </p>
+                  <p>
+                    Độ lớn của vector chịu ảnh hưởng của những thứ không liên quan tới ý nghĩa:
+                    độ dài văn bản, tần suất từ, đặc thù của mô hình embedding. Nếu tính cả độ lớn,
+                    bạn sẽ vô tình luôn xếp hạng văn bản dài lên trên — điều không ai muốn.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Softmax và temperature bằng tay</h4>
+            <div class="exercise-body">
+              <p>
+                Cho logits <code>[2, 1, 0]</code>. Tính softmax bằng tay (dùng máy tính bỏ túi cho
+                phép <code>exp</code>) trong ba trường hợp: <code>T = 1</code>, <code>T = 0.5</code>,
+                <code>T = 2</code>. Nhớ chia logits cho T trước khi lấy <code>exp</code>.
+              </p>
+              <p>
+                Sau đó trả lời: nếu <code>T → 0</code> thì phân phối tiến tới cái gì? Điều đó
+                tương ứng với chế độ sinh văn bản nào?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>e² ≈ 7,389</code> · <code>e¹ ≈ 2,718</code> · <code>e⁰ = 1</code>.
+                    Với T = 1: tổng ≈ 11,107 → <code>[0,665; 0,245; 0,090]</code>.
+                  </p>
+                  <p>
+                    Với T = 0,5, logits thành <code>[4, 2, 0]</code> → <code>[0,867; 0,117; 0,016]</code>
+                    (nhọn hơn hẳn). Với T = 2, logits thành <code>[1; 0,5; 0]</code> →
+                    <code>[0,506; 0,307; 0,186]</code> (phẳng hơn).
+                  </p>
+                  <p>
+                    Khi <code>T → 0</code>, phân phối tiến tới one-hot đặt toàn bộ xác suất vào
+                    logit lớn nhất. Đó chính là <strong>greedy decoding</strong> — luôn chọn token
+                    có khả năng cao nhất. Bạn sẽ gặp lại ở 10.2 chương 1.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Gradient descent năm bước</h4>
+            <div class="exercise-body">
+              <p>
+                Cho <code>f(x) = (x − 4)²</code>. Tính đạo hàm, rồi chạy gradient descent bằng tay
+                5 bước với <code>x₀ = 0</code> và <code>lr = 0,3</code>. Ghi lại x sau mỗi bước.
+              </p>
+              <p>
+                Sau đó chạy lại với <code>lr = 1,2</code> và mô tả điều gì xảy ra. Giải thích
+                bằng hình ảnh "đi xuống thung lũng".
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>f'(x) = 2(x − 4)</code>. Đáy nằm ở <code>x = 4</code>.
+                  </p>
+                  <p>
+                    Với <code>lr = 0,3</code>: 0 → 2,4 → 3,36 → 3,744 → 3,898 → 3,959. Tiến đều
+                    về 4, mỗi bước rút ngắn 40% khoảng cách còn lại.
+                  </p>
+                  <p>
+                    Với <code>lr = 1,2</code>: 0 → 9,6 → −3,84 → 14,976 → … Mỗi bước <em>vượt qua</em>
+                    đáy và văng ra xa hơn trước. Đây là hiện tượng phân kỳ — trong huấn luyện thật
+                    nó biểu hiện thành loss tăng vọt rồi thành <code>NaN</code>.
+                  </p>
+                  <p>
+                    Theo hình ảnh thung lũng: bước quá dài khiến bạn nhảy vọt sang sườn bên kia,
+                    ở vị trí còn cao hơn chỗ xuất phát.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>So sánh hai mô hình bằng cross-entropy</h4>
+            <div class="exercise-body">
+              <p>
+                Nhãn đúng là lớp 2 (chỉ số 2, đếm từ 0). Hai mô hình dự đoán:
+              </p>
+              <ul>
+                <li>Mô hình X: <code>[0.1, 0.2, 0.6, 0.1]</code></li>
+                <li>Mô hình Y: <code>[0.3, 0.3, 0.35, 0.05]</code></li>
+              </ul>
+              <p>
+                Tính cross-entropy cho từng mô hình. Mô hình nào tốt hơn? Cả hai đều
+                <code>argmax</code> ra đúng lớp 2 — vậy vì sao điểm số lại khác nhau, và điều đó
+                nói lên tính chất gì của cross-entropy so với accuracy?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>X: −ln(0,6) ≈ 0,511</code> · <code>Y: −ln(0,35) ≈ 1,050</code>.
+                    X tốt hơn (mất mát thấp hơn).
+                  </p>
+                  <p>
+                    Cả hai đều "đúng" theo thước đo accuracy, nhưng cross-entropy còn đo cả
+                    <strong>mức độ tự tin</strong>. Mô hình Y đúng một cách lưỡng lự — chỉ hơn
+                    lớp 0 và 1 có 5 điểm phần trăm. Nếu dữ liệu nhiễu đi một chút, Y sẽ đoán sai
+                    còn X thì vẫn đúng.
+                  </p>
+                  <p>
+                    Đây là lý do huấn luyện tối thiểu hoá cross-entropy chứ không tối đa hoá
+                    accuracy: cross-entropy cho tín hiệu gradient mượt và giàu thông tin hơn nhiều.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Vì sao tìm kiếm ngữ nghĩa dùng cosine similarity chứ không dùng khoảng cách Euclid?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì trong không gian embedding, <strong>hướng mang ý nghĩa còn độ lớn thì không</strong>.
+                Độ lớn của vector chịu ảnh hưởng của độ dài văn bản, tần suất từ và đặc thù mô
+                hình — những thứ không liên quan tới nội dung.
+              </p>
+              <p style="margin-top: 8px;">
+                Khoảng cách Euclid tính cả độ lớn, nên nó sẽ coi một đoạn văn dài và một câu ngắn
+                cùng chủ đề là "xa nhau". Cosine bỏ qua độ lớn nhờ chia cho tích hai norm, chỉ
+                giữ lại góc.
+              </p>
+              <p style="margin-top: 8px;">
+                Ghi chú: với vector đã chuẩn hoá về độ dài 1, xếp hạng theo cosine và theo khoảng
+                cách Euclid cho <em>cùng một thứ tự</em> — đây là lý do nhiều thư viện cho phép
+                dùng thay thế nhau khi vector đã chuẩn hoá.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Softmax làm gì, và vì sao dùng <code>exp</code> thay vì chia đều theo tỉ lệ?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Softmax biến một danh sách số thực bất kỳ (logits) thành một phân phối xác suất
+                hợp lệ: mọi giá trị nằm trong [0, 1] và tổng bằng 1.
+              </p>
+              <p style="margin-top: 8px;">
+                Dùng <code>exp</code> vì hai lý do: <strong>(1)</strong> logits có thể âm mà xác
+                suất thì không được âm — <code>exp</code> luôn cho kết quả dương; <strong>(2)</strong>
+                <code>exp</code> khuếch đại chênh lệch, nên một khác biệt nhỏ giữa các logit trở
+                thành khác biệt rõ về xác suất, giúp mô hình "quyết đoán" hơn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Gradient chỉ về hướng nào, và trong huấn luyện ta đi theo hướng nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Gradient chỉ về hướng <strong>tăng nhanh nhất</strong> của hàm. Vì huấn luyện là
+                <em>giảm</em> hàm mất mát, ta đi <strong>ngược</strong> gradient — đó là ý nghĩa
+                của dấu trừ trong công thức cập nhật: <code>θ ← θ − η∇ℒ</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                <code>η</code> (learning rate) quyết định độ dài mỗi bước. Quá lớn → nhảy vọt qua
+                đáy, loss phân kỳ. Quá nhỏ → hội tụ đúng hướng nhưng chậm, và dễ mắc kẹt ở cực
+                tiểu địa phương.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Quy tắc chuỗi liên quan gì tới việc huấn luyện mạng nơ-ron nhiều lớp?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Một mạng N lớp là một hàm lồng N tầng. Để biết trọng số ở lớp đầu ảnh hưởng thế
+                nào tới sai số ở lớp cuối, phải nhân liên tiếp các đạo hàm dọc theo chuỗi —
+                đó chính là quy tắc chuỗi. Thuật toán thực hiện việc này là
+                <strong>lan truyền ngược</strong>.
+              </p>
+              <p style="margin-top: 8px;">
+                Hệ quả quan trọng: vì các đạo hàm được <em>nhân</em> với nhau, nếu chúng đều nhỏ
+                hơn 1 thì tích tiến rất nhanh về 0 — hiện tượng <strong>gradient tiêu biến</strong>.
+                Đây là động lực cho ReLU, residual connection và LayerNorm.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Cross-entropy đo cái gì? Vì sao nó là hàm mất mát tốt hơn accuracy khi huấn luyện?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Cross-entropy đo khoảng cách giữa phân phối đúng và phân phối mô hình dự đoán.
+                Với nhãn one-hot, nó rút gọn thành <code>−log(xác suất mô hình gán cho đáp án
+                đúng)</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                Nó tốt hơn accuracy khi huấn luyện vì hai lý do:
+              </p>
+              <ul>
+                <li>
+                  <strong>Có gradient hữu ích.</strong> Accuracy là hàm bậc thang — đạo hàm bằng 0
+                  ở gần như mọi nơi, nên không dùng để cập nhật trọng số được.
+                </li>
+                <li>
+                  <strong>Đo cả mức độ tự tin.</strong> Hai mô hình cùng đoán đúng nhưng một cái
+                  chắc chắn 90% còn một cái lưỡng lự 35% sẽ nhận điểm khác nhau — accuracy coi
+                  chúng như nhau.
+                </li>
+              </ul>
+              <p style="margin-top: 8px;">
+                Cross-entropy phạt đặc biệt nặng việc <em>tự tin mà sai</em>, nên nó dạy mô hình
+                trải xác suất ra khi không chắc.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Chuẩn hoá dữ liệu để làm gì, và cái bẫy khi thực hiện nó là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Chuẩn hoá đưa các đặc trưng về cùng thang đo, để không đặc trưng nào áp đảo gradient
+                chỉ vì đơn vị của nó lớn hơn. Không chuẩn hoá thì bề mặt loss trở thành thung lũng
+                hẹp và dài, gradient descent chạy zigzag và hội tụ rất chậm.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Bẫy:</strong> tính <code>mean</code> và <code>std</code> trên toàn bộ dữ
+                liệu <em>trước khi</em> chia tập. Khi đó thông tin từ tập kiểm thử rò rỉ vào quá
+                trình huấn luyện và kết quả đánh giá đẹp giả tạo. Phải fit trên train, rồi chỉ
+                transform trên test.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Phép nhân ma trận <code>(3,4) @ (4,2)</code> cho shape gì? Còn <code>(4,2) @ (3,4)</code>?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <code>(3,4) @ (4,2) → (3,2)</code>. Hai số ở giữa (4 và 4) khớp nhau nên phép nhân
+                hợp lệ; chúng biến mất, hai số ngoài cùng tạo thành shape kết quả.
+              </p>
+              <p style="margin-top: 8px;">
+                <code>(4,2) @ (3,4)</code> — <strong>lỗi</strong>. Hai số ở giữa là 2 và 3, không
+                khớp. Điều này minh hoạ tính chất quan trọng: nhân ma trận
+                <strong>không giao hoán</strong>, đảo thứ tự thường cho kết quả khác hoặc không
+                hợp lệ.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Perplexity của một mô hình ngôn ngữ bằng 30 nghĩa là gì? Có so sánh được perplexity của hai mô hình bất kỳ không?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Perplexity = 30 nghĩa là ở mỗi bước dự đoán, mô hình lưỡng lự như thể đang chọn
+                ngẫu nhiên giữa khoảng 30 khả năng ngang nhau. Thấp hơn là tốt hơn; bằng 1 nghĩa
+                là luôn biết chắc token tiếp theo.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Không</strong> so sánh được tuỳ tiện. Perplexity chỉ có nghĩa khi hai mô
+                hình dùng <em>cùng bộ từ vựng / cùng tokenizer</em> và đo trên <em>cùng tập dữ
+                liệu</em>. Mô hình chia văn bản thành nhiều token nhỏ hơn sẽ có perplexity thấp
+                hơn một cách giả tạo, vì mỗi token dễ đoán hơn.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 2, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Vector</strong> là điểm trong không gian nhiều chiều; embedding chính là vector.</li>
+          <li><strong>Cosine similarity</strong> = tích vô hướng chia cho tích hai norm — chỉ đo hướng, bỏ qua độ lớn. Đây là lý do nó là thước đo mặc định trong tìm kiếm ngữ nghĩa.</li>
+          <li><strong>Chuẩn hoá vector</strong> về độ dài 1 biến cosine thành tích vô hướng thuần — mẹo tăng tốc mà mọi vector database đều dùng.</li>
+          <li><strong>Quy tắc khớp chiều</strong> <code>(m,n) @ (n,p) → (m,p)</code>, và nhân ma trận không giao hoán.</li>
+          <li><strong>Gradient</strong> chỉ hướng dốc lên; huấn luyện đi ngược lại, với learning rate là độ dài bước.</li>
+          <li><strong>Quy tắc chuỗi</strong> là nền của lan truyền ngược, và là nguyên nhân của gradient tiêu biến.</li>
+          <li><strong>Softmax</strong> biến logits thành phân phối xác suất; <code>temperature</code> điều khiển độ nhọn của phân phối đó.</li>
+          <li><strong>Chuẩn hoá dữ liệu</strong> giúp hội tụ nhanh; nhưng phải fit trên train để tránh rò rỉ.</li>
+          <li><strong>Cross-entropy</strong> phạt nặng việc tự tin mà sai; <strong>perplexity</strong> là dạng dễ diễn giải của nó cho mô hình ngôn ngữ.</li>
+          <li><strong>Bảng ký hiệu</strong> để tra khi gặp công thức lạ trong tài liệu.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 3 (Python cho AI)</strong> — cài đặt mọi thứ trong chương này bằng NumPy, và học broadcasting để không bị lỗi shape.</li>
+          <li><strong>Chương 7 (Deep Learning)</strong> — gradient và quy tắc chuỗi được dùng ở mức đầy đủ; sẽ tính tay backpropagation cho một mạng 2 lớp.</li>
+          <li><strong>Chương 10 (Transformer)</strong> — công thức <code>softmax(QKᵀ/√d)V</code> dùng lại đúng ba thứ trong chương này: tích vô hướng, softmax, và nhân ma trận.</li>
+          <li><strong>10.2 chương 1 (LLM hoạt động thế nào)</strong> — softmax và phân phối xác suất là nền để hiểu temperature, top-k, top-p.</li>
+          <li><strong>10.3 chương 2 (Embedding)</strong> — cosine similarity được dùng ở quy mô hàng triệu vector.</li>
+          <li><strong>10.5 chương 3 (LoRA)</strong> — hiểu ma trận hạng thấp cần nền về nhân ma trận và shape.</li>
+          <li><strong>Trụ cột 1 — DSA</strong> — độ phức tạp tính toán của phép nhân ma trận là lý do attention có chi phí O(n²).</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong1.html" class="prev">
+            <div class="dir">← Chương 1</div>
+            <div class="label">AI là gì, và AI Engineer làm gì</div>
+          </a>
+          <a href="chuong3.html" class="next">
+            <div class="dir">Chương 3 →</div>
+            <div class="label">Python cho AI: NumPy, Pandas, Matplotlib</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#vector">1. Vector</a></li>
+          <li class="level-3"><a href="#phep-toan-vector">1.1. Ba phép toán</a></li>
+          <li><a href="#cosine">2. Cosine similarity</a></li>
+          <li class="level-3"><a href="#chuan-hoa-vector">2.1. Chuẩn hoá vector</a></li>
+          <li><a href="#ma-tran">3. Ma trận</a></li>
+          <li class="level-3"><a href="#quy-tac-khop-chieu">3.1. Khớp chiều</a></li>
+          <li><a href="#gradient">4. Đạo hàm &amp; gradient</a></li>
+          <li class="level-3"><a href="#gradient-descent">4.1. Gradient descent</a></li>
+          <li class="level-3"><a href="#quy-tac-chuoi">4.2. Quy tắc chuỗi</a></li>
+          <li><a href="#xac-suat">5. Xác suất</a></li>
+          <li class="level-3"><a href="#bayes">5.1. Bayes</a></li>
+          <li><a href="#softmax">6. Softmax</a></li>
+          <li><a href="#thong-ke">7. Thống kê mô tả</a></li>
+          <li class="level-3"><a href="#chuan-hoa">7.1. Chuẩn hoá</a></li>
+          <li><a href="#entropy">8. Entropy &amp; cross-entropy</a></li>
+          <li class="level-3"><a href="#perplexity">8.1. Perplexity</a></li>
+          <li><a href="#ky-hieu">9. Bảng tra ký hiệu</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 2 — Toán cho AI · Nền tảng AI · Trụ cột 10 IT Basic<br/>
+        <a href="../index.html">Mục lục 10.1</a> ·
+        <a href="chuong1.html">← Chương 1</a> ·
+        <a href="chuong3.html">Chương 3 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    /* ---------- Máy tính cosine similarity ---------- */
+    var ids = ['a0','a1','a2','b0','b1','b2'];
+    var els = {};
+    ids.forEach(function (id) { els[id] = document.getElementById(id); });
+
+    function fmt(x, d) { return Number(x).toFixed(d === undefined ? 3 : d); }
+
+    function updateCosine() {
+      var a = [+els.a0.value || 0, +els.a1.value || 0, +els.a2.value || 0];
+      var b = [+els.b0.value || 0, +els.b1.value || 0, +els.b2.value || 0];
+
+      var dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+      var na = Math.sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+      var nb = Math.sqrt(b[0]*b[0] + b[1]*b[1] + b[2]*b[2]);
+
+      document.getElementById('out-dot').textContent = fmt(dot, 2);
+      document.getElementById('out-na').textContent  = fmt(na);
+      document.getElementById('out-nb').textContent  = fmt(nb);
+
+      var verdict = document.getElementById('cos-verdict');
+
+      if (na === 0 || nb === 0) {
+        document.getElementById('out-cos').textContent = '—';
+        document.getElementById('out-ang').textContent = '—';
+        verdict.innerHTML = 'Vector không (mọi thành phần bằng 0) <strong>không có hướng</strong>, ' +
+          'nên cosine không xác định — mẫu số bằng 0. Trong thực tế, embedding của một chuỗi rỗng ' +
+          'là ca biên cần chặn trước khi đưa vào tìm kiếm.';
+        return;
+      }
+
+      var cos = dot / (na * nb);
+      cos = Math.max(-1, Math.min(1, cos));           // chặn sai số dấu phẩy động
+      var ang = Math.acos(cos) * 180 / Math.PI;
+
+      document.getElementById('out-cos').textContent = fmt(cos);
+      document.getElementById('out-ang').textContent = fmt(ang, 1) + '°';
+
+      var msg;
+      if (cos > 0.98)       msg = '<strong>Gần như cùng hướng.</strong> Trong tìm kiếm ngữ nghĩa, đây là mức của hai đoạn văn nói cùng một điều.';
+      else if (cos > 0.7)   msg = '<strong>Rất liên quan.</strong> Cùng chủ đề, khác cách diễn đạt.';
+      else if (cos > 0.3)   msg = '<strong>Có liên quan phần nào.</strong> Chung một lĩnh vực nhưng không cùng nội dung.';
+      else if (cos > -0.1)  msg = '<strong>Gần như không liên quan.</strong> Cosine quanh 0 nghĩa là hai vector gần vuông góc.';
+      else                  msg = '<strong>Ngược hướng.</strong> Hiếm gặp với embedding văn bản thật, vì các mô hình hiện đại hầu như không tạo ra vector đối nhau.';
+
+      verdict.innerHTML = msg;
+    }
+
+    ids.forEach(function (id) { els[id].addEventListener('input', updateCosine); });
+
+    document.querySelectorAll('.preset-row button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var a = btn.dataset.a.split(',');
+        var b = btn.dataset.b.split(',');
+        els.a0.value = a[0]; els.a1.value = a[1]; els.a2.value = a[2];
+        els.b0.value = b[0]; els.b1.value = b[1]; els.b2.value = b[2];
+        updateCosine();
+      });
+    });
+
+    document.getElementById('cos-reset').addEventListener('click', function () {
+      els.a0.value = 1; els.a1.value = 2; els.a2.value = 3;
+      els.b0.value = 4; els.b1.value = 5; els.b2.value = 6;
+      updateCosine();
+    });
+
+    updateCosine();
+
+    /* ---------- Softmax + temperature ---------- */
+    var logitsInput = document.getElementById('sm-logits');
+    var tempInput   = document.getElementById('sm-temp');
+    var tempVal     = document.getElementById('sm-temp-val');
+    var demo        = document.getElementById('sm-demo');
+    var smNote      = document.getElementById('sm-note');
+
+    function softmax(xs, T) {
+      var scaled = xs.map(function (x) { return x / T; });
+      var mx = Math.max.apply(null, scaled);
+      var exps = scaled.map(function (x) { return Math.exp(x - mx); });  // trừ max, tránh tràn số
+      var sum = exps.reduce(function (s, e) { return s + e; }, 0);
+      return exps.map(function (e) { return e / sum; });
+    }
+
+    function updateSoftmax() {
+      var raw = logitsInput.value.split(',')
+        .map(function (s) { return parseFloat(s.trim()); })
+        .filter(function (x) { return !isNaN(x); });
+
+      var T = parseFloat(tempInput.value);
+      tempVal.textContent = T.toFixed(1);
+
+      if (raw.length < 2) {
+        demo.innerHTML = '';
+        smNote.textContent = 'Nhập ít nhất hai số, cách nhau bởi dấu phẩy.';
+        return;
+      }
+
+      var probs = softmax(raw, T);
+      var maxP = Math.max.apply(null, probs);
+
+      demo.innerHTML = probs.map(function (p, i) {
+        var h = Math.max(2, (p / maxP) * 100);
+        return '<div class="sm-col">' +
+                 '<div class="sm-val">' + (p * 100).toFixed(1) + '%</div>' +
+                 '<div class="sm-bar" style="height:' + h + '%"></div>' +
+                 '<div class="sm-lbl">' + raw[i] + '</div>' +
+               '</div>';
+      }).join('');
+
+      var top = maxP * 100;
+      var note;
+      if (T <= 0.4)      note = 'Temperature rất thấp: phân phối gần như one-hot (' + top.toFixed(0) + '% cho token mạnh nhất). Đầu ra sẽ lặp lại và rất ổn định — phù hợp cho trích xuất dữ liệu, phân loại.';
+      else if (T <= 1.1) note = 'Temperature quanh mặc định: token mạnh nhất chiếm ' + top.toFixed(0) + '%, các token khác vẫn có cơ hội. Đây là vùng cân bằng cho phần lớn ứng dụng.';
+      else               note = 'Temperature cao: phân phối phẳng (' + top.toFixed(0) + '% cho token mạnh nhất). Đầu ra đa dạng hơn nhưng dễ lệch chủ đề và dễ sai — cân nhắc kỹ trước khi dùng trong production.';
+      smNote.innerHTML = note;
+    }
+
+    logitsInput.addEventListener('input', updateSoftmax);
+    tempInput.addEventListener('input', updateSoftmax);
+    updateSoftmax();
+  })();
+  </script>
+</body>
+</html>

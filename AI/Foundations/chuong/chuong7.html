@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 7 — Deep Learning: mạng nơ-ron &amp; lan truyền ngược · Nền tảng AI</title>
+  <meta name="description" content="Vì sao cần hàm kích hoạt phi tuyến, MLP, backpropagation tính tay từng bước, optimizer SGD/Adam, learning rate, khởi tạo trọng số, LayerNorm, dropout, đọc đường cong huấn luyện, và vì sao deep learning cần GPU." />
+  <meta name="theme-color" content="#8a6a3f" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Bảng tính tay backprop */
+    .bp-steps { margin: 20px 0; }
+    .bp-step {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px dashed var(--border-soft);
+    }
+    .bp-step:last-child { border-bottom: none; }
+    .bp-n {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent-deep);
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+    .bp-body { min-width: 0; }
+    .bp-formula {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      background: var(--bg-alt);
+      padding: 7px 11px;
+      border-radius: 6px;
+      margin: 6px 0;
+      overflow-x: auto;
+    }
+    .bp-formula .res { color: var(--accent); font-weight: 700; }
+    .bp-why { font-size: 0.87rem; color: var(--text-soft); line-height: 1.55; }
+
+    /* Playground mạng nơ-ron */
+    .nn-layout {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .nn-canvas {
+      width: 100%;
+      background: var(--bg-alt);
+      border-radius: var(--radius);
+      display: block;
+    }
+    .nn-side { display: flex; flex-direction: column; gap: 11px; }
+    .nn-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 9px 13px;
+      background: var(--bg-alt);
+      border-radius: 8px;
+      font-size: 0.86rem;
+    }
+    .nn-stat .k { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .nn-stat .v { font-family: var(--font-mono); font-size: 1.02rem; font-weight: 700; color: var(--ink); }
+    .nn-loss-svg { width: 100%; height: 86px; background: var(--bg-alt); border-radius: 8px; }
+    .nn-diag {
+      padding: 11px 13px;
+      border-left: 3px solid var(--accent);
+      background: var(--bg-alt);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.86rem;
+      line-height: 1.55;
+    }
+    .nn-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Bảng hàm kích hoạt với hình nhỏ */
+    .act-table svg { display: block; }
+    .act-table td { vertical-align: middle; }
+
+    /* Sơ đồ mạng */
+    .net-diagram { width: 100%; max-width: 460px; margin: 20px auto; display: block; }
+
+    @media (max-width: 860px) {
+      .nn-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark">10.1</span>
+        Nền tảng AI · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Trụ cột 10</a></li>
+          <li><a href="../index.html" class="active">Nền tảng</a></li>
+          <li><a href="../../LLM/index.html">LLM</a></li>
+          <li><a href="../../RAG/index.html">RAG</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Trụ cột 10</a><span class="sep">/</span>
+        <a href="../index.html">Nền tảng AI</a><span class="sep">/</span>
+        <span>Chương 7</span>
+      </div>
+      <div class="chapter-num">Chương 07 · Deep Learning</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; margin: 0 0 14px; color: var(--ink); line-height: 1.15;">
+        Mạng nơ-ron &amp; lan truyền ngược
+      </h1>
+      <p class="lead">
+        Mạng nơ-ron thường được mô tả bằng phép ẩn dụ sinh học — "mô phỏng não bộ" — và phép ẩn dụ
+        đó gây hại nhiều hơn giúp. Chương này tiếp cận theo hướng khác: mạng nơ-ron là
+        <strong>một chuỗi phép nhân ma trận xen kẽ với hàm phi tuyến</strong>, và nó học bằng
+        cách áp dụng quy tắc chuỗi. Chỉ vậy thôi. Chúng ta sẽ tính tay một lượt huấn luyện đầy đủ
+        để bạn thấy tận mắt không có gì huyền bí ở đây.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1.400 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Cần trước:</strong> Chương 2 (gradient), 4</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Thấy được một nơ-ron chỉ là <strong>hồi quy tuyến tính cộng một hàm phi tuyến</strong>.</li>
+            <li>Chứng minh được vì sao <strong>không có phi tuyến thì mạng sâu vô nghĩa</strong>.</li>
+            <li>Biết chọn hàm kích hoạt và hiểu vấn đề <strong>gradient tiêu biến</strong>.</li>
+            <li><strong>Tính tay được một lượt lan truyền ngược</strong> đầy đủ với số cụ thể.</li>
+            <li>Hiểu SGD, momentum, Adam khác nhau ở đâu và vì sao <strong>learning rate là siêu tham số quan trọng nhất</strong>.</li>
+            <li>Biết vai trò của khởi tạo trọng số và <strong>LayerNorm</strong> — thứ Transformer dùng.</li>
+            <li>Chẩn đoán được năm dạng đường cong huấn luyện.</li>
+            <li>Giải thích được vì sao deep learning cần GPU, ở mức cơ chế.</li>
+          </ul>
+        </div>
+
+        <h2 id="mot-no-ron">1. Một nơ-ron là gì</h2>
+
+        <p>
+          Bắt đầu từ thứ đã biết. Hồi quy tuyến tính ở chương 5:
+        </p>
+
+        <div class="formula" style="margin: 18px 0; padding: 16px 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-align: center; font-family: var(--font-mono);">
+          z = w₁x₁ + w₂x₂ + … + wₙxₙ + b
+        </div>
+
+        <p>
+          Một <strong>nơ-ron</strong> chính là biểu thức đó, cộng thêm một bước: đưa kết quả qua
+          một hàm phi tuyến gọi là <strong>hàm kích hoạt</strong>.
+        </p>
+
+        <div class="formula" style="margin: 18px 0; padding: 16px 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-align: center; font-family: var(--font-mono);">
+          a = f(z) = f(w·x + b)
+        </div>
+
+        <p>
+          Vậy thôi. Một nơ-ron = một phép biến đổi tuyến tính + một hàm phi tuyến. Sức mạnh không
+          nằm ở nơ-ron đơn lẻ mà ở việc <strong>xếp chồng hàng nghìn nơ-ron thành nhiều lớp</strong>.
+        </p>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Về phép ẩn dụ "mô phỏng não bộ"</div>
+          <p>
+            Cái tên "nơ-ron" đến từ nguồn cảm hứng sinh học ban đầu vào những năm 1940–1950, nhưng
+            mạng nơ-ron nhân tạo <em>không</em> hoạt động giống nơ-ron sinh học. Nơ-ron thật giao
+            tiếp bằng xung điện rời rạc theo thời gian, có hoá chất dẫn truyền, và không hề có
+            thứ gì tương đương lan truyền ngược.
+          </p>
+          <p style="margin-top: 10px;">
+            Bám vào phép ẩn dụ sinh học sẽ khiến bạn khó hiểu những thứ về sau. Cách nghĩ hữu ích
+            hơn: <strong>đây là một hàm toán học có rất nhiều tham số, được tối ưu bằng gradient
+            descent.</strong>
+          </p>
+        </div>
+
+        <h2 id="phi-tuyen">2. Vì sao bắt buộc phải có phi tuyến</h2>
+
+        <p>
+          Đây là điểm cốt lõi mà rất nhiều người học bỏ qua. Giả sử ta bỏ hàm kích hoạt và xếp
+          chồng hai lớp tuyến tính:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Lớp 1: h = W₁x + b₁</span>
+<span class="tok-com"># Lớp 2: y = W₂h + b₂</span>
+
+<span class="tok-com"># Thay h vào:</span>
+<span class="tok-com">#   y = W₂(W₁x + b₁) + b₂</span>
+<span class="tok-com">#     = (W₂W₁)x + (W₂b₁ + b₂)</span>
+<span class="tok-com">#     = W'x + b'          ← vẫn chỉ là MỘT lớp tuyến tính!</span>
+
+<span class="tok-kw">import</span> numpy <span class="tok-kw">as</span> np
+
+W1, b1 = np.random.<span class="tok-fn">randn</span>(<span class="tok-num">4</span>, <span class="tok-num">3</span>), np.random.<span class="tok-fn">randn</span>(<span class="tok-num">4</span>)
+W2, b2 = np.random.<span class="tok-fn">randn</span>(<span class="tok-num">2</span>, <span class="tok-num">4</span>), np.random.<span class="tok-fn">randn</span>(<span class="tok-num">2</span>)
+x = np.random.<span class="tok-fn">randn</span>(<span class="tok-num">3</span>)
+
+hai_lop = W2 @ (W1 @ x + b1) + b2
+mot_lop = (W2 @ W1) @ x + (W2 @ b1 + b2)
+
+<span class="tok-fn">print</span>(np.<span class="tok-fn">allclose</span>(hai_lop, mot_lop))   <span class="tok-com"># True — hoàn toàn tương đương</span></code></pre>
+        </div>
+
+        <p>
+          Kết luận: <strong>một trăm lớp tuyến tính xếp chồng vẫn chỉ tương đương một lớp tuyến
+          tính.</strong> Toàn bộ độ sâu trở nên vô nghĩa. Hàm phi tuyến giữa các lớp là thứ duy
+          nhất cho phép mạng biểu diễn được các quan hệ phức tạp.
+        </p>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Nối lại với chương 5</div>
+          <p>
+            Bạn đã thấy điều này ở dạng khác: trong trình mô phỏng ranh giới quyết định, hồi quy
+            logistic — vốn là một lớp tuyến tính cộng sigmoid — không tách nổi dữ liệu kiểu XOR.
+            Thêm một lớp ẩn với hàm phi tuyến là đủ để giải bài toán đó. Bạn sẽ tự kiểm chứng
+            trong trình mô phỏng ở mục 5.
+          </p>
+        </div>
+
+        <h2 id="mlp">3. MLP — mạng nhiều lớp</h2>
+
+        <p>
+          <strong>Multi-Layer Perceptron</strong> là kiến trúc mạng cơ bản nhất: các lớp nối tiếp,
+          mỗi nơ-ron ở lớp sau nhận đầu vào từ <em>mọi</em> nơ-ron ở lớp trước.
+        </p>
+
+        <svg class="net-diagram" viewBox="0 0 460 220">
+          <!-- các cạnh -->
+          <g stroke="#d5cbb8" stroke-width="1">
+            <line x1="70" y1="70"  x2="200" y2="45"/>  <line x1="70" y1="70"  x2="200" y2="90"/>
+            <line x1="70" y1="70"  x2="200" y2="135"/> <line x1="70" y1="70"  x2="200" y2="180"/>
+            <line x1="70" y1="150" x2="200" y2="45"/>  <line x1="70" y1="150" x2="200" y2="90"/>
+            <line x1="70" y1="150" x2="200" y2="135"/> <line x1="70" y1="150" x2="200" y2="180"/>
+            <line x1="200" y1="45"  x2="330" y2="80"/> <line x1="200" y1="45"  x2="330" y2="145"/>
+            <line x1="200" y1="90"  x2="330" y2="80"/> <line x1="200" y1="90"  x2="330" y2="145"/>
+            <line x1="200" y1="135" x2="330" y2="80"/> <line x1="200" y1="135" x2="330" y2="145"/>
+            <line x1="200" y1="180" x2="330" y2="80"/> <line x1="200" y1="180" x2="330" y2="145"/>
+            <line x1="330" y1="80"  x2="420" y2="112"/>
+            <line x1="330" y1="145" x2="420" y2="112"/>
+          </g>
+          <!-- nút -->
+          <g>
+            <circle cx="70"  cy="70"  r="14" fill="#f0e6d5" stroke="#8a6a3f" stroke-width="2"/>
+            <circle cx="70"  cy="150" r="14" fill="#f0e6d5" stroke="#8a6a3f" stroke-width="2"/>
+            <circle cx="200" cy="45"  r="14" fill="#e6e1f0" stroke="#5b4b8a" stroke-width="2"/>
+            <circle cx="200" cy="90"  r="14" fill="#e6e1f0" stroke="#5b4b8a" stroke-width="2"/>
+            <circle cx="200" cy="135" r="14" fill="#e6e1f0" stroke="#5b4b8a" stroke-width="2"/>
+            <circle cx="200" cy="180" r="14" fill="#e6e1f0" stroke="#5b4b8a" stroke-width="2"/>
+            <circle cx="330" cy="80"  r="14" fill="#e6e1f0" stroke="#5b4b8a" stroke-width="2"/>
+            <circle cx="330" cy="145" r="14" fill="#e6e1f0" stroke="#5b4b8a" stroke-width="2"/>
+            <circle cx="420" cy="112" r="14" fill="#d9ebe8" stroke="#2f6f6a" stroke-width="2"/>
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="10.5" fill="#7d7a89" text-anchor="middle">
+            <text x="70"  y="200">đầu vào</text>
+            <text x="265" y="210">hai lớp ẩn</text>
+            <text x="420" y="145">đầu ra</text>
+          </g>
+        </svg>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 24%;">Khái niệm</th><th>Nghĩa</th><th style="width: 28%;">Ảnh hưởng</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Chiều rộng</strong></td><td>Số nơ-ron trong một lớp</td><td>Khả năng biểu diễn ở mỗi tầng</td></tr>
+              <tr><td><strong>Chiều sâu</strong></td><td>Số lớp</td><td>Khả năng tạo đặc trưng phân cấp</td></tr>
+              <tr><td><strong>Lớp fully-connected</strong></td><td>Mỗi nơ-ron nối tới mọi nơ-ron lớp trước</td><td>Số tham số = (vào × ra) + ra</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Định lý xấp xỉ phổ quát — và vì sao nó ít hữu ích</div>
+          <p>
+            Có một định lý nổi tiếng nói rằng một mạng <em>một lớp ẩn</em> đủ rộng có thể xấp xỉ
+            bất kỳ hàm liên tục nào với độ chính xác tuỳ ý. Nghe rất mạnh mẽ.
+          </p>
+          <p style="margin-top: 10px;">
+            Nhưng nó không hữu ích trong thực tế vì hai lẽ: định lý nói mạng như vậy
+            <em>tồn tại</em>, chứ không nói làm sao <em>tìm ra</em> nó; và "đủ rộng" có thể nghĩa
+            là số nơ-ron lớn đến vô lý.
+          </p>
+          <p style="margin-top: 10px;">
+            Thực tế cho thấy <strong>sâu hiệu quả hơn rộng</strong>: mạng sâu tạo được đặc trưng
+            phân cấp (nét → hình → vật thể), nên đạt cùng chất lượng với ít tham số hơn nhiều.
+            Đó là lý do lĩnh vực này tên là <em>deep</em> learning.
+          </p>
+        </div>
+
+        <h2 id="ham-kich-hoat">4. Hàm kích hoạt</h2>
+
+        <div class="table-wrap act-table">
+          <table>
+            <thead>
+              <tr><th style="width: 13%;">Hàm</th><th style="width: 88px;">Hình</th><th style="width: 22%;">Công thức</th><th>Đặc điểm</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Sigmoid</strong></td>
+                <td>
+                  <svg width="80" height="42" viewBox="0 0 80 42">
+                    <line x1="4" y1="21" x2="76" y2="21" stroke="#d5cbb8" stroke-width="1"/>
+                    <line x1="40" y1="4" x2="40" y2="38" stroke="#d5cbb8" stroke-width="1"/>
+                    <path d="M6,36 C 24,36 30,32 40,21 C 50,10 56,6 74,6" fill="none" stroke="#8a6a3f" stroke-width="2"/>
+                  </svg>
+                </td>
+                <td><code>1/(1+e⁻ᶻ)</code></td>
+                <td>Cho ra (0,1). ⚠️ Gradient tiêu biến ở hai đầu. Ngày nay chỉ dùng ở lớp đầu ra nhị phân.</td>
+              </tr>
+              <tr>
+                <td><strong>tanh</strong></td>
+                <td>
+                  <svg width="80" height="42" viewBox="0 0 80 42">
+                    <line x1="4" y1="21" x2="76" y2="21" stroke="#d5cbb8" stroke-width="1"/>
+                    <line x1="40" y1="4" x2="40" y2="38" stroke="#d5cbb8" stroke-width="1"/>
+                    <path d="M6,38 C 26,38 32,34 40,21 C 48,8 54,4 74,4" fill="none" stroke="#8a6a3f" stroke-width="2"/>
+                  </svg>
+                </td>
+                <td><code>(eᶻ−e⁻ᶻ)/(eᶻ+e⁻ᶻ)</code></td>
+                <td>Cho ra (−1,1), đối xứng quanh 0 nên hội tụ tốt hơn sigmoid. Vẫn tiêu biến.</td>
+              </tr>
+              <tr>
+                <td><strong>ReLU</strong></td>
+                <td>
+                  <svg width="80" height="42" viewBox="0 0 80 42">
+                    <line x1="4" y1="34" x2="76" y2="34" stroke="#d5cbb8" stroke-width="1"/>
+                    <line x1="40" y1="4" x2="40" y2="38" stroke="#d5cbb8" stroke-width="1"/>
+                    <path d="M6,34 L40,34 L74,6" fill="none" stroke="#5b4b8a" stroke-width="2.2"/>
+                  </svg>
+                </td>
+                <td><code>max(0, z)</code></td>
+                <td><strong>Mặc định lâu năm.</strong> Rẻ, không tiêu biến ở phần dương. ⚠️ "Nơ-ron chết" khi luôn nhận đầu vào âm.</td>
+              </tr>
+              <tr>
+                <td><strong>Leaky ReLU</strong></td>
+                <td>
+                  <svg width="80" height="42" viewBox="0 0 80 42">
+                    <line x1="4" y1="30" x2="76" y2="30" stroke="#d5cbb8" stroke-width="1"/>
+                    <line x1="40" y1="4" x2="40" y2="38" stroke="#d5cbb8" stroke-width="1"/>
+                    <path d="M6,34 L40,30 L74,6" fill="none" stroke="#5b4b8a" stroke-width="2.2"/>
+                  </svg>
+                </td>
+                <td><code>max(0.01z, z)</code></td>
+                <td>Sửa vấn đề nơ-ron chết bằng cách cho phần âm một độ dốc nhỏ.</td>
+              </tr>
+              <tr>
+                <td><strong>GELU</strong></td>
+                <td>
+                  <svg width="80" height="42" viewBox="0 0 80 42">
+                    <line x1="4" y1="32" x2="76" y2="32" stroke="#d5cbb8" stroke-width="1"/>
+                    <line x1="40" y1="4" x2="40" y2="38" stroke="#d5cbb8" stroke-width="1"/>
+                    <path d="M6,32 C 22,32 32,35 40,32 C 50,27 60,16 74,6" fill="none" stroke="#2f6f6a" stroke-width="2.2"/>
+                  </svg>
+                </td>
+                <td><code>z·Φ(z)</code></td>
+                <td><strong>Dùng trong Transformer.</strong> Trơn, có phần âm nhỏ. Hoạt động tốt hơn ReLU trong mô hình lớn.</td>
+              </tr>
+              <tr>
+                <td><strong>SiLU / Swish</strong></td>
+                <td>
+                  <svg width="80" height="42" viewBox="0 0 80 42">
+                    <line x1="4" y1="32" x2="76" y2="32" stroke="#d5cbb8" stroke-width="1"/>
+                    <line x1="40" y1="4" x2="40" y2="38" stroke="#d5cbb8" stroke-width="1"/>
+                    <path d="M6,32 C 22,32 33,36 40,32 C 50,26 60,15 74,5" fill="none" stroke="#2f6f6a" stroke-width="2.2"/>
+                  </svg>
+                </td>
+                <td><code>z·σ(z)</code></td>
+                <td>Rất giống GELU, rẻ hơn một chút. Dùng trong nhiều LLM mã nguồn mở.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="gradient-tieu-bien">4.1. Gradient tiêu biến</h3>
+
+        <p>
+          Đây là lý do ReLU thay thế sigmoid, và là một trong những vấn đề trung tâm của deep
+          learning trong hai thập kỷ.
+        </p>
+
+        <p>
+          Đạo hàm của sigmoid đạt giá trị lớn nhất là <strong>0,25</strong> (tại z = 0), và tiến
+          nhanh về 0 khi <code>|z|</code> lớn. Nhớ lại quy tắc chuỗi ở chương 2: gradient được
+          <em>nhân</em> dọc theo các lớp. Với mạng 10 lớp dùng sigmoid:
+        </p>
+
+        <div class="formula" style="margin: 18px 0; padding: 16px 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-align: center; font-family: var(--font-mono);">
+          0,25<sup>10</sup> ≈ 0,00000095
+          <span style="display:block; margin-top: 8px; font-family: var(--font-body); font-size: 0.86rem; color: var(--text-muted);">
+            Và đó là trường hợp <em>tốt nhất</em> — thực tế còn nhỏ hơn nhiều
+          </span>
+        </div>
+
+        <p>
+          Gradient tới các lớp đầu gần như bằng 0, nên chúng gần như không học được gì. Mạng sâu
+          trở nên vô dụng.
+        </p>
+
+        <p>
+          <strong>ReLU giải quyết bằng cách nào?</strong> Đạo hàm của ReLU ở phần dương đúng bằng
+          <strong>1</strong>. Nhân bao nhiêu số 1 với nhau vẫn ra 1 — gradient đi qua nhiều lớp
+          mà không suy giảm.
+        </p>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Cái giá của ReLU: nơ-ron chết</div>
+          <p>
+            Đạo hàm của ReLU ở phần âm bằng <strong>0</strong>. Nếu một nơ-ron rơi vào trạng thái
+            luôn nhận đầu vào âm cho mọi mẫu dữ liệu, gradient của nó luôn bằng 0, trọng số không
+            bao giờ được cập nhật nữa — nơ-ron đó <em>chết vĩnh viễn</em>.
+          </p>
+          <p style="margin-top: 10px;">
+            Hay xảy ra khi learning rate quá lớn, khiến một bước cập nhật đẩy trọng số đi quá xa.
+            Cách phòng: giảm learning rate, hoặc dùng Leaky ReLU / GELU vốn luôn có gradient khác 0.
+          </p>
+        </div>
+
+        <h2 id="backprop">5. Lan truyền ngược, tính tay</h2>
+
+        <p>
+          Đây là mục quan trọng nhất chương. Ta sẽ đi qua <strong>một lượt huấn luyện đầy đủ</strong>
+          với số cụ thể để bạn thấy backpropagation chỉ là quy tắc chuỗi được áp dụng có tổ chức.
+        </p>
+
+        <p><strong>Thiết lập.</strong> Mạng nhỏ nhất còn có ý nghĩa:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 30%;">Thành phần</th><th>Giá trị</th></tr></thead>
+            <tbody>
+              <tr><td>Đầu vào</td><td><code>x = [1, 2]</code></td></tr>
+              <tr><td>Lớp ẩn (1 nơ-ron, ReLU)</td><td><code>w = [0,5 · −0,1]</code> · <code>b = 0,1</code></td></tr>
+              <tr><td>Lớp ra (1 nơ-ron, sigmoid)</td><td><code>v = 0,8</code> · <code>c = −0,2</code></td></tr>
+              <tr><td>Nhãn đúng</td><td><code>y = 1</code></td></tr>
+              <tr><td>Hàm mất mát</td><td>Cross-entropy nhị phân</td></tr>
+              <tr><td>Learning rate</td><td><code>η = 0,1</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="forward">5.1. Lượt tiến (forward pass)</h3>
+
+        <div class="bp-steps">
+          <div class="bp-step">
+            <div><span class="bp-n">1</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">z₁ = w₁x₁ + w₂x₂ + b = 0,5(1) + (−0,1)(2) + 0,1 = <span class="res">0,4</span></div>
+              <div class="bp-why">Tổng có trọng số của đầu vào — đúng là hồi quy tuyến tính.</div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">2</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">a₁ = ReLU(z₁) = max(0 · 0,4) = <span class="res">0,4</span></div>
+              <div class="bp-why">z₁ dương nên ReLU cho qua nguyên vẹn.</div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">3</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">z₂ = v·a₁ + c = 0,8(0,4) + (−0,2) = <span class="res">0,12</span></div>
+              <div class="bp-why">Lớp ra, vẫn là tổ hợp tuyến tính.</div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">4</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">ŷ = σ(z₂) = 1/(1 + e<sup>−0,12</sup>) = <span class="res">0,5300</span></div>
+              <div class="bp-why">Sigmoid biến điểm số thô thành xác suất.</div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">5</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">ℒ = −ln(ŷ) = −ln(0,5300) = <span class="res">0,6349</span></div>
+              <div class="bp-why">Với y = 1, cross-entropy rút gọn còn −ln(ŷ). Mô hình đoán 53% cho lớp đúng — chưa tốt.</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="backward">5.2. Lượt lùi (backward pass)</h3>
+
+        <p>
+          Bây giờ đi ngược lại, tính xem <em>mỗi tham số ảnh hưởng thế nào tới mất mát</em>.
+        </p>
+
+        <div class="bp-steps">
+          <div class="bp-step">
+            <div><span class="bp-n">6</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">∂ℒ/∂z₂ = ŷ − y = 0,5300 − 1 = <span class="res">−0,4700</span></div>
+              <div class="bp-why">
+                <strong>Kết quả đẹp nhất trong toàn bộ deep learning.</strong> Khi ghép sigmoid với
+                cross-entropy, đạo hàm rút gọn thành hiệu đơn giản giữa dự đoán và nhãn. Đây
+                <em>chính là lý do</em> cặp hàm này luôn đi cùng nhau — nếu dùng MSE với sigmoid,
+                công thức sẽ phức tạp hơn và gradient dễ tiêu biến.
+              </div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">7</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">∂ℒ/∂v = (∂ℒ/∂z₂)·a₁ = (−0,47)(0,4) = <span class="res">−0,188</span></div>
+              <div class="bp-formula">∂ℒ/∂c = ∂ℒ/∂z₂ = <span class="res">−0,470</span></div>
+              <div class="bp-why">Quy tắc chuỗi. Trọng số nhân với đầu vào của nó; bias thì không nhân gì.</div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">8</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">∂ℒ/∂a₁ = (∂ℒ/∂z₂)·v = (−0,47)(0,8) = <span class="res">−0,376</span></div>
+              <div class="bp-why">
+                <strong>Bước "lan truyền ngược" thật sự</strong> — gradient được đẩy từ lớp sau về
+                lớp trước, nhân với trọng số nối giữa chúng.
+              </div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">9</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">∂ℒ/∂z₁ = (∂ℒ/∂a₁)·ReLU′(z₁) = (−0,376)(1) = <span class="res">−0,376</span></div>
+              <div class="bp-why">
+                z₁ = 0,4 &gt; 0 nên ReLU′ = 1, gradient đi qua nguyên vẹn. Nếu z₁ âm thì ReLU′ = 0
+                và <em>toàn bộ gradient bị chặn ở đây</em> — đó chính là cơ chế nơ-ron chết.
+              </div>
+            </div>
+          </div>
+          <div class="bp-step">
+            <div><span class="bp-n">10</span></div>
+            <div class="bp-body">
+              <div class="bp-formula">∂ℒ/∂w₁ = (∂ℒ/∂z₁)·x₁ = (−0,376)(1) = <span class="res">−0,376</span></div>
+              <div class="bp-formula">∂ℒ/∂w₂ = (∂ℒ/∂z₁)·x₂ = (−0,376)(2) = <span class="res">−0,752</span></div>
+              <div class="bp-formula">∂ℒ/∂b = ∂ℒ/∂z₁ = <span class="res">−0,376</span></div>
+              <div class="bp-why">
+                Để ý: <code>w₂</code> có gradient gấp đôi <code>w₁</code> vì đầu vào <code>x₂ = 2</code>
+                gấp đôi <code>x₁ = 1</code>. Đây chính là lý do phải chuẩn hoá dữ liệu — đặc trưng
+                có thang lớn sẽ tạo gradient lớn và áp đảo quá trình học.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="update">5.3. Cập nhật trọng số</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Quy tắc: tham_số ← tham_số − η × gradient   (đi NGƯỢC gradient)</span>
+
+v  = <span class="tok-num">0.8</span>  - <span class="tok-num">0.1</span> * (-<span class="tok-num">0.188</span>)   <span class="tok-com"># = 0.8188</span>
+c  = -<span class="tok-num">0.2</span> - <span class="tok-num">0.1</span> * (-<span class="tok-num">0.470</span>)   <span class="tok-com"># = -0.1530</span>
+w1 = <span class="tok-num">0.5</span>  - <span class="tok-num">0.1</span> * (-<span class="tok-num">0.376</span>)   <span class="tok-com"># = 0.5376</span>
+w2 = -<span class="tok-num">0.1</span> - <span class="tok-num">0.1</span> * (-<span class="tok-num">0.752</span>)   <span class="tok-com"># = -0.0248</span>
+b  = <span class="tok-num">0.1</span>  - <span class="tok-num">0.1</span> * (-<span class="tok-num">0.376</span>)   <span class="tok-com"># = 0.1376</span></code></pre>
+        </div>
+
+        <p><strong>Kiểm chứng — chạy lại lượt tiến với tham số mới:</strong></p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 26%;">Đại lượng</th><th>Trước</th><th>Sau</th></tr></thead>
+            <tbody>
+              <tr><td>z₁</td><td>0,4000</td><td>0,6256</td></tr>
+              <tr><td>a₁</td><td>0,4000</td><td>0,6256</td></tr>
+              <tr><td>z₂</td><td>0,1200</td><td>0,3592</td></tr>
+              <tr><td>ŷ</td><td>0,5300</td><td><strong>0,5889</strong></td></tr>
+              <tr><td><strong>Mất mát</strong></td><td>0,6349</td><td><strong>0,5296</strong> ↓</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Mất mát giảm. Dự đoán cho lớp đúng tăng từ 53% lên 58,9%. <strong>Đó là toàn bộ quá
+          trình huấn luyện</strong> — lặp lại hàng triệu lần, trên hàng tỉ tham số.
+        </p>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Điều duy nhất cần rút ra từ mục này</div>
+          <p>
+            Không có gì huyền bí trong backpropagation. Nó là quy tắc chuỗi, được áp dụng theo thứ
+            tự từ cuối về đầu, với một mẹo tổ chức: <strong>lưu lại kết quả trung gian ở lượt tiến
+            để dùng lại ở lượt lùi</strong> thay vì tính lại. Đó là toàn bộ "phát minh" của thuật
+            toán này — và cũng là lý do huấn luyện tốn bộ nhớ nhiều hơn suy luận.
+          </p>
+        </div>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Thử: huấn luyện một mạng nơ-ron</span>
+            <div class="nn-btns">
+              <button class="ia-btn" type="button" id="nn-run">▶ Huấn luyện</button>
+              <button class="ia-btn ghost" type="button" id="nn-reset">Đặt lại</button>
+            </div>
+          </div>
+          <div class="ia-body">
+            <div class="ia-controls" style="margin-bottom: 16px;">
+              <div class="ia-field">
+                <label for="nn-hidden">Nơ-ron lớp ẩn: <span class="rangeval" id="nn-hidden-val">6</span></label>
+                <input type="range" id="nn-hidden" min="1" max="12" step="1" value="6">
+              </div>
+              <div class="ia-field">
+                <label for="nn-lr">Learning rate: <span class="rangeval" id="nn-lr-val">0,50</span></label>
+                <input type="range" id="nn-lr" min="0.01" max="3" step="0.01" value="0.5">
+              </div>
+              <div class="ia-field">
+                <label for="nn-act">Hàm kích hoạt</label>
+                <select id="nn-act">
+                  <option value="tanh">tanh</option>
+                  <option value="relu">ReLU</option>
+                  <option value="none">không có (tuyến tính)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="nn-layout">
+              <canvas class="nn-canvas" id="nn-cv" width="420" height="300"></canvas>
+              <div class="nn-side">
+                <div class="nn-stat"><span class="k">Epoch</span><span class="v" id="nn-epoch">0</span></div>
+                <div class="nn-stat"><span class="k">Loss</span><span class="v" id="nn-loss">—</span></div>
+                <div class="nn-stat"><span class="k">Độ chính xác</span><span class="v" id="nn-acc">—</span></div>
+                <svg class="nn-loss-svg" id="nn-loss-svg" viewBox="0 0 200 86" preserveAspectRatio="none"></svg>
+                <div class="nn-diag" id="nn-diag">Bấm “Huấn luyện” để bắt đầu.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ia-note">
+            Thử ba thí nghiệm: <strong>(1)</strong> chọn "không có hàm kích hoạt" — mạng không bao
+            giờ giải được, đúng như chứng minh ở mục 2. <strong>(2)</strong> đặt learning rate lên
+            2,5 — loss dao động hoặc phân kỳ. <strong>(3)</strong> hạ xuống 0,02 — hội tụ đúng
+            hướng nhưng rất chậm.
+          </div>
+        </div>
+
+        <h2 id="optimizer">6. Optimizer</h2>
+
+        <p>
+          Gradient cho biết <em>hướng</em>. Optimizer quyết định <em>đi thế nào</em> — bước bao
+          xa, có tính tới lịch sử các bước trước không.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 16%;">Optimizer</th><th>Ý tưởng</th><th style="width: 30%;">Khi nào dùng</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>SGD</strong></td>
+                <td><code>θ ← θ − η∇ℒ</code>. Đơn giản nhất.</td>
+                <td>Ít dùng một mình; là nền của mọi thứ khác</td>
+              </tr>
+              <tr>
+                <td><strong>SGD + momentum</strong></td>
+                <td>Tích luỹ "đà" từ các bước trước — như hòn bi lăn xuống dốc, không dừng lại ở mỗi chỗ lõm nhỏ.</td>
+                <td>Thị giác máy tính; thường tổng quát hoá tốt hơn Adam</td>
+              </tr>
+              <tr>
+                <td><strong>RMSprop</strong></td>
+                <td>Learning rate riêng cho từng tham số, chia cho căn của trung bình bình phương gradient gần đây.</td>
+                <td>Tiền thân của Adam</td>
+              </tr>
+              <tr>
+                <td><strong>Adam</strong></td>
+                <td>Kết hợp momentum + learning rate thích ứng theo từng tham số.</td>
+                <td><strong>Mặc định tốt</strong> cho hầu hết bài toán</td>
+              </tr>
+              <tr>
+                <td><strong>AdamW</strong></td>
+                <td>Adam với weight decay tách rời khỏi gradient — sửa một lỗi tinh tế trong Adam gốc.</td>
+                <td><strong>Chuẩn hiện nay cho Transformer và LLM</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="learning-rate">6.1. Learning rate — siêu tham số quan trọng nhất</h3>
+
+        <p>
+          Nếu chỉ được tinh chỉnh <em>một</em> siêu tham số, hãy chọn learning rate. Nó ảnh hưởng
+          tới kết quả nhiều hơn kiến trúc mạng, nhiều hơn optimizer, nhiều hơn mọi thứ khác.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 26%;">Learning rate</th><th>Triệu chứng</th><th style="width: 26%;">Xử lý</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Quá lớn</strong></td><td>Loss dao động mạnh, tăng vọt, hoặc thành <code>NaN</code></td><td>Chia 10, thử lại</td></tr>
+              <tr><td><strong>Hơi lớn</strong></td><td>Loss giảm nhanh rồi mắc kẹt ở mức cao</td><td>Giảm dần theo lịch trình</td></tr>
+              <tr><td><strong>Vừa</strong></td><td>Loss giảm mượt, ổn định</td><td>Giữ nguyên</td></tr>
+              <tr><td><strong>Quá nhỏ</strong></td><td>Loss giảm rất chậm; huấn luyện mãi không xong</td><td>Nhân 10, thử lại</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> torch
+
+optimizer = torch.optim.<span class="tok-fn">AdamW</span>(model.<span class="tok-fn">parameters</span>(), lr=<span class="tok-num">3e-4</span>, weight_decay=<span class="tok-num">0.01</span>)
+
+<span class="tok-com"># Lịch trình learning rate: warmup rồi giảm dần theo cosine.</span>
+<span class="tok-com"># Đây là cấu hình chuẩn khi huấn luyện Transformer.</span>
+scheduler = torch.optim.lr_scheduler.<span class="tok-fn">OneCycleLR</span>(
+    optimizer,
+    max_lr=<span class="tok-num">3e-4</span>,
+    total_steps=so_buoc,
+    pct_start=<span class="tok-num">0.05</span>,      <span class="tok-com"># 5% đầu để warmup</span>
+)</code></pre>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Vì sao cần warmup</div>
+          <p>
+            Ở những bước đầu, trọng số còn ngẫu nhiên nên gradient rất lớn và rất nhiễu. Nếu áp
+            learning rate đầy đủ ngay lập tức, những bước đầu tiên có thể đẩy mô hình vào một vùng
+            tồi mà nó không thoát ra được.
+          </p>
+          <p style="margin-top: 10px;">
+            Warmup tăng learning rate dần từ gần 0 lên giá trị đích trong vài phần trăm đầu của
+            quá trình huấn luyện. Với Transformer, đây gần như là bắt buộc — bỏ warmup thường
+            khiến huấn luyện phân kỳ.
+          </p>
+        </div>
+
+        <h2 id="khoi-tao-chuan-hoa">7. Khởi tạo trọng số và chuẩn hoá</h2>
+
+        <h3 id="khoi-tao">7.1. Khởi tạo</h3>
+
+        <p>
+          Không thể khởi tạo mọi trọng số bằng 0: khi đó mọi nơ-ron trong một lớp nhận cùng
+          gradient, cập nhật giống hệt nhau, và mãi mãi tính ra cùng một thứ. Cả lớp trở thành
+          một nơ-ron duy nhất.
+        </p>
+
+        <p>
+          Khởi tạo ngẫu nhiên tuỳ tiện cũng không ổn: quá lớn thì kích hoạt bão hoà, quá nhỏ thì
+          tín hiệu tắt dần qua các lớp. Các sơ đồ khởi tạo hiện đại chọn phương sai theo số chiều
+          vào/ra để giữ độ lớn tín hiệu ổn định:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 26%;">Sơ đồ</th><th>Dùng với</th><th>Ý tưởng</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Xavier / Glorot</strong></td><td>tanh, sigmoid</td><td>Cân bằng phương sai theo cả chiều vào và chiều ra</td></tr>
+              <tr><td><strong>He / Kaiming</strong></td><td>ReLU và họ hàng</td><td>Bù cho việc ReLU cắt bỏ một nửa giá trị</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Trong thực tế, PyTorch đã chọn sơ đồ hợp lý theo mặc định cho từng loại lớp. Bạn chỉ cần
+          can thiệp khi tự viết lớp mới.
+        </p>
+
+        <h3 id="normalization">7.2. BatchNorm và LayerNorm</h3>
+
+        <p>
+          Cả hai đều chuẩn hoá giá trị kích hoạt về trung bình 0, phương sai 1 — nhưng
+          <strong>chuẩn hoá theo chiều khác nhau</strong>, và khác biệt đó quyết định cái nào
+          dùng được cho Transformer.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 18%;"></th><th>BatchNorm</th><th>LayerNorm</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Chuẩn hoá theo</strong></td>
+                <td><strong>Batch</strong> — thống kê tính qua các mẫu trong batch</td>
+                <td><strong>Đặc trưng</strong> — thống kê tính trong từng mẫu</td>
+              </tr>
+              <tr>
+                <td><strong>Phụ thuộc batch size</strong></td>
+                <td>Có — batch nhỏ cho thống kê nhiễu</td>
+                <td><strong>Không</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Với chuỗi dài ngắn khác nhau</strong></td>
+                <td>Rắc rối</td>
+                <td><strong>Hoạt động tự nhiên</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Train vs inference</strong></td>
+                <td>Hành vi khác nhau — dùng thống kê chạy trung bình khi suy luận</td>
+                <td><strong>Giống nhau</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Dùng ở</strong></td>
+                <td>CNN, thị giác máy tính</td>
+                <td><strong>Transformer, mọi LLM</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Vì sao Transformer chọn LayerNorm — chuẩn bị cho chương 10</div>
+          <p>
+            Ba lý do, và cả ba đều là hệ quả trực tiếp của bảng trên:
+          </p>
+          <ul style="margin-top: 8px;">
+            <li>Câu văn có độ dài khác nhau, nên chuẩn hoá theo batch trở nên phức tạp và không nhất quán.</li>
+            <li>Suy luận thường chạy với batch bằng 1 (một người dùng, một yêu cầu) — BatchNorm gần như vô nghĩa ở batch size 1.</li>
+            <li>LayerNorm hành xử y hệt khi huấn luyện và khi suy luận, nên không có nguồn sai lệch nào giữa hai giai đoạn.</li>
+          </ul>
+          <p style="margin-top: 10px;">
+            Bạn sẽ thấy LayerNorm xuất hiện <strong>hai lần trong mỗi khối Transformer</strong> ở
+            chương 10.
+          </p>
+        </div>
+
+        <h2 id="regularization">8. Regularization trong deep learning</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 22%;">Kỹ thuật</th><th>Cơ chế</th><th style="width: 26%;">Lưu ý</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Dropout</strong></td>
+                <td>Mỗi bước huấn luyện, ngẫu nhiên "tắt" một tỉ lệ nơ-ron. Mạng buộc phải học nhiều đường dẫn dự phòng thay vì phụ thuộc vào một vài nơ-ron.</td>
+                <td>Chỉ bật khi huấn luyện. ⚠️ Quên <code>model.eval()</code> lúc suy luận là lỗi kinh điển</td>
+              </tr>
+              <tr>
+                <td><strong>Weight decay</strong></td>
+                <td>Phạt trọng số lớn — chính là L2 ở chương 4, cài trong optimizer</td>
+                <td>AdamW xử lý đúng cách hơn Adam gốc</td>
+              </tr>
+              <tr>
+                <td><strong>Dừng sớm</strong></td>
+                <td>Dừng tại epoch có val loss thấp nhất</td>
+                <td>Rẻ nhất, gần như luôn nên bật</td>
+              </tr>
+              <tr>
+                <td><strong>Tăng cường dữ liệu</strong></td>
+                <td>Sinh biến thể của dữ liệu có sẵn</td>
+                <td>Rất mạnh với ảnh; với văn bản thì tinh tế hơn</td>
+              </tr>
+              <tr>
+                <td><strong>Cắt gradient</strong></td>
+                <td>Giới hạn độ lớn gradient để tránh bước nhảy đột ngột</td>
+                <td>Gần như bắt buộc khi huấn luyện Transformer</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">import</span> torch.nn <span class="tok-kw">as</span> nn
+
+model = nn.<span class="tok-fn">Sequential</span>(
+    nn.<span class="tok-fn">Linear</span>(<span class="tok-num">784</span>, <span class="tok-num">256</span>),
+    nn.<span class="tok-fn">ReLU</span>(),
+    nn.<span class="tok-fn">Dropout</span>(<span class="tok-num">0.3</span>),        <span class="tok-com"># tắt 30% nơ-ron mỗi bước huấn luyện</span>
+    nn.<span class="tok-fn">Linear</span>(<span class="tok-num">256</span>, <span class="tok-num">128</span>),
+    nn.<span class="tok-fn">ReLU</span>(),
+    nn.<span class="tok-fn">Dropout</span>(<span class="tok-num">0.3</span>),
+    nn.<span class="tok-fn">Linear</span>(<span class="tok-num">128</span>, <span class="tok-num">10</span>),
+)
+
+<span class="tok-com"># Trong vòng lặp huấn luyện — cắt gradient sau backward, trước step</span>
+loss.<span class="tok-fn">backward</span>()
+torch.nn.utils.<span class="tok-fn">clip_grad_norm_</span>(model.<span class="tok-fn">parameters</span>(), max_norm=<span class="tok-num">1.0</span>)
+optimizer.<span class="tok-fn">step</span>()</code></pre>
+        </div>
+
+        <h2 id="doc-duong-cong">9. Đọc đường cong huấn luyện</h2>
+
+        <p>
+          Kỹ năng dùng hằng ngày. Năm dạng cần nhận ra ngay lập tức:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 28%;">Dạng</th><th>Chẩn đoán</th><th style="width: 28%;">Việc cần làm</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Cả hai giảm mượt rồi phẳng dần</td>
+                <td>Khoẻ mạnh, đã hội tụ</td>
+                <td>Không phải làm gì. Muốn tốt hơn: mô hình lớn hơn hoặc thêm dữ liệu</td>
+              </tr>
+              <tr>
+                <td>Train giảm, val chạm đáy rồi tăng</td>
+                <td>Overfitting</td>
+                <td>Dừng sớm tại đáy; thêm dropout / weight decay / dữ liệu</td>
+              </tr>
+              <tr>
+                <td>Cả hai phẳng ở mức cao</td>
+                <td>Underfitting, hoặc learning rate quá nhỏ</td>
+                <td>Tăng learning rate; mô hình lớn hơn; kiểm tra dữ liệu có tín hiệu không</td>
+              </tr>
+              <tr>
+                <td>Dao động mạnh, không xu hướng rõ</td>
+                <td>Learning rate quá lớn, hoặc batch quá nhỏ</td>
+                <td>Giảm learning rate; tăng batch size; cắt gradient</td>
+              </tr>
+              <tr>
+                <td>Loss thành <code>NaN</code></td>
+                <td>Tràn số — learning rate quá lớn, dữ liệu có <code>inf</code>, hoặc chia cho 0</td>
+                <td>Giảm mạnh learning rate; kiểm tra dữ liệu; cắt gradient; kiểm tra hàm mất mát</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Thí nghiệm đầu tiên nên làm với mọi mô hình mới</div>
+          <p>
+            Lấy <strong>một batch nhỏ</strong> (8–32 mẫu) và huấn luyện cho tới khi mô hình
+            <em>overfit hoàn toàn</em> lên đúng batch đó — loss phải tiến gần 0.
+          </p>
+          <p style="margin-top: 10px;">
+            Nếu làm được: pipeline của bạn đúng, mô hình có đủ năng lực, gradient chảy được. Giờ
+            mới đáng huấn luyện trên toàn bộ dữ liệu.
+          </p>
+          <p style="margin-top: 10px;">
+            Nếu <em>không</em> làm được: có lỗi ở đâu đó — sai chiều nhãn, hàm mất mát sai, gradient
+            bị chặn, learning rate quá nhỏ. Tìm ra bây giờ rẻ hơn rất nhiều so với sau sáu giờ
+            huấn luyện.
+          </p>
+        </div>
+
+        <h2 id="gpu">10. Vì sao deep learning cần GPU</h2>
+
+        <p>
+          Toàn bộ tính toán trong một mạng nơ-ron quy về <strong>phép nhân ma trận</strong> — và
+          phép nhân ma trận có một tính chất then chốt: <em>mọi phần tử của kết quả tính được độc
+          lập với nhau</em>.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 22%;"></th><th>CPU</th><th>GPU</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Số nhân</strong></td><td>8 – 64 nhân mạnh</td><td>Hàng nghìn nhân đơn giản</td></tr>
+              <tr><td><strong>Thiết kế cho</strong></td><td>Ít luồng phức tạp, nhiều rẽ nhánh</td><td>Rất nhiều phép tính giống nhau chạy song song</td></tr>
+              <tr><td><strong>Băng thông bộ nhớ</strong></td><td>~100 GB/s</td><td>~1.000 – 3.000 GB/s</td></tr>
+              <tr><td><strong>Phù hợp</strong></td><td>Logic nghiệp vụ, hệ điều hành</td><td>Nhân ma trận, đồ hoạ, deep learning</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Đây chính là ý tưởng "vector hoá" ở chương 3, đẩy đi xa hơn một bậc: NumPy tận dụng SIMD
+          trên CPU để xử lý vài số cùng lúc; GPU xử lý hàng nghìn số cùng lúc.
+        </p>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Điều này quyết định mọi thứ ở 10.5</div>
+          <p>
+            Sự phụ thuộc vào GPU giải thích gần như toàn bộ kinh tế học của lĩnh vực AI: vì sao
+            huấn luyện đắt, vì sao VRAM là ràng buộc cứng, vì sao có lượng tử hoá, và vì sao API
+            tính tiền theo token.
+          </p>
+          <p style="margin-top: 10px;">
+            Một chi tiết sẽ trở nên rất quan trọng ở <strong>10.5 chương 7</strong>: ở pha sinh
+            văn bản, GPU thường <em>chờ nạp trọng số từ bộ nhớ</em> chứ không phải chờ tính toán.
+            Nghĩa là <strong>băng thông bộ nhớ mới là con số cần nhìn</strong>, không phải TFLOPS —
+            điều đi ngược trực giác của hầu hết mọi người.
+          </p>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Tính tay một lượt huấn luyện</h4>
+            <div class="exercise-body">
+              <p>
+                Cùng kiến trúc như mục 5 nhưng số khác: <code>x = [2, 1]</code>,
+                <code>w = [0,3 · 0,4]</code>, <code>b = −0,5</code>, <code>v = 1,2</code>,
+                <code>c = 0,1</code>, nhãn <code>y = 0</code>, <code>η = 0,2</code>.
+              </p>
+              <p>
+                Tính đầy đủ lượt tiến, lượt lùi, và cập nhật. Sau đó chạy lại lượt tiến với tham
+                số mới để kiểm chứng mất mát đã giảm.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>z₁ = 0,3(2) + 0,4(1) − 0,5 = 0,5</code> · <code>a₁ = 0,5</code> ·
+                    <code>z₂ = 1,2(0,5) + 0,1 = 0,7</code> · <code>ŷ = σ(0,7) ≈ 0,6682</code>.
+                  </p>
+                  <p>
+                    Với <code>y = 0</code>, mất mát là <code>−ln(1 − ŷ) = −ln(0,3318) ≈ 1,1033</code>.
+                  </p>
+                  <p>
+                    Điểm mấu chốt: công thức <code>∂ℒ/∂z₂ = ŷ − y</code> vẫn đúng nguyên vẹn —
+                    ở đây là <code>0,6682 − 0 = +0,6682</code>. Dấu <em>dương</em> (khác ví dụ
+                    trong bài) nghĩa là mô hình đang dự đoán quá cao và cần bị kéo xuống.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Chứng minh mạng tuyến tính vô nghĩa</h4>
+            <div class="exercise-body">
+              <p>
+                Viết code tạo một mạng 5 lớp <em>không có hàm kích hoạt</em>, rồi tìm một ma trận
+                duy nhất <code>W'</code> và vector <code>b'</code> cho ra kết quả giống hệt.
+                Kiểm chứng bằng <code>np.allclose</code>.
+              </p>
+              <p>
+                Sau đó huấn luyện mạng đó trên dữ liệu XOR (từ chương 5) và cho biết độ chính xác
+                cao nhất đạt được là bao nhiêu.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <code>W' = W₅ @ W₄ @ W₃ @ W₂ @ W₁</code>. Phần bias tích luỹ phức tạp hơn —
+                    tính lần lượt: <code>b' = W₅(W₄(W₃(W₂b₁ + b₂) + b₃) + b₄) + b₅</code>.
+                  </p>
+                  <p>
+                    Trên dữ liệu XOR, độ chính xác sẽ quanh 50% dù huấn luyện bao lâu — vì mạng
+                    này tương đương một đường thẳng, mà không đường thẳng nào tách được XOR. Có thể
+                    kiểm chứng ngay trong trình mô phỏng ở mục 5 bằng cách chọn "không có hàm kích hoạt".
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Bốn learning rate, bốn hành vi</h4>
+            <div class="exercise-body">
+              <p>
+                Trong trình mô phỏng ở mục 5 (hoặc bằng code PyTorch của riêng bạn), thử bốn giá
+                trị: <code>0,01</code> · <code>0,3</code> · <code>1,0</code> · <code>2,8</code>.
+              </p>
+              <p>
+                Với mỗi giá trị, ghi lại: loss sau 200 epoch, hình dạng đường cong, và mô tả hành
+                vi bằng một câu. Rút ra kết luận về cách chọn learning rate.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Bạn sẽ thấy bốn chế độ rõ rệt: quá chậm (loss còn cao sau 200 epoch) → tốt
+                    (giảm mượt) → hơi nhanh (giảm rồi dao động quanh một mức) → phân kỳ (loss tăng
+                    hoặc nhảy loạn).
+                  </p>
+                  <p>
+                    Quy trình thực tế thường dùng: bắt đầu từ giá trị an toàn (<code>3e-4</code>
+                    cho Adam), nếu loss giảm quá chậm thì nhân 3; nếu dao động thì chia 3. Chỉ cần
+                    vài lần thử là tìm được vùng hợp lý.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Gradient descent bằng NumPy cho hồi quy tuyến tính</h4>
+            <div class="exercise-body">
+              <p>
+                Cài hồi quy tuyến tính huấn luyện bằng gradient descent, dùng NumPy thuần
+                (không dùng scikit-learn, không dùng PyTorch). Sinh dữ liệu giả từ một quan hệ
+                tuyến tính đã biết cộng nhiễu.
+              </p>
+              <p>
+                Vẽ đường cong loss. Kiểm chứng hệ số học được có gần với hệ số thật không.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Với MSE và mô hình <code>ŷ = Xw + b</code>, gradient là:<br/>
+                    <code>dw = (2/n) · X.T @ (ŷ − y)</code> · <code>db = (2/n) · sum(ŷ − y)</code>
+                  </p>
+                  <p>
+                    Nhớ chuẩn hoá X trước — nếu không, các đặc trưng có thang khác nhau sẽ khiến
+                    hội tụ rất chậm, đúng như đã thấy ở bước 10 của phần tính tay.
+                  </p>
+                  <p>
+                    Đây là bài tập nền cho chương 8: <code>autograd</code> của PyTorch sẽ tự động
+                    làm chính xác những gì bạn vừa viết tay.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Chẩn đoán năm đường cong</h4>
+            <div class="exercise-body">
+              <p>Với mỗi mô tả, chẩn đoán và nêu hai hành động cụ thể:</p>
+              <ol>
+                <li>Train loss 0,02 · val loss 0,71 · khoảng cách nới rộng từ epoch 8</li>
+                <li>Cả hai đứng yên ở 0,69 suốt 50 epoch (bài toán phân loại nhị phân)</li>
+                <li>Loss nhảy từ 0,4 lên 12,8 rồi thành <code>NaN</code> ở epoch 3</li>
+                <li>Loss giảm đều nhưng sau 100 epoch vẫn còn 0,55 và vẫn đang giảm</li>
+                <li>Train loss giảm mượt, val loss dao động mạnh không theo xu hướng nào</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <strong>(2)</strong> đáng chú ý: <code>ln(2) ≈ 0,693</code> chính là loss của
+                    một mô hình đoán 50/50. Mô hình <em>hoàn toàn không học được gì</em> — nghi
+                    ngờ: learning rate quá nhỏ, gradient bị chặn (kiểm tra hàm kích hoạt), hoặc
+                    nhãn bị xáo trộn so với đầu vào.
+                  </p>
+                  <p>
+                    <strong>(3)</strong> Learning rate quá lớn → chia 10 và bật cắt gradient. Cũng
+                    kiểm tra dữ liệu có <code>inf</code>/<code>NaN</code> không.
+                  </p>
+                  <p>
+                    <strong>(5)</strong> Tập validation có thể quá nhỏ, khiến mỗi lần đo là một
+                    con số nhiễu. Tăng kích thước tập validation hoặc giảm tần suất đo.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Vì sao mạng nơ-ron bắt buộc phải có hàm kích hoạt phi tuyến?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì <strong>hợp của các phép biến đổi tuyến tính vẫn là một phép biến đổi tuyến
+                tính</strong>. Nếu <code>h = W₁x + b₁</code> và <code>y = W₂h + b₂</code>, thay
+                vào ta được <code>y = (W₂W₁)x + (W₂b₁ + b₂)</code> — vẫn chỉ là một lớp.
+              </p>
+              <p style="margin-top: 8px;">
+                Không có phi tuyến thì một trăm lớp cũng chỉ mạnh bằng một lớp, và toàn bộ độ sâu
+                trở nên vô nghĩa. Hàm kích hoạt là thứ duy nhất cho phép mạng biểu diễn quan hệ
+                phức tạp.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>ReLU giải quyết vấn đề gì của sigmoid, và nó tạo ra vấn đề mới nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Giải quyết gradient tiêu biến.</strong> Đạo hàm sigmoid tối đa là 0,25;
+                qua 10 lớp, gradient bị nhân xuống còn khoảng <code>0,25¹⁰ ≈ 10⁻⁶</code> — các lớp
+                đầu gần như không học được. Đạo hàm ReLU ở phần dương đúng bằng 1, nên gradient đi
+                qua nhiều lớp mà không suy giảm.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Vấn đề mới: nơ-ron chết.</strong> Đạo hàm ReLU ở phần âm bằng 0. Nếu một
+                nơ-ron luôn nhận đầu vào âm cho mọi mẫu, gradient của nó vĩnh viễn bằng 0 và nó
+                không bao giờ được cập nhật nữa. Cách phòng: giảm learning rate, hoặc dùng Leaky
+                ReLU / GELU.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Backpropagation dùng quy tắc gì, và "mẹo" của nó là gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Dùng <strong>quy tắc chuỗi</strong> của đạo hàm. Mạng N lớp là một hàm lồng N tầng;
+                gradient của lớp đầu theo mất mát ở lớp cuối là tích các đạo hàm dọc chuỗi.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Mẹo:</strong> lưu lại các kết quả trung gian ở lượt tiến (các giá trị
+                <code>z</code> và <code>a</code>) để dùng lại ở lượt lùi, thay vì tính lại từ đầu
+                cho từng tham số. Không có mẹo này, chi phí sẽ tăng theo cấp số nhân với độ sâu.
+              </p>
+              <p style="margin-top: 8px;">
+                Hệ quả thực tế: <em>huấn luyện tốn bộ nhớ hơn suy luận</em>, vì phải giữ toàn bộ
+                kết quả trung gian cho tới khi lượt lùi dùng xong.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Adam khác SGD ở điểm nào? Vì sao AdamW là chuẩn cho Transformer?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Adam thêm hai thứ so với SGD: <strong>momentum</strong> (tích luỹ đà từ các bước
+                trước, giúp vượt qua các chỗ lõm nhỏ) và <strong>learning rate thích ứng theo từng
+                tham số</strong> (tham số có gradient lớn thì bước ngắn lại, và ngược lại).
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>AdamW</strong> sửa một lỗi tinh tế: trong Adam gốc, weight decay được cộng
+                vào gradient nên bị cơ chế thích ứng chia lại, khiến hiệu lực của nó khác nhau giữa
+                các tham số. AdamW tách weight decay ra khỏi gradient và áp trực tiếp lên trọng số.
+                Với mô hình rất lớn, khác biệt này ảnh hưởng rõ tới khả năng tổng quát hoá.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Learning rate quá lớn và quá nhỏ biểu hiện thế nào?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Quá lớn:</strong> loss dao động mạnh, tăng vọt, hoặc thành <code>NaN</code>.
+                Theo hình ảnh "đi xuống thung lũng" ở chương 2: bước quá dài khiến bạn nhảy vọt
+                sang sườn bên kia, ở vị trí còn cao hơn.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Quá nhỏ:</strong> loss giảm rất chậm; sau nhiều epoch vẫn còn cao. Đi đúng
+                hướng nhưng mất quá nhiều thời gian, và dễ mắc kẹt ở cực tiểu địa phương.
+              </p>
+              <p style="margin-top: 8px;">
+                Quy trình thực tế: bắt đầu từ <code>3e-4</code> với Adam; loss giảm quá chậm thì
+                nhân 3, dao động thì chia 3.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Dropout hoạt động ra sao, và lỗi phổ biến nào liên quan tới nó?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Mỗi bước huấn luyện, dropout ngẫu nhiên tắt một tỉ lệ nơ-ron (ví dụ 30%). Mạng
+                không thể phụ thuộc vào một vài nơ-ron cụ thể, buộc phải học nhiều đường dẫn dự
+                phòng — về mặt trực giác giống như huấn luyện đồng thời rất nhiều mạng con rồi lấy
+                trung bình.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Lỗi phổ biến:</strong> quên gọi <code>model.eval()</code> trước khi suy
+                luận. Khi đó dropout vẫn hoạt động lúc dự đoán, khiến kết quả ngẫu nhiên và kém đi
+                — cùng một đầu vào cho hai kết quả khác nhau. (Lỗi này cũng làm BatchNorm dùng sai
+                thống kê.)
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>LayerNorm khác BatchNorm ở đâu? Vì sao Transformer dùng LayerNorm?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>BatchNorm</strong> chuẩn hoá theo chiều batch — thống kê tính qua các mẫu
+                khác nhau. <strong>LayerNorm</strong> chuẩn hoá theo chiều đặc trưng — thống kê
+                tính <em>trong từng mẫu</em>, độc lập với các mẫu khác.
+              </p>
+              <p style="margin-top: 8px;">Transformer chọn LayerNorm vì ba lý do:</p>
+              <ol>
+                <li>Câu văn có độ dài khác nhau, khiến chuẩn hoá theo batch trở nên phức tạp.</li>
+                <li>Suy luận thường chạy với batch size 1, nơi thống kê theo batch gần như vô nghĩa.</li>
+                <li>LayerNorm hành xử giống hệt nhau khi huấn luyện và khi suy luận — không có sai lệch giữa hai giai đoạn.</li>
+              </ol>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Vì sao deep learning cần GPU? Điều đó liên quan gì tới chương 3?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì mọi tính toán trong mạng nơ-ron quy về <strong>nhân ma trận</strong>, mà nhân
+                ma trận có tính chất: mỗi phần tử của kết quả tính được <em>độc lập</em> với các
+                phần tử khác. GPU có hàng nghìn nhân đơn giản chạy song song, đúng hình dạng của
+                bài toán này. CPU chỉ có vài chục nhân, tối ưu cho logic phức tạp và rẽ nhánh.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Liên hệ với chương 3:</strong> đây chính là ý tưởng vector hoá, đẩy đi xa
+                hơn một bậc. NumPy dùng SIMD trên CPU để xử lý vài số cùng lúc; GPU xử lý hàng
+                nghìn số cùng lúc. Cùng một nguyên lý — "một phép toán áp lên cả khối dữ liệu" —
+                ở hai quy mô khác nhau.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 7, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Một nơ-ron</strong> = hồi quy tuyến tính + hàm phi tuyến. Không cần phép ẩn dụ sinh học.</li>
+          <li><strong>Không có phi tuyến thì mạng sâu vô nghĩa</strong> — chứng minh được bằng vài dòng đại số.</li>
+          <li><strong>Sâu hiệu quả hơn rộng</strong>; định lý xấp xỉ phổ quát đúng nhưng ít hữu ích trong thực tế.</li>
+          <li><strong>ReLU</strong> giải quyết gradient tiêu biến nhưng tạo ra nơ-ron chết; <strong>GELU/SiLU</strong> là lựa chọn của Transformer.</li>
+          <li><strong>Backpropagation</strong> là quy tắc chuỗi cộng mẹo lưu kết quả trung gian — bạn đã tính tay một lượt đầy đủ.</li>
+          <li><strong><code>∂ℒ/∂z = ŷ − y</code></strong> khi ghép sigmoid với cross-entropy — lý do cặp hàm này luôn đi cùng nhau.</li>
+          <li><strong>Learning rate là siêu tham số quan trọng nhất</strong>; AdamW là chuẩn cho Transformer; warmup gần như bắt buộc.</li>
+          <li><strong>LayerNorm</strong> thắng BatchNorm trong Transformer vì độ dài chuỗi thay đổi và suy luận chạy batch nhỏ.</li>
+          <li><strong>Năm dạng đường cong huấn luyện</strong>, và thí nghiệm "overfit một batch nhỏ" trước khi huấn luyện thật.</li>
+          <li><strong>GPU</strong> hữu ích vì nhân ma trận song song hoá hoàn hảo — cùng nguyên lý vector hoá ở chương 3.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 2</strong> — gradient, quy tắc chuỗi, softmax và cross-entropy vừa được dùng ở mức đầy đủ.</li>
+          <li><strong>Chương 3</strong> — vector hoá là phiên bản CPU của cùng nguyên lý khiến GPU hữu ích.</li>
+          <li><strong>Chương 4</strong> — dropout và weight decay là hiện thân cụ thể của regularization; đọc đường cong loss là kỹ năng chung.</li>
+          <li><strong>Chương 8 (PyTorch)</strong> — <code>autograd</code> tự động làm chính xác những gì bạn vừa tính tay ở mục 5.</li>
+          <li><strong>Chương 9</strong> — CNN và RNN là các cách <em>ràng buộc</em> kiến trúc MLP để khai thác cấu trúc của dữ liệu.</li>
+          <li><strong>Chương 10 (Transformer)</strong> — LayerNorm, GELU và residual connection đều xuất hiện trong mỗi khối; giờ bạn biết vì sao chúng ở đó.</li>
+          <li><strong>10.5 chương 3 (LoRA)</strong> — hiểu gradient chảy qua trọng số là điều kiện để hiểu vì sao chỉ huấn luyện adapter là đủ.</li>
+          <li><strong>10.5 chương 7 (GPU)</strong> — mở rộng mục 10, với chi tiết về VRAM và băng thông bộ nhớ.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong6.html" class="prev">
+            <div class="dir">← Chương 6</div>
+            <div class="label">Đánh giá mô hình</div>
+          </a>
+          <a href="chuong8.html" class="next">
+            <div class="dir">Chương 8 →</div>
+            <div class="label">PyTorch thực chiến</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#mot-no-ron">1. Một nơ-ron là gì</a></li>
+          <li><a href="#phi-tuyen">2. Vì sao cần phi tuyến</a></li>
+          <li><a href="#mlp">3. MLP</a></li>
+          <li><a href="#ham-kich-hoat">4. Hàm kích hoạt</a></li>
+          <li class="level-3"><a href="#gradient-tieu-bien">4.1. Gradient tiêu biến</a></li>
+          <li><a href="#backprop">5. Backprop tính tay</a></li>
+          <li class="level-3"><a href="#forward">5.1. Lượt tiến</a></li>
+          <li class="level-3"><a href="#backward">5.2. Lượt lùi</a></li>
+          <li class="level-3"><a href="#update">5.3. Cập nhật</a></li>
+          <li><a href="#optimizer">6. Optimizer</a></li>
+          <li class="level-3"><a href="#learning-rate">6.1. Learning rate</a></li>
+          <li><a href="#khoi-tao-chuan-hoa">7. Khởi tạo &amp; chuẩn hoá</a></li>
+          <li class="level-3"><a href="#khoi-tao">7.1. Khởi tạo</a></li>
+          <li class="level-3"><a href="#normalization">7.2. LayerNorm</a></li>
+          <li><a href="#regularization">8. Regularization</a></li>
+          <li><a href="#doc-duong-cong">9. Đọc đường cong</a></li>
+          <li><a href="#gpu">10. Vì sao cần GPU</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 7 — Mạng nơ-ron &amp; lan truyền ngược · Nền tảng AI · Trụ cột 10 IT Basic<br/>
+        <a href="../index.html">Mục lục 10.1</a> ·
+        <a href="chuong6.html">← Chương 6</a> ·
+        <a href="chuong8.html">Chương 8 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    /* ---------- Dữ liệu XOR cố định (giống chương 5) ---------- */
+    var DATA = [];
+    (function build() {
+      var blobs = [[0.25,0.25,1],[0.75,0.75,1],[0.25,0.75,0],[0.75,0.25,0]];
+      var jit = [[0,0],[0.08,-0.05],[-0.07,0.06],[0.05,0.09],[-0.09,-0.04],
+                 [0.11,0.03],[-0.04,-0.10],[0.03,-0.08],[-0.11,0.02],[0.07,0.07]];
+      blobs.forEach(function (b) {
+        jit.forEach(function (j) {
+          DATA.push([
+            Math.min(0.97, Math.max(0.03, b[0] + j[0])),
+            Math.min(0.97, Math.max(0.03, b[1] + j[1])),
+            b[2]
+          ]);
+        });
+      });
+    })();
+
+    /* ---------- PRNG có hạt giống để khởi tạo tái lập được ---------- */
+    function makeRng(seed) {
+      var s = seed >>> 0;
+      return function () {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return s / 4294967296 * 2 - 1;   // (-1, 1)
+      };
+    }
+
+    /* ---------- Mạng 2 → H → 1 ---------- */
+    var net = null, timer = null, lossHist = [];
+
+    function initNet(H, actName) {
+      var rng = makeRng(7);
+      var scale = Math.sqrt(2 / 2);   // khởi tạo kiểu He cho lớp đầu
+      var W1 = [], b1 = [];
+      for (var i = 0; i < H; i++) {
+        W1.push([rng() * scale, rng() * scale]);
+        b1.push(0);
+      }
+      var W2 = [], b2 = 0;
+      for (var j = 0; j < H; j++) W2.push(rng() * Math.sqrt(2 / H));
+      return { H: H, W1: W1, b1: b1, W2: W2, b2: b2, act: actName };
+    }
+
+    function actFn(name, z) {
+      if (name === 'relu') return z > 0 ? z : 0;
+      if (name === 'tanh') return Math.tanh(z);
+      return z;                          // tuyến tính — không có phi tuyến
+    }
+    function actDeriv(name, z, a) {
+      if (name === 'relu') return z > 0 ? 1 : 0;
+      if (name === 'tanh') return 1 - a * a;
+      return 1;
+    }
+
+    function forward(n, x1, x2) {
+      var z1 = [], a1 = [];
+      for (var i = 0; i < n.H; i++) {
+        var z = n.W1[i][0] * x1 + n.W1[i][1] * x2 + n.b1[i];
+        z1.push(z);
+        a1.push(actFn(n.act, z));
+      }
+      var z2 = n.b2;
+      for (var j = 0; j < n.H; j++) z2 += n.W2[j] * a1[j];
+      var yhat = 1 / (1 + Math.exp(-z2));
+      return { z1: z1, a1: a1, yhat: yhat };
+    }
+
+    function trainEpoch(n, lr) {
+      var gW1 = [], gb1 = new Array(n.H).fill(0);
+      for (var i = 0; i < n.H; i++) gW1.push([0, 0]);
+      var gW2 = new Array(n.H).fill(0), gb2 = 0;
+      var loss = 0, dung = 0;
+
+      DATA.forEach(function (p) {
+        var f = forward(n, p[0], p[1]);
+        var y = p[2];
+        var eps = 1e-9;
+        loss += -(y * Math.log(f.yhat + eps) + (1 - y) * Math.log(1 - f.yhat + eps));
+        if ((f.yhat >= 0.5 ? 1 : 0) === y) dung++;
+
+        var dz2 = f.yhat - y;            // sigmoid + BCE → rút gọn đẹp
+        gb2 += dz2;
+        for (var j = 0; j < n.H; j++) {
+          gW2[j] += dz2 * f.a1[j];
+          var da1 = dz2 * n.W2[j];
+          var dz1 = da1 * actDeriv(n.act, f.z1[j], f.a1[j]);
+          gW1[j][0] += dz1 * p[0];
+          gW1[j][1] += dz1 * p[1];
+          gb1[j] += dz1;
+        }
+      });
+
+      var m = DATA.length;
+      for (var k = 0; k < n.H; k++) {
+        n.W1[k][0] -= lr * gW1[k][0] / m;
+        n.W1[k][1] -= lr * gW1[k][1] / m;
+        n.b1[k]    -= lr * gb1[k] / m;
+        n.W2[k]    -= lr * gW2[k] / m;
+      }
+      n.b2 -= lr * gb2 / m;
+
+      return { loss: loss / m, acc: dung / m };
+    }
+
+    /* ---------- Vẽ ---------- */
+    var cv = document.getElementById('nn-cv');
+    var ctx = cv.getContext('2d');
+    var STEP = 6;
+
+    function draw(n) {
+      var W = cv.width, H = cv.height;
+      ctx.clearRect(0, 0, W, H);
+      for (var px = 0; px < W; px += STEP) {
+        for (var py = 0; py < H; py += STEP) {
+          var x = (px + STEP / 2) / W;
+          var y = 1 - (py + STEP / 2) / H;
+          var p = forward(n, x, y).yhat;
+          ctx.fillStyle = p >= 0.5
+            ? 'rgba(163,90,42,' + (0.08 + (p - 0.5) * 0.5).toFixed(3) + ')'
+            : 'rgba(60,85,112,' + (0.08 + (0.5 - p) * 0.5).toFixed(3) + ')';
+          ctx.fillRect(px, py, STEP, STEP);
+        }
+      }
+      DATA.forEach(function (p) {
+        ctx.beginPath();
+        ctx.arc(p[0] * W, (1 - p[1]) * H, 4.2, 0, Math.PI * 2);
+        ctx.fillStyle = p[2] === 1 ? '#a35a2a' : '#3c5570';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    }
+
+    function drawLoss() {
+      var svg = document.getElementById('nn-loss-svg');
+      if (lossHist.length < 2) { svg.innerHTML = ''; return; }
+      var mx = Math.max.apply(null, lossHist);
+      var mn = Math.min.apply(null, lossHist);
+      var rng = Math.max(1e-6, mx - mn);
+      var pts = lossHist.map(function (v, i) {
+        var x = (i / (lossHist.length - 1)) * 196 + 2;
+        var y = 80 - ((v - mn) / rng) * 72;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+      svg.innerHTML =
+        '<polyline points="' + pts + '" fill="none" stroke="#5b4b8a" stroke-width="1.8" ' +
+        'vector-effect="non-scaling-stroke"/>';
+    }
+
+    /* ---------- Điều khiển ---------- */
+    var elHidden = document.getElementById('nn-hidden');
+    var elLr     = document.getElementById('nn-lr');
+    var elAct    = document.getElementById('nn-act');
+    var elEpoch  = document.getElementById('nn-epoch');
+    var elLoss   = document.getElementById('nn-loss');
+    var elAcc    = document.getElementById('nn-acc');
+    var elDiag   = document.getElementById('nn-diag');
+    var btnRun   = document.getElementById('nn-run');
+
+    var epoch = 0, running = false;
+
+    function reset() {
+      stop();
+      epoch = 0;
+      lossHist = [];
+      net = initNet(parseInt(elHidden.value, 10), elAct.value);
+      elEpoch.textContent = '0';
+      elLoss.textContent = '—';
+      elAcc.textContent = '—';
+      elDiag.textContent = 'Bấm “Huấn luyện” để bắt đầu.';
+      draw(net);
+      drawLoss();
+    }
+
+    function stop() {
+      running = false;
+      if (timer) { clearInterval(timer); timer = null; }
+      btnRun.textContent = '▶ Huấn luyện';
+    }
+
+    function diagnose(loss, acc, lr) {
+      if (!isFinite(loss)) {
+        return '<strong>Phân kỳ.</strong> Loss thành NaN — learning rate quá lớn. Giảm mạnh rồi đặt lại.';
+      }
+      if (elAct.value === 'none') {
+        return '<strong>Không có hàm phi tuyến.</strong> Mạng này tương đương một lớp tuyến tính, ' +
+               'nên không bao giờ tách được dữ liệu XOR — độ chính xác sẽ mắc kẹt quanh 50%. ' +
+               'Đây chính là chứng minh ở mục 2.';
+      }
+      if (lr > 2 && lossHist.length > 20) {
+        var recent = lossHist.slice(-10);
+        var dao = Math.max.apply(null, recent) - Math.min.apply(null, recent);
+        if (dao > 0.05) {
+          return '<strong>Learning rate hơi lớn.</strong> Loss dao động thay vì giảm mượt. ' +
+                 'Giảm xuống khoảng 0,5 để thấy khác biệt.';
+        }
+      }
+      if (acc >= 0.98) return '<strong>Đã học xong.</strong> Mạng tách được XOR — điều mà một lớp tuyến tính không làm nổi.';
+      if (acc >= 0.85) return '<strong>Đang học tốt.</strong> Ranh giới quyết định đang hình thành quanh các cụm.';
+      if (epoch > 300 && acc < 0.7) {
+        return '<strong>Học chậm.</strong> Thử tăng learning rate, hoặc tăng số nơ-ron lớp ẩn.';
+      }
+      return '<strong>Đang huấn luyện…</strong> Quan sát ranh giới quyết định biến đổi qua từng epoch.';
+    }
+
+    function step() {
+      var lr = parseFloat(elLr.value);
+      for (var i = 0; i < 4; i++) {          // 4 epoch mỗi khung hình
+        var r = trainEpoch(net, lr);
+        epoch++;
+        if (epoch % 2 === 0) lossHist.push(r.loss);
+        if (lossHist.length > 100) lossHist.shift();
+      }
+      var last = trainEpoch(net, 0);          // đo mà không cập nhật (lr = 0)
+      elEpoch.textContent = epoch;
+      elLoss.textContent = isFinite(last.loss) ? last.loss.toFixed(4) : 'NaN';
+      elAcc.textContent = (last.acc * 100).toFixed(1) + '%';
+      elDiag.innerHTML = diagnose(last.loss, last.acc, lr);
+      draw(net);
+      drawLoss();
+      if (epoch >= 1200 || !isFinite(last.loss)) stop();
+    }
+
+    btnRun.addEventListener('click', function () {
+      if (running) { stop(); return; }
+      if (!net) reset();
+      running = true;
+      btnRun.textContent = '⏸ Tạm dừng';
+      timer = setInterval(step, 60);
+    });
+
+    document.getElementById('nn-reset').addEventListener('click', reset);
+
+    elHidden.addEventListener('input', function () {
+      document.getElementById('nn-hidden-val').textContent = elHidden.value;
+      reset();
+    });
+    elLr.addEventListener('input', function () {
+      document.getElementById('nn-lr-val').textContent =
+        parseFloat(elLr.value).toFixed(2).replace('.', ',');
+    });
+    elAct.addEventListener('change', reset);
+
+    reset();
+  })();
+  </script>
+</body>
+</html>

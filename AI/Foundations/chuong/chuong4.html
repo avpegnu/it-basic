@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chương 4 — Machine Learning cơ bản · Nền tảng AI</title>
+  <meta name="description" content="Ba nhóm bài toán học máy, chia train/validation/test, overfitting và bias–variance, cách chống overfitting, rò rỉ dữ liệu, cross-validation, và vòng đời một dự án ML." />
+  <meta name="theme-color" content="#8a6a3f" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../shared/css/base.css">
+  <link rel="stylesheet" href="../css/theme.css">
+
+  <style>
+    /* Khu vực trình mô phỏng overfitting */
+    .fit-wrap {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .fit-svg {
+      width: 100%;
+      background: var(--bg-alt);
+      border-radius: var(--radius);
+      display: block;
+    }
+    .fit-side { display: flex; flex-direction: column; gap: 12px; }
+    .fit-metric {
+      padding: 11px 14px;
+      background: var(--bg-alt);
+      border-radius: 8px;
+      border-left: 3px solid var(--border);
+    }
+    .fit-metric .k {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .fit-metric .v {
+      font-family: var(--font-mono);
+      font-size: 1.16rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-top: 2px;
+    }
+    .fit-metric.train { border-left-color: #3c5570; }
+    .fit-metric.train .v { color: #3c5570; }
+    .fit-metric.val { border-left-color: #a35a2a; }
+    .fit-metric.val .v { color: #a35a2a; }
+    .fit-diag {
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      background: var(--bg-alt);
+      border-left: 3px solid var(--accent);
+    }
+    .fit-diag strong { color: var(--ink); }
+    .fit-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .fit-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .fit-legend i {
+      width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+    }
+
+    /* Sơ đồ chia tập dữ liệu */
+    .split-bar {
+      display: flex;
+      height: 46px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin: 18px 0 10px;
+    }
+    .split-seg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .split-seg small { font-weight: 400; opacity: 0.85; font-size: 0.68rem; }
+
+    /* Cung bia–phương sai */
+    .bv-table td:first-child { font-weight: 600; color: var(--ink); }
+
+    /* Vòng đời dự án */
+    .lifecycle { counter-reset: lc; list-style: none; padding: 0; margin: 22px 0; }
+    .lifecycle li {
+      counter-increment: lc;
+      position: relative;
+      padding: 13px 0 13px 52px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .lifecycle li:last-child { border-bottom: none; }
+    .lifecycle li::before {
+      content: counter(lc);
+      position: absolute;
+      left: 0; top: 13px;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent-deep);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .lifecycle .lc-time {
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+      color: var(--rust);
+      margin-left: 8px;
+    }
+
+    @media (max-width: 820px) {
+      .fit-wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="site-logo" href="../../../index.html">
+        <span class="mark">10.1</span>
+        Nền tảng AI · IT Basic
+      </a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="../../../index.html">IT Basic</a></li>
+          <li><a href="../../index.html">Trụ cột 10</a></li>
+          <li><a href="../index.html" class="active">Nền tảng</a></li>
+          <li><a href="../../LLM/index.html">LLM</a></li>
+          <li><a href="../../RAG/index.html">RAG</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <header class="chapter-header">
+      <div class="breadcrumb">
+        <a href="../../../index.html">IT Basic</a><span class="sep">/</span>
+        <a href="../../index.html">Trụ cột 10</a><span class="sep">/</span>
+        <a href="../index.html">Nền tảng AI</a><span class="sep">/</span>
+        <span>Chương 4</span>
+      </div>
+      <div class="chapter-num">Chương 04 · Học máy</div>
+      <h1 style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; margin: 0 0 14px; color: var(--ink); line-height: 1.15;">
+        Machine Learning cơ bản
+      </h1>
+      <p class="lead">
+        Chương này dạy một thứ duy nhất nhưng dạy cho kỹ: <strong>làm sao biết mô hình của bạn
+        thật sự tốt, hay chỉ đang học thuộc bài.</strong> Đó là câu hỏi trung tâm của học máy, và
+        nó không biến mất khi ta chuyển sang LLM — nó chỉ đổi hình dạng. Rò rỉ dữ liệu ở chương
+        này chính là "eval bị nhiễm" ở <strong>10.6 chương 2</strong>; overfitting ở đây chính là
+        "mô hình fine-tune quên năng lực chung" ở <strong>10.5 chương 3</strong>.
+      </p>
+      <div class="chapter-meta">
+        <span class="item"><strong>Độ dài:</strong> ~1.250 dòng</span>
+        <span class="item"><strong>Bài tập:</strong> 5</span>
+        <span class="item"><strong>Quiz:</strong> 8</span>
+        <span class="item"><strong>Cần trước:</strong> Chương 2, 3</span>
+      </div>
+    </header>
+
+    <div class="layout">
+
+      <main class="prose">
+
+        <div class="callout callout-goal">
+          <div class="callout-label">🎯 Mục tiêu chương</div>
+          <ul>
+            <li>Phát biểu được học máy khác lập trình truyền thống ở điểm nào, bằng một ví dụ cụ thể.</li>
+            <li>Phân biệt <strong>ba nhóm bài toán</strong> và nhận ra bài toán của mình thuộc nhóm nào.</li>
+            <li>Dùng đúng từ vựng nền: đặc trưng, nhãn, tham số vs siêu tham số, huấn luyện vs suy luận.</li>
+            <li>Giải thích <strong>vì sao cần ba tập</strong> chứ không phải hai, và vì sao test set chỉ được đụng một lần.</li>
+            <li>Nhận ra <strong>overfitting</strong> và <strong>underfitting</strong> từ đường cong loss, và biết cách xử lý từng cái.</li>
+            <li>Hiểu đánh đổi <strong>bias–variance</strong> đủ để giải thích được trong phỏng vấn.</li>
+            <li>Phát hiện được <strong>rò rỉ dữ liệu</strong> — lỗi âm thầm nhất và tốn kém nhất trong ML.</li>
+            <li>Biết khi nào dùng cross-validation và khi nào nó <em>không</em> dùng được.</li>
+          </ul>
+        </div>
+
+        <h2 id="hoc-may-la-gi">1. Học máy khác lập trình truyền thống ở đâu</h2>
+
+        <p>
+          Cách phân biệt gọn nhất là nhìn vào <strong>cái gì là đầu vào và cái gì là đầu ra của
+          quá trình phát triển</strong>:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th style="width: 20%;"></th><th>Lập trình truyền thống</th><th>Học máy</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Bạn cung cấp</strong></td>
+                <td>Luật (code) + dữ liệu</td>
+                <td>Dữ liệu + <em>đáp án mong muốn</em></td>
+              </tr>
+              <tr>
+                <td><strong>Máy trả về</strong></td>
+                <td>Đáp án</td>
+                <td><em>Luật</em> (mô hình)</td>
+              </tr>
+              <tr>
+                <td><strong>Sửa lỗi bằng</strong></td>
+                <td>Sửa code</td>
+                <td>Sửa dữ liệu, hoặc đổi thuật toán/siêu tham số</td>
+              </tr>
+              <tr>
+                <td><strong>Hành vi</strong></td>
+                <td>Tất định, giải thích được từng dòng</td>
+                <td>Xác suất, giải thích khó hơn nhiều</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Ví dụ cụ thể — lọc thư rác. Cách truyền thống là viết luật:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Cách truyền thống: con người nghĩ ra luật</span>
+<span class="tok-kw">def</span> <span class="tok-fn">la_thu_rac</span>(thu):
+    <span class="tok-kw">if</span> <span class="tok-str">"trúng thưởng"</span> <span class="tok-kw">in</span> thu.tieu_de.<span class="tok-fn">lower</span>():
+        <span class="tok-kw">return</span> <span class="tok-kw">True</span>
+    <span class="tok-kw">if</span> thu.so_nguoi_nhan &gt; <span class="tok-num">100</span>:
+        <span class="tok-kw">return</span> <span class="tok-kw">True</span>
+    <span class="tok-kw">if</span> thu.nguoi_gui <span class="tok-kw">in</span> DANH_SACH_DEN:
+        <span class="tok-kw">return</span> <span class="tok-kw">True</span>
+    <span class="tok-com"># ... và 200 luật nữa, mỗi luật là một lần bị lọt thư rác</span>
+    <span class="tok-kw">return</span> <span class="tok-kw">False</span></code></pre>
+        </div>
+
+        <p>
+          Cách này hỏng vì hai lý do. Thứ nhất, kẻ gửi thư rác thích nghi ngay — họ viết
+          "trúng thư0ng" và luật đầu tiên vô dụng. Thứ hai, số luật phình ra không kiểm soát được
+          và chúng bắt đầu mâu thuẫn nhau.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Cách học máy: đưa ví dụ, để mô hình tự tìm ra luật</span>
+<span class="tok-kw">from</span> sklearn.naive_bayes <span class="tok-kw">import</span> MultinomialNB
+
+<span class="tok-com"># X: đặc trưng trích từ hàng triệu thư (tần suất từ, độ dài, giờ gửi...)</span>
+<span class="tok-com"># y: nhãn 1 = rác, 0 = không rác — do người dùng bấm nút "Báo cáo thư rác"</span>
+mo_hinh = <span class="tok-fn">MultinomialNB</span>()
+mo_hinh.<span class="tok-fn">fit</span>(X_train, y_train)     <span class="tok-com"># ← "luật" được sinh ra ở đây</span>
+
+du_doan = mo_hinh.<span class="tok-fn">predict</span>(X_moi)</code></pre>
+        </div>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Khi nào dùng học máy, khi nào không</div>
+          <p>
+            Học máy đáng dùng khi <strong>bạn nhận ra được đáp án đúng nhưng không viết được luật
+            tạo ra nó</strong>. Bạn nhìn một bức ảnh và biết ngay đó là con mèo, nhưng không viết
+            nổi hàm <code>la_meo(anh)</code>.
+          </p>
+          <p style="margin-top: 10px;">
+            Ngược lại, nếu luật rõ ràng và ổn định — tính thuế, kiểm tra định dạng email, sắp xếp
+            danh sách — thì viết code thẳng luôn tốt hơn: nhanh hơn, rẻ hơn, chính xác 100%, và
+            giải thích được. <em>Đừng dùng học máy cho việc mà một câu <code>if</code> làm được.</em>
+          </p>
+        </div>
+
+        <h2 id="ba-nhom">2. Ba nhóm bài toán</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 18%;">Nhóm</th>
+                <th style="width: 22%;">Dữ liệu có gì</th>
+                <th>Bài toán con</th>
+                <th style="width: 24%;">Ví dụ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Có giám sát</strong><br/><small>supervised</small></td>
+                <td>Đầu vào <em>và</em> đáp án đúng</td>
+                <td><strong>Phân loại</strong> (đầu ra rời rạc)<br/><strong>Hồi quy</strong> (đầu ra liên tục)</td>
+                <td>Lọc thư rác · dự báo giá nhà · chấm điểm tín dụng</td>
+              </tr>
+              <tr>
+                <td><strong>Không giám sát</strong><br/><small>unsupervised</small></td>
+                <td>Chỉ có đầu vào, không có đáp án</td>
+                <td><strong>Phân cụm</strong><br/><strong>Giảm chiều</strong><br/><strong>Phát hiện bất thường</strong></td>
+                <td>Phân nhóm khách hàng · nén embedding · phát hiện giao dịch lạ</td>
+              </tr>
+              <tr>
+                <td><strong>Học tăng cường</strong><br/><small>reinforcement</small></td>
+                <td>Môi trường trả về phần thưởng</td>
+                <td>Học chính sách hành động</td>
+                <td>Chơi game · điều khiển robot · <strong>RLHF cho LLM</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Cả ba nhóm đều xuất hiện trong vòng đời một LLM</div>
+          <ul>
+            <li>
+              <strong>Tiền huấn luyện</strong> là học có giám sát ở dạng đặc biệt gọi là
+              <em>tự giám sát</em>: nhãn được sinh tự động từ chính văn bản — "đáp án" của mỗi
+              vị trí chính là token thật sự đứng sau nó. Không cần ai gán nhãn, nên mới huấn
+              luyện được trên quy mô internet.
+            </li>
+            <li>
+              <strong>Embedding và phân cụm tài liệu</strong> trong RAG là học không giám sát.
+            </li>
+            <li>
+              <strong>RLHF / DPO / GRPO</strong> — bước dạy mô hình cư xử — là học tăng cường
+              hoặc họ hàng gần của nó. Chi tiết ở <strong>10.5 chương 4</strong>.
+            </li>
+          </ul>
+        </div>
+
+        <h2 id="tu-vung">3. Từ vựng nền</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 26%;">Thuật ngữ</th><th>Nghĩa</th><th style="width: 30%;">Trong ví dụ dự báo giá nhà</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Mẫu</strong> (sample)</td>
+                <td>Một quan sát đơn lẻ — thường là một hàng trong bảng</td>
+                <td>Một căn nhà</td>
+              </tr>
+              <tr>
+                <td><strong>Đặc trưng</strong> (feature)</td>
+                <td>Một thuộc tính dùng làm đầu vào — một cột</td>
+                <td>Diện tích, số phòng, quận, năm xây</td>
+              </tr>
+              <tr>
+                <td><strong>Nhãn</strong> (label / target)</td>
+                <td>Thứ ta muốn dự đoán</td>
+                <td>Giá bán</td>
+              </tr>
+              <tr>
+                <td><strong>Tham số</strong> (parameter)</td>
+                <td><em>Mô hình tự học</em> trong lúc huấn luyện</td>
+                <td>Hệ số của từng đặc trưng trong hồi quy</td>
+              </tr>
+              <tr>
+                <td><strong>Siêu tham số</strong> (hyperparameter)</td>
+                <td><em>Bạn đặt trước</em> khi huấn luyện, mô hình không tự chỉnh</td>
+                <td>Learning rate, độ sâu cây, số cụm k</td>
+              </tr>
+              <tr>
+                <td><strong>Hàm mất mát</strong> (loss)</td>
+                <td>Đo mô hình sai bao nhiêu; huấn luyện là tối thiểu hoá nó</td>
+                <td>MSE giữa giá dự đoán và giá thật</td>
+              </tr>
+              <tr>
+                <td><strong>Huấn luyện</strong> (training)</td>
+                <td>Quá trình điều chỉnh tham số theo dữ liệu</td>
+                <td><code>model.fit(X, y)</code></td>
+              </tr>
+              <tr>
+                <td><strong>Suy luận</strong> (inference)</td>
+                <td>Dùng mô hình đã huấn luyện để dự đoán dữ liệu mới</td>
+                <td><code>model.predict(X_moi)</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-note">
+          <div class="callout-label">📌 Tham số vs siêu tham số — phân biệt này quan trọng suốt trụ cột</div>
+          <p>
+            Quy tắc: <strong>tham số do dữ liệu quyết định, siêu tham số do bạn quyết định.</strong>
+          </p>
+          <p style="margin-top: 10px;">
+            Khi nghe "mô hình 70 tỉ tham số", đó là 70 tỉ con số mà quá trình huấn luyện đã học
+            được. Còn learning rate, số epoch, kích thước batch, và ở
+            <strong>10.5 chương 3</strong> là <code>rank</code> của LoRA — tất cả đều là siêu tham
+            số bạn phải chọn, và chọn sai thì mô hình học kém dù dữ liệu tốt.
+          </p>
+        </div>
+
+        <h2 id="chia-tap">4. Chia dữ liệu: vì sao ba tập chứ không phải hai</h2>
+
+        <div class="split-bar">
+          <div class="split-seg" style="flex: 70; background: #3c5570;">TRAIN · 70%<small>mô hình học từ đây</small></div>
+          <div class="split-seg" style="flex: 15; background: #a35a2a;">VAL · 15%<small>chọn siêu tham số</small></div>
+          <div class="split-seg" style="flex: 15; background: #5f6b45;">TEST · 15%<small>đo một lần duy nhất</small></div>
+        </div>
+
+        <p>
+          Ai cũng hiểu vì sao cần tách <strong>train</strong> và <strong>test</strong>: đo mô hình
+          trên chính dữ liệu nó đã học thì cũng như cho học sinh thi đúng đề đã ôn — điểm cao
+          không nói lên gì.
+        </p>
+
+        <p>
+          Nhưng vì sao lại cần thêm tập <strong>validation</strong>? Hãy xem điều gì xảy ra nếu
+          chỉ có hai tập:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Chỉ có train và test — và ta thử 20 cấu hình</span>
+diem_tot_nhat, cau_hinh_tot_nhat = <span class="tok-num">0</span>, <span class="tok-kw">None</span>
+
+<span class="tok-kw">for</span> do_sau <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">1</span>, <span class="tok-num">21</span>):
+    m = <span class="tok-fn">DecisionTree</span>(max_depth=do_sau)
+    m.<span class="tok-fn">fit</span>(X_train, y_train)
+    diem = m.<span class="tok-fn">score</span>(X_test, y_test)      <span class="tok-com"># ← đang dùng TEST để chọn!</span>
+    <span class="tok-kw">if</span> diem &gt; diem_tot_nhat:
+        diem_tot_nhat, cau_hinh_tot_nhat = diem, do_sau
+
+<span class="tok-fn">print</span>(<span class="tok-str">f"Độ sâu tốt nhất: {cau_hinh_tot_nhat}, điểm: {diem_tot_nhat:.3f}"</span>)
+<span class="tok-com"># Con số này BỊ THỔI PHỒNG và không đáng tin</span></code></pre>
+        </div>
+
+        <p>
+          Vấn đề: bạn vừa dùng tập test hai mươi lần để <em>chọn</em> mô hình. Cấu hình thắng cuộc
+          có thể chỉ đơn giản là cấu hình hợp với những đặc thù ngẫu nhiên của riêng tập test đó.
+          Con số cuối cùng không còn là ước lượng khách quan cho dữ liệu mới nữa — nó đã bị
+          "tối ưu vào" tập test.
+        </p>
+
+        <p>Với ba tập, mỗi tập có đúng một nhiệm vụ và không được kiêm nhiệm:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 16%;">Tập</th><th style="width: 30%;">Dùng để</th><th>Đụng vào bao nhiêu lần</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Train</strong></td><td>Học tham số</td><td>Rất nhiều — mỗi epoch</td></tr>
+              <tr><td><strong>Validation</strong></td><td>Chọn siêu tham số, quyết định dừng sớm</td><td>Nhiều lần, mỗi lần thử một cấu hình</td></tr>
+              <tr><td><strong>Test</strong></td><td>Báo cáo kết quả cuối cùng</td><td><strong>Đúng một lần</strong>, khi mọi quyết định đã chốt</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ "Đúng một lần" là nghiêm túc</div>
+          <p>
+            Nếu bạn đo trên test, thấy kết quả không đẹp, rồi quay về chỉnh mô hình và đo lại —
+            bạn vừa biến test thành validation. Từ thời điểm đó trở đi, mọi con số bạn báo cáo từ
+            tập này đều lạc quan hơn thực tế.
+          </p>
+          <p style="margin-top: 10px;">
+            Trong thực tế người ta vẫn vi phạm điều này, và cách xử lý trung thực là: <em>ghi lại
+            số lần đã đụng vào test và nói rõ trong báo cáo</em>. Nếu đã đụng quá nhiều lần, cách
+            duy nhất khôi phục tính khách quan là lấy một tập test hoàn toàn mới.
+          </p>
+          <p style="margin-top: 10px;">
+            Điều này áp dụng nguyên vẹn cho bộ eval của hệ thống LLM ở
+            <strong>10.6 chương 2</strong>: nếu bạn sửa prompt cho tới khi điểm eval đẹp, bộ eval
+            đó đã thôi đo được năng lực thật.
+          </p>
+        </div>
+
+        <h3 id="chia-sao-cho-dung">4.1. Chia sao cho đúng</h3>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.model_selection <span class="tok-kw">import</span> train_test_split
+
+<span class="tok-com"># Chia hai lần để được ba tập</span>
+X_tmp, X_test, y_tmp, y_test = <span class="tok-fn">train_test_split</span>(
+    X, y, test_size=<span class="tok-num">0.15</span>, random_state=<span class="tok-num">42</span>, stratify=y
+)
+X_train, X_val, y_train, y_val = <span class="tok-fn">train_test_split</span>(
+    X_tmp, y_tmp, test_size=<span class="tok-num">0.176</span>, random_state=<span class="tok-num">42</span>, stratify=y_tmp
+)
+<span class="tok-com"># 0.176 ≈ 0.15 / 0.85 → cho đúng 15% của TỔNG dữ liệu ban đầu</span></code></pre>
+        </div>
+
+        <p>Ba tham số cần chú ý:</p>
+
+        <ul>
+          <li>
+            <code>random_state</code> — cố định để kết quả tái lập được. Không có nó, mỗi lần chạy
+            ra một con số khác và bạn không biết cải thiện là thật hay do may.
+          </li>
+          <li>
+            <code>stratify=y</code> — giữ tỉ lệ các lớp giống nhau ở cả ba tập.
+            <strong>Bắt buộc</strong> khi dữ liệu mất cân bằng: nếu lớp hiếm chỉ chiếm 2%, chia
+            ngẫu nhiên có thể khiến tập test không có mẫu nào của lớp đó.
+          </li>
+          <li>
+            <code>shuffle</code> — mặc định là <code>True</code>, và đây là bẫy với dữ liệu chuỗi
+            thời gian. Xem ngay dưới đây.
+          </li>
+        </ul>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Dữ liệu chuỗi thời gian: tuyệt đối không xáo trộn</div>
+          <p>
+            Nếu bạn dự báo doanh thu tháng sau, việc xáo trộn ngẫu nhiên khiến mô hình được huấn
+            luyện trên dữ liệu tháng 12 rồi đem đi dự đoán tháng 6 — tức là <em>nhìn thấy tương
+            lai</em>. Kết quả sẽ rất đẹp và hoàn toàn vô nghĩa.
+          </p>
+          <p style="margin-top: 10px;">
+            Với dữ liệu có trục thời gian, luôn chia theo <strong>mốc thời gian</strong>: train
+            trên quá khứ, validation trên giai đoạn sau đó, test trên giai đoạn mới nhất. Đây là
+            cách duy nhất mô phỏng đúng tình huống lúc triển khai thật.
+          </p>
+        </div>
+
+        <h2 id="overfitting">5. Overfitting và underfitting</h2>
+
+        <p>
+          Đây là khái niệm trung tâm của chương. Hãy xem trực tiếp: cùng một tập dữ liệu, thay đổi
+          độ phức tạp của mô hình và quan sát điều gì xảy ra.
+        </p>
+
+        <div class="interactive">
+          <div class="ia-head">
+            <span class="ia-title">Thử: độ phức tạp mô hình và overfitting</span>
+            <span class="text-muted mono" style="font-size: 0.76rem;">14 điểm train · 8 điểm validation</span>
+          </div>
+          <div class="ia-body">
+            <div class="ia-controls" style="margin-bottom: 14px;">
+              <div class="ia-field" style="flex: 1;">
+                <label for="deg">Bậc đa thức (độ phức tạp): <span class="rangeval" id="deg-val">3</span></label>
+                <input type="range" id="deg" min="1" max="12" step="1" value="3" style="width: 100%;">
+              </div>
+            </div>
+
+            <div class="fit-wrap">
+              <div>
+                <svg class="fit-svg" id="fit-svg" viewBox="0 0 420 260" preserveAspectRatio="xMidYMid meet"></svg>
+                <div class="fit-legend">
+                  <span><i style="background:#3c5570"></i> Điểm huấn luyện</span>
+                  <span><i style="background:#a35a2a"></i> Điểm validation</span>
+                  <span><i style="background:#5b4b8a"></i> Mô hình đã học</span>
+                </div>
+              </div>
+              <div class="fit-side">
+                <div class="fit-metric train">
+                  <div class="k">Loss trên train</div>
+                  <div class="v" id="loss-train">—</div>
+                </div>
+                <div class="fit-metric val">
+                  <div class="k">Loss trên validation</div>
+                  <div class="v" id="loss-val">—</div>
+                </div>
+                <div class="fit-diag" id="fit-diag">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="ia-note">
+            Kéo từ bậc 1 lên bậc 12 và để ý <strong>hai đường loss đi khác nhau</strong>: loss
+            train luôn giảm khi mô hình phức tạp hơn, nhưng loss validation chạm đáy rồi quay đầu
+            đi lên. Điểm đáy đó là độ phức tạp bạn nên chọn.
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th style="width: 20%;"></th><th>Underfitting</th><th>Vừa vặn</th><th>Overfitting</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Loss train</strong></td>
+                <td>Cao</td>
+                <td>Thấp</td>
+                <td>Rất thấp</td>
+              </tr>
+              <tr>
+                <td><strong>Loss validation</strong></td>
+                <td>Cao</td>
+                <td>Thấp</td>
+                <td><strong>Cao</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Khoảng cách</strong></td>
+                <td>Nhỏ</td>
+                <td>Nhỏ</td>
+                <td><strong>Lớn</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Ví von</strong></td>
+                <td>Học sinh chưa hiểu bài</td>
+                <td>Học sinh hiểu bài</td>
+                <td>Học sinh học thuộc đề cũ</td>
+              </tr>
+              <tr>
+                <td><strong>Cách xử lý</strong></td>
+                <td>Mô hình phức tạp hơn · thêm đặc trưng · huấn luyện lâu hơn</td>
+                <td>Không phải làm gì</td>
+                <td>Thêm dữ liệu · regularization · dừng sớm · mô hình đơn giản hơn</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="bias-variance">5.1. Đánh đổi bias–phương sai</h3>
+
+        <p>
+          Đây là cách nói chính xác hơn về cùng một hiện tượng, và là câu hỏi phỏng vấn kinh điển.
+          Sai số của mô hình tách được thành ba phần:
+        </p>
+
+        <div class="table-wrap bv-table">
+          <table>
+            <thead><tr><th style="width: 22%;">Thành phần</th><th>Nghĩa</th><th style="width: 30%;">Cao khi nào</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Bias</strong><br/><small>độ chệch</small></td>
+                <td>Sai số do mô hình quá đơn giản để nắm được quy luật thật</td>
+                <td>Dùng đường thẳng để khớp dữ liệu vốn cong</td>
+              </tr>
+              <tr>
+                <td><strong>Variance</strong><br/><small>phương sai</small></td>
+                <td>Sai số do mô hình quá nhạy với nhiễu trong tập huấn luyện</td>
+                <td>Đổi vài điểm dữ liệu là mô hình đổi hẳn</td>
+              </tr>
+              <tr>
+                <td><strong>Nhiễu</strong><br/><small>irreducible</small></td>
+                <td>Sai số vốn có trong dữ liệu, không mô hình nào loại bỏ được</td>
+                <td>Luôn tồn tại — đây là trần hiệu năng</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Bias cao ↔ underfitting. Variance cao ↔ overfitting. Đánh đổi nằm ở chỗ: làm mô hình
+          phức tạp hơn thì giảm bias nhưng tăng variance, và ngược lại. Mục tiêu là tìm điểm mà
+          <em>tổng</em> của chúng nhỏ nhất — chính là đáy của đường loss validation trong trình
+          mô phỏng phía trên.
+        </p>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Cách nói gọn cho phỏng vấn</div>
+          <p>
+            <em>"Bias cao nghĩa là mô hình sai một cách có hệ thống — nó quá đơn giản. Variance
+            cao nghĩa là mô hình học cả nhiễu — đổi tập huấn luyện một chút là nó đổi hẳn. Mô hình
+            phức tạp hơn thì bias giảm nhưng variance tăng, nên phải tìm điểm cân bằng, và cách
+            tìm là nhìn loss validation."</em>
+          </p>
+        </div>
+
+        <h2 id="chong-overfitting">6. Sáu cách chống overfitting</h2>
+
+        <p>Xếp theo thứ tự nên thử — cách hiệu quả nhất nằm đầu:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 24%;">Cách</th><th>Cơ chế</th><th style="width: 26%;">Lưu ý</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Thêm dữ liệu</strong></td>
+                <td>Nhiễu trở nên khó "học thuộc" hơn khi có nhiều mẫu; quy luật thật nổi lên rõ hơn</td>
+                <td>Hiệu quả nhất, nhưng thường tốn kém nhất</td>
+              </tr>
+              <tr>
+                <td><strong>2. Dừng sớm</strong><br/><small>early stopping</small></td>
+                <td>Dừng huấn luyện tại epoch có val loss thấp nhất</td>
+                <td>Rẻ nhất, gần như luôn nên bật</td>
+              </tr>
+              <tr>
+                <td><strong>3. Regularization L1/L2</strong></td>
+                <td>Cộng thêm hình phạt cho trọng số lớn vào hàm mất mát</td>
+                <td>L2 (weight decay) là mặc định trong deep learning</td>
+              </tr>
+              <tr>
+                <td><strong>4. Dropout</strong></td>
+                <td>Ngẫu nhiên tắt một phần nơ-ron mỗi bước, buộc mạng không phụ thuộc vào một đường duy nhất</td>
+                <td>Chỉ dùng cho mạng nơ-ron; chi tiết ở chương 7</td>
+              </tr>
+              <tr>
+                <td><strong>5. Tăng cường dữ liệu</strong><br/><small>augmentation</small></td>
+                <td>Sinh biến thể từ dữ liệu có sẵn (xoay ảnh, diễn đạt lại câu)</td>
+                <td>Cách "thêm dữ liệu" rẻ tiền, rất hiệu quả với ảnh</td>
+              </tr>
+              <tr>
+                <td><strong>6. Đơn giản hoá mô hình</strong></td>
+                <td>Ít tham số hơn thì ít chỗ để nhớ nhiễu hơn</td>
+                <td>Cẩn thận đi quá đà thành underfitting</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-connect">
+          <div class="callout-label">🔗 Sáu cách này xuất hiện lại ở đâu</div>
+          <p>
+            Ở <strong>10.5 chương 3</strong> (fine-tuning LoRA), bốn trong sáu cách trên là lời
+            khuyên chính khi mô hình fine-tune bị overfit: dừng sớm (2–3 epoch thay vì 10),
+            weight decay, thêm dữ liệu đa dạng, và giảm <code>rank</code> — chính là đơn giản hoá
+            mô hình.
+          </p>
+        </div>
+
+        <h2 id="ro-ri">7. Rò rỉ dữ liệu</h2>
+
+        <p>
+          Nếu chương này chỉ được nhớ một mục, hãy nhớ mục này. <strong>Rò rỉ dữ liệu</strong>
+          (data leakage) là khi thông tin mà mô hình <em>không được phép có</em> lúc dự đoán thật
+          lại lọt vào quá trình huấn luyện. Triệu chứng đặc trưng: kết quả đẹp bất thường lúc thử
+          nghiệm, rồi sụp đổ khi triển khai.
+        </p>
+
+        <h3 id="ro-ri-dang">7.1. Bốn dạng phổ biến</h3>
+
+        <p><strong>Dạng 1 — Tiền xử lý trước khi chia tập.</strong></p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># ❌ SAI — scaler đã "nhìn thấy" cả tập test</span>
+scaler = <span class="tok-fn">StandardScaler</span>()
+X_scaled = scaler.<span class="tok-fn">fit_transform</span>(X)          <span class="tok-com"># fit trên TOÀN BỘ dữ liệu</span>
+X_train, X_test = <span class="tok-fn">train_test_split</span>(X_scaled)
+
+<span class="tok-com"># ✅ ĐÚNG — fit chỉ trên train, test chỉ được transform</span>
+X_train, X_test = <span class="tok-fn">train_test_split</span>(X)
+scaler = <span class="tok-fn">StandardScaler</span>()
+X_train = scaler.<span class="tok-fn">fit_transform</span>(X_train)
+X_test  = scaler.<span class="tok-fn">transform</span>(X_test)          <span class="tok-com"># KHÔNG fit lại</span>
+
+<span class="tok-com"># ✅ TỐT HƠN — dùng Pipeline, không thể quên</span>
+<span class="tok-kw">from</span> sklearn.pipeline <span class="tok-kw">import</span> Pipeline
+pipe = <span class="tok-fn">Pipeline</span>([
+    (<span class="tok-str">"scaler"</span>, <span class="tok-fn">StandardScaler</span>()),
+    (<span class="tok-str">"model"</span>, <span class="tok-fn">LogisticRegression</span>()),
+])
+pipe.<span class="tok-fn">fit</span>(X_train, y_train)      <span class="tok-com"># scaler tự động chỉ fit trên train</span></code></pre>
+        </div>
+
+        <p>
+          <strong>Dạng 2 — Đặc trưng chứa thông tin tương lai.</strong> Đây là dạng khó phát hiện
+          nhất vì nó nằm ở tầng ý nghĩa nghiệp vụ, không phải ở tầng code.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 34%;">Bài toán</th><th>Đặc trưng gây rò rỉ</th><th>Vì sao</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Dự đoán khách hàng sẽ rời bỏ dịch vụ</td>
+                <td><code>ngay_huy_hop_dong</code></td>
+                <td>Chỉ tồn tại <em>sau khi</em> họ đã rời — lúc dự đoán thật thì trường này rỗng</td>
+              </tr>
+              <tr>
+                <td>Dự đoán bệnh nhân có bệnh X</td>
+                <td><code>thuoc_dang_dung</code></td>
+                <td>Thuốc được kê <em>sau</em> chẩn đoán, không phải trước</td>
+              </tr>
+              <tr>
+                <td>Dự đoán gian lận giao dịch</td>
+                <td><code>so_lan_bi_khieu_nai</code></td>
+                <td>Khiếu nại xảy ra sau khi gian lận bị phát hiện</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>Dạng 3 — Trùng lặp giữa train và test.</strong> Cùng một bản ghi xuất hiện ở cả
+          hai tập (do dữ liệu có bản sao, hoặc do gộp từ nhiều nguồn). Mô hình chỉ cần nhớ lại
+          là "dự đoán đúng".
+        </p>
+
+        <p>
+          <strong>Dạng 4 — Rò rỉ theo nhóm.</strong> Tinh vi hơn: các bản ghi khác nhau nhưng
+          thuộc cùng một thực thể bị chia sang hai tập.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-com"># Bài toán: chẩn đoán từ ảnh X-quang.</span>
+<span class="tok-com"># Mỗi bệnh nhân có nhiều ảnh chụp ở các thời điểm khác nhau.</span>
+
+<span class="tok-com"># ❌ SAI — ảnh của cùng một bệnh nhân nằm ở cả train lẫn test.</span>
+<span class="tok-com">#    Mô hình học nhận diện bệnh nhân, không phải nhận diện bệnh.</span>
+X_train, X_test = <span class="tok-fn">train_test_split</span>(anh, test_size=<span class="tok-num">0.2</span>)
+
+<span class="tok-com"># ✅ ĐÚNG — chia theo BỆNH NHÂN, mọi ảnh của một người nằm cùng một tập</span>
+<span class="tok-kw">from</span> sklearn.model_selection <span class="tok-kw">import</span> GroupShuffleSplit
+
+gss = <span class="tok-fn">GroupShuffleSplit</span>(test_size=<span class="tok-num">0.2</span>, random_state=<span class="tok-num">42</span>)
+idx_train, idx_test = <span class="tok-fn">next</span>(gss.<span class="tok-fn">split</span>(anh, nhan, groups=ma_benh_nhan))</code></pre>
+        </div>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">⚠️ Ba dấu hiệu nghi ngờ có rò rỉ</div>
+          <ol>
+            <li>
+              <strong>Kết quả tốt bất thường.</strong> Accuracy 99% trên một bài toán mà con người
+              chỉ đạt 85% — hãy nghi ngờ trước khi ăn mừng.
+            </li>
+            <li>
+              <strong>Một đặc trưng quan trọng áp đảo.</strong> Nếu một cột đóng góp phần lớn khả
+              năng dự đoán, hãy hỏi: <em>lúc dự đoán thật, giá trị này có sẵn chưa?</em>
+            </li>
+            <li>
+              <strong>Kết quả sụp đổ khi triển khai.</strong> Chênh lệch lớn giữa số liệu thử
+              nghiệm và thực tế gần như luôn là rò rỉ.
+            </li>
+          </ol>
+          <p style="margin-top: 12px;">
+            Câu hỏi vàng để tự kiểm tra, áp cho <em>từng</em> đặc trưng:
+            <strong>"Tại thời điểm cần đưa ra dự đoán trong thực tế, tôi có giá trị này không?"</strong>
+            Nếu câu trả lời là không hoặc "chưa chắc" — bỏ đặc trưng đó ra.
+          </p>
+        </div>
+
+        <h2 id="cross-validation">8. Cross-validation</h2>
+
+        <p>
+          Khi dữ liệu ít, việc cắt riêng 15% làm validation vừa lãng phí vừa cho ước lượng nhiễu:
+          kết quả phụ thuộc nhiều vào chuyện 15% đó tình cờ gồm những mẫu nào.
+        </p>
+
+        <p>
+          <strong>K-fold cross-validation</strong> giải quyết bằng cách chia dữ liệu thành k phần,
+          rồi lần lượt lấy từng phần làm validation và huấn luyện trên k−1 phần còn lại. Kết quả
+          cuối là trung bình của k lần.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="tok-kw">from</span> sklearn.model_selection <span class="tok-kw">import</span> cross_val_score, StratifiedKFold
+
+cv = <span class="tok-fn">StratifiedKFold</span>(n_splits=<span class="tok-num">5</span>, shuffle=<span class="tok-kw">True</span>, random_state=<span class="tok-num">42</span>)
+diem = <span class="tok-fn">cross_val_score</span>(pipe, X_train, y_train, cv=cv, scoring=<span class="tok-str">"f1"</span>)
+
+<span class="tok-fn">print</span>(<span class="tok-str">f"F1: {diem.mean():.3f} ± {diem.std():.3f}"</span>)
+<span class="tok-com"># Độ lệch chuẩn quan trọng không kém giá trị trung bình:</span>
+<span class="tok-com"># nó cho biết kết quả ổn định tới đâu giữa các lần chia khác nhau.</span></code></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width: 28%;">Biến thể</th><th>Dùng khi</th></tr></thead>
+            <tbody>
+              <tr><td><strong>K-Fold</strong></td><td>Trường hợp chung, dữ liệu độc lập</td></tr>
+              <tr><td><strong>StratifiedKFold</strong></td><td>Phân loại — giữ tỉ lệ lớp trong mỗi fold. Mặc định nên dùng.</td></tr>
+              <tr><td><strong>GroupKFold</strong></td><td>Dữ liệu có nhóm (nhiều bản ghi cùng một thực thể)</td></tr>
+              <tr><td><strong>TimeSeriesSplit</strong></td><td>Dữ liệu thời gian — chỉ huấn luyện trên quá khứ</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Khi nào KHÔNG dùng cross-validation</div>
+          <ul>
+            <li>
+              <strong>Dữ liệu rất lớn.</strong> Chia một lần là đủ tin cậy rồi, mà k-fold thì tốn
+              gấp k lần thời gian huấn luyện.
+            </li>
+            <li>
+              <strong>Huấn luyện quá đắt.</strong> Không ai chạy 5-fold cho một lần fine-tune LLM
+              mất 6 giờ và vài trăm đô.
+            </li>
+            <li>
+              <strong>Dữ liệu chuỗi thời gian.</strong> K-fold thường sẽ xáo trộn thứ tự — phải
+              dùng <code>TimeSeriesSplit</code> thay thế.
+            </li>
+          </ul>
+        </div>
+
+        <h2 id="vong-doi">9. Vòng đời một dự án ML</h2>
+
+        <p>
+          Phần trăm thời gian dưới đây là ước lượng điển hình trong dự án thật — và nó gây bất ngờ
+          cho hầu hết người mới:
+        </p>
+
+        <ol class="lifecycle">
+          <li>
+            <strong>Xác định bài toán</strong> <span class="lc-time">~5%</span><br/>
+            Bài toán nghiệp vụ là gì, có thật sự cần ML không, thành công đo bằng chỉ số nào, sai
+            thì hậu quả gì. Bỏ qua bước này là nguyên nhân số một khiến dự án ML thất bại.
+          </li>
+          <li>
+            <strong>Thu thập &amp; làm sạch dữ liệu</strong> <span class="lc-time">~40%</span><br/>
+            Phần tốn thời gian nhất, luôn luôn. Nối nguồn, xử lý thiếu, sửa kiểu, khử trùng lặp,
+            chuẩn hoá.
+          </li>
+          <li>
+            <strong>Khám phá &amp; xây đặc trưng</strong> <span class="lc-time">~20%</span><br/>
+            Hiểu phân bố, tìm quan hệ, tạo đặc trưng mới. Đây là nơi kiến thức nghiệp vụ tạo ra
+            khác biệt lớn nhất.
+          </li>
+          <li>
+            <strong>Huấn luyện &amp; tinh chỉnh</strong> <span class="lc-time">~15%</span><br/>
+            Thử vài thuật toán, tinh chỉnh siêu tham số. Ít thời gian hơn nhiều so với tưởng tượng.
+          </li>
+          <li>
+            <strong>Đánh giá</strong> <span class="lc-time">~10%</span><br/>
+            Đo trên test, phân tích ca sai, kiểm tra công bằng giữa các nhóm.
+          </li>
+          <li>
+            <strong>Triển khai</strong> <span class="lc-time">~5%</span><br/>
+            Đóng gói, dựng API, tích hợp.
+          </li>
+          <li>
+            <strong>Giám sát &amp; huấn luyện lại</strong> <span class="lc-time">~5% + mãi mãi</span><br/>
+            Dữ liệu thực tế trôi theo thời gian; mô hình xuống cấp dần. Không giám sát thì bạn sẽ
+            biết điều đó từ khách hàng chứ không phải từ dashboard.
+          </li>
+        </ol>
+
+        <div class="callout callout-mental">
+          <div class="callout-label">🧠 Điều rút ra quan trọng nhất từ bảng phân bổ này</div>
+          <p>
+            Bước 4 — thứ mà đa số người coi là "làm machine learning" — chiếm khoảng 15% thời
+            gian. Bước 2 và 3 gộp lại chiếm 60%.
+          </p>
+          <p style="margin-top: 10px;">
+            Đây chính là phiên bản ML của câu "80% kỹ thuật, 20% mô hình" ở chương 1. Và nó cũng
+            giải thích vì sao trong trụ cột này, sub-pillar RAG dành 6/10 chương cho khâu chuẩn bị
+            và truy xuất dữ liệu, chỉ 1 chương cho khâu sinh câu trả lời.
+          </p>
+        </div>
+
+        <h2 id="bai-tap">Bài tập</h2>
+
+        <div class="exercises">
+
+          <div class="exercise">
+            <h4>Chẩn đoán bốn đường cong loss</h4>
+            <div class="exercise-body">
+              <p>Với mỗi mô tả sau, cho biết tình trạng và hai việc nên làm tiếp theo:</p>
+              <ol>
+                <li>Train loss 0,05 · val loss 0,48 · khoảng cách nới rộng dần theo epoch</li>
+                <li>Train loss 0,42 · val loss 0,44 · cả hai phẳng từ epoch 3</li>
+                <li>Train loss dao động mạnh giữa 0,2 và 2,8 · val loss không giảm</li>
+                <li>Train loss 0,09 · val loss 0,11 · cả hai vẫn đang giảm chậm ở epoch cuối</li>
+              </ol>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <strong>(1)</strong> Overfitting rõ. → Dừng sớm tại đáy val; thêm regularization
+                    hoặc thêm dữ liệu.
+                  </p>
+                  <p>
+                    <strong>(2)</strong> Underfitting. → Mô hình phức tạp hơn; kiểm tra lại đặc
+                    trưng có mang đủ thông tin không; tăng learning rate.
+                  </p>
+                  <p>
+                    <strong>(3)</strong> Learning rate quá lớn, hoặc dữ liệu có giá trị bất thường.
+                    → Giảm learning rate; kiểm tra <code>inf</code>/<code>NaN</code> trong dữ liệu.
+                  </p>
+                  <p>
+                    <strong>(4)</strong> Khoẻ mạnh, chưa hội tụ. → Huấn luyện thêm epoch; đây là
+                    trường hợp duy nhất trong bốn cái không cần sửa gì.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Tìm rò rỉ dữ liệu</h4>
+            <div class="exercise-body">
+              <p>Đoạn code sau có <strong>hai</strong> lỗi rò rỉ. Tìm cả hai và viết lại cho đúng.</p>
+              <div class="code-wrap" style="margin-top: 10px;">
+                <div class="code-meta"><span>python</span><button class="copy-btn">Sao chép</button></div>
+<pre><code>df = pd.<span class="tok-fn">read_csv</span>(<span class="tok-str">"khach_hang.csv"</span>)
+
+<span class="tok-com"># Điền giá trị thiếu</span>
+df[<span class="tok-str">"thu_nhap"</span>] = df[<span class="tok-str">"thu_nhap"</span>].<span class="tok-fn">fillna</span>(df[<span class="tok-str">"thu_nhap"</span>].<span class="tok-fn">median</span>())
+
+<span class="tok-com"># Chuẩn hoá</span>
+scaler = <span class="tok-fn">StandardScaler</span>()
+X = scaler.<span class="tok-fn">fit_transform</span>(df.<span class="tok-fn">drop</span>(columns=[<span class="tok-str">"da_roi_bo"</span>]))
+y = df[<span class="tok-str">"da_roi_bo"</span>]
+
+X_train, X_test, y_train, y_test = <span class="tok-fn">train_test_split</span>(X, y, test_size=<span class="tok-num">0.2</span>)
+
+model.<span class="tok-fn">fit</span>(X_train, y_train)
+<span class="tok-fn">print</span>(model.<span class="tok-fn">score</span>(X_test, y_test))   <span class="tok-com"># 0.97 — nghi ngờ được rồi</span></code></pre>
+              </div>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    <strong>Lỗi 1:</strong> <code>median()</code> tính trên toàn bộ dữ liệu, tức
+                    đã bao gồm tập test.
+                  </p>
+                  <p>
+                    <strong>Lỗi 2:</strong> <code>scaler.fit_transform</code> cũng chạy trên toàn
+                    bộ dữ liệu trước khi chia.
+                  </p>
+                  <p>
+                    Cách sửa gọn nhất là chia tập <em>trước tiên</em>, rồi bọc cả
+                    <code>SimpleImputer</code> lẫn <code>StandardScaler</code> vào một
+                    <code>Pipeline</code> — khi đó <code>fit</code> chỉ có thể chạy trên train.
+                  </p>
+                  <p>
+                    Bonus: hãy kiểm tra xem còn <strong>lỗi thứ ba</strong> tiềm ẩn không —
+                    trong bài toán dự đoán rời bỏ, những cột nào có thể chỉ tồn tại <em>sau khi</em>
+                    khách hàng đã rời? Đó là dạng rò rỉ 2, và nó không nhìn thấy được từ code.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Chia tập cho dữ liệu chuỗi thời gian</h4>
+            <div class="exercise-body">
+              <p>
+                Bạn có 3 năm dữ liệu doanh thu theo ngày và cần dự báo doanh thu 30 ngày tới.
+                Thiết kế cách chia train/val/test, giải thích vì sao không dùng
+                <code>train_test_split</code> mặc định, và viết code chia.
+              </p>
+              <p>
+                Sau đó: nếu muốn dùng cross-validation cho bài toán này thì làm thế nào?
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Chia theo mốc thời gian: ví dụ train = năm 1–2, val = 6 tháng đầu năm 3,
+                    test = 6 tháng cuối năm 3. Test phải là giai đoạn <em>mới nhất</em>, vì đó là
+                    thứ mô phỏng đúng tình huống triển khai.
+                  </p>
+                  <p>
+                    <code>train_test_split</code> mặc định có <code>shuffle=True</code>, khiến mô
+                    hình được huấn luyện trên dữ liệu tương lai rồi đem dự đoán quá khứ — kết quả
+                    đẹp giả tạo.
+                  </p>
+                  <p>
+                    Cross-validation: dùng <code>TimeSeriesSplit</code>. Nó tạo các fold theo kiểu
+                    cửa sổ mở rộng — fold 1 train trên tháng 1–6 và val tháng 7; fold 2 train trên
+                    tháng 1–7 và val tháng 8; cứ thế. Luôn giữ nguyên tắc "chỉ huấn luyện trên quá khứ".
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>Vì sao 99% accuracy có thể là kết quả tồi</h4>
+            <div class="exercise-body">
+              <p>
+                Một mô hình phát hiện gian lận đạt accuracy 99,2% trên tập test. Trong dữ liệu,
+                0,8% giao dịch là gian lận.
+              </p>
+              <p>
+                Tính accuracy của một mô hình "luôn dự đoán không gian lận". So sánh và giải thích
+                vấn đề. Đề xuất chỉ số thay thế.
+              </p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Mô hình "luôn nói không" đạt <strong>99,2%</strong> — đúng bằng mô hình kia,
+                    trong khi nó không phát hiện được một vụ gian lận nào. Accuracy vô dụng ở đây.
+                  </p>
+                  <p>
+                    Chỉ số phù hợp: <strong>recall</strong> trên lớp gian lận (bắt được bao nhiêu
+                    phần trăm số vụ gian lận thật), kèm <strong>precision</strong> (trong số bị
+                    gắn cờ, bao nhiêu là gian lận thật). Với dữ liệu mất cân bằng nặng,
+                    <strong>PR-AUC</strong> phù hợp hơn ROC-AUC.
+                  </p>
+                  <p>
+                    Chương 6 sẽ nói kỹ về việc chọn chỉ số theo hậu quả của từng loại sai.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="exercise">
+            <h4>K-fold cho dữ liệu mất cân bằng và có nhóm</h4>
+            <div class="exercise-body">
+              <p>
+                Bạn có 5.000 ảnh X-quang từ 300 bệnh nhân (mỗi người 10–30 ảnh). 4% ảnh có dấu
+                hiệu bệnh. Thiết kế chiến lược cross-validation xử lý được <em>cả hai</em> vấn đề:
+                mất cân bằng lớp và nhóm theo bệnh nhân.
+              </p>
+              <p>Viết code, và giải thích chuyện gì xảy ra nếu bỏ qua một trong hai.</p>
+              <details class="exercise-hint">
+                <summary>Gợi ý</summary>
+                <div class="hint-content">
+                  <p>
+                    Cần <code>StratifiedGroupKFold</code> — kết hợp cả hai yêu cầu. Nếu phiên bản
+                    scikit-learn không có, có thể tự chia thủ công: nhóm bệnh nhân theo tỉ lệ mắc
+                    bệnh rồi phân bổ đều các nhóm vào các fold.
+                  </p>
+                  <p>
+                    Bỏ qua <strong>group</strong>: ảnh của cùng một bệnh nhân nằm ở cả train lẫn
+                    val, mô hình học nhận diện <em>bệnh nhân</em> chứ không phải <em>bệnh</em> —
+                    điểm rất cao nhưng vô dụng với bệnh nhân mới.
+                  </p>
+                  <p>
+                    Bỏ qua <strong>stratify</strong>: với 4% dương tính, một fold có thể chỉ có
+                    vài ca dương hoặc không có ca nào, khiến chỉ số dao động rất mạnh giữa các fold.
+                  </p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+        </div>
+
+        <h2 id="quiz">Quiz</h2>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q1</span>
+            <div class="quiz-q-text"><p>Vì sao cần tập validation riêng, trong khi đã có train và test?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Vì việc chọn siêu tham số cũng là một dạng "học" — chỉ là bạn học chứ không phải
+                mô hình học. Nếu dùng tập test để chọn cấu hình tốt nhất, bạn đang tối ưu vào đúng
+                tập đó, và con số cuối cùng không còn là ước lượng khách quan cho dữ liệu mới.
+              </p>
+              <p style="margin-top: 8px;">
+                Ba tập, ba vai trò tách bạch: <strong>train</strong> học tham số,
+                <strong>validation</strong> chọn siêu tham số và quyết định dừng sớm,
+                <strong>test</strong> báo cáo kết quả cuối cùng — đúng một lần.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q2</span>
+            <div class="quiz-q-text"><p>Overfitting biểu hiện thế nào trên đường cong loss, và ba cách xử lý theo thứ tự ưu tiên?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Biểu hiện:</strong> train loss tiếp tục giảm, val loss chạm đáy rồi
+                <em>tăng dần</em>. Khoảng cách giữa hai đường nới rộng theo thời gian.
+              </p>
+              <p style="margin-top: 8px;"><strong>Ba cách xử lý:</strong></p>
+              <ol>
+                <li><strong>Dừng sớm</strong> — rẻ nhất, lấy checkpoint tại đáy val loss.</li>
+                <li><strong>Thêm dữ liệu</strong> (hoặc tăng cường dữ liệu) — bền vững nhất.</li>
+                <li><strong>Regularization</strong> — weight decay, dropout.</li>
+              </ol>
+              <p style="margin-top: 8px;">
+                Giảm độ phức tạp mô hình cũng được, nhưng để sau vì dễ đi quá đà thành underfitting.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q3</span>
+            <div class="quiz-q-text"><p>Bias cao nghĩa là gì? Nó tương ứng với underfitting hay overfitting?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Bias cao nghĩa là mô hình <strong>quá đơn giản để nắm được quy luật thật</strong>,
+                nên nó sai một cách có hệ thống — ví dụ dùng đường thẳng để khớp dữ liệu vốn cong.
+                Nó tương ứng với <strong>underfitting</strong>.
+              </p>
+              <p style="margin-top: 8px;">
+                Đối lập là variance cao ↔ overfitting: mô hình quá nhạy với nhiễu, đổi vài điểm dữ
+                liệu là nó đổi hẳn. Làm mô hình phức tạp hơn thì giảm bias nhưng tăng variance;
+                mục tiêu là điểm mà tổng nhỏ nhất — chính là đáy đường val loss.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q4</span>
+            <div class="quiz-q-text"><p>Regularization L2 hoạt động ra sao, và vì sao nó chống được overfitting?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                L2 cộng thêm một hình phạt tỉ lệ với <em>bình phương</em> độ lớn của trọng số vào
+                hàm mất mát: <code>ℒ_tổng = ℒ_gốc + λ · Σwᵢ²</code>.
+              </p>
+              <p style="margin-top: 8px;">
+                Điều này khiến mô hình phải "trả giá" cho việc dùng trọng số lớn. Mà trọng số lớn
+                chính là cách mô hình khớp chính xác vào từng điểm nhiễu trong tập huấn luyện. Kết
+                quả: mô hình bị đẩy về phía những lời giải mượt hơn, tổng quát hơn.
+              </p>
+              <p style="margin-top: 8px;">
+                <code>λ</code> là siêu tham số điều khiển mức phạt. Trong deep learning, L2 thường
+                được cài dưới tên <strong>weight decay</strong> ngay trong optimizer.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q5</span>
+            <div class="quiz-q-text"><p>Rò rỉ dữ liệu nguy hiểm ở chỗ nào? Nêu câu hỏi vàng để tự kiểm tra.</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                Nguy hiểm vì nó <strong>không báo lỗi</strong> — trái lại, nó làm kết quả <em>đẹp
+                lên</em>. Bạn tưởng mô hình rất tốt, triển khai, rồi nó sụp đổ trong thực tế. Đến
+                lúc đó, chi phí đã phát sinh và niềm tin đã mất.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Câu hỏi vàng, áp cho từng đặc trưng:</strong> <em>"Tại thời điểm cần đưa
+                ra dự đoán trong thực tế, tôi có giá trị của trường này không?"</em> Nếu không, hoặc
+                nếu không chắc, hãy bỏ nó ra.
+              </p>
+              <p style="margin-top: 8px;">
+                Bốn dạng phổ biến: tiền xử lý trước khi chia tập · đặc trưng chứa thông tin tương
+                lai · trùng lặp giữa train và test · rò rỉ theo nhóm.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q6</span>
+            <div class="quiz-q-text"><p>Khi nào k-fold cross-validation <em>không</em> dùng được?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <ul>
+                <li>
+                  <strong>Dữ liệu chuỗi thời gian</strong> — k-fold thông thường xáo trộn thứ tự,
+                  gây rò rỉ tương lai. Phải dùng <code>TimeSeriesSplit</code>.
+                </li>
+                <li>
+                  <strong>Huấn luyện quá đắt</strong> — k-fold tốn gấp k lần. Không khả thi với
+                  fine-tuning LLM.
+                </li>
+                <li>
+                  <strong>Dữ liệu rất lớn</strong> — một lần chia đã đủ tin cậy; k-fold chỉ thêm
+                  chi phí mà không thêm thông tin.
+                </li>
+                <li>
+                  <strong>Dữ liệu có nhóm mà không dùng biến thể group</strong> — sẽ gây rò rỉ
+                  theo nhóm. Phải dùng <code>GroupKFold</code>.
+                </li>
+              </ul>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q7</span>
+            <div class="quiz-q-text"><p>Phân biệt tham số và siêu tham số. Cho hai ví dụ mỗi loại.</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Tham số</strong> — mô hình tự học từ dữ liệu trong lúc huấn luyện.
+                Ví dụ: hệ số của từng đặc trưng trong hồi quy tuyến tính; trọng số của các nơ-ron
+                trong mạng.
+              </p>
+              <p style="margin-top: 8px;">
+                <strong>Siêu tham số</strong> — bạn đặt trước khi huấn luyện, mô hình không tự
+                chỉnh được. Ví dụ: learning rate; độ sâu tối đa của cây quyết định; số cụm
+                <code>k</code> trong k-means; <code>rank</code> của LoRA.
+              </p>
+              <p style="margin-top: 8px;">
+                Quy tắc nhớ: <em>tham số do dữ liệu quyết định, siêu tham số do bạn quyết định</em>.
+                Việc chọn siêu tham số là lý do tập validation tồn tại.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div class="quiz">
+          <div class="quiz-question">
+            <span class="quiz-num">Q8</span>
+            <div class="quiz-q-text"><p>Trong vòng đời một dự án ML, bước nào tốn nhiều thời gian nhất và điều đó có ý nghĩa gì?</p></div>
+          </div>
+          <details>
+            <summary>Xem đáp án</summary>
+            <div class="quiz-answer">
+              <span class="answer-label">✓ Đáp án</span>
+              <p>
+                <strong>Thu thập và làm sạch dữ liệu</strong> — khoảng 40% thời gian. Cộng với
+                khám phá và xây đặc trưng (~20%), phần dữ liệu chiếm khoảng 60% dự án. Bước
+                "huấn luyện mô hình" chỉ khoảng 15%.
+              </p>
+              <p style="margin-top: 8px;">
+                Ý nghĩa: chất lượng dữ liệu quyết định kết quả nhiều hơn việc chọn thuật toán.
+                Đổi từ random forest sang gradient boosting thường cải thiện vài phần trăm; sửa
+                một lỗi dữ liệu có hệ thống có thể cải thiện hàng chục phần trăm.
+              </p>
+              <p style="margin-top: 8px;">
+                Đây là phiên bản ML của nguyên tắc "80% kỹ thuật, 20% mô hình" ở chương 1 — và là
+                lý do sub-pillar RAG dành 6/10 chương cho khâu dữ liệu và truy xuất.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <h2 id="tong-ket">Tổng kết</h2>
+
+        <p>Sau chương 4, bạn đã nắm:</p>
+        <ul>
+          <li><strong>Học máy</strong> nhận dữ liệu + đáp án và trả về luật; dùng khi bạn nhận ra được đáp án đúng nhưng không viết được luật tạo ra nó.</li>
+          <li><strong>Ba nhóm bài toán</strong> — có giám sát, không giám sát, tăng cường — và cả ba đều xuất hiện trong vòng đời một LLM.</li>
+          <li><strong>Tham số do dữ liệu quyết định, siêu tham số do bạn quyết định</strong> — phân biệt này là lý do tập validation tồn tại.</li>
+          <li><strong>Ba tập</strong> với ba vai trò tách bạch; test set đụng đúng một lần.</li>
+          <li><strong>Overfitting</strong> = train loss giảm nhưng val loss tăng; <strong>underfitting</strong> = cả hai đều cao.</li>
+          <li><strong>Bias cao ↔ underfitting, variance cao ↔ overfitting</strong>; mục tiêu là điểm tổng nhỏ nhất.</li>
+          <li><strong>Sáu cách chống overfitting</strong>, ưu tiên thêm dữ liệu và dừng sớm.</li>
+          <li><strong>Rò rỉ dữ liệu</strong> — bốn dạng, ba dấu hiệu nghi ngờ, và câu hỏi vàng để tự kiểm tra.</li>
+          <li><strong>Cross-validation</strong> khi dữ liệu ít; nhưng không dùng cho chuỗi thời gian hay khi huấn luyện quá đắt.</li>
+          <li><strong>60% thời gian dự án nằm ở dữ liệu</strong>, chỉ 15% ở huấn luyện mô hình.</li>
+        </ul>
+
+        <h2 id="ket-noi">Kết nối</h2>
+        <ul>
+          <li><strong>Chương 5 (Thuật toán ML kinh điển)</strong> — áp dụng mọi thứ ở đây vào bảy thuật toán cụ thể với scikit-learn.</li>
+          <li><strong>Chương 6 (Đánh giá mô hình)</strong> — đi sâu vào việc chọn chỉ số; bài tập 4 ở đây là bản xem trước.</li>
+          <li><strong>Chương 7 (Deep Learning)</strong> — dropout và weight decay được cài đặt cụ thể; đọc đường cong loss dùng liên tục.</li>
+          <li><strong>10.5 chương 3 (LoRA)</strong> — overfitting khi fine-tune, và "quên thảm hoạ" là một dạng đánh đổi bias–variance ở tầng khác.</li>
+          <li><strong>10.6 chương 2 (Evaluation)</strong> — golden dataset chính là test set, và "eval bị nhiễm" chính là rò rỉ dữ liệu. Nguyên tắc "đụng một lần" áp dụng nguyên vẹn.</li>
+          <li><strong>10.3 chương 8 (Đánh giá RAG)</strong> — chia tách đánh giá theo khâu là cùng một tư duy với việc tách ba tập ở đây.</li>
+          <li><strong>Trụ cột 4 — Database</strong> — kỹ năng SQL giúp phát hiện trùng lặp và rò rỉ theo nhóm nhanh hơn nhiều so với làm bằng Pandas.</li>
+        </ul>
+
+        <nav class="chapter-nav">
+          <a href="chuong3.html" class="prev">
+            <div class="dir">← Chương 3</div>
+            <div class="label">Python cho AI</div>
+          </a>
+          <a href="chuong5.html" class="next">
+            <div class="dir">Chương 5 →</div>
+            <div class="label">Thuật toán ML kinh điển</div>
+          </a>
+        </nav>
+
+      </main>
+
+      <aside class="toc">
+        <div class="toc-label">Trong chương này</div>
+        <ul>
+          <li><a href="#hoc-may-la-gi">1. Khác lập trình thường</a></li>
+          <li><a href="#ba-nhom">2. Ba nhóm bài toán</a></li>
+          <li><a href="#tu-vung">3. Từ vựng nền</a></li>
+          <li><a href="#chia-tap">4. Chia dữ liệu</a></li>
+          <li class="level-3"><a href="#chia-sao-cho-dung">4.1. Chia sao cho đúng</a></li>
+          <li><a href="#overfitting">5. Overfitting</a></li>
+          <li class="level-3"><a href="#bias-variance">5.1. Bias–phương sai</a></li>
+          <li><a href="#chong-overfitting">6. Sáu cách chống</a></li>
+          <li><a href="#ro-ri">7. Rò rỉ dữ liệu</a></li>
+          <li class="level-3"><a href="#ro-ri-dang">7.1. Bốn dạng</a></li>
+          <li><a href="#cross-validation">8. Cross-validation</a></li>
+          <li><a href="#vong-doi">9. Vòng đời dự án</a></li>
+          <li><a href="#bai-tap">Bài tập</a></li>
+          <li><a href="#quiz">Quiz</a></li>
+          <li><a href="#tong-ket">Tổng kết</a></li>
+          <li><a href="#ket-noi">Kết nối</a></li>
+        </ul>
+      </aside>
+
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Chương 4 — Machine Learning cơ bản · Nền tảng AI · Trụ cột 10 IT Basic<br/>
+        <a href="../index.html">Mục lục 10.1</a> ·
+        <a href="chuong3.html">← Chương 3</a> ·
+        <a href="chuong5.html">Chương 5 →</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="../../shared/js/chapter.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    /* Dữ liệu cố định (sinh sẵn, không ngẫu nhiên) để kết quả tái lập được.
+       Quy luật thật: y ≈ 0.55 + 0.75·sin(2.4x) — cộng nhiễu.                */
+    var TRAIN = [
+      [0.02, 0.60], [0.10, 0.79], [0.17, 1.02], [0.25, 1.14],
+      [0.33, 1.28], [0.40, 1.19], [0.48, 1.06], [0.55, 0.83],
+      [0.63, 0.52], [0.70, 0.31], [0.78, 0.02], [0.85, -0.14],
+      [0.93, -0.19], [1.00, -0.12]
+    ];
+    var VAL = [
+      [0.06, 0.74], [0.21, 1.01], [0.36, 1.31], [0.51, 0.99],
+      [0.66, 0.44], [0.74, 0.20], [0.89, -0.21], [0.97, -0.16]
+    ];
+
+    var degInput = document.getElementById('deg');
+    var degVal   = document.getElementById('deg-val');
+    var svg      = document.getElementById('fit-svg');
+    var elTrain  = document.getElementById('loss-train');
+    var elVal    = document.getElementById('loss-val');
+    var elDiag   = document.getElementById('fit-diag');
+
+    /* --- Khớp đa thức bằng phương trình chuẩn + khử Gauss có chọn trụ --- */
+    function polyfit(pts, deg) {
+      var n = deg + 1;
+      var A = [], b = [];
+      for (var i = 0; i < n; i++) {
+        A.push(new Array(n).fill(0));
+        b.push(0);
+      }
+      pts.forEach(function (p) {
+        var x = p[0], y = p[1];
+        var pow = [1];
+        for (var k = 1; k <= 2 * deg; k++) pow.push(pow[k - 1] * x);
+        for (var r = 0; r < n; r++) {
+          for (var c = 0; c < n; c++) A[r][c] += pow[r + c];
+          b[r] += pow[r] * y;
+        }
+      });
+
+      // Khử Gauss với chọn trụ từng phần
+      for (var col = 0; col < n; col++) {
+        var piv = col;
+        for (var r2 = col + 1; r2 < n; r2++) {
+          if (Math.abs(A[r2][col]) > Math.abs(A[piv][col])) piv = r2;
+        }
+        if (Math.abs(A[piv][col]) < 1e-12) return null;   // ma trận suy biến
+        var tmp = A[col]; A[col] = A[piv]; A[piv] = tmp;
+        var tb = b[col];  b[col] = b[piv];  b[piv] = tb;
+
+        for (var r3 = col + 1; r3 < n; r3++) {
+          var f = A[r3][col] / A[col][col];
+          for (var c3 = col; c3 < n; c3++) A[r3][c3] -= f * A[col][c3];
+          b[r3] -= f * b[col];
+        }
+      }
+      var coef = new Array(n).fill(0);
+      for (var r4 = n - 1; r4 >= 0; r4--) {
+        var s = b[r4];
+        for (var c4 = r4 + 1; c4 < n; c4++) s -= A[r4][c4] * coef[c4];
+        coef[r4] = s / A[r4][r4];
+      }
+      return coef;
+    }
+
+    function evalPoly(coef, x) {
+      var y = 0;
+      for (var i = coef.length - 1; i >= 0; i--) y = y * x + coef[i];
+      return y;
+    }
+
+    function mse(coef, pts) {
+      var s = 0;
+      pts.forEach(function (p) {
+        var d = p[1] - evalPoly(coef, p[0]);
+        s += d * d;
+      });
+      return s / pts.length;
+    }
+
+    /* --- Vẽ --- */
+    var W = 420, H = 260, PAD = 26;
+    var Y_MIN = -0.9, Y_MAX = 1.8;
+
+    function sx(x) { return PAD + x * (W - 2 * PAD); }
+    function sy(y) { return H - PAD - ((y - Y_MIN) / (Y_MAX - Y_MIN)) * (H - 2 * PAD); }
+
+    function render(deg) {
+      var coef = polyfit(TRAIN, deg);
+      if (!coef) {
+        elDiag.innerHTML = 'Bậc quá cao so với số điểm dữ liệu — hệ phương trình suy biến.';
+        return;
+      }
+
+      var lossT = mse(coef, TRAIN);
+      var lossV = mse(coef, VAL);
+
+      // Đường cong mô hình, cắt bớt phần vượt khung để không tràn ra ngoài
+      var d = '', started = false;
+      for (var i = 0; i <= 240; i++) {
+        var x = i / 240;
+        var y = evalPoly(coef, x);
+        if (y < Y_MIN - 0.3 || y > Y_MAX + 0.3) { started = false; continue; }
+        var yy = Math.max(Y_MIN, Math.min(Y_MAX, y));
+        d += (started ? ' L' : ' M') + sx(x).toFixed(1) + ',' + sy(yy).toFixed(1);
+        started = true;
+      }
+
+      var parts = [];
+      // Lưới ngang
+      for (var g = 0; g <= 3; g++) {
+        var gy = PAD + g * (H - 2 * PAD) / 3;
+        parts.push('<line x1="' + PAD + '" y1="' + gy + '" x2="' + (W - PAD) +
+                   '" y2="' + gy + '" stroke="#d8d0c0" stroke-width="1" stroke-dasharray="3 4"/>');
+      }
+      // Đường cong
+      parts.push('<path d="' + d + '" fill="none" stroke="#5b4b8a" stroke-width="2.4" stroke-linejoin="round"/>');
+      // Điểm train
+      TRAIN.forEach(function (p) {
+        parts.push('<circle cx="' + sx(p[0]).toFixed(1) + '" cy="' + sy(p[1]).toFixed(1) +
+                   '" r="4" fill="#3c5570"/>');
+      });
+      // Điểm validation
+      VAL.forEach(function (p) {
+        parts.push('<rect x="' + (sx(p[0]) - 3.6).toFixed(1) + '" y="' + (sy(p[1]) - 3.6).toFixed(1) +
+                   '" width="7.2" height="7.2" fill="#a35a2a" transform="rotate(45 ' +
+                   sx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1) + ')"/>');
+      });
+
+      svg.innerHTML = parts.join('');
+      elTrain.textContent = lossT.toFixed(4);
+      elVal.textContent   = lossV.toFixed(4);
+
+      var ratio = lossV / Math.max(lossT, 1e-9);
+      var msg;
+      if (deg <= 1) {
+        msg = '<strong>Underfitting.</strong> Một đường thẳng không thể mô tả được quy luật cong ' +
+              'của dữ liệu. Cả hai loss đều cao — đây là <em>bias cao</em>.';
+      } else if (lossV < 0.02 && ratio < 3) {
+        msg = '<strong>Vừa vặn.</strong> Loss thấp trên cả hai tập và khoảng cách nhỏ. ' +
+              'Mô hình nắm được quy luật thật mà không học thuộc nhiễu.';
+      } else if (ratio > 6) {
+        msg = '<strong>Overfitting nặng.</strong> Loss train rất thấp nhưng loss validation cao ' +
+              'gấp ' + ratio.toFixed(0) + ' lần. Đường cong uốn éo để đi qua từng điểm huấn luyện — ' +
+              'nó đang học thuộc nhiễu. Đây là <em>variance cao</em>.';
+      } else if (ratio > 2.5) {
+        msg = '<strong>Bắt đầu overfitting.</strong> Khoảng cách giữa hai loss đang nới rộng. ' +
+              'Đây là vùng cần dừng lại.';
+      } else {
+        msg = '<strong>Chấp nhận được.</strong> Thử tăng/giảm bậc để tìm điểm loss validation ' +
+              'thấp nhất.';
+      }
+      elDiag.innerHTML = msg;
+    }
+
+    degInput.addEventListener('input', function () {
+      degVal.textContent = degInput.value;
+      render(parseInt(degInput.value, 10));
+    });
+
+    render(parseInt(degInput.value, 10));
+  })();
+  </script>
+</body>
+</html>
