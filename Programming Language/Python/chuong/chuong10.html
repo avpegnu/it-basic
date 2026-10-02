@@ -630,11 +630,14 @@ lock = threading.Lock()
 <span class="tok-kw">with</span> lock:
     shared_state += <span class="tok-num">1</span>
 
-<span class="tok-com"># Database connection (SQLite) — commit/rollback + close</span>
+<span class="tok-com"># Database connection (SQLite) — commit/rollback, NHƯNG KHÔNG close</span>
 <span class="tok-kw">import</span> sqlite3
-<span class="tok-kw">with</span> sqlite3.connect(<span class="tok-str">"db.sqlite"</span>) <span class="tok-kw">as</span> conn:
-    conn.execute(<span class="tok-str">"INSERT INTO ..."</span>)
-    <span class="tok-com"># commit khi không exception, rollback nếu có</span></code></pre>
+<span class="tok-kw">from</span> contextlib <span class="tok-kw">import</span> closing
+<span class="tok-kw">with</span> closing(sqlite3.connect(<span class="tok-str">"db.sqlite"</span>)) <span class="tok-kw">as</span> conn:  <span class="tok-com"># closing → close khi ra</span>
+    <span class="tok-kw">with</span> conn:                     <span class="tok-com"># transaction: commit nếu OK, rollback nếu exception</span>
+        conn.execute(<span class="tok-str">"INSERT INTO ..."</span>)
+<span class="tok-com"># ⚠️ `with sqlite3.connect(...) as conn` một mình chỉ quản lý transaction —</span>
+<span class="tok-com">#    connection vẫn mở sau khối with (đã ghi rõ trong tài liệu chính thức).</span></code></pre>
         </div>
 
         <div class="callout callout-mental">
