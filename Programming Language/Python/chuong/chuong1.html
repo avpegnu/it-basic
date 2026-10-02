@@ -286,7 +286,8 @@ uv python list</code></pre>
           <div class="callout-label">💡 Khuyên</div>
           <p>
             Người mới năm 2026: dùng <strong>uv</strong> nếu OK với tool còn mới. Dùng <strong>pyenv</strong> nếu muốn tool
-            đã rất ổn định 10+ năm và nhiều tài liệu. Sub-pillar này demo cả hai để bạn tự chọn.
+            đã rất ổn định 10+ năm và nhiều tài liệu. Sub-pillar này demo cả hai để bạn tự chọn — xem bảng so sánh và cách
+            chuyển từ pyenv sang uv ở <a href="#pyenv-vs-uv">mục 7.2–7.3</a>.
           </p>
         </div>
 
@@ -683,6 +684,101 @@ uv add --dev ruff pytest</code></pre>
           <p>
             Dùng <code>uv</code> trừ khi có lý do cụ thể không. Nhanh, tích hợp, lock file deterministic, không phải nhớ
             activate venv. Kể cả nếu team chưa dùng uv, output <code>pyproject.toml</code> của uv vẫn tương thích với pip.
+          </p>
+        </div>
+
+        <h3 id="pyenv-vs-uv">7.2. pyenv hay uv — chọn cái nào?</h3>
+
+        <p>
+          Hai tool không loại trừ nhau, nhưng phạm vi khác hẳn: <strong>pyenv chỉ quản lý phiên bản Python</strong>, còn
+          <strong>uv quản lý cả Python lẫn venv, package, lock file</strong>. Dùng pyenv thì vẫn cần thêm pip + venv
+          (hoặc poetry); dùng uv thì một binary là đủ.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tiêu chí</th><th>pyenv</th><th>uv</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Cài nhiều bản Python</td><td>Có — <strong>biên dịch từ source</strong>, mất vài phút mỗi bản</td><td>Có — tải bản dựng sẵn, vài giây</td></tr>
+              <tr><td>Cơ chế chọn bản Python</td><td>Shim trong <code>~/.pyenv/shims</code> + sửa PATH trong <code>~/.zshrc</code></td><td>Đọc <code>.python-version</code> / <code>requires-python</code> khi chạy <code>uv run</code>, không cần shim</td></tr>
+              <tr><td>Tạo virtualenv</td><td>Không — dùng <code>python -m venv</code> hoặc plugin</td><td><code>uv venv</code>, hoặc tự tạo khi <code>uv add</code>/<code>uv run</code></td></tr>
+              <tr><td>Cài package</td><td>Không — dùng pip</td><td><code>uv add</code> / <code>uv pip install</code>, nhanh hơn pip 10–100 lần</td></tr>
+              <tr><td>Lock file</td><td>Không</td><td><code>uv.lock</code> — cài lại y hệt trên máy khác</td></tr>
+              <tr><td>Tool CLI toàn cục (ruff, httpie…)</td><td>Không — cần pipx</td><td><code>uv tool install</code>, <code>uvx</code></td></tr>
+              <tr><td>Lệnh <code>python</code> toàn cục</td><td><code>pyenv global 3.12</code></td><td><code>uv python install 3.12 --default</code></td></tr>
+              <tr><td>Độ chín</td><td>10+ năm, tài liệu cũ hầu hết dùng pyenv</td><td>Mới (2024+), phát triển rất nhanh, đã thành mặc định của nhiều team</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-label">💡 Quy tắc chọn</div>
+          <ul>
+            <li><strong>Project mới, học cá nhân</strong> → uv. Một tool, ít cấu hình shell, ít chỗ hỏng.</li>
+            <li><strong>Project cũ của team đang dùng pyenv + pip/poetry</strong> → theo team. uv vẫn đọc được
+              <code>.python-version</code> nên chuyển dần được.</li>
+            <li>Không cần giữ cả hai lâu dài: hai cơ chế chọn Python cùng tồn tại dễ làm <code>which python</code> trả về
+              thứ bạn không ngờ.</li>
+          </ul>
+        </div>
+
+        <h3 id="pyenv-sang-uv">7.3. Chuyển từ pyenv sang uv</h3>
+
+        <div class="callout callout-gotcha">
+          <div class="callout-label">🔥 Gotcha — <code>alias python=python3</code> che mất mọi thứ</div>
+          <p>
+            Nhiều hướng dẫn cũ bảo thêm <code>alias python=python3</code> vào <code>~/.zshrc</code> cho tiện. Trong zsh,
+            <strong>alias được ưu tiên hơn PATH</strong>, nên sau khi cài pyenv bạn sẽ thấy:
+          </p>
+<pre><code>❯ which python
+python: aliased to python3</code></pre>
+          <p>
+            <code>python</code> không đi qua shim của pyenv (hay qua <code>~/.local/bin</code> của uv) nữa, mà đi theo
+            <code>python3</code> đầu tiên tìm thấy trong PATH — có thể là Homebrew hoặc system Python. Cách sửa: xóa/comment
+            alias đó, rồi <code>unalias python; hash -r</code> trong terminal đang mở. Kiểm tra bằng
+            <code>type -a python</code> — lệnh này liệt kê cả alias lẫn mọi file thực thi trên PATH, theo đúng thứ tự shell
+            sẽ chọn.
+          </p>
+        </div>
+
+        <p>Quy trình chuyển hẳn sang uv trên macOS:</p>
+
+        <div class="code-wrap">
+          <div class="code-meta">
+            <span>Terminal — gỡ pyenv, dùng uv</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+<pre><code><span class="tok-com"># 1. Cài uv (nếu chưa có) — chọn MỘT cách</span>
+curl -LsSf https://astral.sh/uv/install.sh | sh    <span class="tok-com"># cài vào ~/.local/bin</span>
+brew install uv                                    <span class="tok-com"># hoặc qua Homebrew</span>
+
+<span class="tok-com"># 2. Cài bản Python bạn cần và đặt làm python mặc định</span>
+uv python install 3.12 --default    <span class="tok-com"># tạo python, python3 trong ~/.local/bin</span>
+
+<span class="tok-com"># 3. Xóa cấu hình pyenv trong ~/.zshrc — 3 dòng này:</span>
+<span class="tok-com">#   export PYENV_ROOT="$HOME/.pyenv"</span>
+<span class="tok-com">#   [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"</span>
+<span class="tok-com">#   eval "$(pyenv init -)"</span>
+
+<span class="tok-com"># 4. Gỡ pyenv và các bản Python nó đã cài</span>
+brew uninstall pyenv
+rm -rf ~/.pyenv                     <span class="tok-com"># xóa luôn mọi Python + package cài qua pyenv</span>
+
+<span class="tok-com"># 5. Mở terminal mới và kiểm tra</span>
+type -a python      <span class="tok-com"># ~/.local/bin/python đứng đầu</span>
+python --version    <span class="tok-com"># Python 3.12.x</span></code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-label">⚠️ Trước khi <code>rm -rf ~/.pyenv</code></div>
+          <p>
+            Venv của project nào được tạo từ Python của pyenv sẽ <strong>hỏng</strong> sau khi xóa, vì
+            <code>.venv/bin/python</code> chỉ là symlink trỏ vào <code>~/.pyenv/versions/...</code>. Venv không đáng giữ:
+            xóa <code>.venv/</code> rồi chạy <code>uv sync</code> (nếu có <code>pyproject.toml</code>) hoặc
+            <code>uv venv &amp;&amp; uv pip install -r requirements.txt</code> để tạo lại. Đây cũng là lý do không bao giờ
+            commit <code>.venv/</code> — nó luôn tạo lại được từ manifest.
           </p>
         </div>
 
@@ -1313,6 +1409,8 @@ name: <span class="tok-type">str</span> = sys.argv[<span class="tok-num">1</span
           <li class="level-3"><a href="#python-version-file">6.1. .python-version</a></li>
           <li><a href="#uv">7. uv modern tool</a></li>
           <li class="level-3"><a href="#uv-init">7.1. uv init project</a></li>
+          <li class="level-3"><a href="#pyenv-vs-uv">7.2. pyenv hay uv?</a></li>
+          <li class="level-3"><a href="#pyenv-sang-uv">7.3. Chuyển pyenv → uv</a></li>
           <li><a href="#pip-co-ban">8. pip và PyPI</a></li>
           <li><a href="#pyproject-toml">9. pyproject.toml</a></li>
           <li><a href="#pep8-zen">10. PEP 8 &amp; Zen</a></li>
