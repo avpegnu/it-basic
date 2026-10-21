@@ -14,6 +14,7 @@ Hai repo mặc định nằm cạnh nhau. Nội dung được đối chiếu the
 | `Programming Language/`, `Fullstack-ContactCenter/` | `src/content/courses/` theo `track` và trường `source` |
 | `Database/`, `DevOps/`, `SystemDesign/`, `AI/` | `src/content/courses/` theo `track` và trường `source` |
 | `NotesInterview/content/<topic>.json` | `src/content/topics/<topic>.json` |
+| `SystemDesign/Handbook/*.html` (qua `tools/sync-handbook.py`) | `src/content/handbook/*.json` (nội dung Việt–Anh chuẩn) |
 | Navigation, danh mục, trang HTML theo chủ đề | `src/lib/content.ts`, các routes và sidebar tương ứng |
 
 - Trước khi sửa, đọc `git status` ở cả hai repo và giữ nguyên thay đổi ngoài phạm vi của người dùng.
