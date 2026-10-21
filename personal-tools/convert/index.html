@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f5" />
+    <meta
+      name="description"
+      content="Chuyển đổi Base64, URL, HTML entities, JSON, YAML, CSV và hex."
+    />
+    <title>Chuyển đổi dữ liệu — Personal Tools</title>
+    <link rel="icon" href="../assets/favicon.svg" />
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../assets/vendor/lossless-json.js" defer></script>
+    <script src="../assets/vendor/js-yaml.min.js" defer></script>
+    <script src="../assets/vendor/papaparse.min.js" defer></script>
+    <script src="../assets/common.js" defer></script>
+    <script src="../assets/data.js" defer></script>
+    <script src="../assets/convert.js" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <a class="brand" href="../" aria-label="Personal Tools — Trang chủ"
+        ><span class="brand-mark" aria-hidden="true">⌘</span>personal<span
+          class="brand-light"
+          >tools</span
+        ><span class="brand-dot">.</span></a
+      ><a class="header-back" href="../">← Tất cả công cụ</a>
+    </header>
+    <main class="container workspace">
+      <nav class="breadcrumb" aria-label="Đường dẫn">
+        <a href="../">Công cụ</a><span aria-hidden="true">/</span
+        ><span>Chuyển đổi dữ liệu</span>
+      </nav>
+      <div class="page-heading"><h1>Chuyển đổi dữ liệu</h1></div>
+      <noscript
+        ><p class="status error">
+          Cần bật JavaScript để sử dụng công cụ.
+        </p></noscript
+      >
+      <div class="toolbar">
+        <div class="toolbar-field conversion-field">
+          <label class="field-label" for="conversion-type"
+            >Phép chuyển đổi</label
+          ><select id="conversion-type">
+            <optgroup label="Base64">
+              <option value="base64-encode">Văn bản → Base64</option>
+              <option value="base64-decode">Base64 → Văn bản</option>
+              <option value="base64url-encode">
+                Văn bản → Base64 URL-safe
+              </option>
+              <option value="base64url-decode">
+                Base64 URL-safe → Văn bản
+              </option>
+            </optgroup>
+            <optgroup label="URL">
+              <option value="url-encode">URL component · Encode</option>
+              <option value="url-decode">URL component · Decode</option>
+              <option value="uri-encode">URL đầy đủ · Encode</option>
+              <option value="uri-decode">URL đầy đủ · Decode</option>
+              <option value="form-encode">Form URL · Encode</option>
+              <option value="form-decode">
+                Form URL · Decode (+ → khoảng trắng)
+              </option>
+            </optgroup>
+            <optgroup label="HTML / JSON string">
+              <option value="html-encode">HTML entities · Encode</option>
+              <option value="html-decode">HTML entities · Decode</option>
+              <option value="json-escape">Văn bản → JSON string</option>
+              <option value="json-unescape">JSON string → Văn bản</option>
+            </optgroup>
+            <optgroup label="JSON / YAML / CSV">
+              <option value="json-yaml">JSON → YAML</option>
+              <option value="yaml-json">YAML → JSON</option>
+              <option value="json-csv">JSON → CSV</option>
+              <option value="csv-json">CSV → JSON</option>
+            </optgroup>
+            <optgroup label="Hex">
+              <option value="hex-encode">UTF-8 → Hex</option>
+              <option value="hex-decode">Hex → UTF-8</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="toolbar-field" id="csv-options" hidden>
+          <label class="field-label" for="csv-types">Giá trị CSV</label
+          ><select id="csv-types">
+            <option value="strings">Giữ dạng chuỗi</option>
+            <option value="auto">Nhận dạng số / boolean / null</option>
+          </select>
+        </div>
+        <div class="toolbar-actions">
+          <button type="button" id="swap-direction" class="button secondary">
+            Đảo chiều ⇄</button
+          ><button type="button" id="load-sample" class="button secondary">
+            Mẫu
+          </button>
+        </div>
+      </div>
+      <div class="work-grid">
+        <section class="panel editor-panel" aria-labelledby="input-heading">
+          <div class="panel-heading">
+            <h2 id="input-heading">Đầu vào</h2>
+            <button type="button" id="clear-data" class="text-button">
+              Xóa
+            </button>
+          </div>
+          <label class="sr-only" for="convert-input">Dữ liệu đầu vào</label
+          ><textarea
+            id="convert-input"
+            class="code-editor"
+            placeholder="Dán dữ liệu…"
+            spellcheck="false"
+          ></textarea>
+          <div class="result-actions">
+            <button type="button" id="convert-data" class="button primary">
+              Chuyển đổi</button
+            ><button type="button" id="load-file" class="button secondary">
+              Mở tệp
+            </button>
+          </div>
+        </section>
+        <section class="panel editor-panel" aria-labelledby="output-heading">
+          <div class="panel-heading">
+            <h2 id="output-heading">Kết quả</h2>
+            <span id="output-count" class="step-label">0 ký tự</span>
+          </div>
+          <label class="sr-only" for="convert-output"
+            >Dữ liệu đã chuyển đổi</label
+          ><textarea
+            id="convert-output"
+            class="code-editor"
+            placeholder="Chưa có kết quả"
+            readonly
+            spellcheck="false"
+          ></textarea>
+          <div class="result-actions">
+            <button
+              type="button"
+              id="copy-output"
+              class="button secondary"
+              disabled
+            >
+              Sao chép</button
+            ><button
+              type="button"
+              id="download-output"
+              class="button secondary"
+              disabled
+            >
+              Tải xuống ↓</button
+            ><button type="button" id="use-output" class="text-button" disabled>
+              Dùng làm đầu vào ↑
+            </button>
+          </div>
+        </section>
+      </div>
+      <input
+        id="text-file"
+        type="file"
+        accept=".txt,.json,.yaml,.yml,.csv,.md,.html,.css"
+        hidden
+      />
+      <p
+        id="convert-status"
+        class="status"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </main>
+  </body>
+</html>

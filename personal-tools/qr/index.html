@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f5" />
+    <meta
+      name="description"
+      content="Đọc mã QR từ ảnh, ảnh chụp màn hình hoặc clipboard. Tạo QR cho đường dẫn, văn bản và tải PNG ngay trên trình duyệt."
+    />
+    <title>Công cụ QR — Personal Tools</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../assets/vendor/jsQR.js" defer></script>
+    <script src="../assets/vendor/qrcode.js" defer></script>
+    <script src="../assets/qr.js" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <a class="brand" href="../" aria-label="Personal Tools — Trang chủ"
+        ><span class="brand-mark" aria-hidden="true">⌘</span>personal<span
+          class="brand-light"
+          >tools</span
+        ><span class="brand-dot">.</span></a
+      >
+      <a class="header-back" href="../">← Tất cả công cụ</a>
+    </header>
+    <main class="container workspace">
+      <nav class="breadcrumb" aria-label="Đường dẫn">
+        <a href="../">Công cụ</a><span aria-hidden="true">/</span
+        ><span>QR</span>
+      </nav>
+      <div class="page-heading">
+        <div>
+          <h1>QR</h1>
+        </div>
+        <span class="heading-decoration" aria-hidden="true"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+          >
+            <path
+              d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h3v3h-3zM21 14v7h-7M12 3v3M3 12h4M12 9v6M9 12h7M12 18v3M18 12h3"
+            /></svg
+        ></span>
+      </div>
+      <noscript
+        ><p class="status error">
+          Bạn cần bật JavaScript để sử dụng công cụ QR.
+        </p></noscript
+      >
+      <div class="tabs" role="tablist" aria-label="Chức năng QR">
+        <button
+          type="button"
+          class="tab"
+          id="read-tab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="read-panel"
+          tabindex="0"
+        >
+          Đọc mã QR
+        </button>
+        <button
+          type="button"
+          class="tab"
+          id="create-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="create-panel"
+          tabindex="-1"
+        >
+          Tạo mã QR
+        </button>
+      </div>
+      <section id="read-panel" role="tabpanel" aria-labelledby="read-tab">
+        <div class="work-grid">
+          <section class="panel input-panel" aria-labelledby="upload-heading">
+            <div class="panel-heading">
+              <h2 id="upload-heading">Ảnh chứa mã QR</h2>
+              <span class="step-label">01 / ĐẦU VÀO</span>
+            </div>
+            <input
+              type="file"
+              id="image-input"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+              hidden
+            />
+            <button
+              type="button"
+              id="drop-zone"
+              class="drop-zone"
+              aria-describedby="upload-help"
+            >
+              <span class="upload-icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <path
+                    d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"
+                  /></svg
+              ></span>
+              <strong>Kéo ảnh vào đây</strong
+              ><span
+                >hoặc
+                <span class="upload-link">chọn ảnh từ thiết bị</span></span
+              >
+              <span class="file-types" id="upload-help"
+                >PNG, JPG, WebP, GIF, BMP · Tối đa 20 MB</span
+              >
+            </button>
+            <div class="paste-hint">
+              Dán ảnh:
+              <kbd id="paste-shortcut">Ctrl + V</kbd>
+            </div>
+            <div id="image-preview" class="image-preview" hidden>
+              <canvas id="preview-canvas" aria-label="Ảnh QR vừa chọn"></canvas>
+              <div class="preview-caption">
+                <span id="file-name"></span
+                ><button type="button" id="clear-image" class="text-button">
+                  Xóa ảnh
+                </button>
+              </div>
+            </div>
+            <p
+              id="read-status"
+              class="status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </section>
+          <section
+            class="panel result-panel"
+            aria-labelledby="result-heading"
+            aria-busy="false"
+            id="read-result-panel"
+          >
+            <div class="panel-heading">
+              <h2 id="result-heading">Nội dung mã QR</h2>
+              <span class="step-label">02 / KẾT QUẢ</span>
+            </div>
+            <div id="read-empty" class="empty-state">
+              <span class="empty-symbol" aria-hidden="true">↳</span
+              ><strong>Chưa có kết quả</strong>
+            </div>
+            <div id="read-result" class="result-content" hidden>
+              <span id="result-type" class="result-tag">VĂN BẢN</span
+              ><label class="sr-only" for="decoded-text">Nội dung đã đọc</label
+              ><textarea
+                id="decoded-text"
+                readonly
+                spellcheck="false"
+              ></textarea>
+              <div class="result-actions">
+                <button type="button" id="copy-result" class="button primary">
+                  Sao chép nội dung</button
+                ><a
+                  id="open-link"
+                  class="button secondary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  hidden
+                  >Mở đường dẫn ↗</a
+                >
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+      <section
+        id="create-panel"
+        role="tabpanel"
+        aria-labelledby="create-tab"
+        hidden
+      >
+        <div class="work-grid">
+          <form id="create-form" class="panel input-panel">
+            <div class="panel-heading">
+              <h2>Nội dung</h2>
+              <span class="step-label">01 / ĐẦU VÀO</span>
+            </div>
+            <label class="field-label" for="qr-content"
+              >Đường dẫn hoặc văn bản</label
+            >
+            <textarea
+              id="qr-content"
+              class="content-input"
+              placeholder="https://example.com hoặc văn bản"
+              maxlength="4000"
+              spellcheck="false"
+              required
+            ></textarea>
+            <div class="form-row">
+              <div>
+                <label class="field-label" for="qr-size">Kích thước ảnh</label
+                ><select id="qr-size">
+                  <option value="256">256 × 256 px</option>
+                  <option value="512" selected>512 × 512 px</option>
+                  <option value="1024">1024 × 1024 px</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="qr-level">Mức sửa lỗi</label
+                ><select id="qr-level">
+                  <option value="L">Thấp · L</option>
+                  <option value="M" selected>Vừa · M</option>
+                  <option value="Q">Cao · Q</option>
+                  <option value="H">Rất cao · H</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="button primary create-button">
+              Tạo mã QR <span aria-hidden="true">↗</span>
+            </button>
+            <p
+              id="create-status"
+              class="status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </form>
+          <section
+            class="panel result-panel"
+            aria-labelledby="generated-heading"
+          >
+            <div class="panel-heading">
+              <h2>Mã QR</h2>
+              <span class="step-label">02 / KẾT QUẢ</span>
+            </div>
+            <div id="create-empty" class="empty-state">
+              <span class="empty-symbol" aria-hidden="true">▦</span
+              ><strong>Chưa có mã QR</strong>
+            </div>
+            <div id="create-result" class="generated-result" hidden>
+              <div class="qr-preview">
+                <canvas
+                  id="generated-canvas"
+                  aria-label="Mã QR đã tạo"
+                ></canvas>
+              </div>
+              <span id="generated-info" class="field-help"></span
+              ><button type="button" id="download-qr" class="button primary">
+                Tải ảnh PNG ↓
+              </button>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
