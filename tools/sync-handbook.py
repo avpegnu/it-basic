@@ -60,11 +60,15 @@ for lang in ['vi','en']:
     out+='</svg></div><p>'+('Sơ đồ các component; các luồng request được giải thích đầy đủ theo thứ tự bên dưới.' if lang=='vi' else 'Component map; the complete ordered request paths are explained below.')+'</p>'
     for trace in graph['traces']:out+=f'<h3>{text(trace["label"])}</h3><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
     out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in graph['nodes'])+'</dl>'
-   for stage in s.get('stages',[]):out+=f'<h3>{text(stage["title"])}</h3><p>{text(stage["description"])}</p><aside>{text(stage["exitCriteria"])}</aside>'
    for stage in s.get('stages',[]):
+    out+=f'<h3>{text(stage["title"])}</h3><p>{text(stage["description"])}</p>'
+    for key,vi,en in [('problem','Áp lực cần giải quyết','Problem pressure'),('decision','Quyết định kiến trúc','Architectural decision'),('tradeoff','Chi phí và đánh đổi','Costs and trade-offs'),('nextPressure','Khi nào cần bước tiếp?','When is the next step needed?')]:
+     if stage.get(key):out+=f'<p><strong>{vi if lang=="vi" else en}: </strong>{text(stage[key])}</p>'
+    out+=f'<aside>{text(stage["exitCriteria"])}</aside>'
     if stage.get('diagram'):
      for trace in stage['diagram']['traces']:
       out+=f'<h4>{text(trace["label"])}</h4><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
+     out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in stage['diagram']['nodes'])+'</dl>'
    if c:=s.get('callout'):out+=f'<aside><strong>{text(c["title"])}</strong><p>{text(c["body"])}</p></aside>'
    for q in s.get('questions',[]):
     out+=f'<details><summary>{text(q["question"])}</summary>'+''.join(f'<p>{text(a)}</p>' for a in q['answer'])
