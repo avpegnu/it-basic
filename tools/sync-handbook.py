@@ -92,6 +92,11 @@ for lang in ['vi','en']:
      for trace in stage['diagram']['traces']:
       out+=f'<h4>{text(trace["label"])}</h4><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
      out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in stage['diagram']['nodes'])+'</dl>'
+   for scenario in s.get('workshop',[]):
+    out+=f'<article class="reasoning-scenario"><h3 id="workshop-{esc(scenario["id"])}">{text(scenario["title"])}</h3><p>{text(scenario["prompt"])}</p><aside>{text(scenario["proposal"])}</aside>'
+    for claim in scenario['claims']:
+     out+=f'<section class="reasoning-claim"><h4>{text(claim["title"])}</h4><p>{text(claim["statement"])}</p><p>{text(claim["why"])}</p><p>{text(claim["check"])}</p></section>'
+    out+='</article>'
    if s.get('experiment')=='visual-recall':
     def topic_text(value):
      if lang=='vi':return esc(value)
