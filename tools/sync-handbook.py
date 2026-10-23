@@ -104,6 +104,7 @@ for lang in ['vi','en']:
     # Static component map; the complete ordered request paths below carry flow semantics.
     for n in graph['nodes']:out+=f'<g><rect x="{n["x"]-88}" y="{n["y"]-32}" width="176" height="64" rx="12"/><text x="{n["x"]}" y="{n["y"]+5}" text-anchor="middle">{text(n["label"])}</text></g>'
     out+='</svg></div><p>'+('Sơ đồ các component; các luồng request được giải thích đầy đủ theo thứ tự bên dưới.' if lang=='vi' else 'Component map; the complete ordered request paths are explained below.')+'</p>'
+    out+=f'<p class="diagram-caption">{text(graph["caption"])}</p>'
     for trace in graph['traces']:out+=f'<h3>{text(trace["label"])}</h3><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
     out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in graph['nodes'])+'</dl>'
    for stage in s.get('stages',[]):
@@ -112,6 +113,7 @@ for lang in ['vi','en']:
      if stage.get(key):out+=f'<p><strong>{vi if lang=="vi" else en}: </strong>{text(stage[key])}</p>'
     out+=f'<aside>{text(stage["exitCriteria"])}</aside>'
     if stage.get('diagram'):
+     out+=f'<p class="stage-diagram-caption">{text(stage["diagram"]["caption"])}</p>'
      for trace in stage['diagram']['traces']:
       out+=f'<h4>{text(trace["label"])}</h4><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
      out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in stage['diagram']['nodes'])+'</dl>'
