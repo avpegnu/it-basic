@@ -20,6 +20,9 @@ glossary_folder=SOURCE.parent/'glossary'
 glossary=[e for p in sorted(glossary_folder.glob('*.json')) for e in json.loads(p.read_text())]
 if any(s.get('experiment')=='glossary' for l in lessons for s in l['sections']) and not glossary:raise SystemExit('Glossary source entries missing')
 glossary.sort(key=lambda e:e['term'].casefold())
+quiz_folder=SOURCE.parent/'quiz'
+quiz=[q for p in sorted(quiz_folder.glob('*.json')) for q in json.loads(p.read_text())]
+if any(s.get('experiment')=='knowledge-quiz' for l in lessons for s in l['sections']) and not quiz:raise SystemExit('Quiz source questions missing')
 learning={};english={}
 if any(section.get('experiment') in ['visual-recall','question-bank'] for lesson in lessons for section in lesson['sections']):
  learning_source=SOURCE.parent.parent/'lib/learning.ts'
@@ -137,6 +140,20 @@ for lang in ['vi','en']:
     for item in lessons:
      if item['id']!=l['id'] and item.get('overview'):
       out+=f'<article><h3 id="map-handbook-{esc(item["id"])}">{text(item["title"])}</h3>'+render_flow(item['overview'])+'<ul>'+''.join(f'<li>{text(t)}</li>' for t in item['takeaways'])+f'</ul><a href="{esc(item["id"])}{"" if lang=="vi" else ".en"}.html">'+('Mở bài học →' if lang=='vi' else 'Open lesson →')+'</a></article>'
+   if s.get('experiment')=='knowledge-quiz':
+    out+='<p>'+('Câu hỏi và giải thích đầy đủ; công cụ làm bài/timer thuộc bản AV Lore.' if lang=='vi' else 'Complete questions and explanations; session and timer tools are available in AV Lore.')+'</p><div class="quiz-corpus-transcript">'
+    for q in quiz:
+     out+=f'<article><h3 id="quiz-{esc(q["id"])}">{text(q["question"])}</h3><ol>'
+     for option in q['options']:
+      out+=f'<li><strong>{text(option["text"])}</strong><p>{text(option["rationale"])}</p>'
+      if option['id']==q['correctId']:out+='<aside>'+('Đáp án theo tình huống' if lang=='vi' else 'Answer under the stated assumptions')+'</aside>'
+      out+='</li>'
+     out+='</ol>'+''.join(f'<p>{text(item)}</p>' for item in q['explanation'])
+     if q.get('lessonId') in known:
+      href=esc(q['lessonId'])+('' if lang=='vi' else '.en')+'.html'
+     else:href='../../NotesInterview/index.html#topic/'+esc(q['topicId'])
+     out+=f'<a href="{href}">'+('Mở bài học →' if lang=='vi' else 'Open lesson →')+'</a></article>'
+    out+='</div>'
    if s.get('experiment')=='question-bank':
     out+='<p>'+('Toàn bộ câu hỏi và lời giải; công cụ lọc/luyện thẻ thuộc bản AV Lore.' if lang=='vi' else 'Complete questions and answers; filtering and flashcard tools are available in AV Lore.')+'</p><div class="question-bank-transcript">'
     for i,q in enumerate(bank):
