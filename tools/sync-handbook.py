@@ -92,6 +92,16 @@ for lang in ['vi','en']:
      for trace in stage['diagram']['traces']:
       out+=f'<h4>{text(trace["label"])}</h4><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
      out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in stage['diagram']['nodes'])+'</dl>'
+   if mock:=s.get('mock'):
+    out+='<h3>'+('Coaching theo pha' if lang=='vi' else 'Phase coaching')+'</h3>'
+    for phase in mock['coach']:
+     out+=f'<section><h4>{text(phase["title"])}</h4><p>{text(phase["goal"])}</p><ul>'+''.join(f'<li>{text(c)}</li>' for c in phase['checklist'])+'</ul></section>'
+    for prompt in mock['prompts']:
+     out+=f'<article class="mock-prompt"><h3 id="mock-prompt-{esc(prompt["id"])}">{text(prompt["title"])}</h3><p>{text(prompt["prompt"])}</p><h4>Curveballs</h4><ul>'+''.join(f'<li>{text(c)}</li>' for c in prompt['curveballs'])+'</ul>'
+     if prompt.get('lessonId') in known:
+      id=prompt['lessonId'];out+=f'<a href="{esc(id)}{"" if lang=="vi" else ".en"}.html">{text(known[id]["title"])}</a>'
+     if id:=prompt.get('topicId'):out+=f'<a href="../../NotesInterview/index.html#topic/{esc(id)}">Notes &amp; Interview / {esc(id)}</a>'
+     out+='</article>'
    for scenario in s.get('workshop',[]):
     out+=f'<article class="reasoning-scenario"><h3 id="workshop-{esc(scenario["id"])}">{text(scenario["title"])}</h3><p>{text(scenario["prompt"])}</p><aside>{text(scenario["proposal"])}</aside>'
     for claim in scenario['claims']:
