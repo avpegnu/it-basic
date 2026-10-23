@@ -21,7 +21,7 @@ glossary=[e for p in sorted(glossary_folder.glob('*.json')) for e in json.loads(
 if any(s.get('experiment')=='glossary' for l in lessons for s in l['sections']) and not glossary:raise SystemExit('Glossary source entries missing')
 glossary.sort(key=lambda e:e['term'].casefold())
 learning={};english={}
-if any(section.get('experiment')=='visual-recall' for lesson in lessons for section in lesson['sections']):
+if any(section.get('experiment') in ['visual-recall','question-bank'] for lesson in lessons for section in lesson['sections']):
  learning_source=SOURCE.parent.parent/'lib/learning.ts'
  learning=json.loads(subprocess.run(['node','--input-type=module','-e','import(process.argv[1]).then(m=>console.log(JSON.stringify(m.learning)))',learning_source.resolve().as_uri()],check=True,capture_output=True,text=True).stdout)
  for name in ['en.json','en-overrides.json']:
@@ -41,6 +41,26 @@ style='''body{margin:0;background:#f9f8f4;color:#242c35;font:16px/1.9 system-ui,
 (DEST/'handbook.css').write_text(style+'\n')
 def page(title,body,lang,other):
  return f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(title)} · IT Basic</title><link rel="stylesheet" href="handbook.css"></head><body><header><nav><a href="../index.html">IT Basic / System Design</a><a href="index.html">Handbook</a><a href="{esc(other)}">{"English" if lang=="vi" else "Tiếng Việt"}</a></nav></header><main>{body}</main><footer>IT Basic · Learn. Understand. Build.</footer></body></html>'
+# Question Bank is a view of existing authoritative answers, not a second answer collection.
+bank=[]
+if any(s.get('experiment')=='question-bank' for l in lessons for s in l['sections']):
+ topic_folder=SOURCE.parent/'topics'
+ def bank_pair(value):return {'vi':value,'en':learning_english(value)}
+ for p in sorted(topic_folder.glob('*.json')):
+  topic=json.loads(p.read_text())
+  for q in topic['questions']:
+   bank.append({'question':bank_pair(q['question']),'answer':[bank_pair(q[k]) for k in ['answer','explanation'] if q[k].strip()], 'followup':bank_pair(q['followUp']) if q['followUp'] else None,'origins':[{'title':bank_pair(topic['title']),'topic':topic['id'],'question':q['id']}]})
+ for item in lessons:
+  for sec in item['sections']:
+   for q in sec.get('questions',[]):
+    bank.append({'question':q['question'],'answer':q['answer'],'followup':q.get('followup'),'origins':[{'title':item['title'],'lesson':item['id'],'section':sec['id']}]})
+ unique={}
+ for q in bank:
+  fingerprint=json.dumps([q['question'],q['answer'],q['followup']],sort_keys=True,ensure_ascii=False)
+  if fingerprint in unique:unique[fingerprint]['origins'].extend(q['origins'])
+  else:unique[fingerprint]=q
+ bank=list(unique.values())
+
 for lang in ['vi','en']:
  text=lambda pair:esc(pair[lang])
  for l in lessons:
@@ -117,6 +137,17 @@ for lang in ['vi','en']:
     for item in lessons:
      if item['id']!=l['id'] and item.get('overview'):
       out+=f'<article><h3 id="map-handbook-{esc(item["id"])}">{text(item["title"])}</h3>'+render_flow(item['overview'])+'<ul>'+''.join(f'<li>{text(t)}</li>' for t in item['takeaways'])+f'</ul><a href="{esc(item["id"])}{"" if lang=="vi" else ".en"}.html">'+('Mở bài học →' if lang=='vi' else 'Open lesson →')+'</a></article>'
+   if s.get('experiment')=='question-bank':
+    out+='<p>'+('Toàn bộ câu hỏi và lời giải; công cụ lọc/luyện thẻ thuộc bản AV Lore.' if lang=='vi' else 'Complete questions and answers; filtering and flashcard tools are available in AV Lore.')+'</p><div class="question-bank-transcript">'
+    for i,q in enumerate(bank):
+     out+=f'<article><h3 id="bank-question-{i+1}">{text(q["question"])}</h3>'+''.join(f'<p>{text(a)}</p>' for a in q['answer'])
+     if q.get('followup'):out+=f'<aside>{text(q["followup"])}</aside>'
+     for origin in q['origins']:
+      if origin.get('lesson'):href=esc(origin['lesson'])+('' if lang=='vi' else '.en')+'.html#'+esc(origin['section'])
+      else:href='../../NotesInterview/index.html#topic/'+esc(origin['topic'])
+      out+=f'<a href="{href}">{text(origin["title"])} →</a>'
+     out+='</article>'
+    out+='</div>'
    if s.get('experiment')=='glossary':
     out+='<nav aria-label="Glossary categories">'+''.join(f'<a href="#category-{esc(c)}">{text(label)}</a>' for c,label in {e['category']['id']:e['category']['label'] for e in glossary}.items())+'</nav>'
     for category in dict.fromkeys(e['category']['id'] for e in glossary):
