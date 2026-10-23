@@ -5,7 +5,9 @@ Interactive React worksheets remain exclusive to AV Lore; all explanatory text i
 """
 import html
 import json
+import re
 import sys
+import subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=Path(sys.argv[1]) if len(sys.argv)>1 else ROOT.parent/'av-lore/src/content/handbook'
@@ -18,6 +20,23 @@ glossary_folder=SOURCE.parent/'glossary'
 glossary=[e for p in sorted(glossary_folder.glob('*.json')) for e in json.loads(p.read_text())]
 if any(s.get('experiment')=='glossary' for l in lessons for s in l['sections']) and not glossary:raise SystemExit('Glossary source entries missing')
 glossary.sort(key=lambda e:e['term'].casefold())
+learning={};english={}
+if any(section.get('experiment')=='visual-recall' for lesson in lessons for section in lesson['sections']):
+ learning_source=SOURCE.parent.parent/'lib/learning.ts'
+ learning=json.loads(subprocess.run(['node','--input-type=module','-e','import(process.argv[1]).then(m=>console.log(JSON.stringify(m.learning)))',learning_source.resolve().as_uri()],check=True,capture_output=True,text=True).stdout)
+ for name in ['en.json','en-overrides.json']:
+  english.update(json.loads((SOURCE.parent.parent/'i18n'/name).read_text()))
+
+def learning_english(value):
+ key=' '.join(value.split());translated=english.get(key)
+ if translated is None and any(ord(c)>127 for c in key):raise ValueError('Missing saved learning-map translation: '+key)
+ result=translated if translated is not None else value
+ if re.search(r'[ăâđêôơưĂÂĐÊÔƠƯ\u1EA0-\u1EF9]',result):raise ValueError('Untranslated learning-map value: '+key)
+ return result
+# Validate every new shared-map translation before writing any generated pages.
+for topic_id,m in learning.items():
+ topic=json.loads((SOURCE.parent/'topics'/f'{topic_id}.json').read_text())
+ for value in [topic['title'],m['analogy'],*m['path'],*m['takeaways']]:learning_english(value)
 style='''body{margin:0;background:#f9f8f4;color:#242c35;font:16px/1.9 system-ui,sans-serif}main,header,footer{max-width:1050px;margin:auto;padding:24px}main{overflow-wrap:anywhere}.cards>*{min-width:0}h1{font-size:clamp(30px,5vw,48px);line-height:1.3}h2{margin-top:64px;border-top:1px solid #cbd0d5;padding-top:24px;scroll-margin-top:24px}a{color:#24547a}nav{display:flex;gap:20px;flex-wrap:wrap}pre{white-space:pre;overflow:auto;background:#e9edf0;padding:20px;border-radius:10px;font-size:13px}aside,details{background:#eef1ed;border:1px solid #cbd0d5;padding:20px;border-radius:10px;margin:24px 0}summary{cursor:pointer;font-weight:600}.table{overflow:auto}table{width:100%;border-collapse:collapse;min-width:540px}th,td{text-align:left;vertical-align:top;border:1px solid #cbd0d5;padding:14px}th{background:#edf0f1}.diagram{overflow:auto;background:#edf0f1}.diagram svg{min-width:760px;width:100%}.diagram rect{fill:#fff;stroke:#50718b;stroke-width:2}.diagram text{font:13px system-ui;fill:#242c35}dt{font-weight:700;margin-top:20px}dd{margin-left:0}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}.cards a{padding:24px;border:1px solid #cbd0d5;border-radius:12px;text-decoration:none} @media(prefers-color-scheme:dark){body{background:#111820;color:#d9e2eb}a{color:#8ec1ee}pre,aside,details,.diagram{background:#1d2a35}th{background:#233442}.diagram rect{fill:#263b4b;stroke:#9ab9d2}.diagram text{fill:#d9e2eb}}'''
 (DEST/'handbook.css').write_text(style+'\n')
 def page(title,body,lang,other):
@@ -73,6 +92,16 @@ for lang in ['vi','en']:
      for trace in stage['diagram']['traces']:
       out+=f'<h4>{text(trace["label"])}</h4><ol>'+''.join(f'<li>{text(step["description"])}</li>' for step in trace['steps'])+'</ol>'
      out+='<dl>'+''.join(f'<dt>{text(n["label"])}</dt><dd>{text(n["detail"])}</dd>' for n in stage['diagram']['nodes'])+'</dl>'
+   if s.get('experiment')=='visual-recall':
+    def topic_text(value):
+     if lang=='vi':return esc(value)
+     return esc(learning_english(value))
+    for topic_id,m in learning.items():
+     topic=json.loads((SOURCE.parent/'topics'/f'{topic_id}.json').read_text())
+     out+=f'<article><h3 id="map-topic-{esc(topic_id)}">Notes &amp; Interview / {topic_text(topic["title"])}</h3><ol>'+''.join(f'<li>{topic_text(step)}</li>' for step in m['path'])+'</ol><aside>'+topic_text(m['analogy'])+'</aside><ul>'+''.join(f'<li>{topic_text(t)}</li>' for t in m['takeaways'])+f'</ul><a href="../../NotesInterview/index.html#topic/{esc(topic_id)}">Notes &amp; Interview →</a></article>'
+    for item in lessons:
+     if item['id']!=l['id'] and item.get('overview'):
+      out+=f'<article><h3 id="map-handbook-{esc(item["id"])}">{text(item["title"])}</h3>'+render_flow(item['overview'])+'<ul>'+''.join(f'<li>{text(t)}</li>' for t in item['takeaways'])+f'</ul><a href="{esc(item["id"])}{"" if lang=="vi" else ".en"}.html">'+('Mở bài học →' if lang=='vi' else 'Open lesson →')+'</a></article>'
    if s.get('experiment')=='glossary':
     out+='<nav aria-label="Glossary categories">'+''.join(f'<a href="#category-{esc(c)}">{text(label)}</a>' for c,label in {e['category']['id']:e['category']['label'] for e in glossary}.items())+'</nav>'
     for category in dict.fromkeys(e['category']['id'] for e in glossary):
