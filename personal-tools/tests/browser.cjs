@@ -65,11 +65,13 @@ async function run() {
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
     await page.goto(`${origin}/personal-tools/`);
-    assert.equal(await page.locator(".tool-card").count(), 4);
+    assert.equal(await page.locator(".tool-card").count(), 5);
     await page.screenshot({
       path: path.join(outputDir, "home.png"),
       fullPage: true,
     });
+
+    await require("./image-pdf.cjs")(page, origin, outputDir);
 
     await page.goto(`${origin}/personal-tools/convert/`);
     const modes = await page
@@ -284,7 +286,7 @@ async function run() {
       "PASS: real Vietnamese/English OCR using local WASM/language files, editing, copy, cancellation, invalid file",
     );
 
-    for (const route of ["", "qr/", "ocr/", "format/", "convert/"]) {
+    for (const route of ["", "qr/", "ocr/", "image-pdf/", "format/", "convert/"]) {
       await page.goto(`${origin}/personal-tools/${route}`);
       for (const width of [360, 768, 1440]) {
         await page.setViewportSize({ width, height: 900 });

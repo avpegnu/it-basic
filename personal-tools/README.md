@@ -5,6 +5,7 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
 - Trang chủ: `/personal-tools/` (`personal-tools/index.html`).
 - Công cụ QR: `/personal-tools/qr/` (`personal-tools/qr/index.html`).
 - Ảnh → Văn bản: `/personal-tools/ocr/`.
+- Ảnh → PDF: `/personal-tools/image-pdf/`.
 - Format & Preview: `/personal-tools/format/`.
 - Chuyển đổi dữ liệu: `/personal-tools/convert/`.
 - Xem tại máy: chạy `python3 -m http.server 8000` từ thư mục gốc repo, rồi mở `http://localhost:8000/personal-tools/`.
@@ -27,6 +28,15 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
 - Engine OCR và dữ liệu Việt/Anh phục vụ từ `assets/vendor/`; không dùng CDN hay API OCR bên ngoài.
 - Có cả bản SIMD và không SIMD cho engine LSTM. Các file `.wasm.js` đã chứa binary WASM.
 - Độ chính xác phụ thuộc độ rõ, font, góc chụp và ngôn ngữ của ảnh; có thể sửa văn bản sau nhận dạng.
+
+## Ảnh → PDF
+
+- Chọn hoặc kéo thả nhiều ảnh, thêm ảnh nhiều lần; xem ảnh thu nhỏ, đổi thứ tự bằng nút ↑ ↓ và xóa từng ảnh.
+- Gom thành một PDF, mỗi ảnh một trang. Chọn A4, Letter hoặc trang theo tỉ lệ ảnh; hướng tự động/dọc/ngang; lề 0/10/20 mm.
+- PNG/JPEG/WebP/BMP; tối đa 50 ảnh, 20 MB/ảnh, tổng 100 MB và 40 triệu pixel/ảnh. Báo lỗi từng tệp và giữ các ảnh hợp lệ.
+- Giữ tỉ lệ, căn giữa, không cắt; nền trắng cho ảnh trong suốt. Chuyển ảnh sang JPEG với cạnh dài tối đa 3.200 px, chọn chất lượng và tên PDF.
+- Xem tiến trình, hủy tạo mà vẫn giữ danh sách ảnh. Chạy hoàn toàn trong trình duyệt, không tải ảnh lên máy chủ hoặc gọi CDN; dùng được qua `file://`.
+- Đây là tiện ích riêng của IT Basic, không phải nội dung kiến thức dùng chung với AV Lore. PDF chứa ảnh, không có lớp OCR để tìm kiếm văn bản.
 
 ## Format & Preview
 
@@ -56,6 +66,7 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
 - `assets/common.js`: thao tác tệp, clipboard, tải kết quả, phím tắt.
 - `assets/data.js`: logic parse/serialize và chuyển đổi dùng chung.
 - `assets/ocr.js`, `assets/format.js`, `assets/convert.js`: xử lý ba công cụ mới.
+- `assets/image-pdf.js`, `assets/image-pdf.css`: xử lý và giao diện gom ảnh thành PDF.
 - `assets/vendor/`: thư viện ghim phiên bản và giấy phép, phục vụ cùng trang để không phụ thuộc CDN.
 - `qr/index.html`: trang QR riêng.
 - Thư mục `tools/` có sẵn ở gốc repo chứa các script build/kiểm tra phần kiến thức và được giữ riêng.
@@ -71,6 +82,7 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
 - [js-yaml 4.1.1](https://github.com/nodeca/js-yaml), MIT: YAML.
 - [Papa Parse 5.5.3](https://github.com/mholt/PapaParse), MIT: CSV.
 - [lossless-json 4.3.0](https://github.com/josdejong/lossless-json), MIT: giữ chính xác giá trị số JSON.
+- [PDF-LIB 1.17.1](https://github.com/Hopding/pdf-lib), MIT: tạo PDF từ ảnh; thư viện và giấy phép được phục vụ từ `assets/vendor/`.
 
 Giấy phép nằm cạnh mỗi thư viện trong `assets/vendor/`.
 
