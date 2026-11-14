@@ -20,8 +20,9 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
   hiện URL cuối, các bước chuyển hướng, sao chép/mở link đích và hủy tra cứu.
   Không gửi request khi mới quét QR. Khi bấm tra, URL được gửi tới máy chủ và
   có thể được tính là lượt truy cập bởi dịch vụ đích; ảnh QR vẫn ở trên thiết bị.
-- API cần được bật riêng trên VPS theo [hướng dẫn](../deploy/qr-resolver/README.md).
-  Website tĩnh hoặc `file://` vẫn đọc/tạo QR, nhưng chưa tra short URL được.
+- Trên Vercel, API được triển khai từ `api/expand-url.js` khi push code. Nếu
+  dùng VPS, cài service riêng theo [hướng dẫn](../deploy/qr-resolver/README.md).
+  Máy chủ chỉ phục vụ file tĩnh hoặc `file://` vẫn đọc/tạo QR, nhưng chưa tra short URL được.
   Chỉ theo redirect HTTP; JavaScript, meta refresh, đăng nhập hoặc mở ứng dụng
   có thể không tra được. Kết quả không phải xác nhận link an toàn.
 - Tạo QR từ đường dẫn hoặc văn bản, hỗ trợ tiếng Việt/emoji, chọn kích thước và mức sửa lỗi, tải PNG.
@@ -113,4 +114,4 @@ NODE_PATH=/tmp/personal-tools-qa/node_modules node personal-tools/tests/browser.
 
 Trên macOS test dùng Chrome có sẵn. Hệ điều hành khác dùng Chromium của Playwright hoặc biến `PERSONAL_TOOLS_CHROME` để chỉ định executable. Test tự chạy/dừng HTTP server localhost, kiểm tra QR thật và tra link qua API giả lập, OCR thật Việt/Anh, PDF, 20 phép chuyển đổi, 5 định dạng, preview cách ly, clipboard/download và bố cục 360/768/1440 px. Ảnh chụp và tệp tải được lưu ở thư mục tạm có đường dẫn in trong output.
 
-Workflow deploy hiện tại tự đồng bộ `personal-tools/`. Thư mục `tools/` và `deploy/` vẫn được loại trừ như trước. Các công cụ local không cần đổi cấu hình. Riêng API tra link cần cài service và thêm location Nginx theo hướng dẫn, giữ nguyên workflow.
+Website hiện tại trên Vercel tự nhận API từ `api/expand-url.js` và cấu hình `vercel.json`. Workflow VPS hiện tại vẫn giữ nguyên, tự đồng bộ `personal-tools/` và loại trừ `tools/`, `deploy/`; nếu dùng VPS thì cài service và thêm location Nginx theo hướng dẫn.

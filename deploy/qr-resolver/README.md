@@ -4,6 +4,21 @@ Phần đọc/tạo QR vẫn chạy local. Nút **Xem link đích** gửi URL t�
 `POST /api/expand-url` cùng origin. API dùng Node.js 22+ và các module có sẵn,
 không cần npm, database hoặc dịch vụ rút gọn link bên ngoài.
 
+## Website hiện tại trên Vercel
+
+Đã kiểm tra ngày 14/11/2026: `it.avpegnu.io.vn` được Vercel phục vụ. Endpoint
+[`api/expand-url.js`](../../api/expand-url.js) dùng chung handler và resolver
+trong thư mục này. Vercel tự triển khai function khi nhận commit mới; cấu hình
+[`vercel.json`](../../vercel.json) đóng gói các module `.cjs`, cho phép hủy request
+và đặt thời gian thực thi tối đa 20 giây. Không cần cài service/Nginx trên VPS
+để dùng API trên Vercel. Giữ nguyên workflow deploy VPS độc lập.
+
+Handler nhận được cả body JSON do Vercel parse sẵn lẫn stream HTTP ở service
+VPS. Origin mặc định là `https://it.avpegnu.io.vn`; nếu đổi domain, đặt
+`ALLOWED_ORIGIN` theo origin mới. Preview domain không tự được cho phép tra URL.
+Giới hạn theo IP và số tác vụ dùng bộ nhớ của từng instance, không phải hạn mức
+toàn deployment khi Vercel scale ra nhiều instance.
+
 ## Hành vi
 
 - Theo tối đa 8 lần chuyển hướng HTTP 301/302/303/307/308; trả URL cuối và
@@ -22,7 +37,7 @@ không cần npm, database hoặc dịch vụ rút gọn link bên ngoài.
   Không ghi URL vào log của API. Access log tắt cho route, không đưa URL vào
   query string. Không có CORS công khai hay API proxy trả nội dung trang.
 
-## Cài trên VPS
+## Cài trên VPS (khi dùng hosting VPS)
 
 Thực hiện một lần sau khi chủ sở hữu đồng ý bật API. Các file `deploy/`
 đang được workflow loại khỏi rsync, nên chúng phải được cài riêng. **Không

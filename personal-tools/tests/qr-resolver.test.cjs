@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const { once } = require("node:events");
 const { createResolver, isPublicAddress, parseUrl, requestHeaders } = require("../../deploy/qr-resolver/resolve.cjs");
-const { createServer } = require("../../deploy/qr-resolver/server.cjs");
+const { createServer, createHandler } = require("../../deploy/qr-resolver/server.cjs");
 const publicDns = async () => [{ address: "93.184.215.14", family: 4 }];
 
 test("public IP policy rejects internal, metadata, mapped and reserved addresses", () => {
@@ -146,4 +146,48 @@ test("API validates origin/method/body, returns JSON no-store, and limits rate",
   assert.equal((await fetch(endpoint, options)).status, 200);
   assert.equal((await fetch(endpoint, options)).status, 429);
   assert.equal(requests, 2);
+});
+
+test("handler supports Vercel's already-consumed stream and lazy JSON body", async (t) => {
+  const inputs = [];
+  const handler = createHandler({
+    allowedOrigin: "https://tools.example",
+    resolveUrl: async url => { inputs.push(url); return { finalUrl: url }; },
+  });
+  const api = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    Object.defineProperty(request, "body", { get() { return JSON.parse(body); } });
+    return handler(request, response);
+  });
+  api.listen(0, "127.0.0.1");
+  await once(api, "listening");
+  t.after(() => { api.closeAllConnections(); api.close(); });
+  const endpoint = `http://127.0.0.1:${api.address().port}/api/expand-url`;
+  const options = { method: "POST", headers: { Origin: "https://tools.example", "Content-Type": "application/json" } };
+  const url = "https://short.example/ảnh?q=Việt#nội-dung";
+  const response = await fetch(endpoint, { ...options, body: JSON.stringify({ url }) });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).finalUrl, url);
+  assert.equal((await fetch(endpoint, { ...options, body: "bad JSON" })).status, 400);
+  assert.equal((await fetch(endpoint, { ...options, body: JSON.stringify({ url: "x".repeat(9000) }) })).status, 413);
+  assert.deepEqual(inputs, [url]);
+});
+
+test("Vercel entry serves the endpoint and retains private-network protection", async (t) => {
+  const handler = require("../../api/expand-url.js");
+  const api = http.createServer(handler);
+  api.listen(0, "127.0.0.1");
+  await once(api, "listening");
+  t.after(() => { api.closeAllConnections(); api.close(); });
+  const endpoint = `http://127.0.0.1:${api.address().port}/api/expand-url`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Origin: "https://it.avpegnu.io.vn", "Content-Type": "application/json" },
+    body: JSON.stringify({ url: "http://127.0.0.1/" }),
+  });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /nội bộ/);
+  assert.equal((await fetch(endpoint)).status, 405);
 });
