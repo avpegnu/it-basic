@@ -1,4 +1,4 @@
-/* QR tools: no network requests, storage, or automatic navigation. */
+/* QR decoding/generation stays local; optional URL lookup is in qr-expand.js. */
 (() => {
   "use strict";
 
@@ -43,6 +43,7 @@
     $("paste-shortcut").textContent = "⌘ + V";
 
   function clearReadResult() {
+    document.dispatchEvent(new CustomEvent("qr-content-changed", { detail: "" }));
     $("read-result").hidden = true;
     $("read-empty").hidden = false;
     $("decoded-text").value = "";
@@ -123,6 +124,7 @@
     $("read-empty").hidden = true;
     $("read-result").hidden = false;
     status("read-status", "Đã đọc được mã QR.");
+    document.dispatchEvent(new CustomEvent("qr-content-changed", { detail: text }));
   }
 
   async function readFile(file) {

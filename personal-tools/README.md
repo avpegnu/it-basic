@@ -16,9 +16,17 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
 
 - Đọc một QR từ ảnh chọn, kéo thả hoặc dán từ clipboard; sao chép kết quả.
 - Chỉ hiện nút mở đường dẫn cho giao thức HTTP/HTTPS; không tự truy cập nội dung QR.
+- Với QR là URL, nút **Xem link đích** tra chuyển hướng HTTP qua API cùng website,
+  hiện URL cuối, các bước chuyển hướng, sao chép/mở link đích và hủy tra cứu.
+  Không gửi request khi mới quét QR. Khi bấm tra, URL được gửi tới máy chủ và
+  có thể được tính là lượt truy cập bởi dịch vụ đích; ảnh QR vẫn ở trên thiết bị.
+- API cần được bật riêng trên VPS theo [hướng dẫn](../deploy/qr-resolver/README.md).
+  Website tĩnh hoặc `file://` vẫn đọc/tạo QR, nhưng chưa tra short URL được.
+  Chỉ theo redirect HTTP; JavaScript, meta refresh, đăng nhập hoặc mở ứng dụng
+  có thể không tra được. Kết quả không phải xác nhận link an toàn.
 - Tạo QR từ đường dẫn hoặc văn bản, hỗ trợ tiếng Việt/emoji, chọn kích thước và mức sửa lỗi, tải PNG.
 - Ảnh đầu vào: PNG/JPEG/WebP/GIF/BMP, tối đa 20 MB và 40 triệu pixel. Ảnh GIF dùng khung hình đầu tiên.
-- Xử lý tại trình duyệt, không tải ảnh lên máy chủ, không lưu lịch sử hoặc dùng dịch vụ QR bên ngoài.
+- Đọc/tạo QR tại trình duyệt, không tải ảnh lên máy chủ, không lưu lịch sử hoặc dùng dịch vụ QR bên ngoài.
 
 ## Ảnh → Văn bản
 
@@ -63,6 +71,7 @@ Trang tiện ích độc lập với phần kiến thức của repo. HTML/CSS/J
 
 - `assets/styles.css`: giao diện chung cho các trang tiện ích.
 - `assets/qr.js`, `assets/qr-worker.js`: giao diện và xử lý QR.
+- `assets/qr-expand.js`: tra link đích khi người dùng bấm; API tùy chọn nằm trong `deploy/qr-resolver/`.
 - `assets/common.js`: thao tác tệp, clipboard, tải kết quả, phím tắt.
 - `assets/data.js`: logic parse/serialize và chuyển đổi dùng chung.
 - `assets/ocr.js`, `assets/format.js`, `assets/convert.js`: xử lý ba công cụ mới.
@@ -92,6 +101,7 @@ Logic chuyển đổi, không cần cài dependency:
 
 ```sh
 node --test personal-tools/tests/data.test.cjs
+node --test personal-tools/tests/qr-resolver.test.cjs
 ```
 
 Kiểm thử trình duyệt cần Playwright và Chrome/Chromium. Có thể cài Playwright ở thư mục tạm để không tạo package/node_modules trong repo:
@@ -101,6 +111,6 @@ npm install --prefix /tmp/personal-tools-qa --no-audit --no-fund playwright@1.56
 NODE_PATH=/tmp/personal-tools-qa/node_modules node personal-tools/tests/browser.cjs
 ```
 
-Trên macOS test dùng Chrome có sẵn. Hệ điều hành khác dùng Chromium của Playwright hoặc biến `PERSONAL_TOOLS_CHROME` để chỉ định executable. Test tự chạy/dừng HTTP server localhost, kiểm tra OCR thật Việt/Anh, 20 phép chuyển đổi, 5 định dạng, preview cách ly, clipboard/download và bố cục 360/768/1440 px. Ảnh chụp và tệp tải được lưu ở thư mục tạm có đường dẫn in trong output.
+Trên macOS test dùng Chrome có sẵn. Hệ điều hành khác dùng Chromium của Playwright hoặc biến `PERSONAL_TOOLS_CHROME` để chỉ định executable. Test tự chạy/dừng HTTP server localhost, kiểm tra QR thật và tra link qua API giả lập, OCR thật Việt/Anh, PDF, 20 phép chuyển đổi, 5 định dạng, preview cách ly, clipboard/download và bố cục 360/768/1440 px. Ảnh chụp và tệp tải được lưu ở thư mục tạm có đường dẫn in trong output.
 
-Workflow deploy hiện tại tự đồng bộ `personal-tools/`. Thư mục `tools/` vẫn được loại trừ như trước. Không cần thay cấu hình deploy hoặc Nginx.
+Workflow deploy hiện tại tự đồng bộ `personal-tools/`. Thư mục `tools/` và `deploy/` vẫn được loại trừ như trước. Các công cụ local không cần đổi cấu hình. Riêng API tra link cần cài service và thêm location Nginx theo hướng dẫn, giữ nguyên workflow.

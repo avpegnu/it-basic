@@ -72,6 +72,7 @@ async function run() {
     });
 
     await require("./image-pdf.cjs")(page, origin, outputDir);
+    await require("./qr-expand.cjs")(browser, origin, outputDir);
 
     await page.goto(`${origin}/personal-tools/convert/`);
     const modes = await page
